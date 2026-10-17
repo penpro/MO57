@@ -3,12 +3,13 @@
 > **Covers:** why MO57 never pauses, the one chokepoint that refuses every pause, what a player does instead (back out to the main
 > menu: leaving always saves), and what the policy does not govern (the editor's debugger).
 > **Current state (2026-10-17):** `AMOPlayerController::SetPause` refuses every runtime pause. Every way out of a world saves first,
-> with no confirm (`UMOSystemMenuUIController::SaveWorldBeforeLeaving`), so leaving is the player's pause and can't be used to undo
-> anything (no save-scumming).
+> with no confirm (`UMOSystemMenuUIController::SaveThisWorld`), so leaving is the player's pause and can't be used to undo anything
+> (no save-scumming). A world has ONE save, its own slot (DECISIONS F24): no Save As, and no loading the world you are in.
 > **Wes, 2026-10-17:** "no pause, ever... if they want to pause they can back out to the main menu"; "get rid of the save confirm and just
 > force the save... i don't want people to be able to 'save-scum'".
-> **Entry points:** `AMOPlayerController::SetPause`, `UMOSystemMenuUIController::SaveWorldBeforeLeaving` / `ReturnToMainMenuImmediate` /
-> `QuitGameImmediate` / `HandleViewportCloseRequested`. **Open:** manual save slots can still reopen an older save (DECISIONS F24).
+> **Entry points:** `AMOPlayerController::SetPause`, `UMOSystemMenuUIController::SaveThisWorld` / `HandleSaveRequested` /
+> `ReturnToMainMenuImmediate` / `QuitGameImmediate` / `HandleLoadRequested` / `HandleViewportCloseRequested`. **Open:** a crash or a
+> killed process still loses everything since the last save (no timed autosave: BACKLOG N-157).
 
 **MO57 does not pause. Ever. By design.**
 
@@ -67,15 +68,17 @@ bool AMOPlayerController::SetPause(bool bPause, FCanUnpause CanUnpauseDelegate)
 
 ### Leaving a world (the player's pause)
 
-Every way out of a world goes through one save, `UMOSystemMenuUIController::SaveWorldBeforeLeaving` ->
-`UMOPersistenceSubsystem::SaveToCurrentSlot` (the slot the world was loaded from; a new game gets an `AutoSave_<world>_<time>` slot on its
-first save). There is no confirmation and no "leave without saving":
+Every way out of a world goes through one save, `UMOSystemMenuUIController::SaveThisWorld` ->
+`UMOPersistenceSubsystem::SaveToCurrentSlot`: the world's own slot (a new game's `World_<time>`, the slot a loaded world came from, or an
+`AutoSave_<map>_<time>` slot for a world started without one). A world has one save (DECISIONS F24). There is no confirmation and no
+"leave without saving":
 
 | Way out | Path |
 |---|---|
 | In-game menu: Exit to Main Menu | `ReturnToMainMenuImmediate` (save, then open the main menu level) |
 | In-game menu: Exit Game | `QuitGameImmediate` (save, then quit to desktop) |
-| In-game menu: Load another save | `HandleLoadRequested` (save this world, then load the chosen one) |
+| In-game menu: Load another world | `HandleLoadRequested` (save this world, then load the chosen one; the list hides the world you are in and loading it is refused) |
+| In-game menu: Save (staying) | `HandleSaveRequested` (the same save, to the world's own slot; toast "World saved"; no slot list, no Save As) |
 | Death recap: Return to Main Menu | `ReturnToMainMenuImmediate` (the death is saved; deceased pawns stay deceased on load, and the load gives the player the same next life as the recap's Continue: `AMOGameMode::OnPlayerNeedsNextLife` -> `ContinueAfterDeath`) |
 | Game window close (X / Alt+F4) | `HandleViewportCloseRequested` on `UGameViewportClient::OnCloseRequested` (packaged / `-game`; not PIE) |
 
@@ -83,12 +86,15 @@ first save). There is no confirmation and no "leave without saving":
   owns the world save`.
 - A failed save is the only case with a dialog: "Could Not Save ... Leave Anyway / Stay", so progress is never lost silently. The window
   close can't offer one; it logs the failure.
-- Log line to check: `[MOSysUI] Leaving the world (<reason>): save to slot '<slot>' ok=1`.
+- Log line to check: `[MOSysUI] Saving this world (<reason>): slot '<slot>' ok=1` (reasons: `save`, `exit to main menu`, `exit game`,
+  `load another save`, `window closed`).
 - Not covered: a crash or a killed process (no autosave timer exists yet: BACKLOG N-157), and the console `quit` command (developer console only).
 - Verified 2026-10-17 in a `-game` instance: Exit to Main Menu, Exit Game, the death recap's Return and the window close each logged
   `save to slot ... ok=1` with no dialog. Reloading the save made at a death now respawns a new survivor 4.96 mi from the recorded death
-  spot; before that fix it left a sky camera with no pawn. Not run: loading another save from the in-game menu (the same save step),
-  the failed-save dialog, and the co-op client path.
+  spot; before that fix it left a sky camera with no pawn. After F24: Save wrote the world's own slot with the toast and no new slot
+  (6 slots before and after); the in-game Load list showed the 5 other worlds and hid the current one; the main menu listed all 6.
+  Not run: loading another world from the in-game menu, the refusal of the current world's slot (code only; the list hides it), the
+  failed-save dialog, and the co-op client path.
 
 ### What replaces pause
 
@@ -120,7 +126,7 @@ In a packaged build or PIE:
 4. Confirm the world keeps ticking (watch any moving creature, the time-of-day, etc).
 
 Leaving: in a `-game` instance or packaged build, open the in-game menu and press Exit to Main Menu. No dialog appears, the log shows
-`Leaving the world (exit to main menu): save to slot '...' ok=1`, and `MO.Save.List` lists that slot with a fresh timestamp.
+`Saving this world (exit to main menu): slot '...' ok=1`, and `MO.Save.List` lists that slot with a fresh timestamp and no new slot.
 
 ## If you ever need to break this policy
 

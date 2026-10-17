@@ -26,6 +26,14 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
+ * [2026-10-17] ONE SAVE PER WORLD (DECISIONS F24): the in-game menu's Save
+ *   button no longer opens this panel; it saves the world to its own slot
+ *   (UMOInGameMenu::HandleSaveClicked). If this panel is shown anyway, New
+ *   Save / picking a slot still only saves THIS world: the controller
+ *   (UMOSystemMenuUIController::HandleSaveRequested) ignores the slot name.
+ *   CreateNewSave's "<Character>-NN" names are dead; never route a player
+ *   save to a second slot of a world (that is Save As = save-scumming).
+ *
  * [2026-05] WBP COMPAT: WBP_SavePanel parents to this class. Inherited
  *   BindWidgets (SaveSlotsScrollBox, BackButton) bind transparently — keep
  *   widget names matching the base's property names.

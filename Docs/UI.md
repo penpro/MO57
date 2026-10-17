@@ -162,6 +162,15 @@ if (MyButton)
   ignores F1. Test `MOHUDModeTests`.
 - Tutorial hints: a triggered tutorial outranks a pending one; `GetActiveTutorialHint` orders by `SortOrder` (quest SortOrder default =
   last); the first hint (possession) is gated on the first recruit.
+### In-game menu: Save, Load and the exits (one save per world, Oct 17)
+- **Save** (`UMOInGameMenu::HandleSaveClicked`) saves this world to its own slot immediately: `OnSaveRequested` with an empty slot name ->
+  `UMOSystemMenuUIController::HandleSaveRequested` -> `SaveThisWorld`, plus a toast ("World saved" / "The host saves this world" /
+  "Could not save the world"). There is no Save panel any more, no Save As and no overwrite confirm. `WBP_SavePanel` is still a child of the
+  menu's focus switcher but unreachable (BACKLOG N-159); if it is shown, it still only saves this world.
+- **Load** lists other worlds: `UMOInGameMenu::HideCurrentWorldInLoadPanel` calls `UMOSaveSlotListPanel::SetHiddenSlot` before every
+  refresh. The main menu's Load panel is a separate instance and lists every world.
+- **Exits** save first with no dialog (`Docs/PAUSE_POLICY.md` "Leaving a world"). The only dialog is "Could Not Save -- Leave Anyway / Stay".
+- `bFilterToCurrentWorld` on the list panels is a same-MAP filter (every world on a map shares the identifier), not a same-world one.
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 

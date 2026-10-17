@@ -105,8 +105,8 @@ enum class EMOBodyPartType : uint8;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationCancelledDelegate);
 
-/** What the save on the way out of a world did. A client is not a failure: the host owns the world save. */
-enum class EMOLeaveSaveResult : uint8
+/** What a save of this world did (SaveThisWorld). A client is not a failure: the host owns the world save. */
+enum class EMOWorldSaveResult : uint8
 {
 	Saved,
 	NotHost,
@@ -421,7 +421,7 @@ private:
 	 * Centralized "open the main menu level" path — called by the in-game
 	 * menu's Exit to Main Menu button and the death recap "Return" button.
 	 * Single source of truth for the exit sequence. Saves the world first
-	 * (SaveWorldBeforeLeaving): leaving is how a player "pauses", and it can
+	 * (SaveThisWorld): leaving is how a player "pauses", and it can
 	 * never be used to discard progress (no save-scumming; Wes 2026-10-17).
 	 */
 	void ReturnToMainMenuImmediate();
@@ -439,14 +439,16 @@ private:
 	void LoadSlotNow(const FString& SlotName);
 
 	/**
-	 * The one save every way out of a world goes through (main menu, quit,
-	 * death recap, window close). No confirmation and no opt-out. The host /
-	 * standalone writes the world to its current slot (a new game gets an
-	 * AutoSave_ slot on first save); a client never saves (the host owns the
-	 * world save). Only Failed offers "leave anyway" (menu exits) so a broken
-	 * save never loses progress silently.
+	 * The one player-facing save of a world: the in-game Save button and every
+	 * way out (main menu, quit, loading another world, death recap, window
+	 * close). A world has ONE save, its own slot (DECISIONS F24): the host /
+	 * standalone writes the persistence subsystem's current slot (a new game's
+	 * World_<time> slot; a world started without one gets an AutoSave_ slot on
+	 * its first save). No confirmation and no opt-out. A client never saves
+	 * (the host owns the world save). Only Failed offers "leave anyway" (menu
+	 * exits) so a broken save never loses progress silently.
 	 */
-	EMOLeaveSaveResult SaveWorldBeforeLeaving(const TCHAR* Reason);
+	EMOWorldSaveResult SaveThisWorld(const TCHAR* Reason);
 
 	/** The game window's close button / Alt+F4 (UGameViewportClient::OnCloseRequested). */
 	void HandleViewportCloseRequested(FViewport* Viewport);

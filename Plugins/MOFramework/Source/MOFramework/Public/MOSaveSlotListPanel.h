@@ -87,6 +87,15 @@ public:
 	void RefreshSaveList();
 
 	/**
+	 * Hide one slot from the list: the in-game menu hides the world you are
+	 * in, because a world has one save and it is not a snapshot to go back
+	 * to (DECISIONS F24). Empty = hide nothing. Takes effect on the next
+	 * RefreshSaveList.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|SaveSlotList")
+	void SetHiddenSlot(const FString& SlotName) { HiddenSlotName = SlotName; }
+
+	/**
 	 * Apply a rename to a slot's player-visible display name. Called by the
 	 * hosting widget after a text-input modal collected NewDisplayName.
 	 * Auto-refreshes the list on success.
@@ -170,12 +179,18 @@ protected:
 	TSubclassOf<UMOSaveSlotEntry> SaveSlotEntryClass;
 
 	/**
-	 * Whether to show only saves matching the current world identifier.
-	 * Defaults true (in-game save / load is world-scoped). Main menu load
-	 * should set this to false to list all worlds.
+	 * Whether to show only saves whose level identifier (the MAP name, e.g.
+	 * MOPCGScattering) matches the current one. Every world played on a map
+	 * shares that identifier, so this is a same-map filter, not a same-world
+	 * one (a world's identity is its one slot: DECISIONS F24). Defaults true
+	 * for in-game panels; the main menu sets false to list every save.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|UI|SaveSlotList")
 	bool bFilterToCurrentWorld = true;
+
+	/** The slot SetHiddenSlot hides (the world you are in, in-game). */
+	UPROPERTY(Transient)
+	FString HiddenSlotName;
 
 	/**
 	 * Confirmation dialog WBP used for the delete prompt. If set, the panel

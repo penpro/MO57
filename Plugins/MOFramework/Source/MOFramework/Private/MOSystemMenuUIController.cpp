@@ -13,6 +13,7 @@
 
 #include "MOUIManagerComponent.h"
 #include "MOInGameMenu.h"
+#include "MONotificationComponent.h"
 #include "MOPossessionMenu.h"
 #include "MOConfirmationDialog.h"
 #include "MOSurvivorContextMenu.h"
@@ -308,7 +309,7 @@ void UMOSystemMenuUIController::HandleInGameMenuRequestClose()
 	CloseInGameMenu();
 }
 
-// No confirmation on either exit: leaving always saves (SaveWorldBeforeLeaving), so there is no
+// No confirmation on either exit: leaving always saves (SaveThisWorld), so there is no
 // "unsaved progress" to warn about and no way to leave without saving (Wes 2026-10-17: no save-scumming).
 void UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu()
 {
@@ -322,63 +323,58 @@ void UMOSystemMenuUIController::HandleInGameMenuExitGame()
 
 void UMOSystemMenuUIController::HandleSaveRequested(const FString& SlotName)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] *** HANDLE SAVE REQUESTED: %s ***"), *SlotName);
-
-	// Check if slot exists for overwrite confirmation
-	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-	if (GameInstance)
+	// One save per world (Wes, DECISIONS F24, 2026-10-17): Save always writes THIS world's own slot, with no confirm. A slot name a
+	// panel passes is ignored, so no UI path can make a second save of a world (no Save As, no snapshots to reload: no save-scumming).
+	if (!SlotName.IsEmpty())
 	{
-		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-		if (Persistence)
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Save: ignoring the requested slot '%s' -- a world has one save"), *SlotName);
+	}
+
+	const EMOWorldSaveResult Result = SaveThisWorld(TEXT("save"));
+
+	if (const AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwner()))
+	{
+		if (UMONotificationComponent* Notes = PC->GetNotificationComponent())
 		{
-			const bool bSlotExists = Persistence->DoesSaveSlotExist(SlotName);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Slot '%s' exists: %s"), *SlotName, bSlotExists ? TEXT("YES") : TEXT("NO"));
-
-			if (bSlotExists)
+			if (Result == EMOWorldSaveResult::Saved)
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Showing overwrite confirmation"));
-				PendingConfirmationContext = FString::Printf(TEXT("Save:%s"), *SlotName);
-				ShowConfirmationDialog(
-					NSLOCTEXT("MO", "OverwriteSaveTitle", "Overwrite Save"),
-					FText::Format(NSLOCTEXT("MO", "OverwriteSaveMessage", "Are you sure you want to overwrite '{0}'?"), FText::FromString(SlotName)),
-					NSLOCTEXT("MO", "Overwrite", "Overwrite"),
-					NSLOCTEXT("MO", "Cancel", "Cancel")
-				);
-				return;
+				Notes->ShowInfoNotification(NSLOCTEXT("MO", "WorldSaved", "World saved"), 3.0f);
 			}
-
-			// New save - proceed directly without confirmation
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Saving to new slot (no confirmation needed): %s"), *SlotName);
-			bool bSaveSuccess = Persistence->SaveWorldToSlot(SlotName);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Save complete (success: %s)"), bSaveSuccess ? TEXT("YES") : TEXT("NO"));
-
-			// Refresh both panels to show the new save
-			if (bSaveSuccess)
+			else if (Result == EMOWorldSaveResult::NotHost)
 			{
-				UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-				if (IsValid(MenuWidget))
-				{
-					MenuWidget->RefreshSavePanelList();
-					MenuWidget->RefreshLoadPanelList();
-					UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Save and load panels refreshed"));
-				}
+				Notes->ShowInfoNotification(NSLOCTEXT("MO", "HostSaves", "The host saves this world"), 4.0f);
 			}
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Persistence subsystem is NULL"));
+			else
+			{
+				Notes->ShowWarningNotification(NSLOCTEXT("MO", "WorldSaveFailed", "Could not save the world"), 6.0f);
+			}
 		}
 	}
-	else
+
+	if (Result == EMOWorldSaveResult::Saved)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] GameInstance is NULL in HandleSaveRequested"));
+		if (UMOInGameMenu* MenuWidget = InGameMenuWidget.Get())
+		{
+			MenuWidget->RefreshLoadPanelList();
+		}
 	}
 }
 
 void UMOSystemMenuUIController::HandleLoadRequested(const FString& SlotName)
 {
+	// One save per world: the save of the world you are standing in is not a snapshot to go back to (the in-game Load list hides it too).
+	if (UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this))
+	{
+		const UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+		if (Persistence && !SlotName.IsEmpty() && SlotName == Persistence->GetCurrentSlotName())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Load refused: '%s' is the world you are in (one save per world)"), *SlotName);
+			return;
+		}
+	}
+
 	// Loading another save leaves this world: save it first like every other way out (no confirm, no save-scumming).
-	if (SaveWorldBeforeLeaving(TEXT("load another save")) == EMOLeaveSaveResult::Failed)
+	if (SaveThisWorld(TEXT("load another save")) == EMOWorldSaveResult::Failed)
 	{
 		PendingConfirmationContext = FString::Printf(TEXT("LeaveUnsaved:Load:%s"), *SlotName);
 		ShowConfirmationDialog(
@@ -727,31 +723,6 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 	else if (PendingConfirmationContext == TEXT("LeaveUnsaved:Quit"))
 	{
 		QuitToDesktop();
-	}
-	else if (PendingConfirmationContext.StartsWith(TEXT("Save:")))
-	{
-		FString SlotName = PendingConfirmationContext.RightChop(5);
-		UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-		if (GameInstance)
-		{
-			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-			if (Persistence)
-			{
-				bool bSaveSuccess = Persistence->SaveWorldToSlot(SlotName);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Saved to slot: %s (success: %s)"), *SlotName, bSaveSuccess ? TEXT("YES") : TEXT("NO"));
-
-				// Refresh panels to show updated save
-				if (bSaveSuccess)
-				{
-					UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-					if (IsValid(MenuWidget))
-					{
-						MenuWidget->RefreshSavePanelList();
-						MenuWidget->RefreshLoadPanelList();
-					}
-				}
-			}
-		}
 	}
 	else if (PendingConfirmationContext.StartsWith(TEXT("LeaveUnsaved:Load:")))
 	{
@@ -1235,14 +1206,14 @@ void UMOSystemMenuUIController::ContinueAfterDeath(const AMOCharacter* DeadChara
 	PC->ServerRequestRespawn();
 }
 
-EMOLeaveSaveResult UMOSystemMenuUIController::SaveWorldBeforeLeaving(const TCHAR* Reason)
+EMOWorldSaveResult UMOSystemMenuUIController::SaveThisWorld(const TCHAR* Reason)
 {
 	UWorld* World = GetWorld();
 	if (World && World->GetNetMode() == NM_Client)
 	{
 		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOSysUI] Leaving the world (%s): client -- the host owns the world save, nothing written"), Reason);
-		return EMOLeaveSaveResult::NotHost;
+			TEXT("[MOSysUI] Saving this world (%s): client -- the host owns the world save, nothing written"), Reason);
+		return EMOWorldSaveResult::NotHost;
 	}
 
 	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
@@ -1250,15 +1221,15 @@ EMOLeaveSaveResult UMOSystemMenuUIController::SaveWorldBeforeLeaving(const TCHAR
 	if (!Persistence)
 	{
 		UE_LOG(LogMOFramework, Error,
-			TEXT("[MOSysUI] Leaving the world (%s): no persistence subsystem -- NOT saved"), Reason);
-		return EMOLeaveSaveResult::Failed;
+			TEXT("[MOSysUI] Saving this world (%s): no persistence subsystem -- NOT saved"), Reason);
+		return EMOWorldSaveResult::Failed;
 	}
 
 	const bool bSaved = Persistence->SaveToCurrentSlot();
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOSysUI] Leaving the world (%s): save to slot '%s' ok=%d"),
+		TEXT("[MOSysUI] Saving this world (%s): slot '%s' ok=%d"),
 		Reason, *Persistence->GetCurrentSlotName(), bSaved ? 1 : 0);
-	return bSaved ? EMOLeaveSaveResult::Saved : EMOLeaveSaveResult::Failed;
+	return bSaved ? EMOWorldSaveResult::Saved : EMOWorldSaveResult::Failed;
 }
 
 void UMOSystemMenuUIController::HandlePlayerNeedsNextLife(APlayerController* PC)
@@ -1274,12 +1245,12 @@ void UMOSystemMenuUIController::HandlePlayerNeedsNextLife(APlayerController* PC)
 void UMOSystemMenuUIController::HandleViewportCloseRequested(FViewport* Viewport)
 {
 	// The window is closing either way: there is no dialog to offer, so a failed save is only logged.
-	SaveWorldBeforeLeaving(TEXT("window closed"));
+	SaveThisWorld(TEXT("window closed"));
 }
 
 void UMOSystemMenuUIController::QuitGameImmediate()
 {
-	if (SaveWorldBeforeLeaving(TEXT("exit game")) == EMOLeaveSaveResult::Failed)
+	if (SaveThisWorld(TEXT("exit game")) == EMOWorldSaveResult::Failed)
 	{
 		PendingConfirmationContext = TEXT("LeaveUnsaved:Quit");
 		ShowConfirmationDialog(
@@ -1300,7 +1271,7 @@ void UMOSystemMenuUIController::QuitToDesktop()
 
 void UMOSystemMenuUIController::ReturnToMainMenuImmediate()
 {
-	if (SaveWorldBeforeLeaving(TEXT("exit to main menu")) == EMOLeaveSaveResult::Failed)
+	if (SaveThisWorld(TEXT("exit to main menu")) == EMOWorldSaveResult::Failed)
 	{
 		PendingConfirmationContext = TEXT("LeaveUnsaved:Menu");
 		ShowConfirmationDialog(

@@ -612,3 +612,17 @@ References: CL-0050, CL-0051
 Files released: MOSystemMenuUIController.h/.cpp, MOGameMode.h/.cpp, the docs, the build window and the instances (ex1 stopped).
 
 Done and verified in a -game instance: Exit to Main Menu, Exit Game, the death recap's Return and the window close each save with no dialog. Loading a save made at a death respawns a new survivor ~5 mi from the recorded death spot; it used to leave a sky camera. The build compiled your uncommitted batches A-F without errors or warnings. Two items wait on your commit (both in your files): N-155 (deceased records skipped on load, so the corpse and gear vanish) and N-156 (the MOPlayerController.h comment says AGameMode::SetPause is caught; a direct AGameModeBase::SetPause bypasses the override).
+
+### 2026-10-17 16:40 Pacific Daylight Time — CLAUDE — CL-0053
+Status: CLAIM
+References: CL-0052, DECISIONS F24
+Files claimed: MOSystemMenuUIController.h/.cpp, MOInGameMenu.h/.cpp, MOSaveSlotListPanel.h/.cpp, MOSavePanel.h, the save docs. Build window + -game instances (editor down).
+
+Wes answered F24 with A, one save per world. The in-game Save writes the world's own slot immediately (no panel, no Save As, no overwrite confirm). The in-game Load lists other worlds only, and loading the world you are in is refused. The main menu lists one entry per world (slot = world; old saves are not kept, Oct 13). SaveWorldBeforeLeaving is renamed SaveThisWorld (EMOWorldSaveResult), since manual Save uses it too. Your files are untouched. Follow-up for after your N-001 commit: store an explicit WorldId in UMOWorldSaveGame, so a world's identity no longer rides on its slot name.
+
+### 2026-10-17 16:55 Pacific Daylight Time — CLAUDE — CL-0054
+Status: RELEASE
+References: CL-0053, DECISIONS F24
+Files released: MOSystemMenuUIController.h/.cpp, MOInGameMenu.h/.cpp, MOSaveSlotListPanel.h/.cpp, MOSavePanel.h, the save docs, the build window and the instances (ex1 stopped).
+
+One save per world is done and committed. In a -game instance: Save wrote the world's own slot with the toast and created no new slot; the in-game Load hid the current world; the main menu listed all 6 worlds. Your files are untouched. Waiting on your N-001 commit: N-158 (an explicit WorldId in UMOWorldSaveGame, which needs MOworldSaveGame.h and MOPersistenceSubsystem.cpp).

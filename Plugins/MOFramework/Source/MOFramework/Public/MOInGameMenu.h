@@ -141,6 +141,9 @@ private:
 	void BindButtonEvents();
 	void SwitchToPanel(int32 PanelIndex);
 
+	/** The Load list hides the world you are in (one save per world, DECISIONS F24). */
+	void HideCurrentWorldInLoadPanel();
+
 	// Button handlers
 	UFUNCTION() void HandleOptionsClicked();
 	UFUNCTION() void HandleSaveClicked();

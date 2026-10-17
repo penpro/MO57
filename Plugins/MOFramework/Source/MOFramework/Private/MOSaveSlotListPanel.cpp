@@ -159,6 +159,11 @@ TArray<FMOSaveMetadata> UMOSaveSlotListPanel::QuerySaveMetadata() const
 	const TArray<FString> SlotNames = Persistence->GetAllSaveSlots();
 	for (const FString& SlotName : SlotNames)
 	{
+		if (!HiddenSlotName.IsEmpty() && SlotName == HiddenSlotName)
+		{
+			continue; // the world you are in (SetHiddenSlot)
+		}
+
 		FMOSaveMetadata Meta;
 		if (Persistence->GetSaveSlotMetadata(SlotName, Meta))
 		{

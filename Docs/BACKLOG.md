@@ -16,7 +16,7 @@
 F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F6 weather client apply · F7 building refund ·
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
-F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art · F24 manual save slots (save-scumming).
+F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art.
 
 ## In flight (built, uncommitted, other agent)
 
@@ -79,7 +79,7 @@ F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
 | N-155 | OPEN | Codex / Claude | Permadeath gear: a deceased pawn record is skipped entirely on load (`MOPersistenceSubsystem` full-load loop), so the dead pawn's body and gear vanish after a reload; the design says the gear stays where it fell. Spawn the body as a dead, lootable corpse (or drop its inventory as world items at save). `MOPersistenceSubsystem.cpp` has Codex's uncommitted edits: after N-001 | `Docs/Persistence.md` §1; CL-0051 | |
-| N-157 | OPEN | Claude | No timed autosave: a crash or a killed process loses everything since the last exit (and killing the process is the one scum route left besides F24). Autosave on a game-time interval through the same `SaveWorldBeforeLeaving` step | `Docs/PAUSE_POLICY.md` "Leaving a world" | |
+| N-157 | OPEN | Claude | No timed autosave: a crash or a killed process loses everything since the last exit (and killing the process is the one scum route left). Autosave on a game-time interval through the same `SaveThisWorld` step | `Docs/PAUSE_POLICY.md` "Leaving a world" | |
 | N-060 | WAITING | Wes | Survival single source (F1); thermal model (F2) | DECISIONS | G10, G11, H10/H11 of the Oct 13 handoff |
 | N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
 | N-062 | OPEN | Claude | Early dressing before cloth exists (MakeBandage needs WovenCloth01) | PROGRESSION_ROADMAP §3 | |
@@ -196,11 +196,14 @@ re-checked defects were already fixed): **re-verify against current code before 
 | N-150 | OPEN | Claude | Record the last Steam patch (date / time / commit) in `Docs/STEAM_RELEASES.md` whenever Wes asks for Steam patch notes (N9) | `Docs/TOOLING.md` § Steam patch notes |
 | N-151 | OPEN | Wes | CS399: weekly progress is updated every Sunday (last entry Week 2, Oct 5); check-in Nov 18 | `Docs/CS399/CS399_WEEKLY_PROGRESS.md` |
 | N-156 | WAITING | Claude | `MOPlayerController.h`'s SetPause comment lists `AGameMode::SetPause` as caught; a direct `AGameModeBase::SetPause` call bypasses the override (engine source, Oct 17). Fix the comment once Codex commits that file | `Docs/PAUSE_POLICY.md` § Enforcement |
+| N-158 | WAITING | Claude | Store an explicit WorldId (FGuid) in `UMOWorldSaveGame`, made at new game and carried by every save, so a world's identity no longer rides on its slot name (F24). `MOworldSaveGame.h` / `MOPersistenceSubsystem.cpp` hold Codex's uncommitted batches: after N-001 | DECISIONS 2026-10-17 F24 |
+| N-159 | OPEN | Claude | Optional cleanup: remove the unreachable `WBP_SavePanel` child from `WBP_MOInGameMenu` (`python Tools/ue.py ui remove`); `UMOInGameMenu::ShowSavePanel` / `UMOSavePanel::CreateNewSave` then have no caller | `Docs/UI.md` § 3 |
 | N-152 | OPEN | Claude | Codex's July audit docs in `Docs/agent/` say "Status: In progress" and were never closed: ask Codex to close or archive them | `Docs/agent/` |
 | N-153 | OPEN | Wes | Global CLAUDE.md and `D:\ClaudeMaster\CLAUDE_BIBLE.md` were corrected for the engine type and the principles' new home on 2026-10-17; Law 6 still says "commit only when asked" globally (MO57 overrides it per N1) | DECISIONS N1, N4 |
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-17 F24 (Wes: A): one save per world -- in-game Save writes the world's own slot with a toast (no Save As, no confirm), the in-game Load hides the world you are in, the main menu lists worlds.
 - DONE-2026-10-17 N-154 + Wes's pause call: every way out of a world saves with no confirm (no save-scumming); loading a save made at a death respawns instead of a sky camera; PAUSE_POLICY's two pause-path claims corrected from the engine source.
 - DONE-2026-10-17 G26 / this consolidation: one BACKLOG, DECISIONS, TRAPS, INDEX, per-system docs, slim layer 1.
 - DONE-2026-10-17 inspect discovery (d6a3af69), dig time by rock (37a3d694), torch + eye adaptation + dark caves (4b1e1265, 057e525a), galena,

@@ -9,6 +9,9 @@
 #include "MOSavePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
+#include "MOPersistenceSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/PanelWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Engine/World.h"
@@ -213,8 +216,22 @@ void UMOInGameMenu::RefreshLoadPanelList()
 {
 	if (LoadPanel)
 	{
+		HideCurrentWorldInLoadPanel();
 		LoadPanel->RefreshSaveList();
 	}
+}
+
+void UMOInGameMenu::HideCurrentWorldInLoadPanel()
+{
+	// One save per world (DECISIONS F24): the in-game Load list offers OTHER worlds; the world you are in has one save, not a
+	// snapshot to go back to (UMOSystemMenuUIController::HandleLoadRequested refuses it too).
+	if (!LoadPanel)
+	{
+		return;
+	}
+	const UGameInstance* GI = UGameplayStatics::GetGameInstance(this);
+	const UMOPersistenceSubsystem* Persistence = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+	LoadPanel->SetHiddenSlot(Persistence ? Persistence->GetCurrentSlotName() : FString());
 }
 
 void UMOInGameMenu::ShowOptionsPanel()
@@ -240,6 +257,7 @@ void UMOInGameMenu::ShowLoadPanel()
 	// Refresh load list when opening
 	if (LoadPanel)
 	{
+		HideCurrentWorldInLoadPanel();
 		LoadPanel->RefreshSaveList();
 	}
 }
@@ -347,7 +365,9 @@ void UMOInGameMenu::HandleOptionsClicked()
 
 void UMOInGameMenu::HandleSaveClicked()
 {
-	ShowSavePanel();
+	// One save per world (DECISIONS F24): Save writes this world's own slot right away -- no slot list, no Save As, no
+	// overwrite confirm. The empty slot name means "this world"; the controller ignores any other name anyway.
+	OnSaveRequested.Broadcast(FString());
 }
 
 void UMOInGameMenu::HandleLoadClicked()

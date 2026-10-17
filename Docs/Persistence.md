@@ -13,7 +13,7 @@
 > **Dev verbs:** `MO.Save.LoadFrom` (reloads IN PLACE, same UWorld), `MO.Session.HostSave <slot>`, `MO.BugReport.Preview`,
 > `MO.BugReport.EndpointOverride` (loopback only). **Tools:** `python -I Tools/crash_triage.py <crash-dumps dir>`,
 > `Tools/ue_crash_bundle.py`, `python Tools/ue.py nettest bugreport --package` (`Tools/bugreport_receiver.py`).
-> **Open items:** `Docs/BACKLOG.md` (no section of its own: N-001 under § In flight, N-111 under § Co-op, N-155 and N-157 under § Medical and survival). **Decisions:** DECISIONS 2026-10-17 (leaving saves; F24 manual slots), 2026-10-13 (old saves), 2026-07-08 (offline cap).
+> **Open items:** `Docs/BACKLOG.md` (no section of its own: N-001 under § In flight, N-111 under § Co-op, N-155 and N-157 under § Medical and survival, N-158 under § Docs and process). **Decisions:** DECISIONS 2026-10-17 (leaving saves; one save per world), 2026-10-13 (old saves), 2026-07-08 (offline cap).
 
 ## 1. Save domains (register, don't edit persistence)
 
@@ -25,9 +25,14 @@
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters were NOT saved
   (Deep Dive #6; Codex batch D persists them, uncommitted 2026-10-17).
 - Component pattern: `BuildSaveData(FMO...SaveData&) const` (any caller) / `ApplySaveDataAuthority(const FMO...SaveData&)` (server only).
-- **When the world is saved:** on every way out of it (Exit to Main Menu, Exit Game, loading another save, the death recap's Return, the
-  window close), through `UMOSystemMenuUIController::SaveWorldBeforeLeaving` -> `SaveToCurrentSlot`; host / standalone only; no confirm.
-  Plus manual saves from the in-game Save panel. There is no timed autosave (N-157).
+- **One save per world (Wes, F24, 2026-10-17):** a world's identity is its one slot: a new game's `World_<time>`
+  (`ResetForNewWorld(PendingNewGameSlot)`), the slot a loaded world came from, or `AutoSave_<map>_<time>` when a world started without
+  one. No UI path writes a second slot of a world (no Save As) or loads the world you are in. The main menu therefore lists one entry
+  per world (old saves are not kept: Oct 13). The save itself records no world ID yet (N-158). `GetCurrentWorldIdentifier` /
+  `WorldName` is the MAP name, which every world shares; it is not a world identity.
+- **When the world is saved:** the in-game Save button and every way out (Exit to Main Menu, Exit Game, loading another world, the
+  death recap's Return, the window close), all through `UMOSystemMenuUIController::SaveThisWorld` -> `SaveToCurrentSlot`;
+  host / standalone only; no confirm. There is no timed autosave (N-157).
 - **A load that leaves the player without a pawn** (the last-played pawn died before the save) raises `AMOGameMode::OnPlayerNeedsNextLife`
   after the load handoff; the UI runs the live death path's `ContinueAfterDeath` (possession menu, or a respawn ~5 mi from the deceased
   record's location via `PendingRespawnOrigin`). Before Oct 17 this left a sky camera with nothing to control. Gap: a deceased record is
