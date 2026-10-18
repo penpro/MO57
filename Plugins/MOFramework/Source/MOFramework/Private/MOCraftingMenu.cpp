@@ -97,6 +97,17 @@ void UMOCraftingMenu::InitializeMenu(
 
 	// Initial refresh
 	RefreshRecipeList();
+
+	// Every opening starts with NOTHING selected and an empty preview: the player picks what to craft (Wes, Oct 18 2026: a preview that
+	// was not the list's selection looked chosen, and its craft button did nothing until you clicked the recipe).
+	if (RecipeList)
+	{
+		RecipeList->SelectEntry(NAME_None);
+	}
+	if (DetailPanel)
+	{
+		DetailPanel->ClearDisplay();
+	}
 }
 
 void UMOCraftingMenu::SetCraftingStation(EMOCraftingStation InStation)

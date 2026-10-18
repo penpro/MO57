@@ -35,7 +35,9 @@ and UE_5.8.
 | `logs`, `results`, `save`, `config`, `mptest` | helpers (see `--help`). There is no top-level `shot`: in an instance run `ue.py inst do NAME run "shot showui"` (PNG in `Saved/Screenshots/WindowsEditor/`); widget shots are `ui shot` |
 
 Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one command to in-game), `Tools\agent_state.ps1` (editor + PIE
-stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|key ...` (real input / window capture for instances and packaged windows).
+stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|click|drag|key ...` (real input / window capture for instances and packaged windows; `drag -X -Y -X2 -Y2` is a real
+UMG drag and drop). `MO.Test.InjectInput <IA_Name> [X Y] [Seconds]` feeds a REAL Enhanced Input action (from `/MOFramework/Input/`) through the
+controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input` skips (it calls the pawn directly): use it for naive-player passes.
 
 ## 2. Build
 

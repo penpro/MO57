@@ -9,6 +9,7 @@
 //   MO.Test.ResourceNodes [radiusCm=3000] [n=5]      resource nodes (ResourceNode_ tags) nearest the local pawn, each with the first action the pawn can do
 //                                                    that keeps the node (its yields, seconds)
 //   MO.Test.Harvest <x> <y> <z> <meshName> <ActionId> the KeepOnHarvest menu's request for that instance: AMOPlayerController::ServerBeginHarvest, next tick
+//   MO.Test.InjectInput <IA_Name> [X Y] [Seconds]  a REAL Enhanced Input action, as if its key were held (the controller's own handlers run)
 //   MO.Test.Inspect <ItemId>                         the inventory's Inspect on the first carried item of that kind (UMOUIManagerComponent::StartItemInspection), next tick
 //   MO.Test.SurvivorCommand <FollowMe|StayHere|SetHome|GoHome|Job <JobType>>  the survivor menus' order to the nearest recruited survivor
 //                                                    (FMOSurvivorCommands::Submit), next tick
@@ -38,6 +39,11 @@
 #include "MOUIManagerComponent.h"
 #include "MOSurvivorCommands.h"
 #include "MORecruitmentComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "InputActionValue.h"
+#include "Engine/LocalPlayer.h"
+#include "Containers/Ticker.h"
 #include "EngineUtils.h"
 
 namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this file in one translation unit with others
@@ -471,6 +477,46 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SWEEPABLE n=%d radius=%.0f zones=%d modified=%d net=%s"), N, Radius, TerrainMod->GetZoneCount(),
 				TerrainMod->IsLocationModified(P) ? 1 : 0, World->GetNetMode() == NM_Client ? TEXT("client") : TEXT("host"));
 		}));
+	// MO.Test.InjectInput <IA_Name> [X=1] [Y=0] [Seconds=0.3]: an Enhanced Input action injected as if its key were held, through the
+	// controller's bindings and handlers -- tutorial events, menu gates, the HUD. MO.Test.Input skips all of that (it calls the pawn's
+	// interface directly), so a naive-player pass of the tutorial saw no quest move at all (Oct 18 2026). Actions are /MOFramework/Input/<Name>.
+	FAutoConsoleCommandWithWorldAndArgs GInjectInputCmd(
+		TEXT("MO.Test.InjectInput"),
+		TEXT("Test: a real Enhanced Input action as if its key were held -- the controller's own handlers run. Usage: MO.Test.InjectInput <IA_Name> [X=1] [Y=0] [Seconds=0.3]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			ULocalPlayer* Local = PC ? PC->GetLocalPlayer() : nullptr;
+			UEnhancedInputLocalPlayerSubsystem* Input = Local ? Local->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+			const FString Name = Args.Num() > 0 ? Args[0] : FString();
+			UInputAction* Action = Name.IsEmpty() ? nullptr : LoadObject<UInputAction>(nullptr, *FString::Printf(TEXT("/MOFramework/Input/%s.%s"), *Name, *Name));
+			if (!Input || !Action)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] InjectInput FAILED: %s"), !Input ? TEXT("no local player input subsystem") : TEXT("no such action in /MOFramework/Input"));
+				return;
+			}
+			const double X = Args.Num() > 1 ? FCString::Atod(*Args[1]) : 1.0;
+			const double Y = Args.Num() > 2 ? FCString::Atod(*Args[2]) : 0.0;
+			const double Seconds = Args.Num() > 3 ? FCString::Atod(*Args[3]) : 0.3;
+			Input->StartContinuousInputInjectionForAction(Action, FInputActionValue(Action->ValueType, FVector(X, Y, 0.0)), {}, {});
+			TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> WeakInput(Input);
+			TWeakObjectPtr<UInputAction> WeakAction(Action);
+			const double End = FPlatformTime::Seconds() + Seconds;
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakInput, WeakAction, End](float)
+			{
+				if (FPlatformTime::Seconds() < End)
+				{
+					return true;
+				}
+				if (WeakInput.IsValid() && WeakAction.IsValid())
+				{
+					WeakInput->StopContinuousInputInjectionForAction(WeakAction.Get());
+				}
+				return false;
+			}));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] InjectInput %s (%.2f, %.2f) for %.2f s"), *Name, X, Y, Seconds);
+		}));
 }
 
 #endif // !UE_BUILD_SHIPPING
+

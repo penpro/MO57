@@ -257,6 +257,7 @@ UMOInventorySlot* UMOInventoryGrid::AcquireSlotWidget()
 		if (IsValid(SlotWidget))
 		{
 			SlotWidget->SetVisibility(ESlateVisibility::Visible);
+			SlotWidget->ResetTransientVisualState();   // a pooled widget must not bring the look of the slot it showed before
 			return SlotWidget;
 		}
 	}

@@ -6,15 +6,18 @@
 #   powershell -NoProfile -File Tools\win_input.ps1 -ProcessId <pid> -Action move  -X 960 -Y 540
 #   powershell -NoProfile -File Tools\win_input.ps1 -ProcessId <pid> -Action key   -Keys "{ESC}"          (System.Windows.Forms.SendKeys syntax)
 #   powershell -NoProfile -File Tools\win_input.ps1 -ProcessId <pid> -Action info                          (client rectangle on screen)
+#   powershell -NoProfile -File Tools\win_input.ps1 -ProcessId <pid> -Action drag -X 200 -Y 200 -X2 470 -Y2 200   (left button down, moved in steps, up: a UMG drag and drop)
 #
 # SAFETY: shots use PrintWindow (works while another window covers the game and never moves the cursor). click / move / key REFUSE to run unless the target window really is the foreground window
 # (Windows may refuse SetForegroundWindow, and real input would then hit whatever application is in front: another game, the user's browser ...). Coordinates are client-area pixels (what a 1920x1080 -ResX/-ResY window shows), converted with the live client rectangle, so a moved window is fine.
 param(
     [Parameter(Mandatory = $true)][int]$ProcessId,
-    [Parameter(Mandatory = $true)][ValidateSet("shot", "click", "move", "key", "info")][string]$Action,
+    [Parameter(Mandatory = $true)][ValidateSet("shot", "click", "move", "key", "info", "drag")][string]$Action,
     [string]$Out = "",
     [int]$X = 0,
     [int]$Y = 0,
+    [int]$X2 = 0,
+    [int]$Y2 = 0,
     [string]$Keys = "",
     [ValidateSet("left", "right")][string]$Button = "left"
 )
@@ -106,6 +109,20 @@ switch ($Action) {
         Start-Sleep -Milliseconds 70
         [W32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
         Write-Output ("{0} click at client ({1},{2})" -f $Button, $X, $Y)
+    }
+    "drag" {
+        # A real drag: UMG starts a drag only after the pressed cursor moves past the drag threshold, so the move comes in steps.
+        [void][W32]::SetCursorPos($origin.X + $X, $origin.Y + $Y)
+        Start-Sleep -Milliseconds 150
+        [W32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 150
+        for ($i = 1; $i -le 20; $i++) {
+            [void][W32]::SetCursorPos($origin.X + $X + [int](($X2 - $X) * $i / 20), $origin.Y + $Y + [int](($Y2 - $Y) * $i / 20))
+            Start-Sleep -Milliseconds 25
+        }
+        Start-Sleep -Milliseconds 150
+        [W32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        Write-Output ("drag from client ({0},{1}) to ({2},{3})" -f $X, $Y, $X2, $Y2)
     }
     "key" {
         [System.Windows.Forms.SendKeys]::SendWait($Keys)

@@ -492,6 +492,7 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	DragOp->ItemGuid = CachedVisualData.ItemGuid;
 	DragOp->ItemDefinitionId = CachedVisualData.ItemDefinitionId;
 	DragOp->Quantity = CachedVisualData.Quantity;
+	DragOp->SourceSlotWidget = this;   // gives this slot its look back however the drag ends
 
 	// Create the drag visual - Unreal handles positioning automatically
 	DragOp->DefaultDragVisual = CreateDragVisual();
@@ -506,6 +507,38 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	}
 
 	OutOperation = DragOp;
+}
+
+void UMOInventorySlotDragOperation::Drop_Implementation(const FPointerEvent& PointerEvent)
+{
+	Super::Drop_Implementation(PointerEvent);
+	if (UMOInventorySlot* Source = SourceSlotWidget.Get())
+	{
+		Source->ResetTransientVisualState();
+	}
+}
+
+void UMOInventorySlotDragOperation::DragCancelled_Implementation(const FPointerEvent& PointerEvent)
+{
+	Super::DragCancelled_Implementation(PointerEvent);
+	if (UMOInventorySlot* Source = SourceSlotWidget.Get())
+	{
+		Source->ResetTransientVisualState();
+	}
+}
+
+void UMOInventorySlot::ResetTransientVisualState()
+{
+	bIsBeingDragged = false;
+	bIsDragHovered = false;
+	bIsMouseHovered = false;
+	bDragStarted = false;
+	bButtonPressed = false;
+	if (IsValid(SlotButton))
+	{
+		SlotButton->SetColorAndOpacity(FLinearColor::White);
+	}
+	ApplySlotLook();
 }
 
 void UMOInventorySlot::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)

@@ -971,3 +971,19 @@ Committed: Stick01 teaches BarkFiber 1 (DT_Items), trees can be studied (UMOHarv
 Status: CLAIM (the -game instances; the build window if a fix needs it)
 References: CL-0091
 Wes: "keep going, keep play testing". A naive-player pass through the tutorial chain and the first crafts on a fresh world.
+
+### 2026-10-18 12:58 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0093
+Status: CLAIM (one file; the build window)
+References: CL-0092
+Files claimed: Plugins/MOFramework/Source/MOFramework/Private/MOCoopInstanceCheats.cpp -- a test verb MO.Test.InjectInput: real Enhanced Input actions through the controller's handlers, so a naive-player pass moves the tutorial quests (MO.Test.Input calls the pawn directly and fires no tutorial event).
+
+### 2026-10-18 13:09 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0094
+Status: CLAIM (more files)
+References: CL-0093
+Files claimed: MOInventorySlot.h/.cpp, MOInventoryGrid.cpp (Wes: "blacked out" inventory slots that shuffle on every update -- a successful drag never resets its SOURCE slot's drag look, and the grid re-hands pooled slot widgets to new positions); then the crafting menu's default preview and the survivor task menu's legibility (files claimed when found).
+Files claimed (CL-0094 continued, 13:01): MOBuildingMenu.cpp, MOCraftingMenu.cpp -- a menu opened again showed the last pick highlighted over an empty preview (InitializeMenu cleared the panel, not the list), and clicking it again did nothing; every opening now starts with nothing selected.
+
+### 2026-10-18 13:14 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0095
+Status: RELEASE (CL-0093 / CL-0094 files, committed with this entry) / still mine: the instances and the build window (the survivor task menu restyle next; it needs the editor)
+References: CL-0092..0094
+Committed: inventory slots no longer stay dark after a drag (the drag resets its source; pooled slots reset), the crafting / building menus open with nothing selected, MO.Test.InjectInput (real Enhanced Input), win_input.ps1 -Action drag.

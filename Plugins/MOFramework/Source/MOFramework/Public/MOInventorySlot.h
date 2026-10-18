@@ -107,6 +107,14 @@ public:
 
 	/** Returns true if this drag originated from an equipment slot. */
 	bool IsFromEquipment() const { return SourceEquipmentComponent.IsValid() && SourceEquipmentSlot != EMOEquipmentSlot::MAX; }
+
+	/** The slot widget the drag started from: the operation hands it back its normal look however the drag ends (see Drop / DragCancelled). */
+	TWeakObjectPtr<class UMOInventorySlot> SourceSlotWidget;
+
+	// A drop on a target slot ran only the TARGET's NativeOnDrop: the source slot kept its dragged look -- greyed, dimmed -- for good, and
+	// the grid's pooled slot widgets carried it to new places on every refresh ("blacked out slots that shuffle", Wes, Oct 18 2026).
+	virtual void Drop_Implementation(const FPointerEvent& PointerEvent) override;
+	virtual void DragCancelled_Implementation(const FPointerEvent& PointerEvent) override;
 };
 
 USTRUCT(BlueprintType)
@@ -178,6 +186,10 @@ public:
 	/** Clear the slot's visual data, showing empty state. */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void ClearVisualData();
+
+	/** Back to the plain look: no drag in progress, no hover, the button untinted. Run when a drag from this slot ends however it ends, and when
+	 *  the grid hands a pooled slot widget to a new position (it must not bring another slot's state with it). */
+	void ResetTransientVisualState();
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventorySlotClickedSignature OnSlotClicked;

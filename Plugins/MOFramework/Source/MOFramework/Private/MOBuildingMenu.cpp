@@ -117,6 +117,13 @@ void UMOBuildingMenu::InitializeMenu(
 	}
 
 	RefreshBuildingList();
+
+	// Every opening starts with NOTHING selected, list and preview alike: the panel was cleared here but the list kept the last pick
+	// highlighted, so the menu showed a selection with an empty preview -- and clicking it changed nothing (Wes, Oct 18 2026).
+	if (RecipeList)
+	{
+		RecipeList->SelectEntry(NAME_None);
+	}
 }
 
 void UMOBuildingMenu::RefreshBuildingList()
