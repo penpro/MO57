@@ -156,6 +156,12 @@
 - **A joiner hitch of 250 ms or more while moving = a rubber band** -> the host extrapolates a joiner that sends no moves
   (`AGameNetworkManager::MAXCLIENTUPDATEINTERVAL` 0.25) and corrects it when it comes back: 500 ms hitch at 450 cm/s -> 124 cm, 3/3 ->
   `set GameNetworkManager MAXCLIENTUPDATEINTERVAL 0` on the host leaves 42 cm (`p.NetServerMaxMoveDeltaTimeScalar` 1.75); fork F25. (Oct 17)
+- **A joiner far from the host is corrected on every move by tens of cm, host higher** -> the voxel world has two collision layers (render-chunk
+  "visibility" collision whose detail follows THIS machine's camera, and fine invoker chunks), both WorldStatic, and a pawn stands on the
+  TOPMOST: 1 km from the host's camera the coarse one was up to ~1 m above the ground -> every machine refines the terrain around every other
+  player (`AMOCharacter::RemotePlayerTerrainDetail`). (Oct 18)
+- **A voxel invoker / LOD volume / camera invoker added at runtime from Python does nothing** (no effect, no cost) -> build it into the actor (a
+  default subobject, toggled through `bEnabled`, which the plugin re-reads every tick). Three negative experiments came from this. (Oct 18)
 - **Lining up two machines' logs by the replicated server clock is off by seconds** -> `AGameStateBase::GetServerWorldTimeSeconds` is WORLD
   time, which stops at 0.4 s a frame (`AWorldSettings::MaxUndilatedFrameTime`): a hitching host lost 3.3 s of it against the real clock and the
   joiner's copy sat 3-6 s apart -> line logs up by wall clock (`utc=` in every `[MONet*]` line, clocks synced). (Oct 17)

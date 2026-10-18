@@ -59,6 +59,8 @@
 #include "Perception/AISense_Hearing.h"
 #include "VoxelWorld.h"
 #include "Collision/VoxelCollisionInvoker.h"
+#include "Render/VoxelLODVolumeComponent.h"
+#include "GameFramework/PlayerState.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
@@ -188,6 +190,16 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	VoxelCollisionInvoker->bWaitForVoxelWorld = true; // compute missing chunks inline instead of letting the pawn fall
 	VoxelCollisionInvoker->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	VoxelCollisionInvoker->SetCanEverAffectNavigation(false);
+
+	// Fine terrain around another player's pawn on this machine -- off until this pawn is one (UpdateRemotePlayerTerrainDetail). See the header comment.
+	RemotePlayerTerrainDetail = CreateDefaultSubobject<UVoxelLODVolumeComponent>(TEXT("RemotePlayerTerrainDetail"));
+	RemotePlayerTerrainDetail->SetupAttachment(RootComponent);
+	RemotePlayerTerrainDetail->bEnabled = false;
+	RemotePlayerTerrainDetail->MinLOD = 0;
+	RemotePlayerTerrainDetail->Type = EVoxelLODInvokerType::Sphere;
+	RemotePlayerTerrainDetail->SphereRadius = 3000.f;   // the collision invoker's 30 m
+	RemotePlayerTerrainDetail->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RemotePlayerTerrainDetail->SetCanEverAffectNavigation(false);
 
 	// Held item mesh components (attached to hand sockets)
 	LeftHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftHandMesh"));
@@ -2612,6 +2624,28 @@ void AMOCharacter::NotifyControllerChanged()
 		VoxelCollisionInvoker->bEnabled = bHumanDriven;
 		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: voxel collision invoker %s (controller %s)"),
 			*GetName(), bHumanDriven ? TEXT("ON") : TEXT("off"), Controller ? *Controller->GetName() : TEXT("none"));
+	}
+	UpdateRemotePlayerTerrainDetail();
+}
+
+void AMOCharacter::OnPlayerStateChanged(APlayerState* NewPlayerState, APlayerState* OldPlayerState)
+{
+	Super::OnPlayerStateChanged(NewPlayerState, OldPlayerState);
+	UpdateRemotePlayerTerrainDetail();
+}
+
+void AMOCharacter::UpdateRemotePlayerTerrainDetail()
+{
+	if (!RemotePlayerTerrainDetail)
+	{
+		return;
+	}
+	const APlayerState* PS = GetPlayerState();
+	const bool bRemotePlayer = PS && !PS->IsABot() && !IsLocallyControlled() && GetNetMode() != NM_Standalone;
+	if (RemotePlayerTerrainDetail->bEnabled != bRemotePlayer)
+	{
+		RemotePlayerTerrainDetail->bEnabled = bRemotePlayer;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: fine terrain around this remote player %s"), *GetName(), bRemotePlayer ? TEXT("ON") : TEXT("off"));
 	}
 }
 

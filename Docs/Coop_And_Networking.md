@@ -57,6 +57,11 @@
   client regenerates in `OnRep_WorldSeed`). Determinism matters: `Docs/Caves_And_Geology.md` §2 (checksum) and `Docs/TRAPS.md` (/fp:precise).
 - **Voxel collision exists only around each machine's own human-driven pawns:** `AMOCharacter::VoxelCollisionInvoker`
   (`bWaitForVoxelWorld`) is enabled in `NotifyControllerChanged` while a human drives the pawn (5/6 joins 0 cm, 1/6 17-50 cm for ~10 s).
+- **Every machine builds fine terrain around every OTHER player too** (`AMOCharacter::RemotePlayerTerrainDetail`, a `UVoxelLODVolumeComponent`,
+  MinLOD 0, 30 m, on exactly while the pawn is another human player's on this machine: `UpdateRemotePlayerTerrainDetail` from
+  `NotifyControllerChanged` and `OnPlayerStateChanged`). Pawns stand on the TOPMOST of the voxel world's two collision layers, and the render
+  chunks' (visibility) collision follows this machine's camera: without it a joiner 1 km from the host stood on coarse terrain up to ~1 m too
+  high on the host and was corrected on every move (section 7).
 - A client's simulated copy of a remote pawn must never apply gravity (`AMOCharacter::OnUpdateSimulatedPosition`): with no floor under a
   proxy the client predicts a fall (the host's pawn free-fell to z = -498,790 on clients). Control: `MO.RemotePawn.SimGravity 1`.
 - PCG removals replicate (`AMOGameState::RemovedInstances`, `Docs/PCG.md` §7). Per-machine actors (lakes) don't replicate (`Docs/Water.md`).
@@ -249,6 +254,11 @@ Wes: "it looks like we did fix the weird laggy no running stuff, and it no longe
   the host's floor is too high (+59.3 cm, 121 of 121 moves corrected; the joiner's own floor 1.1 cm off); where it is below, nothing shows
   (-0.1 cm, 0 corrections). That is why the Steam data's error is one-signed: the host is always HIGHER. The host's surface error against
   the generator grows with distance from its camera: 0.4 cm at 20 m, up to 18 cm at 300 m, ~100 cm at 1 km, ~120 cm at 2 km.
-  Fix not chosen yet: a 30 m `UVoxelLODVolumeComponent` on the joiner's pawn (host side) did not change it; a 200 m one still has to be
-  tried at a spot that reproduces. The other way is to keep player pawns off the coarse layer (its own object channel, which
-  human-driven capsules ignore and AI keeps blocking), which needs an audit of every object-type terrain trace.
+  **Fixed (Oct 18):** `AMOCharacter::RemotePlayerTerrainDetail` (section 3) forces the finest render detail within 30 m of every other
+  player's pawn on each machine, so the visibility collision there is the fine one. On two -game processes, at a spot where the host's
+  coarse surface was 93 cm above the ground: fix on, host floor +2.8 cm (the same as the joiner's), the 256 m chunk gone, 0 of 136 moves
+  corrected; switched off at runtime, +93.1 cm and the 256 m chunk back; on again, +2.8 cm. Host fps 89.4 / 88.5 / 88.9 (no measurable cost).
+  It also gives AI near a remote player the same fine ground on both machines. What did NOT work: the same volume, or a camera invoker,
+  added at runtime from Python (no effect, no cost: never picked up). The rejected alternative: keep player pawns off the coarse layer
+  (its own object channel): wildlife walks on that layer 30-75 m from players (it wakes within 75 m) and survivors never freeze, so it
+  would need a 75 m collision invoker around every player (~6x the chunks) and an audit of every object-type terrain trace.

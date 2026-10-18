@@ -924,3 +924,9 @@ Status: CLAIM
 References: CL-0082 (released to me), CL-0081
 Files claimed: the build window and the -game instances (lodhost / lodclient), MOCharacter.h/.cpp (still unchanged).
 Retest at a spot that reproduces: a 30 m and a 200 m UVoxelLODVolumeComponent on the joiner's pawn, host side, where the host's coarse terrain is >= 30 cm above the ground. RELEASE follows.
+
+### 2026-10-18 07:35 Pacific Daylight Time — CLAUDE (net diagnostics) — CL-0084
+Status: RELEASE
+References: CL-0083, CL-0081, N-162
+Files released: the build window, the -game instances (none running), MOCharacter.h/.cpp (committed with this entry).
+N-162 fixed: AMOCharacter::RemotePlayerTerrainDetail (UVoxelLODVolumeComponent, MinLOD 0, 30 m, on only for another human player's pawn on each machine). Two -game processes, a spot where the host's coarse surface was 93 cm high: on +2.8 cm (same as the joiner), 0 of 136 moves corrected; off at runtime +93.1 cm; on again +2.8 cm; host fps 89.4 / 88.5 / 88.9. nettest game 42/42, MOFramework automation 316/316. Runtime-added voxel invokers from Python never take effect (TRAPS).

@@ -245,6 +245,7 @@ class UStaticMeshComponent;
 class USphereComponent;
 class UNavigationInvokerComponent;
 class UVoxelCollisionInvokerComponent;
+class UVoxelLODVolumeComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
 
@@ -638,6 +639,9 @@ protected:
 	 */
 	virtual void NotifyControllerChanged() override;
 
+	/** Runs on the server AND on clients (APawn::SetPlayerState, OnRep_PlayerState): a remote player's pawn on a joiner has no controller there. */
+	virtual void OnPlayerStateChanged(APlayerState* NewPlayerState, APlayerState* OldPlayerState) override;
+
 	/**
 	 * A CLIENT draws every other player's pawn as a simulated proxy: it takes the server's position and PREDICTS between updates, and with no floor under the proxy the
 	 * engine predicts a fall ("No floor, must fall"). Voxel terrain exists on a machine only around ITS OWN human-driven pawns (VoxelCollisionInvoker), and not at all before the
@@ -799,6 +803,19 @@ public:
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Voxel")
 	TObjectPtr<UVoxelCollisionInvokerComponent> VoxelCollisionInvoker;
+
+	/**
+	 * Fine terrain around ANOTHER player's pawn on this machine (the joiner's pawn on the host, the host's pawn on a joiner). Pawns stand on the
+	 * voxel world's render-chunk (visibility) collision, whose detail follows THIS machine's camera: 1 km from the host's camera a joiner stood on
+	 * coarse terrain 69 cm above the true ground, and the host corrected it about 10 times a second, forever, while the joiner (standing at its own
+	 * camera) had the right floor (Docs/Coop_And_Networking.md section 7). This forces the finest detail (MinLOD 0) within 30 m of each remote
+	 * player, so both machines stand it on the same ground. Off for the local pawn (the camera covers it) and for NPCs (no player state).
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Voxel")
+	TObjectPtr<UVoxelLODVolumeComponent> RemotePlayerTerrainDetail;
+
+	/** Turns RemotePlayerTerrainDetail on exactly while this pawn is another (human) player's pawn on this machine. */
+	void UpdateRemotePlayerTerrainDetail();
 
 	// ============================================================================
 	// HELD ITEM VISUALS
