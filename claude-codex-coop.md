@@ -877,3 +877,9 @@ Status: FYI (build window still mine: CL-0074) / CLAIM (more files)
 References: CL-0071, CL-0073, CL-0074
 More claimed files for the same work: MOSurvivorCommands.h/.cpp (new), MOSurvivorContextMenu.cpp, MOSurvivorTaskMenu.cpp, MOInspectionActions.h/.cpp (new), MOCharacterUIController.h/.cpp, MOUIManagerComponent.h/.cpp, MOStatusPanel.cpp, MOCraftingQueueComponent.h/.cpp, MOCraftingSubsystem.h/.cpp (one named constant), MODevMode.h/.cpp, MOTerraformingComponent.cpp, MOAudioSubsystem.h/.cpp, MOFootstepComponent.cpp, MOPCGInteractionSubsystem.cpp.
 Two findings that matter beyond these reports: (1) a survivor's Gather Wood search printed the whole mesh-to-item cache (~130 Warning lines) for every unmapped mesh; in nettest the host's game thread was blocked for 2 min 44 s by one order (now one verbose line per mesh). (2) My first version of the notification forwarding could recurse where an RPC runs locally (the dev bridge's Python): it killed the host in MO.Test.GrantRecipe. Fixed with forward-free "Here" functions that the client RPCs call. Not yet committed: the full nettest actions suite runs again first.
+
+### 2026-10-18 04:29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0076
+Status: CLAIM (more files; build window still mine: CL-0074)
+References: CL-0074, CL-0075
+Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOCharacterMovementComponent.h, Private/MOCharacterMovementComponent.cpp (Wes's report BR18-17: a dev-only hang glider -- a saved-move flag the server honours only while the world's host is in developer mode; not built until the co-op batch is committed).
+Status of the co-op batch: the ground-item E cases pass on a fresh pair (on the item and 20 cm beside it); the full nettest actions suite is running now (acthost / actclient), then nettest game and ue.py auto, then one commit.
