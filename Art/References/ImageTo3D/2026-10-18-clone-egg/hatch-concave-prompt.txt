@@ -1,0 +1,15 @@
+Generated with built-in image_gen, 2026-10-18.
+Edit target: CloneEggPod01-hatch-v1.png
+Supporting interior/material reference: CloneEggPod01-body-v1.png
+Output: CloneEggPod01-hatch-concave-v2.png
+
+Use case: precise-object-edit. Create a corrected single-object image-to-3D reference of the DETACHED HATCH, using image 1 as the edit target and image 2 only as the matching egg's interior/material reference.
+Critical requested change: TURN THE HATCH OVER to show its CONCAVE INNER UNDERSIDE, and photograph it at an oblique angle that unambiguously proves it is a hollow curved shell. Keep the same elongated teardrop-oval outline, pointed/narrow end at LEFT, rounded broad end at RIGHT, natural pale granite exterior and thin dark alien sealing perimeter from image 1. Same one hatch component and proportions; do not turn it into the main pod.
+
+Geometry must be clear: this is a thin curved lid, convex outside and concave inside, like a large shallow oval eggshell segment. Approximately 1.4 m long and 0.75 m wide; continuous shell wall about 4-6 cm thick, with the middle of the concave underside recessed approximately 20 cm below the perimeter. The visible interior is an empty continuous curved depression, not a convex mound, flat slab, solid boulder, full thick egg or flat lid. Show the whole uninterrupted smooth rim around the cavity. The near rim exposes the actual shell thickness and a strip of the exterior granite; far rim visibly rises above the recessed inner surface. Smooth fitted edges, no broken fragments.
+
+Presentation: rest the hatch on its convex exterior on the white studio surface, with its hollow underside facing UP and TOWARD the viewer. Three-quarter camera from above the long near side, around 40 degrees above the floor: high enough to see the complete inner cavity and its depressed centre, low enough for the near/far edge separation and shell curvature to be obvious. Long axis horizontal left to right. The concavity occupies most of the visible face. Physical depth is conveyed by consistent shading, far-rim shadow, overlapping rim edges and visible thin walls, not a painted illusion. No support or stand.
+
+Material: cavity lining is smooth warm grey/taupe mineral like the parent pod's inside in image 2, with a few restrained fossil-like dark bronze/ceramic alien branching inlays embedded flush within the lining. Only a few tiny clear nutritional-jelly smears, no filling liquid. Exterior granite remains visible around the sidewalls and nose edge; keep a little cooled atmospheric-entry char on the LEFT outer tip. Dark narrow sealing rim follows the smooth oval perimeter. No bright glow, bolts, hinges, handles, windows, holes through the shell, or mechanisms projecting off it.
+
+One hatch only, fully visible, ample clear margin, plain opaque white background, neutral soft studio lighting, natural shadow under the object. Photorealistic game-prop reference, same realism and palette as the supplied images. NO egg body, no second object, no additional view, no cross-section diagram, text, arrows or labels. Prioritize unmistakable concave-shell geometry over surface detail.

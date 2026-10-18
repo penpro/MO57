@@ -1,11 +1,12 @@
 # Clone incubation egg: body and hatch
 
-Selected from concept B on 2026-10-18. Two separate single-object image-to-3D references, generated with the built-in image_gen tool. Full generation prompts are in `prompts.json`.
+Selected from concept B on 2026-10-18. Separate single-object image-to-3D references, generated with the built-in image_gen tool. Original generation prompts are in `prompts.json`; the revised concave hatch view's prompt is in `hatch-concave-prompt.txt`.
 
 - `CloneEggPod01-body-v1.png`: horizontal open pale-granite egg, tapered nose at left, broad rear at right. Nose has cooled atmospheric-entry scorching. Smooth oval hatch opening and recessed sealing lip, subtle alien structures in the mineral lining, sparse clear nutritional jelly residue. No detached panel in this image.
 - `CloneEggPod01-hatch-v1.png`: one shallow convex granite hatch with a smooth continuous fitted perimeter, matching mineral palette and restrained leading-end heat staining. Outer face shown; no main body in this image.
+- `CloneEggPod01-hatch-concave-v2.png`: recommended primary hatch input for image-to-3D. Hollow underside faces the camera, showing the recessed mineral lining, full sealing rim and thin granite shell edge. The exterior view remains a supplemental material reference of the same component.
 
-Both are 1536 x 1024 PNGs with opaque white backgrounds. The body image was generated first; the hatch used that exact image as its design reference. These are separate reference images, not a mesh or engine import.
+All are 1536 x 1024 PNGs with opaque white backgrounds. The body image was generated first; the hatch used that exact image as its design reference. The concave view edits the hatch with the body as an interior/material reference. These are separate reference images, not a mesh or engine import.
 
 ## Story and intended scale
 

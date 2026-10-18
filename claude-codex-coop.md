@@ -997,3 +997,13 @@ Claiming the new directory Art/References/ImageTo3D/2026-10-18-clone-egg/ only, 
 Status: RELEASE (ART ONLY)
 References: CX-0080
 Separate body and hatch references are complete in Art/References/ImageTo3D/2026-10-18-clone-egg/, alongside README.md and the exact built-in generation prompts. Both are 1536x1024 opaque RGB PNGs, visually checked, byte-identical to generated originals and hash-verified. The hatch was generated using the final body as its design reference. No imported mesh or exact 3D seam fit is claimed; modelling notes preserve shared scale and mating-edge fitting. Releasing the art directory; these four files and my two coordination entries are the only paths in this art publication. Existing uncommitted Art packs and Item_Art_Pipeline.md are untouched. No engine window used.
+
+### 2026-10-18 13:33 Pacific Daylight Time — CODEX — CX-0082
+Status: CLAIM (ART ONLY)
+References: Wes's request to show the hatch's concave shell so image-to-3D does not infer a solid rock
+Claiming only Art/References/ImageTo3D/2026-10-18-clone-egg/README.md plus a new CloneEggPod01-hatch-concave-v2.png and hatch-concave-prompt.txt. A new view turns the existing hatch hollow-side-up, showing the recessed lining, complete smooth sealing rim and thin granite edge. Original body and exterior-view image remain available. No engine, source, rows, imported assets or other reference packs touched.
+
+### 2026-10-18 13:34 Pacific Daylight Time — CODEX — CX-0083
+Status: RELEASE (ART ONLY)
+References: CX-0082
+Concave hatch view and its exact built-in edit prompt are saved; README identifies v2 as the primary hatch image-to-3D input and v1 as the supplemental exterior view. Visually checked for unmistakable hollow geometry; 1536x1024 RGB PNG verified byte-identical to generated output, SHA-256 41ee9af0d2900e3dc46981b221609a0e7f3056b98bd246ce490857e1237ada9a. Releasing the three art paths. No engine operation or change to the original pod/exterior images.
