@@ -3,6 +3,8 @@
 > **What this is:** the live tracker for the 27 reports Wes sent from his Oct 18 Steam session (host on his machine, a remote joiner on another;
 > `mo-crashes-2026-10-18.tar.gz`, 06:22-07:46 UTC). One row per report: what it is, the layer responsible, and the status. Backlog rows: BR18-n in
 > `Docs/BACKLOG.md`. When every row is closed or moved to the backlog, archive this file (`Docs/Archive/`).
+> **Committed:** the fixes marked FIXED / DONE below in e316e4b5 (Oct 18 05:31 PDT), verified by nettest actions 164/1 (the 1 is N-162),
+> nettest game 42/42 and automation 314/0.
 > **Wes confirmed fixed in this session** (over Steam): the laggy no-run gait of a joiner (the gait fix), and interact no longer kicks the joiner
 > out of their pawn.
 
