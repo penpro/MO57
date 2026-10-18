@@ -235,6 +235,12 @@ private:
 	/** ResourceNodeId extracted from target tags. */
 	FName CachedResourceNodeId = NAME_None;
 
+	/**
+	 * A ground item (a stick, a stone, a flint: PCG's MOItem_<ItemId> tag, no resource node): the menu is titled with the item's name and offers Pick
+	 * Up, the same request E sends. Before Oct 18 2026 this menu showed "Unknown Object" with no buttons for them.
+	 */
+	FName GroundItemId = NAME_None;
+
 	/** Index of the destroy action in AvailableHarvestActions, or INDEX_NONE. */
 	int32 DestroyActionIndex = INDEX_NONE;
 

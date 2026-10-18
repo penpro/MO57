@@ -1538,6 +1538,392 @@ def _client_press_e(rep, host, client):
              ("picked up" if got else (reject.group(0) if reject else "no pickup and no Reject line on the host")) + diag)
 
 
+GROUND_ITEM_RE = re.compile(r"\[MOTEST\] GROUND_ITEM i=\d+ item=(\S+) mesh=(\S+) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) dist=(\d+)")
+INSTANCE_AT_RE = r"\[MOTEST\] INSTANCE_AT present=(\d)[^\n]*"
+SWEEPABLE_RE = r"\[MOTEST\] SWEEPABLE n=(\d+)[^\n]*"
+
+
+def _motest(name, cmd, regex, timeout=12):
+    """Run a [MOTEST] verb in an instance; the match of `regex` in what it logged, or None."""
+    off = log_size(name)
+    console(name, cmd)
+    return wait_log(name, regex, since=off, timeout=timeout, step=0.5)
+
+
+def _worlds_built(rep, host, client, timeout=300):
+    """Both worlds finished building (UMOWorldReadinessSubsystem: 'READY after N s'). PCG instances -- ground items, resource nodes, grass -- exist only
+    after it: the joiner builds its world behind the loading overlay for a minute after it joins."""
+    for name in (host, client):
+        # The READY of the GAME map: the menu world (LoadingLevel) logs its own READY a minute before the joiner travels.
+        m = wait_log(name, r"Load map complete /Game/(?!Penumbra/Maps/LoadingLevel)\S+[\s\S]*?(READY after [\d.]+s[^\r\n]*)", since=0, timeout=timeout, step=2.0)
+        if not rep.step(f"{name}: its world is built (terrain and vegetation)", bool(m), m.group(1) if m else f"no READY line on the game map within {timeout} s"):
+            return False
+    # READY can be the readiness cap (60 s) with PCG still busy: a slow joiner fills in the small things (sticks, stones) for minutes after. Wait for them.
+    # A joiner can also spawn on bare ground (sand, rock): after two minutes with none, stand it by the host's pawn (the host's spawn had items) and wait again.
+    deadline, n, moved = time.time() + timeout, 0, False
+    while time.time() < deadline:
+        m = _motest(client, "MO.Test.GroundItems 3000 1", r"\[MOTEST\] GROUND_ITEMS n=(\d+)")
+        n = int(m.group(1)) if m else 0
+        if n >= 5:
+            break
+        if not moved and time.time() > deadline - timeout + 120:
+            moved = True
+            _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                         "j.set_actor_location(h.get_actor_location() + unreal.Vector(300.0, 0.0, 150.0), False, True); out('JOINER_TO_HOST')")
+            deadline = max(deadline, time.time() + 180)
+        time.sleep(10)
+    detail = f"{n} within 30 m" + (" (moved by the host's pawn)" if moved else "")
+    if n < 5:
+        # N-031 (a world whose PCG never generates): keep the evidence -- the bug report's WorldBuild fields (components generated vs generating).
+        off = log_size(client)
+        console(client, "MO.BugReport.Preview")
+        wait_log(client, r"preview \| WorldBuild\.NearInstances", since=off, timeout=15)
+        wb = re.findall(r"preview \| WorldBuild\.(PcgComponents|PcgExecuting|NearInstances|LastReady): ([^\r\n]*)", read_log_from(client, off))
+        detail += " | " + "; ".join(f"{k}: {v}" for k, v in wb)
+    return rep.step(f"{client}: its PCG has generated ground items around its pawn", n >= 5, detail)
+
+
+def _ground_items_both(rep, host, client, radius, lines):
+    """PCG ground items (MOItem_ tags) the CLIENT lists near its pawn, each confirmed on the HOST at the same place: [(item, mesh, x, y, z, dist)].
+    Instances are named differently on each machine, so they are matched by mesh + place (MOInstanceRef.h)."""
+    off = log_size(client)
+    console(client, f"MO.Test.GroundItems {radius} {lines}")
+    wait_log(client, r"\[MOTEST\] GROUND_ITEMS n=\d+", since=off, timeout=15)
+    both = []
+    for item, mesh, x, y, z, d in GROUND_ITEM_RE.findall(read_log_from(client, off)):
+        m = _motest(host, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
+        if m and m.group(1) == "1":
+            both.append((item, mesh, x, y, z, int(d)))
+    return both
+
+
+def _joiner_remove(host, item, n):
+    """Take back what a case gave the joiner (inventories have a capacity: a full pack makes the LATER cases' gives fail)."""
+    if n > 0:
+        _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                     f"out('TOOK=%s' % inv.remove_item_by_definition_id('{item}', {int(n)}))")
+
+
+TEST_GIFTS = ("Stick01", "Stick02", "Stone01", "Bark01", "RiverCobble01", "PlantFiber01", "Berries01", "FlintNodule01", "Dirt01")
+
+
+def _joiner_make_room(host):
+    """Empty the joiner's pack of what earlier cases gave it (inventories have a slot capacity since the audit, 7f73356b: one no-stack give per slot,
+    and a full pack fails the later cases' gives for a reason that is not theirs)."""
+    ids = "[" + ", ".join(f"'{i}'" for i in TEST_GIFTS) + "]"
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                 f"n = [inv.remove_item_by_definition_id(i, inv.get_item_count_by_definition_id(i)) for i in {ids} if inv.get_item_count_by_definition_id(i) > 0]; "
+                 "out('ROOM %d entries left of %d slots' % (inv.get_entry_count(), inv.get_slot_count()))")
+
+
+def _joiner_item_count(host, item):
+    inv = "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+    m = re.search(r"HAVE=(-?\d+)", _probe(host, inv + f"out('HAVE=%d' % inv.get_item_count_by_definition_id('{item}'))"))
+    return int(m.group(1)) if m else -1
+
+
+def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
+    """CLIENT presses E on a PCG ground item (a stick, stone or flint the biome spawner scattered: an instanced-mesh instance tagged MOItem_<ItemId>),
+    through the real input path. Wes's Steam test, Oct 18 2026: nothing happened -- the RPC carried the PCG component pointer, which the host cannot
+    resolve ("Unable to resolve default guid from client: PCGPartitionActor_2147442263": partition actors are named differently on every machine).
+    _client_press_e cannot catch it: its bark is a replicated actor. Proof on the HOST: the joiner's inventory holds one more. Controls: the host has
+    the same instance at the same place before E, and the count before E."""
+    if not _worlds_built(rep, host, client):
+        return
+    both = _ground_items_both(rep, host, client, 2500, 8)
+    chosen = both[min(pick, len(both) - 1)] if both else None
+    if not rep.step("CONTROL: a PCG ground item near the joiner exists at the same place on host and client", bool(both),
+                    f"{chosen[1]} at {chosen[2]},{chosen[3]},{chosen[4]} ({chosen[0]}; #{both.index(chosen)} of {len(both)})" if both else "none found on both"):
+        return
+    item, mesh, x, y, z, _d = chosen
+    before = _joiner_item_count(host, item)
+    # Stand the joiner 150 cm from the item (the server owns its pawn; the move replicates), then turn the client's camera onto it until the crosshair is on it.
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_G_HOME = p.get_actor_location(); "
+                 f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
+                 "p.set_actor_location(l + d * 150.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('G_STAND')")
+    time.sleep(3)
+    aim_code = (f"pc = unreal.GameplayStatics.get_player_controller(world, 0); t = unreal.Vector({float(x) + aim_offset_cm}, {y}, {z}); "
+                "cam = pc.player_camera_manager.get_camera_location(); fwd = pc.player_camera_manager.get_camera_rotation().get_forward_vector(); "
+                "miss = ((t - cam) - fwd * (t - cam).dot(fwd)).length(); pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(cam, t)); "
+                "out('G_AIM dist=%.0f miss=%.1f' % ((t - cam).length(), miss))")
+    am = None
+    for _ in range(7):
+        am = re.search(r"G_AIM dist=(-?\d+) miss=(-?[\d.]+)", _probe(client, aim_code))
+        if not am or float(am.group(2)) < 4.0:
+            break
+        time.sleep(0.4)
+    # The interaction trace sweeps 30 cm and assists 40 cm around the aim: 15 cm of aim error is on the item.
+    if rep.step(f"client: the crosshair is {f'{aim_offset_cm:.0f} cm beside' if aim_offset_cm else 'on'} the ground item (aim error < 15 cm)", bool(am) and float(am.group(2)) < 15.0, am.group(0) if am else "no G_AIM line"):
+        time.sleep(1.5)  # the new view reaches the server with the next moves
+        hoff, coff = log_size(host), log_size(client)
+        console(client, "mo.Interact.Debug 1")   # the client's targeting passes, for the diagnosis below
+        console(client, "MO.Test.PressKey E")
+        got = False
+        for _ in range(8):
+            time.sleep(1.5)
+            if _joiner_item_count(host, item) > before:
+                got = True
+                break
+        console(client, "mo.Interact.Debug 0")
+        passes = re.findall(r"\[MOInteractor\] (?:target |  near the aim point|no target)[^\n]*", read_log_from(client, coff))
+        hlog = read_log_from(host, hoff)
+        unresolved = re.search(r"Unable to resolve default guid from client[^\n]*", hlog)
+        served = re.search(r"\[MOInteractor\] (?:instance interact|ServerRequestInstanceInteract)[^\n]*", hlog)
+        rep.step(f"client E on a PCG ground item ({item}): the host puts it in the joiner's inventory", got,
+                 f"{item} {before} -> {_joiner_item_count(host, item)} | host: " + (served.group(0) if served else "no [MOInteractor] line")
+                 + ("" if got else " | client targeting: " + " // ".join(p[:220] for p in passes[-4:])))
+        rep.step("... and the host resolved every reference the client sent (no 'Unable to resolve')", unresolved is None,
+                 unresolved.group(0)[:200] if unresolved else "none")
+        if got:
+            time.sleep(2)
+            m = _motest(client, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
+            rep.step("... and the item is gone from the CLIENT's world too (the removal record)", bool(m) and m.group(1) == "0", m.group(0) if m else "no INSTANCE_AT line")
+            _joiner_remove(host, item, _joiner_item_count(host, item) - before)
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_G_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('G_HOME')")
+    time.sleep(2)
+
+
+RESOURCE_NODE_RE = re.compile(r"\[MOTEST\] RESOURCE_NODE i=\d+ mesh=(\S+) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) dist=(\d+) action=(\S+) yields=(\S+) seconds=([\d.]+)")
+HARVEST_OUTCOME_RE = r"\[MOCraftUI\] Harvest '[^']*' finished: produced (\d+) kind\(s\), failed=(\d) depleted=(\d) outOfSeason=(\d)"
+
+
+def _client_harvest(rep, host, client):
+    """CLIENT harvests a resource node (strip bark, gather twigs ...): the KeepOnHarvest menu's request, AMOPlayerController::ServerBeginHarvest.
+    Wes's Steam test, Oct 18 2026: every harvest a joiner made said "Inventory Full!" -- it ran in the joiner's UI on the joiner's own copy of the
+    bush, and the joiner's inventory is not the authority. Proof on the HOST: a yield of the action arrives in the joiner's inventory there; and the
+    joiner's UI gets the outcome. Controls: the node is at the same place on the host; the counts before. A node whose yields are out of season or
+    used up proves nothing either way, so the next one is tried."""
+    if not _worlds_built(rep, host, client):
+        return
+    off = log_size(client)
+    console(client, "MO.Test.ResourceNodes 2500 12")
+    wait_log(client, r"\[MOTEST\] RESOURCE_NODES n=\d+", since=off, timeout=15)
+    nodes = []
+    for mesh, x, y, z, d, action, yields, secs in RESOURCE_NODE_RE.findall(read_log_from(client, off)):
+        m = _motest(host, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
+        if m and m.group(1) == "1":
+            nodes.append((mesh, x, y, z, int(d), action, yields.split(","), float(secs)))
+    if not rep.step("CONTROL: a resource node the joiner can work exists at the same place on host and client", bool(nodes),
+                    f"{len(nodes)} node(s); first {nodes[0][0]} {nodes[0][5]}" if nodes else "none on both"):
+        return
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_H_HOME = p.get_actor_location(); out('H_HOME_SAVED')")
+    tried = []
+    for mesh, x, y, z, d, action, yields, secs in nodes[:3]:
+        before = {i: _joiner_item_count(host, i) for i in yields}
+        # Stand the joiner a metre from the node (the server owns its pawn; the move replicates).
+        _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                     f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
+                     "p.set_actor_location(l + d * 100.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); out('H_STAND')")
+        time.sleep(3)
+        hoff, coff = log_size(host), log_size(client)
+        console(client, f"MO.Test.Harvest {x} {y} {z} {mesh} {action}")
+        deadline = time.time() + secs + 12
+        got, after, outcome = False, dict(before), None
+        while time.time() < deadline and not outcome:
+            time.sleep(1.5)
+            after = {i: _joiner_item_count(host, i) for i in yields}
+            got = any(after[i] > before[i] for i in yields)
+            outcome = re.search(HARVEST_OUTCOME_RE, read_log_from(client, coff))
+        hlog = read_log_from(host, hoff)
+        began = re.search(r"\[MOHarvest\] [^\n]*server-timed[^\n]*", hlog) or re.search(r"\[MOHarvest\] [^\n]*refused[^\n]*", hlog)
+        tried.append(f"{action} on {mesh}: {before} -> {after}; host: {began.group(0)[-140:] if began else 'no [MOHarvest] line'}; "
+                     f"client: {outcome.group(0) if outcome else 'no outcome'}")
+        if outcome and outcome.group(1) == "0" and (outcome.group(3) == "1" or outcome.group(4) == "1"):
+            continue  # used up / out of season: inconclusive, try the next node
+        rep.step(f"client harvest ({action} on {mesh}): a yield arrives in the joiner's inventory on the HOST", got, tried[-1])
+        for i in yields:
+            _joiner_remove(host, i, after[i] - before[i])
+        rep.step("... and the joiner's UI got the outcome, without 'Inventory Full'", bool(outcome) and outcome.group(2) == "0",
+                 outcome.group(0) if outcome else "no outcome line on the client")
+        break
+    else:
+        rep.step("client harvest: a node with something to give in season", False, " || ".join(tried))
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_H_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('H_HOME')")
+    time.sleep(2)
+
+
+def _client_inspect(rep, host, client):
+    """CLIENT inspects a carried item (the inventory's Inspect). Wes's Steam test, Oct 18 2026: "client leaving game resets all skills/knowledge on
+    pawn" -- a joiner's inspection ran in the joiner's UI on the joiner's own copy of its knowledge and skills, which the host never had and never
+    saved. Proof on the HOST: the joiner's pawn there has studied the item. Controls: it had not before; the host gave the item (it is carried)."""
+    know = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); k = p.get_component_by_class(unreal.MOKnowledgeComponent); "
+            "r = k.get_all_inspected_items(); r = r if isinstance(r, (list, tuple)) or hasattr(r, '__iter__') else []; out('STUDIED=' + ','.join(str(x) for x in r))")
+    m = re.search(r"STUDIED=(\S*)", _probe(host, know))
+    studied = set(filter(None, (m.group(1) if m else "").split(",")))
+    item = next((i for i in ("Bark01", "Stick02", "FlintNodule01", "Stone01", "RiverCobble01", "Stick01") if i not in studied), None)
+    if not rep.step("CONTROL: an item the joiner's pawn has never studied (on the host)", bool(item), f"{item}; studied so far: {sorted(studied)}"):
+        return
+    gave = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                        f"out('GAVE=%s' % inv.add_item_by_guid_no_stack(unreal.GuidLibrary.new_guid(), '{item}', 1))")
+    if not rep.step(f"host: gave the joiner a {item}", "GAVE=True" in gave, gave.strip()[-120:]):
+        return
+    time.sleep(3)  # the inventory replicates to the joiner
+    hoff, coff = log_size(host), log_size(client)
+    console(client, f"MO.Test.Inspect {item}")
+    done = False
+    for _ in range(12):
+        time.sleep(1.0)
+        m = re.search(r"STUDIED=(\S*)", _probe(host, know))
+        if m and item in m.group(1).split(","):
+            done = True
+            break
+    hl = re.search(r"\[MOInspection\] [^\n]*(?:server-timed|refused)[^\n]*", read_log_from(host, hoff))
+    cl = re.search(r"\[MOCharUI\] Inspection of '[^']*' finished[^\n]*", read_log_from(client, coff))
+    rep.step(f"client inspects {item}: the joiner's pawn ON THE HOST has studied it (the server's copy, the one saved)", done,
+             f"host: {hl.group(0) if hl else 'no [MOInspection] line'} | client: {cl.group(0) if cl else 'no result line'}")
+    rep.step("... and the joiner's UI got the result", bool(cl) and "Success=true" in cl.group(0), cl.group(0) if cl else "no result line on the client")
+    _joiner_remove(host, item, 1)
+
+
+def _client_survivor_command(rep, host, client):
+    """CLIENT orders a recruited survivor (the survivor context menu's Follow Me, the task menu's Gather Wood). Wes's Steam test, Oct 18 2026: "cant
+    give comand" -- the menus called the survivor's AI controller and job queue directly, which exist / accept changes only on the server. Proof on
+    the HOST: the order is carried out there (its log), the survivor's job queue there holds the task. Controls: a recruited survivor by the joiner
+    (the host spawns and recruits one), and its queue before."""
+    off = log_size(host)
+    console(host, "MO.Colony.SpawnSurvivor 300")
+    m = wait_log(host, r"\[MOQUERY\] COLONY SpawnSurvivor (\S+)", since=off, timeout=15)
+    if not rep.step("host: spawned a survivor", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no SpawnSurvivor line"):
+        return
+    name = m.group(1)
+    console(host, f"MO.Colony.Recruit {name}")
+    r = wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=(\d)", since=off, timeout=15)
+    if not rep.step("CONTROL: the survivor is recruited (the menus offer orders only to recruited survivors)", bool(r) and r.group(1) == "1", r.group(0) if r else "no Recruit line"):
+        return
+    sv = f"sv = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
+    _probe(host, sv + "j = unreal.GameplayStatics.get_player_pawn(world, 1); sv.set_actor_location(j.get_actor_location() + unreal.Vector(250.0, 0.0, 60.0), False, True); out('SV_MOVED')")
+    time.sleep(4)  # the move replicates to the joiner
+    jobs = lambda: int((re.search(r"JOBS=(\d+)", _probe(host, sv + "q = sv.get_component_by_class(unreal.MOSurvivorJobQueueComponent); out('JOBS=%d' % len(q.get_all_jobs()))")) or re.search("(-1)", "-1")).group(1))
+    hoff = log_size(host)
+    console(client, "MO.Test.SurvivorCommand FollowMe")
+    follow = wait_log(host, r"\[MOSurvivorCommand\] [^\n]*order 0 [^\n]*", since=hoff, timeout=10)
+    rep.step("client orders Follow Me: the HOST's survivor AI takes it", bool(follow) and "done" in follow.group(0),
+             follow.group(0) if follow else "no [MOSurvivorCommand] line on the host")
+    before = jobs()
+    hoff = log_size(host)
+    console(client, "MO.Test.SurvivorCommand Job GatherWood")
+    job = wait_log(host, r"\[MOSurvivorCommand\] [^\n]*order 4 [^\n]*", since=hoff, timeout=10)
+    time.sleep(1)
+    after = jobs()
+    rep.step("client orders a task (Gather Wood): it is in the survivor's job queue ON THE HOST", after > before and bool(job) and "done" in job.group(0),
+             f"jobs {before} -> {after} | " + (job.group(0) if job else "no [MOSurvivorCommand] line on the host"))
+
+
+def _host_possession_click(rep, host, client):
+    """The HOST selects a recruited survivor in the possession window with a REAL mouse click (Tools/win_input.ps1). Wes, Oct 18 2026: "still can't
+    select any pawns from the possession window" -- the row's blueprint lays a full-row EntryButton over the Select button, and nothing handled it,
+    so every real click was swallowed; the earlier fix was proven with MO.Possess.Take (the RPC), never a click. Proof: the host now plays the
+    survivor. Controls: Slate's hit test names the button a click at Select lands on; the host's pawn before the click."""
+    off = log_size(host)
+    console(host, "MO.Colony.SpawnSurvivor 400")
+    m = wait_log(host, r"\[MOQUERY\] COLONY SpawnSurvivor (\S+)", since=off, timeout=15)
+    if not rep.step("host: spawned a survivor", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no SpawnSurvivor line"):
+        return
+    name = m.group(1)
+    console(host, f"MO.Colony.Recruit {name}")
+    if not rep.step("host: recruited it", bool(wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=1", since=off, timeout=15))):
+        return
+    pawn_now = lambda: (re.search(r"HOSTPAWN (\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('HOSTPAWN %s' % (p.get_name() if p else 'none'))")) or re.search("(none)", "none")).group(1)
+    before = pawn_now()
+    off = log_size(host)
+    console(host, "MO.UI.Open Possession")
+    pop = wait_log(host, r"\[MOPossessionMenu\] Populated with (\d+) of your / free living", since=off, timeout=10)
+    time.sleep(1.5)  # laid out and painted
+    off = log_size(host)
+    console(host, "MO.Test.FindWidget PossessButton")
+    wait_log(host, r"\[MOQUERY\] FindWidget\('PossessButton'\)", since=off, timeout=10)
+    centers = [(int(x), int(y)) for x, y in re.findall(r"WIDGET 'PossessButton' \([^)]*\) text='[^']*' center=\((\d+),(\d+)\)", read_log_from(host, off))]
+    if not rep.step("host: the possession window lists its rows", bool(pop) and len(centers) >= 2, f"{pop.group(0) if pop else 'not populated'}; {len(centers)} row button(s)"):
+        return
+    hit = _motest(host, "MO.Test.HitTest PossessButton", r"\[MOQUERY\] HITTEST 'PossessButton' at[^\n]*")
+    rep.step("CONTROL: Slate's hit test says where a click on Select lands", bool(hit), hit.group(0) if hit else "no HITTEST line")
+    clicked = None
+    for x, y in centers:  # the rows top down: the current survivor, then the free ones; a click on the current one is ignored
+        off = log_size(host)
+        r = subprocess.run(["powershell", "-NoProfile", "-File", os.path.join(os.path.dirname(os.path.abspath(__file__)), "win_input.ps1"),
+                            "-ProcessId", str(read_pid(host)), "-Action", "click", "-X", str(x), "-Y", str(y)], capture_output=True, text=True, timeout=30)
+        if "REFUSED" in (r.stdout or ""):
+            rep.step("the host window took the foreground for a real click", False, r.stdout.strip()[-160:])
+            return
+        clicked = wait_log(host, r"\[MOPossessionMenu\] Possess clicked for pawn[^\n]*", since=off, timeout=4)
+        if clicked:
+            break
+    time.sleep(3)
+    after = pawn_now()
+    rep.step("a REAL click on a free survivor's row in the possession window: the host plays it", bool(clicked) and after != before,
+             f"pawn {before} -> {after} | " + (clicked.group(0) if clicked else "no 'Possess clicked' line for any row"))
+
+
+def _client_e_beside_ground_item(rep, host, client):
+    """The same, with the crosshair 20 cm BESIDE the item: the line and the sweep meet the terrain, so only the near-the-aim-point pass can find it --
+    the pass that took no instances until Oct 18 2026 (a flint flush with the ground could not be picked up with E). The instance bodies do not answer
+    that pass's overlap query, so it looks them up by bounds."""
+    _client_e_on_ground_item(rep, host, client, aim_offset_cm=20.0, pick=1)
+
+
+def _trust_instance_far(rep, host, client):
+    """The instance RPC names a place (mesh + location), so a modified client could name any place: the server must hold it to interact reach. A
+    joiner asking for a ground item 15+ m away is refused and gets nothing. Control: the host has that item there (the request was not refused for
+    naming nothing)."""
+    if not _worlds_built(rep, host, client):
+        return
+    far = [g for g in _ground_items_both(rep, host, client, 6000, 40) if g[5] > 1500]
+    if not rep.step("CONTROL: a PCG ground item 15-60 m from the joiner exists on both machines", bool(far), f"{far[0][1]} {far[0][5]} cm away" if far else "none"):
+        return
+    item, mesh, x, y, z, d = far[0]
+    before = _joiner_item_count(host, item)
+    hoff = log_size(host)
+    console(client, f"MO.Test.InstanceInteract {x} {y} {z} {mesh}")
+    refused = wait_log(host, r"\[MOInteractor\] ServerRequestInstanceInteract rejected: instance \d+cm away[^\n]*", since=hoff, timeout=10)
+    time.sleep(1)
+    after = _joiner_item_count(host, item)
+    rep.step(f"trust: E on a ground item {d} cm away is REFUSED by the server", bool(refused) and after == before,
+             (refused.group(0) if refused else "no 'rejected: instance ... away' line") + f" | {item} {before} -> {after}")
+
+
+def _host_foliage_reaches_client(rep, host, client):
+    """The HOST clears foliage (the terraform tool's Remove Foliage, by the joiner) and the CLIENT's grass there goes too. Wes's Steam test, Oct 18
+    2026: "remove foliage replicates from client to host but not host to client" -- the worked-ground zones that keep it clear lived only on the
+    host. Controls: both machines had sweepable grass there first, and the host's own count drops (the tool worked)."""
+    if not _worlds_built(rep, host, client):
+        return
+    m = re.search(r"SPOT x=(-?[\d.]+) y=(-?[\d.]+) z=(-?[\d.]+)", _probe(host,
+        "p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); out('SPOT x=%f y=%f z=%f' % (l.x, l.y, l.z))"))
+    if not rep.step("host: located the joiner for the foliage test", bool(m), m.group(0) if m else "no SPOT line"):
+        return
+    spot = None
+    # The grass nearest the joiner, as the CLIENT has it, then the same spot on the host (a joiner can spawn on bare sand: no fixed offset finds grass).
+    n = _motest(client, "MO.Test.NearestSweepable 3000", r"\[MOTEST\] NEAREST_SWEEPABLE found=(\d) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)")
+    if n and n.group(1) == "1":
+        tx, ty, tz = (float(v) for v in n.group(2, 3, 4))
+        hb = _motest(host, f"MO.Test.Sweepable {tx:.0f} {ty:.0f} {tz:.0f} 150", SWEEPABLE_RE)
+        cb = _motest(client, f"MO.Test.Sweepable {tx:.0f} {ty:.0f} {tz:.0f} 150", SWEEPABLE_RE)
+        if hb and cb and int(hb.group(1)) > 0 and int(cb.group(1)) > 0:
+            spot = (tx, ty, tz, int(hb.group(1)), int(cb.group(1)))
+    # Remove Foliage works around the host's pawn: stand it by the spot (the host owns its own pawn).
+    if spot:
+        _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 0); p.set_actor_location(unreal.Vector({spot[0]} + 200.0, {spot[1]}, {spot[2]} + 120.0), False, True); out('HOST_MOVED')")
+        time.sleep(2)
+    if not rep.step("CONTROL: host and client both have grass (sweepable instances) at one spot by the joiner", bool(spot),
+                    f"host {spot[3]}, client {spot[4]} within 1.5 m" if spot else "no spot with grass on both"):
+        return
+    tx, ty, tz, _hn, _cn = spot
+    coff = log_size(client)
+    cleared = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); tc = p.get_component_by_class(unreal.MOTerraformingComponent); "
+                           f"ok = tc.terraform_at_location(unreal.Vector({tx}, {ty}, {tz}), unreal.MOTerraformMode.REMOVE_FOLIAGE) if tc else None; out('CLEAR ok=%s' % ok)")
+    time.sleep(5)
+    ha = _motest(host, f"MO.Test.Sweepable {tx:.0f} {ty:.0f} {tz:.0f} 150", SWEEPABLE_RE)
+    ca = _motest(client, f"MO.Test.Sweepable {tx:.0f} {ty:.0f} {tz:.0f} 150", SWEEPABLE_RE)
+    cm = re.search(r"CLEAR ok=\S+", cleared)
+    rep.step("CONTROL: the host's Remove Foliage cleared the grass on the host", bool(ha) and int(ha.group(1)) == 0,
+             (cm.group(0) if cm else cleared.strip()[-120:]) + " | " + (ha.group(0) if ha else "no SWEEPABLE line"))
+    applied = re.search(r"\[MOTerrainMod\] client: \d+ worked-ground zone\(s\) from the host[^\n]*", read_log_from(client, coff))
+    rep.step("host Remove Foliage: the grass is gone on the CLIENT too", bool(ca) and int(ca.group(1)) == 0,
+             (ca.group(0) if ca else "no SWEEPABLE line") + " | " + (applied.group(0) if applied else "client logged no zones from the host"))
+
+
 def _appearance_replicates(rep, host, client):
     """A survivor's look (the character creator's colours: AMOMetaHumanCharacter::CurrentAppearance, replicated) set on the authority reaches a co-op
     partner -- read on the CLIENT, values and the procedural eye material its OnRep put on. Control: the client's copy had the default look first."""
@@ -1707,6 +2093,7 @@ def _client_build(rep, host, client):
     rep.step("client build: the joiner's right-click opens the build menu ON THE JOINER (the server forwards the UI request)", bool(fwd) and bool(shown),
              (fwd.group(0) if fwd else "no [MOUIContract] line on the client") + (" + menu shown" if shown else " -- menu never shown"))
 
+    _joiner_make_room(host)
     if not rep.step("host: gave the joiner 10 river cobbles", give(10), ""):
         return
     before = cobbles()
@@ -2358,6 +2745,7 @@ def _buildables_near(host, x, y, radius):
 def _trust_pickup_far(rep, host, client):
     """The server holds ServerPickUpWorldItem to a reach (3000 cm). The host drops a stick 45 m from the joiner (inside network relevancy, outside
     the reach); the client asks for the nearest world item at least 35 m away."""
+    _joiner_make_room(host)
     setup = _probe(host,
         "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
         "g = unreal.GuidLibrary.new_guid(); gave = inv.add_item_by_guid_no_stack(g, 'Stone01', 1); "
@@ -2517,7 +2905,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

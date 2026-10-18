@@ -278,6 +278,92 @@ void FMOWorldGen::FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, cons
 	}
 }
 
+bool FMOWorldGen::FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Seed, const FVector2D& From, double MaxRadiusCm, FVector& OutMouth, float& OutSlopeDeg)
+{
+	if (!Params.Tuning.bEnableCaves || MaxRadiusCm <= 0.0)
+	{
+		return false;
+	}
+	constexpr double CellCm = 50000.0;
+	constexpr double StepCm = 400.0;
+	constexpr int32 Columns = (int32)(CellCm / StepCm);
+	const float Voxel = Params.Tuning.VoxelSizeCm;
+	const int64 CX = (int64)FMath::FloorToDouble(From.X / CellCm);
+	const int64 CY = (int64)FMath::FloorToDouble(From.Y / CellCm);
+	const int32 MaxRing = (int32)FMath::CeilToDouble(MaxRadiusCm / CellCm);
+	double BestSq = FMath::Square(MaxRadiusCm);
+	bool bFound = false;
+	for (int32 Ring = 0; Ring <= MaxRing; ++Ring)
+	{
+		// Every cell of this ring is at least (Ring - 1) cells from From: past the best mouth found, nothing nearer is left.
+		if (bFound && FMath::Square(FMath::Max(0, Ring - 1) * CellCm) > BestSq)
+		{
+			break;
+		}
+		for (int32 DY = -Ring; DY <= Ring; ++DY)
+		{
+			for (int32 DX = -Ring; DX <= Ring; ++DX)
+			{
+				if (FMath::Max(FMath::Abs(DX), FMath::Abs(DY)) != Ring)
+				{
+					continue;   // the ring's perimeter only
+				}
+				const double X0 = (double)(CX + DX) * CellCm;
+				const double Y0 = (double)(CY + DY) * CellCm;
+				bool bLimestone = false;
+				for (int32 I = 0; I < 3 && !bLimestone; ++I)
+				{
+					for (int32 J = 0; J < 3 && !bLimestone; ++J)
+					{
+						bLimestone = SampleBedrock(Params, X0 + (0.17 + 0.33 * I) * CellCm, Y0 + (0.17 + 0.33 * J) * CellCm, Seed) == EMOBedrock::Limestone;
+					}
+				}
+				if (!bLimestone)
+				{
+					continue;
+				}
+				TArray<TPair<double, FVector>> RowBest;
+				RowBest.Init(TPair<double, FVector>(BestSq, FVector::ZeroVector), Columns);
+				ParallelFor(Columns, [&](int32 Row)
+				{
+					const double Y = Y0 + (Row + 0.5) * StepCm;
+					for (int32 Col = 0; Col < Columns; ++Col)
+					{
+						const double X = X0 + (Col + 0.5) * StepCm;
+						const double DistSq = FVector2D::DistSquared(FVector2D(X, Y), From);
+						if (DistSq >= RowBest[Row].Key)
+						{
+							continue;
+						}
+						const float Ground = SampleHeightCm(Params, X, Y, Seed, Voxel);
+						if (SampleCaveDistanceAtGround(Params, X, Y, Ground - 200.0, Ground, Seed, 50.0f) < -50.0f)
+						{
+							RowBest[Row] = TPair<double, FVector>(DistSq, FVector(X, Y, Ground));
+						}
+					}
+				});
+				for (const TPair<double, FVector>& Hit : RowBest)
+				{
+					if (Hit.Key < BestSq && !Hit.Value.IsZero())
+					{
+						BestSq = Hit.Key;
+						OutMouth = Hit.Value;
+						bFound = true;
+					}
+				}
+			}
+		}
+	}
+	if (bFound)
+	{
+		auto Ground = [&](double X, double Y) { return SampleHeightCm(Params, X, Y, Seed, Voxel); };
+		const double Gx = (Ground(OutMouth.X + 600.0, OutMouth.Y) - Ground(OutMouth.X - 600.0, OutMouth.Y)) / 1200.0;
+		const double Gy = (Ground(OutMouth.X, OutMouth.Y + 600.0) - Ground(OutMouth.X, OutMouth.Y - 600.0)) / 1200.0;
+		OutSlopeDeg = (float)FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Gx * Gx + Gy * Gy)));
+	}
+	return bFound;
+}
+
 void FMOWorldGen::FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;

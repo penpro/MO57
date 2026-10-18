@@ -120,19 +120,13 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 		}
 	}
 
-	// Log cache contents for debugging (only on first miss to reduce spam)
+	// A miss is normal (grass, flowers, branches are no items): one verbose line per mesh. It used to be a Warning plus the whole cache (~130 lines) for every
+	// new mesh -- a survivor's gather search over 200 m met 122 of them and the host spent 2 min 44 s writing ~16,000 log lines (nettest, Oct 18 2026).
 	static TSet<FString> LoggedMisses;
 	if (!LoggedMisses.Contains(MeshPath))
 	{
 		LoggedMisses.Add(MeshPath);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] No item mapping for mesh '%s' (asset: %s). Cache has %d entries:"),
-			*MeshPath, *MeshAssetPath, MeshToItemCache.Num());
-		for (const auto& Pair : MeshToItemCache)
-		{
-			const FString CachedPath = Pair.Key.ToSoftObjectPath().GetAssetPathString();
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction]   - '%s' -> '%s'"),
-				*CachedPath, *Pair.Value.ToString());
-		}
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] No item mapping for mesh '%s' (asset: %s; %d mapped meshes)"), *MeshPath, *MeshAssetPath, MeshToItemCache.Num());
 	}
 
 	return NAME_None;
@@ -454,6 +448,19 @@ FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(const UActorComponen
 					*Tag.ToString(), *FoundItem->ToString());
 				return *FoundItem;
 			}
+		}
+	}
+
+	// An MOItem_<ItemId> tag names its item itself. The map above is filled per machine (a spawner registers what it spawned there, AMOGameMode its
+	// configured list -- on the host only), so a joining player's ground item could have the tag and no mapping: not a target, and E fell through to
+	// the forage menu (Oct 18 2026). Read the tag, if it names a real item.
+	for (const FName& Tag : Component->ComponentTags)
+	{
+		FString TagString = Tag.ToString();
+		FMOItemDefinitionRow Def;
+		if (TagString.RemoveFromStart(TEXT("MOItem_")) && UMOItemDatabaseSettings::GetItemDefinition(FName(*TagString), Def))
+		{
+			return FName(*TagString);
 		}
 	}
 

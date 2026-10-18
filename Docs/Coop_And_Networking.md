@@ -92,10 +92,23 @@
 - Clients send intents, never results: no skill level, duration, refund policy, station type or completion (the crafting and treatment
   services derive them on the server; `Docs/Crafting_And_Progression.md`, `Docs/Medical_And_Survival.md`).
 - Timed actions run on the pawn's `UMOTimedActionComponent` (server clock, replicated label / duration / start time, movement and
-  damage interrupt): drinking, filling, boiling, fire lighting, eating, butchering, cover gathering, treatment.
+  damage interrupt): drinking, filling, boiling, fire lighting, eating, butchering, cover gathering, treatment, **harvesting a resource
+  node** (`FMOHarvestActions`, `ServerBeginHarvest`) and **inspecting an item** (`FMOInspectionActions`, `ServerInspectItem`, length
+  `MO.Inspect.Seconds`). Both used to run in a widget's UI timer on the clicking machine: a joiner's harvest said "Inventory Full!" and
+  what a joiner learned lived only in its own copy of the pawn, unsaved (Oct 18 Steam test, `Docs/BugReports_2026-10-18.md`).
+- **PCG instances have no network identity.** Partition actors and their instanced-mesh components are spawned at runtime under names
+  that differ per machine (two processes on one machine too), and indices shift as instances go. Never put a PCG component pointer or an
+  instance index in an RPC: it arrives as null ("Unable to resolve default guid from client: PCGPartitionActor_..."). Send
+  `FMOInstanceRef` (MOInstanceRef.h: static mesh + world location; `Resolve` finds each machine's own copy within 25 cm), as E on a
+  ground item (`ServerRequestInstanceInteract`), the harvest and the inspection do. The other direction is world state: removals
+  (`FMORemovedInstanceArray`) and worked-ground zones (`FMOReplicatedTerrainZoneArray`, MOTerrainModificationTypes.h) replicate on
+  AMOGameState and each machine applies them to its own PCG copy.
+- **Notifications for a joiner**: `UMONotificationComponent` on the server's copy of a joiner's controller forwards to that player
+  (`ClientShowNotification`, `ClientShowSkillPopup`); it used to queue them where no one could see them.
 - Dev-mode server RPCs (biome / poi / weather / time) check the SERVER's dev mode (`ServerAllowsDevCheats`, `Docs/AUTONOMOUS_TOOLING.md`).
 - **Interaction targeting** (Oct 16): `UMOInteractorComponent::FindInteractionTarget` = line through cover -> 30 cm sweep -> nearest
-  interactable within `AimAssistRadius` (40) of the line's impact, held to the server's reach (`IsWithinInteractReach`) + LOS;
+  interactable within `AimAssistRadius` (40) of the line's impact -- an actor, or (Oct 18) a harvestable instance by its pivot, so a flint
+  flush with the ground is a target -- held to the server's reach (`IsWithinInteractReach`) + LOS;
   `mo.Interact.Debug 1` logs every pass. Dropped items (`AMOWorldItem`) have NO proxy sphere: the mesh is the target
   (`EnsureMeshAnswersSimpleQueries`), dropped item meshes are `ECC_PhysicsBody` (object-type queries for items must include it).
   Dropped items remember the drop's ground and settle from above (query collision present, physics body not yet, on a host near a joiner).
@@ -122,6 +135,14 @@ python Tools/ue.py inst list              # the running instances; drive one wit
 - After a fix, rerun the probe on the FIXED build and read BOTH machines (the host-pawn bug had a second cause).
 - Run ALL the nettest gates after movement / spawn / water changes (they silently rotted for 4 days after swimming landed).
 - Shipping writes no log: package Development for real-account tests (`Docs/Packaging.md`).
+- **PCG cases need the joiner's PCG.** A joiner's loading overlay lifts at the readiness cap (60 s) while its PCG still fills in the small
+  things for minutes on a slow machine: `_worlds_built` waits for both READY lines OF THE GAME MAP (the menu world logs its own READY first)
+  and then for ground items around the joiner's pawn; a joiner on bare ground is stood by the host's pawn after 2 min, and a world that
+  stays empty logs its WorldBuild fields (`MO.BugReport.Preview`: PCG components generated vs generating) -- once on Oct 18 a joiner's
+  PCG made nothing at all (BACKLOG N-031).
+  Instances are compared across machines by mesh + place (`MO.Test.GroundItems`, `MO.Test.InstanceAt`, `MO.Test.ResourceNodes`,
+  `MO.Test.Sweepable`; MOCoopInstanceCheats.cpp). The Oct 18 cases: `_client_e_on_ground_item`, `_client_e_beside_ground_item` (the crosshair 20 cm beside it), `_trust_instance_far`, `_client_harvest`,
+  `_client_inspect`, `_host_foliage_reaches_client` (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
 - `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an
   internet session's rubber banding (Wes, Oct 17). Its controls (a 4 KB/s rate cap must saturate, a joiner walking 1.6x faster than the
   server allows must be corrected, +100 ms of `NetEmulation.PktLag` must show as delay) prove each measure can fail. Real tests: section 7.
@@ -215,3 +236,7 @@ Wes: "it looks like we did fix the weird laggy no running stuff, and it no longe
   ... NOT Supported") cost a warning, not a position error (measured on two processes: 4,833 and 5,810 of as many PCG instanced meshes Static, and the
   terrain's movement base `VoxelLandscape_0.RootComponent absolute` on both machines; the lines say `RELATIVE` if a base ever is). A joiner's
   `Session.WorldSeed` showed its own old worlds (384, 21354), not the host's: the row now reads the replicated seed.
+- **First floor named (Oct 18, nettest actions `_joiner_long_run`):** the joiner, at rest 1 km from the host after a 150 s sprint, was
+  corrected ~10x/s by 69 cm with no end: `[MONetCorr] server ... floor VoxelWorld/VoxelCollisionComponent z=5865.3` against the joiner's
+  `floor before VoxelWorld/VoxelCollisionComponent z=5796.2`; `MO.WorldGen.Sample` there gives 5796.6 on both machines. The joiner's
+  collision is right; the HOST's terrain collision around a far remote pawn is ~0.7 m high (a coarser mesh on a convex slope). BACKLOG N-162.

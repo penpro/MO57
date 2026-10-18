@@ -13,6 +13,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillsComponent.h"
+#include "MOPlayerController.h"
 
 UMONotificationComponent::UMONotificationComponent()
 {
@@ -65,12 +66,30 @@ void UMONotificationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+AMOPlayerController* UMONotificationComponent::GetRemoteOwningPlayerController() const
+{
+	APlayerController* PC = GetOwningPlayerController();
+	return (PC && !PC->IsLocalController() && PC->GetNetMode() != NM_Client) ? Cast<AMOPlayerController>(PC) : nullptr;
+}
+
 APlayerController* UMONotificationComponent::GetOwningPlayerController() const
 {
 	return Cast<APlayerController>(GetOwner());
 }
 
 void UMONotificationComponent::ShowNotification(const FText& Message, float Duration, EMONotificationType Type)
+{
+	// The server's copy of a co-op player's controller has no screen: the message goes to that player, into their own notification component. Until
+	// Oct 18 2026 it was queued here and never shown (and the queue only grew) -- what the server does for a joiner (a discovery, a harvest) said nothing.
+	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
+	{
+		RemotePC->ClientShowNotification(Message, Duration, Type);
+		return;
+	}
+	ShowNotificationHere(Message, Duration, Type);
+}
+
+void UMONotificationComponent::ShowNotificationHere(const FText& Message, float Duration, EMONotificationType Type)
 {
 	// Add to queue
 	FQueuedNotification Notification;
@@ -393,14 +412,24 @@ void UMONotificationComponent::OnNotificationHideComplete()
 
 void UMONotificationComponent::ShowSkillPopup(FName SkillId, float Duration)
 {
+	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
+	{
+		RemotePC->ClientShowSkillPopup(SkillId, /*bIsKnowledge=*/false, Duration);
+		return;
+	}
+	ShowSkillPopupHere(SkillId, /*bIsKnowledge=*/false, Duration);
+}
+
+void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowledge, float Duration)
+{
 	// Add to queue
 	FQueuedSkillPopup Popup;
 	Popup.Id = SkillId;
-	Popup.bIsKnowledge = false;
+	Popup.bIsKnowledge = bIsKnowledge;
 	Popup.Duration = Duration;
 	SkillPopupQueue.Add(Popup);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued skill popup: %s (%.1fs)"), *SkillId.ToString(), Duration);
+	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued %s popup: %s (%.1fs)"), bIsKnowledge ? TEXT("knowledge") : TEXT("skill"), *SkillId.ToString(), Duration);
 
 	// If no popup currently showing, process immediately
 	UMOSkillEntryWidget* CurrentWidget = CurrentSkillPopupWidget.Get();
@@ -515,21 +544,12 @@ void UMONotificationComponent::ShowSkillPopupInternal(FName SkillId, bool bIsKno
 
 void UMONotificationComponent::ShowKnowledgePopup(FName KnowledgeId, float Duration)
 {
-	// Add to queue (using same queue as skill popups, but marked as knowledge)
-	FQueuedSkillPopup Popup;
-	Popup.Id = KnowledgeId;
-	Popup.bIsKnowledge = true;
-	Popup.Duration = Duration;
-	SkillPopupQueue.Add(Popup);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued knowledge popup: %s (%.1fs)"), *KnowledgeId.ToString(), Duration);
-
-	// If no popup currently showing, process immediately
-	UMOSkillEntryWidget* CurrentWidget = CurrentSkillPopupWidget.Get();
-	if (!IsValid(CurrentWidget) || !CurrentWidget->IsInViewport())
+	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
 	{
-		ProcessNextSkillPopup();
+		RemotePC->ClientShowSkillPopup(KnowledgeId, /*bIsKnowledge=*/true, Duration);
+		return;
 	}
+	ShowSkillPopupHere(KnowledgeId, /*bIsKnowledge=*/true, Duration);
 }
 
 void UMONotificationComponent::HideSkillPopup()

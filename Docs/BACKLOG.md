@@ -17,7 +17,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F25 co-op rubber band after a joiner hitch (Steam A/B first).
+F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long studying an item takes · F27 cliff bands that read as a staircase.
 
 ## Collaboration dependencies and recent handoffs
 
@@ -49,7 +49,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first).
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
 | N-030 | IN PROGRESS | Claude | Cliff / embankment assemblies: iterate and measure until they work every time (Wes) | World_Features "As built" | BR16-15, BR16-19 |
-| N-031 | INVESTIGATING | Claude | Barren rock spire in Wes's session (not reproduced; PCG-stall family, first-launch PSO suspected); bug reports carry WorldBuild.* | archived BugReports_2026-10-16 | BR16-16 |
+| N-031 | INVESTIGATING | Claude | Barren rock spire in Wes's session (not reproduced; PCG-stall family, first-launch PSO suspected); bug reports carry WorldBuild.*. Caught once on Oct 18 (nettest actions run 9, the joiner): its PCG made nothing at all -- 100 partition actors, 0 instance components (host: 400 / 3135) -- busy through the whole 60 s vegetation stage with near=0, then idle, still empty 25 min later; the next fresh pair was fine. Next time: dump the PCG components (WorldBuild.PcgComponents: generated vs generating) before stopping the instance | archived BugReports_2026-10-16 | BR16-16 |
 | N-032 | OPEN | Claude | Shore reeds are stand-ins (tall smdrailr grass): real reed / rush / cattail meshes once F5 is decided | `Docs/PCG.md` §3 | P-4 |
 | N-033 | OPEN | Claude | AlpineHeath ground: a darker heath / moss surface (check after VST_MI_AlpineHeath) | biome-aware | |
 | N-034 | OPEN | Claude | Electric Forest ground = shared MuddyLeaves (a darker mossy surface; ED forest-floor mesh patches not placed) | Overnight_Polish | |
@@ -139,9 +139,28 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first).
 | N-114 | VERIFY | Claude | No build / harvest MO.Test verbs runnable from a client (nettest actions now has `_client_build`): close if covered | OVERNIGHT_LOG | |
 | N-160 | OPEN | Claude | Remote players' pawns read velocity 0 on every other machine: `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled` on every proxy and the engine zeroes a "stuck" proxy's velocity each tick (no extrapolation between updates). Fix to try: disable sim gravity only when the proxy has no floor under it; control `MO.RemotePawn.SimGravity 1` | Coop §7 | |
 | N-161 | WAITING | Wes | Rubber band after a joiner hitch >= 250 ms (the host's forced update): Steam A/B with the toggles, then F25 | Coop §7, DECISIONS F25 | |
-| N-162 | OPEN | Claude | ~2 cm height corrections on 0.8% of a joiner's moves (14% with +100 ms lag), invisible (snap <= 2 cm): find which floor disagrees (per-machine voxel collision? floor hover band) | Coop §7 | |
-| N-163 | OPEN | Claude | Replication references per-machine PCG ISM components (84 `SupportsObject ... NOT Supported` on the host in 25 min): likely a pawn's movement base on a PCG rock; check what a proxy on such a base does | Coop §7 | |
+| N-162 | OPEN | Claude | ~2 cm height corrections on 0.8% of a joiner's moves (14% with +100 ms lag), invisible (snap <= 2 cm): find which floor disagrees (per-machine voxel collision? floor hover band). **Measured Oct 18 (nettest actions, `_joiner_long_run`):** the joiner standing still 1 km from the host was corrected ~10x/s by 69 cm for good: the HOST's floor there was voxel collision at z 5865.3, the joiner's own at 5796.2, the generator's ground 5796.6 on both -- the host's terrain collision around a far remote pawn is too high (coarser than the joiner's; the pawn's own invoker is 30 m, LOD unknown). Next: which collision component the host's floor is (invoker chunk or a far render chunk's collision) and its LOD | Coop §7 | |
+| N-163 | DONE-2026-10-18 | Claude | Replication references per-machine PCG ISM components: the floor session measured PCG meshes Static (an unresolvable base costs a warning, not a position; 3b2c6da9), and client-to-server instance requests no longer carry PCG pointers (`FMOInstanceRef`, BR18-2) | Coop §5, §7 | |
 | N-164 | WAITING | Wes | Steam smoothness test with a remote joiner on the Development package: recipe Coop §7 (stats log by themselves; send both MO57.log) | Coop §7 | |
+| BR18-1 | DONE-2026-10-18 | Claude | A joiner's harvest said "Inventory Full!": it ran in the joiner's UI on its own copy. Now server-owned and timed on the pawn (`FMOHarvestActions`, `ServerBeginHarvest`); `_client_harvest` | `Docs/BugReports_2026-10-18.md` | |
+| BR18-2 | DONE-2026-10-18 | Claude | Ground items: E did nothing for a joiner (PCG pointers unresolvable on the host) and right-click showed "Unknown Object" with no buttons. `FMOInstanceRef`; the menu names the item with Pick Up / Inspect; `_client_e_on_ground_item`, `_trust_instance_far` | `Docs/BugReports_2026-10-18.md` | |
+| BR18-3 | VERIFY | Claude | A joiner can't drink: E hit a PCG plant first and went to the broken instance path; re-check drinking at water with plants in it | `Docs/BugReports_2026-10-18.md` | |
+| BR18-4 | DONE-2026-10-18 | Claude | Host foliage removal never reached a joiner: the worked-ground zones replicate now (`FMOReplicatedTerrainZoneArray`); `_host_foliage_reaches_client` | `Docs/BugReports_2026-10-18.md` | |
+| BR18-5 | DONE-2026-10-18 | Claude | A joiner leaving "reset" the pawn's skills / knowledge: inspection (and harvest XP) ran on the joiner's copy only. Server-owned inspection (`FMOInspectionActions`, `ServerInspectItem`); `_client_inspect` | `Docs/BugReports_2026-10-18.md` | |
+| BR18-6 | DONE-2026-10-18 | Claude | Possession window took no click: the row's full-row EntryButton (overlay) covered Select and nothing handled it; bound to the same select; `_host_possession_click` (a real click) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-7 | DONE-2026-10-18 | Claude | A joiner couldn't order a survivor: every order ran on the clicking machine. One request + server RPC (`FMOSurvivorCommands`, `ServerSurvivorCommand`); also the gather search's log stall (2 min 44 s on the host); `_client_survivor_command` | `Docs/BugReports_2026-10-18.md` | |
+| BR18-8 | IN PROGRESS | Claude | Audio: footsteps played unattenuated (every pawn as loud as your own): footstep profile + event fallback for one-shots; the joiner's own surface not yet reproduced | `Docs/BugReports_2026-10-18.md` | |
+| BR18-9 | DONE-2026-10-18 | Claude | Status vitals once per showing (pooled panel re-added its fields) and the crafting menu's far campfire (active station never cleared): both fixed; the status panel checked on screen (each vital once on the third showing), the far campfire not yet looked at | `Docs/BugReports_2026-10-18.md` | |
+| BR18-10 | IN PROGRESS | Claude | Tool / focus hint showed through menus: in the HUD's menu chokepoint now, checked on screen (inventory over terraform mode: no hint); still behind a WORLD popup (ground-item / station / world-action menus are not menu layers) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-11 | DONE-2026-10-18 | Claude | Terraform 1 s in developer mode: `MO.Dev.TerraformSeconds` (default 1) while the world's HOST is in developer mode | `Docs/BugReports_2026-10-18.md` | |
+| BR18-12 | DONE-2026-10-18 | Claude | Lakes calmer: `mo.Lakes.WaveScale` 0.4 of the preset's wave heights; checked (lake amplitude 20 vs the sea's 50; calm in a screenshot) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-13 | WAITING | Wes | "All the caves are gone": since v11 caves are limestone-only and rare; the POI list finds them now (BR18-15). Whether they should be commoner is Wes's call | `Docs/BugReports_2026-10-18.md` | |
+| BR18-14 | OPEN | Claude | Cliffs not seated, see-through back side: the aligned `ed_cliff` slab species (SM_HugeSandstoneCliff_07) tilted with a steep slope (N-030 family, F9) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-15 | DONE-2026-10-18 | Claude | Caves in the POI list: "Cave entrance" (`FMOWorldGen::FindNearestCaveMouth`); checked in game (a mouth 6.4 km away, found in 1.8 s) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-16 | OPEN | Claude | UDW dynamic landscape weather effects: feed UDW's wetness / snow / puddles into M_QuixelBase's MO_Finish (scoped in the tracker) | `Docs/BugReports_2026-10-18.md` | |
+| BR18-17 | OPEN | Claude | Dev hang glider | `Docs/BugReports_2026-10-18.md` | |
+| BR18-18 | WAITING | Wes | "goffy tran jan" (joiner): the generator's v8 cliff bands read as a staircase on a 42 deg AlpineRock flank; fork F27 | `Docs/BugReports_2026-10-18.md` | |
+| BR18-19 | OPEN | Claude | "goooose" (joiner): a 16.7 m SM_HugeSandstoneCliff_04 slab (`ed_cliff`) tilted 36 deg with the slope, its loose chunks floating -- same cause as BR18-14 | `Docs/BugReports_2026-10-18.md` | |
 
 ## UI
 

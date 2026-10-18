@@ -163,6 +163,16 @@
   the `set <Class> <Property> <value>` / `get <Class> <Property>` console commands write / read the class default live (development builds).
 - **Co-op shows no actors at all** -> the actor channel class in `[/Script/Engine.NetDriver]` ChannelDefinitions (`Config/DefaultEngine.ini`,
   `MONetStatsActorChannel`) failed to load -> every `[MONet] net driver ...` log line names the actor channel class; check it first.
+- **A joiner's request about a PCG instance (a stick, a bush, a tree) arrives as null** -> PCG partition actors and their instanced-mesh
+  components are spawned at runtime under names that differ per machine (two processes on one machine too), and indices shift: the host logs
+  "Unable to resolve default guid from client: ObjectName: PCGPartitionActor_..." -> never put a PCG component pointer or an instance index in an
+  RPC; send `FMOInstanceRef` (mesh + world location) and resolve each machine's own copy. (Oct 18)
+- **Gameplay run from a widget's timer works for the host only** -> the harvest and the inspection ran in UI timers on the clicking machine: a
+  joiner's inventory refused every yield ("Inventory Full!") and what a joiner learned lived only in its own copy -> server action timed on the
+  pawn (`UMOTimedActionComponent`), result back by client RPC (`Docs/Coop_And_Networking.md` §5). Grep a new action for its widget timer. (Oct 18)
+- **A forward to the owning client must never be reachable from that client RPC's own body** -> where an RPC runs locally (the dev bridge's
+  Python, a controller without a connection) forward -> RPC -> forward recursed and the host died of a stack overflow with no crash dump
+  (`MO.Test.GrantRecipe`) -> the RPC body calls a forward-free "Here" function (`UMONotificationComponent::ShowNotificationHere`). (Oct 18)
 
 ## 7. Packaging, cook and Shipping
 
@@ -256,12 +266,20 @@
   `NativeOnInitialized`); `SetIsSelected(false)` does nothing on a non-toggleable button; the HUD learns about a menu on activation
   (`NativeOnActivated` refresh); queries need a PAINTED PIE viewport; hex colours are sRGB but UMG wants linear; fonts only through `UFont`;
   BindWidget name mismatches show as `absent` in `ui check`; the engine console owns Tilde and Enhanced Input removed `BindKey` (`InputKey`).
+- **A row's buttons take no real click** -> the entry blueprint lays a full-row button (EntryButton) over them in an overlay; it takes every click and
+  nothing handled it (the possession window, Oct 18) -> `MO.Test.HitTest <Button>` names what a click really lands on; bind the row button or
+  make it HitTestInvisible. A fix proven by an RPC or `SimulateClick` proves nothing about this. (Oct 18)
+- **A pooled CommonUI widget builds its rows again on every showing** -> `PushWidgetToLayer` reuses instances and `NativeConstruct` re-runs,
+  so code that adds children in it adds them again on top of the old ones (the status panel listed the vitals once per showing, the old rows
+  bound to pawns played before) -> clear the containers first, or build once in `NativeOnInitialized`. (Oct 18)
 
 ## 14. Audio
 
 - **Audio faults leave no log** -> `LogAudio=Warning` hides Display lines and the engine reports nothing -> the `[MOAudio] HB` heartbeat.
   **Muting doesn't fix a NaN mix** (NaN x 0 = NaN) -> bypass submix effects / stop components to bisect. **Full volume after a map load** ->
   `UEngine::LoadMap` resets the device volume -> re-apply. **A debug file logger costs ms** -> default off, gated, compiled out in Shipping. (audio-heartbeat, post-reveal)
+- **Every pawn's footsteps as loud as your own** -> `PlaySoundAtLocation` with no attenuation plays an asset that has none of its own at full
+  volume wherever it is -> `UMOAudioSubsystem::PlayOneShotAtLocation` gives such assets a profile (footsteps: `GetFootstepAttenuation`). (Oct 18)
 
 ## 15. Performance measurement
 
@@ -276,6 +294,13 @@
 
 ## 16. AI and gameplay
 
+- **One survivor order froze the host for minutes** -> `UMOPCGInteractionSubsystem::GetItemIdForMesh` logged a Warning plus the whole
+  mesh-to-item cache (~130 lines) for every unmapped mesh; a Gather Wood search over 200 m met 122 of them inside `EnqueueJob` (2 min 44 s) ->
+  a miss is normal and logs one Verbose line. Never dump a table per miss in a lookup that runs over every instance. (Oct 18)
+- **An overlap query never returns a PCG instance** -> `OverlapMultiByChannel(ECC_Visibility)` around the aim point came back with the terrain
+  only, a stick 2 cm away (the near-the-aim-point pass, Oct 18): a small item flush with the ground was never a target -> find instances by
+  their components' bounds (`TObjectIterator<UInstancedStaticMeshComponent>`, world + bounds filter) and `GetInstancesOverlappingSphere`, as
+  `UMOInteractorComponent::FindInteractableNearAimPoint` and `FMOInstanceRef::Resolve` do. A line or sweep trace still hits them. (Oct 18)
 - **Creatures are blind** -> a perception component with no senses at OnRegister is never registered -> `RequestStimuliListenerUpdate()` before
   `ConfigureSense`. **"IsInAttackRange does not exist"** -> blackboard values pushed before the BT bound the blackboard -> prime in Tick. (post-reveal, caves-and-lighting)
 - **A spawn hitches on soft assets** -> `LoadSynchronous` at spawn -> declare in `GatherRuntimeAssets`. **Fallback deer under the sea** -> `MOSpawnClearance`. (post-reveal)

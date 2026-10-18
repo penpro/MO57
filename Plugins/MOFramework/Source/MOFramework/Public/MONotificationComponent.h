@@ -254,6 +254,19 @@ private:
 	/** Get owning player controller (null-safe). */
 	APlayerController* GetOwningPlayerController() const;
 
+	/** The owning controller when it is a co-op player's, on the server: no screen here, so notifications go to that player by RPC. Else null. */
+	class AMOPlayerController* GetRemoteOwningPlayerController() const;
+
+public:
+	/**
+	 * Show on THIS machine, never forwarded: what the owning client's RPCs (ClientShowNotification / ClientShowSkillPopup) call. The forwarding entries
+	 * above must not be reached from those RPCs: where an RPC runs locally (the dev bridge's Python, a controller with no connection) the forward
+	 * called the RPC, the RPC the forward ... and the host died of a stack overflow (nettest actions, Oct 18 2026).
+	 */
+	void ShowNotificationHere(const FText& Message, float Duration, EMONotificationType Type);
+	void ShowSkillPopupHere(FName Id, bool bIsKnowledge, float Duration);
+private:
+
 	/** Process the next notification in queue. */
 	void ProcessNextNotification();
 

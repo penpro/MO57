@@ -8,6 +8,7 @@
 #include "MOWorldSeedSubsystem.h"
 #include "Actors/OceanologyLakeActor.h"
 #include "Components/Wave/OceanologyWaveSolverComponent.h"
+#include "Components/Wave/OceanologyGerstnerWaveSolverComponent.h"
 #include "Engine/AssetManager.h"
 #include "Async/Async.h"
 #include "HAL/IConsoleManager.h"
@@ -27,6 +28,7 @@ namespace
 	// travels (bigger = clearer; the plugin's units): 2.5 / 4.5 / 3 keeps the deep water dark and the shallows green, a highland freshwater lake (A/B shots 2026-10-13; 35/30/45 went clear
 	// and pink). Applied at spawn (the lake pushes it into its material in Init).
 	TAutoConsoleVariable<FString> CVarLakeAbsorption(TEXT("mo.Lakes.Absorption"), TEXT("2.5 4.5 3 50"), TEXT("Upland lake water absorption \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeWaveScale(TEXT("mo.Lakes.WaveScale"), 0.4f, TEXT("Upland lake wave height as a fraction of the lake preset's (Wes, Oct 18 2026: \"make lakes less splashy, smaller waves\"). Takes effect for lakes spawned afterwards."), ECVF_Default);
 	TAutoConsoleVariable<FString> CVarLakeScattering(TEXT("mo.Lakes.Scattering"), TEXT("0.005 0.012 0.008 2"), TEXT("Upland lake water scattering \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
 
 	/** "R,G,B,A" or "R G B A" (-ExecCmds splits on commas, so a launch line needs the spaces) -> colour; false (Out untouched) when the text is empty or malformed. */
@@ -141,6 +143,16 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 	ParseLakeColor(CVarLakeAbsorption.GetValueOnGameThread(), Water->SurfaceScattering.Absorption);
 	ParseLakeColor(CVarLakeScattering.GetValueOnGameThread(), Water->SurfaceScattering.Scattering);
 	Water->FinishSpawning(Where);
+	// Calmer than the preset's sea-like swell: a lake in a basin has little fetch for the wind to raise waves on. The lakes share one wave clock and
+	// parameter set (the elected lake's, ReelectWaveTimeSource), so every lake gets the same scale.
+	if (UOceanologyGerstnerWaveSolverComponent* Gerstner = Cast<UOceanologyGerstnerWaveSolverComponent>(Water->GetWaveSolver()))
+	{
+		const float WaveScale = FMath::Clamp(CVarLakeWaveScale.GetValueOnGameThread(), 0.0f, 2.0f);
+		Gerstner->Wave_1.Amplitude_1 *= WaveScale;
+		Gerstner->Wave_2.Amplitude_2 *= WaveScale;
+		Gerstner->Wave_3.Amplitude_3 *= WaveScale;
+		Gerstner->Wave_4.Amplitude_4 *= WaveScale;
+	}
 	// Oceanology makes the wave solver with NewObject in AOceanologyWaterParent::SetupWaveSolvers and never registers it. A lake placed in a level gets it
 	// registered on load (its solver was saved with it); a lake SPAWNED at runtime -- every upland lake -- kept an inactive, never-ticking solver, so the lake
 	// wave clock (MPC_Waves.GameTimeInSeconds_Lake) stayed 0 and every lake's water stood still, host and joiner alike (Steam playtest Oct 16 2026: "lake

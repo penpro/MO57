@@ -1,4 +1,5 @@
 #include "MOSurvivorContextMenu.h"
+#include "MOSurvivorCommands.h"
 #include "MOFramework.h"
 #include "MOSurvivorController.h"
 #include "MOSurvivorJobQueueComponent.h"
@@ -87,90 +88,30 @@ void UMOSurvivorContextMenu::InitializeForSurvivor(APawn* Survivor, FVector2D Sc
 
 void UMOSurvivorContextMenu::HandleFollowMeClicked()
 {
-	AMOSurvivorController* Controller = GetSurvivorController();
-	if (!Controller)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] No survivor controller for Follow Me"));
-		RequestClose();
-		return;
-	}
-
-	// Get the player's pawn as the follow target
-	APlayerController* PC = GetOwningPlayer();
-	if (!PC)
-	{
-		RequestClose();
-		return;
-	}
-
-	APawn* PlayerPawn = PC->GetPawn();
-	if (!PlayerPawn)
-	{
-		RequestClose();
-		return;
-	}
-
-	Controller->SetFollowTarget(PlayerPawn);
-
+	// Orders go to the server (FMOSurvivorCommands): the survivor's AI exists only there, so a joiner's direct call did nothing.
+	FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), FMOSurvivorCommand::Make(EMOSurvivorCommandKind::FollowMe));
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Commanded survivor to follow player"));
 	RequestClose();
 }
 
 void UMOSurvivorContextMenu::HandleStayHereClicked()
 {
-	AMOSurvivorController* Controller = GetSurvivorController();
-	APawn* Survivor = TargetSurvivor.Get();
-	if (!Controller || !Survivor)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] No controller or survivor for Stay Here"));
-		RequestClose();
-		return;
-	}
-
-	// Stay at current location
-	FVector CurrentLocation = Survivor->GetActorLocation();
-	Controller->SetStayAtLocation(CurrentLocation);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Commanded survivor to stay at %s"), *CurrentLocation.ToString());
+	FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), FMOSurvivorCommand::Make(EMOSurvivorCommandKind::StayHere));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Commanded survivor to stay where it stands"));
 	RequestClose();
 }
 
 void UMOSurvivorContextMenu::HandleGoHomeClicked()
 {
-	AMOSurvivorController* Controller = GetSurvivorController();
-	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-	if (!Controller || !JobQueue || !JobQueue->HasHome())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] Cannot go home - no controller, job queue, or home assigned"));
-		RequestClose();
-		return;
-	}
-
-	Controller->GoToHome();
-
+	FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), FMOSurvivorCommand::Make(EMOSurvivorCommandKind::GoHome));
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Commanded survivor to go home"));
 	RequestClose();
 }
 
 void UMOSurvivorContextMenu::HandleSetHomeClicked()
 {
-	APawn* Survivor = TargetSurvivor.Get();
-	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-	if (!Survivor || !JobQueue)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] Cannot set home - no survivor or job queue"));
-		RequestClose();
-		return;
-	}
-
-	// Set current location as home
-	FVector CurrentLocation = Survivor->GetActorLocation();
-	JobQueue->SetHome(CurrentLocation);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Set survivor home to %s"), *CurrentLocation.ToString());
-
-	// Update button states since we now have a home
-	UpdateButtonStates();
+	FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), FMOSurvivorCommand::Make(EMOSurvivorCommandKind::SetHome));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Set survivor home where it stands"));
 	RequestClose();
 }
 

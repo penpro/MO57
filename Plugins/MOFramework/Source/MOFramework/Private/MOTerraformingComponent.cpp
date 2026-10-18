@@ -1,4 +1,6 @@
 #include "MOTerraformingComponent.h"
+#include "MODevMode.h"
+#include "HAL/IConsoleManager.h"
 #include "MOInventoryComponent.h"
 #include "MOGeologyYield.h"
 #include "MOFramework.h"
@@ -21,6 +23,22 @@
 #include "MOVoxelAlias.h"  // all Voxel sculpt calls go through this facade
 #include "Sculpt/VoxelSculptMode.h"
 #include "Sculpt/VoxelLevelToolType.h"
+
+namespace MOTerraformDev
+{
+	// Wes, Oct 18 2026: "make terraforming take 1s while in dev mode". A developer's shortcut, never the simulation: off unless the world's host is in
+	// developer mode (FMODevMode::IsHostInDevMode). Development builds are always in developer mode, so check the simulated times with 0.
+	TAutoConsoleVariable<float> CVarDevTerraformSeconds(
+		TEXT("MO.Dev.TerraformSeconds"), 1.0f,
+		TEXT("Developer mode only: every terraform action takes this many seconds. 0 = the simulated time (volume and rock) even in developer mode."),
+		ECVF_Default);
+
+	/** The developer override for Owner's world, or 0 (the simulated time). */
+	float SecondsFor(const UObject* Owner)
+	{
+		return FMODevMode::IsHostInDevMode(Owner) ? FMath::Max(0.0f, CVarDevTerraformSeconds.GetValueOnGameThread()) : 0.0f;
+	}
+}
 
 UMOTerraformingComponent::UMOTerraformingComponent()
 {
@@ -833,6 +851,13 @@ bool UMOTerraformingComponent::BeginTerraform()
 		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, Config.Radius, CutM3, !bUseVolumeSculpting);
 		PendingAction.TotalTime *= DigHardness;
 	}
+	// A developer's shortcut (MO.Dev.TerraformSeconds), only while the world's host is in developer mode.
+	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] developer mode: %.1f s instead of the simulated %.1f s (MO.Dev.TerraformSeconds 0 = simulated)"), DevSeconds,
+			PendingAction.TotalTime);
+		PendingAction.TotalTime = DevSeconds;
+	}
 
 	if (CurrentMode == EMOTerraformMode::Flatten)
 	{
@@ -943,7 +968,8 @@ void UMOTerraformingComponent::ServerApplyTerraform_Implementation(EMOTerraformM
 	// duration is floored there). So two applies from one pawn closer together than most of that floor are not two real actions: refuse the second
 	// (H17 residual -- a modified client could otherwise fire instant craters as fast as it liked).
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	const double MinInterval = 0.8 * FMath::Max(0.1f, TerraformDurationSeconds);
+	const float DevSeconds = MOTerraformDev::SecondsFor(this);
+	const double MinInterval = 0.8 * FMath::Max(0.1f, DevSeconds > 0.0f ? DevSeconds : TerraformDurationSeconds);
 	if (LastServerTerraformTime >= 0.0 && Now - LastServerTerraformTime < MinInterval)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: %.2f s after the last apply (min %.1f) -- rejected"), Now - LastServerTerraformTime, MinInterval);

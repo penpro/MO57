@@ -28,4 +28,10 @@ struct MOFRAMEWORK_API FMODevMode
 
 	/** True when the build itself turns developer mode on (anything but Shipping): the Options toggle cannot turn it off. */
 	static bool IsForcedByBuild();
+
+	/**
+	 * Whether the WORLD's host is in developer mode: on the host (or alone) its own IsEnabled(); on a joiner the host's, which AMOGameState
+	 * replicates. A dev-only gameplay shortcut (MO.Dev.TerraformSeconds) follows this, so a joiner's own toggle cannot speed things up in the host's world.
+	 */
+	static bool IsHostInDevMode(const class UObject* WorldContextObject);
 };

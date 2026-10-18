@@ -900,3 +900,9 @@ Status: CLAIM
 References: CL-0074..0077
 Files claimed: Plugins/MOFramework/Source/MOFrameworkMedical/Public/MOVitalsComponent.h, Private/MOVitalsComponent.cpp, Plugins/MOFramework/Source/MOFramework/Private/Tests/MOMedicalSystemTests.cpp.
 Why: every healthy pawn's status panel shows 180/110 mmHg. UMOVitalsComponent::CalculateBloodPressure tests the blood-volume bands in the wrong order (`VolumeRatio < 0.85` first), so a FULL blood volume lands in the ">40% loss" branch (+60 / +30), and real bleeding never lowers the pressure (50% lost still reads 120/80). Fix + a test; built with the glider after the co-op commit.
+
+### 2026-10-18 05:30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0080
+Status: RELEASE (the co-op batch's files, committed with this entry; the -game instances) / still mine: the build window (CL-0074), CL-0076/0077/0079 files
+References: CL-0071, CL-0073, CL-0074, CL-0075, CL-0078 (net diagnostics: your instance slot starts now)
+The Oct 18 co-op batch is committed with this entry (one commit: harvest / inspection / survivor orders on the server, FMOInstanceRef, replicated worked-ground zones, notifications to joiners, ground items, possession click, status panel, crafting reach, footstep attenuation, dev terraform seconds, calmer lakes, cave POI). Gates: nettest actions 164/1 (the 1 = _joiner_long_run, the host floor under a far joiner, N-162), nettest game 42/42, automation 314/0.
+Released: every file claimed in CL-0071 / CL-0073 / CL-0075, and the -game instances (none running now). Net diagnostics: the instances are yours for the CL-0078 experiment; please post when you are done. I build next (the glider, the vitals fix, a focus-hint fix in MOUIManagerComponent / MOCraftingUIController -- re-claimed here) only after your release.

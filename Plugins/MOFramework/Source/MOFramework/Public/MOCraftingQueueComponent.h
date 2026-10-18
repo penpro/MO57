@@ -41,7 +41,7 @@
  * STATION TRACKING:
  * - SetActiveStation(Actor) stores reference and GUID
  * - GetActiveStationGuid() used for save/load
- * - ClearActiveStation() when leaving station range
+ * - GetActiveStation() is null while the owner is beyond UMOCraftingSubsystem::StationReachCm of it (nothing calls ClearActiveStation on leaving)
  *
  * CRITICAL PATTERNS:
  * 1. INGREDIENTS: Reserved on enqueue; captured per-craft quantities consume owned lots on completion.

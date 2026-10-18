@@ -961,6 +961,14 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 */
 	static void FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out);
 
+	/**
+	 * The cave mouth nearest From within MaxRadiusCm: a column with cave air 2 m under the ground (the test of MO.WorldGen.FindCaveEntrance), made
+	 * cheap enough for kilometres -- caves are only in limestone (v11), so 500 m cells are searched ring by ring outward, a cell only where limestone
+	 * shows at its 3 x 3 sample points, its columns every 4 m. OutSlopeDeg: the ground's slope there. The dev POI list's "Cave entrance" (Wes, Oct 18
+	 * 2026: "add caves to poi list"). False when there is none in range.
+	 */
+	static bool FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Seed, const FVector2D& From, double MaxRadiusCm, FVector& OutMouth, float& OutSlopeDeg);
+
 	/** Bare-rock points on the ground under Area: one column every SpacingCm (jittered), kept where the ground is at least MinSlopeDeg steep over 3 m (cliffs, scarps,
 	 *  stream cuts -- where rock shows through) and above the sea; Kind = Outcrop, AirNormal = the ground's normal. What geology-placed surface ore stands on. */
 	static void FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out);

@@ -48,6 +48,7 @@
 
 class UTextBlock;
 class UMOCommonButton;
+class UCommonButtonBase;
 class UImage;
 class UProgressBar;
 
@@ -115,6 +116,14 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> PossessButton;
+
+	/**
+	 * The row-wide button the entry blueprint lays OVER the row (its overlay draws it above PossessButton): every real click on the row, the Select
+	 * button included, lands on it (MO.Test.HitTest: "BLOCKED ... EntryButton"). Unbound until Oct 18 2026, so the possession window took no click at
+	 * all ("still can't select any pawns from the possession window", Wes). It does what Select does: the whole row of a free survivor selects it.
+	 */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UCommonButtonBase> EntryButton;
 
 	/** "Current survivor" / "Played by <name>" (SetOccupancy); without it the status line says so. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))

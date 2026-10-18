@@ -220,7 +220,7 @@ FMOCraftingExecutionContext UMOCraftingSubsystem::ResolveExecutionContext(FName 
 	if (!Context.StationGuid.IsValid()) return Refuse(EMOCraftingContextFailure::MissingStation, TEXT("The station has no persistent identity."));
 	if (Recipe->RequiredStation != EMOCraftingStation::None && Context.StationType != Recipe->RequiredStation) return Refuse(EMOCraftingContextFailure::WrongStation, TEXT("Wrong crafting station."));
 	if (!Station->IsComplete()) return Refuse(EMOCraftingContextFailure::IncompleteStation, TEXT("Finish building this station first."));
-	if (FVector::DistSquared(Crafter->GetActorLocation(), Station->GetActorLocation()) > FMath::Square(400.0f)) return Refuse(EMOCraftingContextFailure::OutOfRange, TEXT("Return to the crafting station."));
+	if (FVector::DistSquared(Crafter->GetActorLocation(), Station->GetActorLocation()) > FMath::Square(StationReachCm)) return Refuse(EMOCraftingContextFailure::OutOfRange, TEXT("Return to the crafting station."));
 	FVector View = Crafter->GetActorLocation();
 	FRotator Rotation;
 	if (APawn* Pawn = Cast<APawn>(Crafter)) UMOViewpointUtils::ResolveViewpointForPawn(Pawn, View, Rotation);

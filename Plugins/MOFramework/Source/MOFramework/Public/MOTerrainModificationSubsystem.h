@@ -16,6 +16,8 @@
  *
  * ARCHITECTURE NOTES
  *   - UWorldSubsystem: per-world, game-worlds only.
+ *   - CO-OP: the host owns the list and mirrors it into AMOGameState (PublishZones); a client's list is the host's
+ *     (HandleReplicatedZones), and every machine runs the sweep on its own PCG copy (MOTerrainModificationTypes.h).
  *   - Stores a flat list of FMOTerrainModifiedZone (sphere = location + radius).
  *   - Maintains a 2D spatial grid for O(1)-ish lookups by world XY — needed
  *     to scale to "player built a whole city" zone counts.
@@ -56,27 +58,8 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MOSaveDomainInterface.h"
+#include "MOTerrainModificationTypes.h"
 #include "MOTerrainModificationSubsystem.generated.h"
-
-/**
- * A sphere of world that has been deliberately terraformed. Foliage / PCG
- * content inside this sphere is kept clear by the subsystem's periodic sweep.
- */
-USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOTerrainModifiedZone
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category="MO|TerrainMod")
-	FVector Location = FVector::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category="MO|TerrainMod")
-	float Radius = 250.0f;
-
-	FMOTerrainModifiedZone() = default;
-	FMOTerrainModifiedZone(const FVector& InLoc, float InRadius)
-		: Location(InLoc), Radius(InRadius) {}
-};
 
 /**
  * Save-game payload for the terrain modification subsystem. Tiny — just
@@ -190,6 +173,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|TerrainMod")
 	int32 SweepModifiedZones();
+
+	// ============================================================================
+	// CO-OP
+	// ============================================================================
+
+	/** Client: the host's list on AMOGameState changed. Re-read on the next tick (one rebuild for a whole batch of replicated changes). */
+	void HandleReplicatedZonesChanged();
 
 	// ============================================================================
 	// CONFIGURATION
@@ -339,4 +329,11 @@ private:
 
 	/** Reset and re-populate the grid from current Zones (used after load). */
 	void RebuildSpatialIndex();
+
+	/** Authority: mirror Zones into AMOGameState so every client, current and future, sweeps the same ground. */
+	void PublishZones();
+
+	/** Client: take the host's list from AMOGameState, re-index it and sweep (HandleReplicatedZonesChanged schedules it). */
+	void ApplyReplicatedZones();
+	bool bReplicatedZonesPending = false;
 };

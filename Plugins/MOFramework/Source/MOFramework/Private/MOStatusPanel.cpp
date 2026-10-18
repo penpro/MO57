@@ -548,6 +548,19 @@ void UMOStatusPanel::PopulateFieldConfigs_Implementation()
 
 void UMOStatusPanel::CreateFieldsFromConfigs()
 {
+	// NativeConstruct runs again every time this panel is shown (the layer stack re-adds the same instance): start from empty containers. Adding the
+	// fields again on top of the old ones listed the vitals once per showing, the old rows still bound to the pawns played before ("vitals in status
+	// menu shows all three pawns?", Wes, Oct 18 2026).
+	for (int32 Category = static_cast<int32>(EMOStatusCategory::Info); Category <= static_cast<int32>(EMOStatusCategory::Conditions); ++Category)
+	{
+		if (UVerticalBox* Container = GetCategoryContainer(static_cast<EMOStatusCategory>(Category)))
+		{
+			Container->ClearChildren();
+		}
+	}
+	FieldWidgets.Reset();
+	FieldConfigMap.Reset();
+
 	// Sort configs by category and priority
 	FieldConfigs.Sort([](const FMOStatusFieldConfig& A, const FMOStatusFieldConfig& B)
 	{

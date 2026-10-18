@@ -20,11 +20,11 @@
  * UI WIDGETS MANAGED:
  * - SkillsPanel: Shows skill levels and XP progress
  * - StatusPanel: Shows vitals, metabolism, mental state bars
- * - InspectionProgressWidget: Circular progress during item inspection
+ * - (an inspection's progress is the pawn's timed-action bar: the server times it, this controller draws it)
  *
  * INSPECTION FLOW:
- * StartItemInspection(ItemId, Guid) -> Create progress widget
- * -> Player holds inspect -> Progress fills -> HandleInspectionCompleted()
+ * StartItemInspection(ItemId, Guid) -> AMOPlayerController::ServerInspectItem (FMOInspectionActions: the server checks the item is at hand,
+ * times the study on the pawn, inspects on its own copy) -> ClientInspectionResult -> ShowInspectionResult()
  * -> KnowledgeComponent.InspectItem() -> Show XP grants
  *
  * CRITICAL PATTERNS:
@@ -38,7 +38,7 @@
  *    Uses modal background + UI input mode when open
  *
  * 3. Inspection Cancellation:
- *    Player moves or releases key -> CancelItemInspection()
+ *    The server's timed action ends it when the pawn moves or is hurt; CancelItemInspection() stops it on request.
  *    Clears progress widget, no XP granted
  *
  * KNOWN PITFALLS:
@@ -55,7 +55,7 @@
  * - MOUIControllerBase.h - Base class with shared utilities
  * - MOSkillsPanel.h - Skills display widget
  * - MOStatusPanel.h - Medical status display widget
- * - MOInspectionProgressWidget.h - Circular progress widget
+ * - MOInspectionActions.h - the server's inspection
  * - MOKnowledgeComponent.h - Receives inspection results
  *
  * TESTING CHECKLIST:
@@ -76,12 +76,12 @@
 #include "MOUIControllerBase.h"
 #include "MOInterruptibleInterface.h"
 #include "MOVitalsTypes.h"  // EMOWetnessState (used in HandleWetnessStateChanged)
+#include "MOInstanceRef.h"
 #include "MOCharacterUIController.generated.h"
 
 class AMOCharacter;
 class UMOSkillsPanel;
 class UMOStatusPanel;
-class UMOInspectionProgressWidget;
 class UMOProgressWidgetBase;
 class UMOTerraformingComponent;
 class UMOVitalsComponent;
@@ -102,25 +102,12 @@ struct FMOInspectionResult;
  * and provide clear ownership of the character UI subsystem.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOCharacterUIController : public UMOUIControllerBase,
-	public IMOInterruptibleInterface
+class MOFRAMEWORK_API UMOCharacterUIController : public UMOUIControllerBase
 {
 	GENERATED_BODY()
 
 public:
 	UMOCharacterUIController();
-
-	/**
-	 * Interrupt policy for an active item inspection:
-	 *   Movement / Damage / Knockdown / Unconscious / Death / EnteredCombat
-	 *     / LostControl / External  -> CANCEL (no progress preserved)
-	 *   UserCancel  -> ignored (UI calls CancelItemInspection directly)
-	 *
-	 * Inspection is a "stand still and concentrate" action — any meaningful
-	 * disturbance discards progress. Severity is not consulted today; a tap
-	 * on the shoulder breaks concentration just like a stab wound.
-	 */
-	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// ==========================================================================
 	// SKILLS PANEL
@@ -177,6 +164,15 @@ public:
 	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */
 	UFUNCTION(BlueprintCallable, Category="MO|Character|Inspection")
 	void StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid);
+
+	/**
+	 * Inspect ItemDefinitionId: a carried item (ItemGuid), or one in the world the player is looking at -- Instance names it (a stick on the ground, the
+	 * tree its bark comes from). The server checks it is at hand and runs the study (AMOPlayerController::ServerInspectItem).
+	 */
+	void StartItemInspectionAt(FName ItemDefinitionId, const FGuid& ItemGuid, const FMOInstanceRef& Instance);
+
+	/** An inspection this player asked for finished (AMOPlayerController::ClientInspectionResult): the XP / knowledge popups and quest events. */
+	void ShowInspectionResult(FName ItemDefinitionId, const FMOInspectionResult& Result);
 
 	/** Cancel any active inspection. */
 	UFUNCTION(BlueprintCallable, Category="MO|Character|Inspection")
@@ -253,35 +249,6 @@ private:
 
 	// --- Inspection ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOInspectionProgressWidget> InspectionProgressWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 InspectionProgressZOrder = 200;
-
-	/** Duration of item inspection in seconds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(ClampMin="1.0", AllowPrivateAccess="true"))
-	float InspectionDuration = 15.0f;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOInspectionProgressWidget> InspectionProgressWidget;
-
-	/** The item GUID currently being inspected. */
-	FGuid InspectingItemGuid;
-
-	/**
-	 * Character we've registered with for interrupt notifications. Cached so
-	 * we can unregister later even if the controlled pawn changes
-	 * mid-inspection.
-	 */
-	TWeakObjectPtr<AMOCharacter> RegisteredInspectionCharacter;
-
-	/** Subscribe to the inspecting pawn's interrupt broadcast. */
-	void RegisterForInspectionInterrupts();
-
-	/** Drop the inspection interrupt registration (if any). */
-	void UnregisterFromInspectionInterrupts();
-
 	// --- Terraforming Progress ---
 
 	/**
@@ -332,12 +299,6 @@ private:
 
 	/** Remove the progress widget from the layer stack and unbind its delegates. */
 	void TearDownTerraformProgressWidget();
-
-	UFUNCTION()
-	void HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result);
-
-	UFUNCTION()
-	void HandleInspectionCancelled();
 
 	// =========================================================================
 	// VITALS-DERIVED MOODLES (wet, future: bleeding, hot/cold thresholds, etc.)

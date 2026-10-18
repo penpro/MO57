@@ -301,6 +301,9 @@ class MOFRAMEWORK_API UMOCraftingSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** How near a crafter must stand to work at a station (cm): the service refuses beyond it, and a pawn's active station lapses beyond it. */
+	static constexpr float StationReachCm = 400.0f;
+
 	// Delegates
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|Events")
 	FMOOnCraftCompleted OnCraftCompleted;

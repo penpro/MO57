@@ -367,7 +367,7 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 		Played = FallbackTerrainSet;
 		Id = FMOFootstepMath::SoundIdFor(Played, NextVariant);
 	}
-	const bool bOk = Audio->PlayOneShotAtLocation(this, Id, Sole, Volume, Pitch);
+	const bool bOk = Audio->PlayOneShotAtLocationAttenuated(this, Id, Sole, Volume, Pitch, Audio->GetFootstepAttenuation());
 
 	++NextVariant;
 	++StepCount;

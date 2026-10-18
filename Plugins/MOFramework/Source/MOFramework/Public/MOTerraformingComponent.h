@@ -153,7 +153,7 @@ struct MOFRAMEWORK_API FMOTerraformConfig
  * locked to where they were aiming. Movement would cancel the action via the
  * interrupt system anyway, so this lock is mostly defensive.
  */
-// FMOTerrainModifiedZone has moved to UMOTerrainModificationSubsystem.
+// FMOTerrainModifiedZone lives in MOTerrainModificationTypes.h; UMOTerrainModificationSubsystem owns the zones.
 // This component no longer tracks zones directly — it just reports each
 // successful terraform action to that subsystem, which owns the data, the
 // spatial index, the periodic sweep, and save/load integration.

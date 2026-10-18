@@ -14,7 +14,8 @@
 #include "MOUIManagerComponent.h"
 #include "MOSkillsPanel.h"
 #include "MOStatusPanel.h"
-#include "MOInspectionProgressWidget.h"
+#include "MOInspectionActions.h"
+#include "MOPlayerController.h"
 #include "MOSkillsComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOVitalsComponent.h"
@@ -92,18 +93,6 @@ void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		StatusWidget->RemoveFromParent();
 	}
 	StatusPanelWidget.Reset();
-
-	// Clean up inspection widget - unbind delegates first
-	if (UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get())
-	{
-		InspectionWidget->OnInspectionCompleted.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCompleted);
-		InspectionWidget->OnInspectionCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCancelled);
-		InspectionWidget->RemoveFromParent();
-	}
-	InspectionProgressWidget.Reset();
-
-	// Don't leave a stale entry on the character's movement-interrupt list.
-	UnregisterFromInspectionInterrupts();
 
 	// Tear down any in-flight terraform progress widget and unbind from the
 	// component so we don't get callbacks during world teardown.
@@ -799,291 +788,102 @@ void UMOCharacterUIController::TearDownTerraformProgressWidget()
 
 void UMOCharacterUIController::StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid)
 {
+	StartItemInspectionAt(ItemDefinitionId, ItemGuid, FMOInstanceRef());
+}
+
+void UMOCharacterUIController::StartItemInspectionAt(FName ItemDefinitionId, const FGuid& ItemGuid, const FMOInstanceRef& Instance)
+{
 	if (!IsLocalOwningPlayerController())
 	{
 		return;
 	}
-
-	APlayerController* PlayerController = ResolveOwningPlayerController();
+	AMOPlayerController* PlayerController = Cast<AMOPlayerController>(ResolveOwningPlayerController());
 	if (!IsValid(PlayerController))
 	{
 		return;
 	}
-
-	// Cancel any existing inspection
-	if (IsInspectionInProgress())
-	{
-		CancelItemInspection();
-	}
-
-	// Inspection used to close the inventory menu here. Per design — users want to
-	// keep the inventory open while an inspection runs in the background (so they
-	// can look at other items or queue up more inspections). The progress widget
-	// lives on the GameOverlay layer; the inventory is on the Menu layer, so they
-	// coexist visually.
-
-	// Get item display name from database
-	FText ItemDisplayName = UMOItemDatabaseSettings::GetItemDisplayName(ItemDefinitionId);
-	if (ItemDisplayName.IsEmpty())
-	{
-		ItemDisplayName = FText::FromName(ItemDefinitionId);
-	}
-
-	// Get knowledge and skills components from pawn
-	APawn* CurrentPawn = PlayerController->GetPawn();
-	if (!IsValid(CurrentPawn))
+	if (!IsValid(PlayerController->GetPawn()))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharUI] StartItemInspection - No pawn to inspect with"));
 		ShowNoPawnNotification();
 		return;
 	}
-
-	UMOKnowledgeComponent* KnowledgeComp = GetCachedKnowledge();
-	UMOSkillsComponent* SkillsComp = GetCachedSkills();
-
-	if (!IsValid(KnowledgeComp))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharUI] StartItemInspection - Pawn has no KnowledgeComponent"));
-		return;
-	}
-
-	// Create inspection widget if needed
-	if (!InspectionProgressWidgetClass)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharUI] InspectionProgressWidgetClass not set on CharacterUIController"));
-		return;
-	}
-
-	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
-	bool bNeedsBindDelegates = false;
-
-	if (IsValid(InspectionWidget))
-	{
-		// Try to reuse existing widget - push it to the layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, InspectionWidget);
-
-		// CommonUI may have created a new widget (can't add existing instances to stacks)
-		if (ActualWidget && ActualWidget != InspectionWidget)
-		{
-			InspectionWidget = Cast<UMOInspectionProgressWidget>(ActualWidget);
-			InspectionProgressWidget = InspectionWidget;
-			bNeedsBindDelegates = true;
-		}
-	}
-	else
-	{
-		// Create new widget via layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, InspectionProgressWidgetClass);
-		InspectionWidget = Cast<UMOInspectionProgressWidget>(ActualWidget);
-		UMOUIManagerComponent::RegisterHUDElement(InspectionWidget, EMOHUDElementKind::Feedback);
-		bNeedsBindDelegates = true;
-	}
-
-	if (!IsValid(InspectionWidget))
-	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOCharUI] Failed to create inspection widget"));
-		return;
-	}
-
-	// Cache and bind delegates if this is a new widget
-	if (bNeedsBindDelegates)
-	{
-		InspectionProgressWidget = InspectionWidget;
-		InspectionWidget->OnInspectionCompleted.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCompleted);
-		InspectionWidget->OnInspectionCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCancelled);
-		InspectionWidget->OnInspectionCompleted.AddDynamic(this, &UMOCharacterUIController::HandleInspectionCompleted);
-		InspectionWidget->OnInspectionCancelled.AddDynamic(this, &UMOCharacterUIController::HandleInspectionCancelled);
-	}
-
-	// Store the item being inspected
-	InspectingItemGuid = ItemGuid;
-
-	// Start the inspection (widget is now in layer stack, CommonUI handles input mode)
-	InspectionWidget->StartInspection(ItemDefinitionId, ItemDisplayName, KnowledgeComp, SkillsComp, InspectionDuration);
-
-	// Subscribe to movement-interrupt — inspection is a "stand still and study"
-	// action, so any motion cancels it (no partial progress saved).
-	RegisterForInspectionInterrupts();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Started inspection of item '%s' (GUID: %s)"),
-		*ItemDefinitionId.ToString(), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+	// The server owns the study, from the host and a joiner alike (FMOInspectionActions): it checks the item is at hand, times it on the pawn (the
+	// timed-action bar shows it here; moving or being hurt ends it) and inspects on its own copy, so what the player learns is the server's and is
+	// saved. (Until Oct 18 2026 a progress widget's UI timer inspected on THIS machine: a joiner's learning lived only in the joiner's copy.)
+	// Inspection does not close the inventory: the player can keep looking at other items while it runs.
+	PlayerController->ServerInspectItem(ItemDefinitionId, ItemGuid, Instance);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Asked the server to inspect '%s' (GUID: %s, at: %s)"), *ItemDefinitionId.ToString(),
+		*ItemGuid.ToString(EGuidFormats::DigitsWithHyphens), *Instance.ToString());
 }
 
 void UMOCharacterUIController::CancelItemInspection()
 {
-	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
-	if (IsValid(InspectionWidget) && InspectionWidget->IsInspectionInProgress())
+	const APlayerController* PC = ResolveOwningPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	if (Timed && Timed->IsActive() && Timed->GetState().ActionId == FMOInspectionActions::TimedActionId)
 	{
-		InspectionWidget->CancelInspection();
+		Timed->ServerCancel();
 	}
 }
 
 bool UMOCharacterUIController::IsInspectionInProgress() const
 {
-	const UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
-	return IsValid(InspectionWidget) && InspectionWidget->IsInspectionInProgress();
+	const APlayerController* PC = ResolveOwningPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	const UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	return Timed && Timed->IsActive() && Timed->GetState().ActionId == FMOInspectionActions::TimedActionId;
 }
 
-void UMOCharacterUIController::HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result)
+void UMOCharacterUIController::ShowInspectionResult(FName ItemDefinitionId, const FMOInspectionResult& Result)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Inspection completed: Success=%s, XPGrants=%d"),
-		bCompleted ? TEXT("true") : TEXT("false"),
-		Result.XPGrants.Num());
-
-	// Inspection ended one way or another — stop listening for movement.
-	UnregisterFromInspectionInterrupts();
-
-	// Deactivate widget (CommonUI pops it from the layer stack and restores input)
-	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
-	if (IsValid(InspectionWidget))
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Inspection of '%s' finished: Success=%s, XPGrants=%d"), *ItemDefinitionId.ToString(),
+		Result.bSuccess ? TEXT("true") : TEXT("false"), Result.XPGrants.Num());
+	if (!Result.bSuccess)
 	{
-		InspectionWidget->DeactivateWidget();
+		return;
+	}
+	UMONotificationComponent* NotificationComp = GetNotificationComponent();
+
+	// Cycle through showing popup for each affected entry (both skills and knowledge)
+	// Each entry gets its own popup that displays sequentially
+	for (const FMOInspectionXPGrant& Grant : Result.XPGrants)
+	{
+		if (Grant.XPAmount > 0.0f && NotificationComp)
+		{
+			// Both skills and knowledge use the same popup system
+			// The bIsKnowledge flag can be used by the widget to style differently if desired
+			NotificationComp->ShowSkillPopup(Grant.Id, 3.0f);
+
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI]   Showing popup for %s '%s': +%.0f XP, Level %d -> %d"),
+				Grant.bIsKnowledge ? TEXT("knowledge") : TEXT("skill"),
+				*Grant.Id.ToString(),
+				Grant.XPAmount,
+				Grant.LevelBefore,
+				Grant.LevelAfter);
+		}
 	}
 
-	// Clear inspecting item
-	InspectingItemGuid.Invalidate();
-
-	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
-
-	// Show notifications for inspection results
-	if (bCompleted && Result.bSuccess)
+	// Show feedback message about learning potential
+	if (!Result.FeedbackMessage.IsEmpty() && NotificationComp)
 	{
-		UMONotificationComponent* NotificationComp = GetNotificationComponent();
+		NotificationComp->ShowNotification(Result.FeedbackMessage, 4.0f);
+	}
 
-		// Cycle through showing popup for each affected entry (both skills and knowledge)
-		// Each entry gets its own popup that displays sequentially
-		for (const FMOInspectionXPGrant& Grant : Result.XPGrants)
+	// Fire quest events for the inspection (the quest log is this player's machine's)
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
 		{
-			if (Grant.XPAmount > 0.0f && NotificationComp)
+			if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
 			{
-				// Both skills and knowledge use the same popup system
-				// The bIsKnowledge flag can be used by the widget to style differently if desired
-				NotificationComp->ShowSkillPopup(Grant.Id, 3.0f);
-
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI]   Showing popup for %s '%s': +%.0f XP, Level %d -> %d"),
-					Grant.bIsKnowledge ? TEXT("knowledge") : TEXT("skill"),
-					*Grant.Id.ToString(),
-					Grant.XPAmount,
-					Grant.LevelBefore,
-					Grant.LevelAfter);
-			}
-		}
-
-		// Show feedback message about learning potential
-		if (!Result.FeedbackMessage.IsEmpty() && NotificationComp)
-		{
-			NotificationComp->ShowNotification(Result.FeedbackMessage, 4.0f);
-		}
-
-		// Fire quest event for item inspection
-		if (UWorld* World = GetWorld())
-		{
-			if (UGameInstance* GI = World->GetGameInstance())
-			{
-				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
-				{
-					// Get the item ID from the widget if still valid
-					if (IsValid(InspectionWidget))
-					{
-						const FName InspectedItemId = InspectionWidget->GetInspectingItemId();
-						if (!InspectedItemId.IsNone())
-						{
-							// Fire both a generic "ItemInspected" event and an item-specific event
-							QuestSub->FireGameEvent(FName(TEXT("ItemInspected")));
-							QuestSub->FireGameEvent(FName(*FString::Printf(TEXT("Inspected_%s"), *InspectedItemId.ToString())));
-						}
-					}
-				}
+				// Fire both a generic "ItemInspected" event and an item-specific event
+				QuestSub->FireGameEvent(FName(TEXT("ItemInspected")));
+				QuestSub->FireGameEvent(FName(*FString::Printf(TEXT("Inspected_%s"), *ItemDefinitionId.ToString())));
 			}
 		}
 	}
-}
-
-void UMOCharacterUIController::HandleInspectionCancelled()
-{
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Inspection cancelled"));
-
-	// Deactivate widget (CommonUI pops it from the layer stack and restores input)
-	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
-	if (IsValid(InspectionWidget))
-	{
-		InspectionWidget->DeactivateWidget();
-	}
-
-	// Clear inspecting item
-	InspectingItemGuid.Invalidate();
-
-	UnregisterFromInspectionInterrupts();
-
-	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
-}
-
-// =============================================================================
-// INTERRUPT HANDLING (IMOInterruptibleInterface)
-// =============================================================================
-
-void UMOCharacterUIController::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
-{
-	if (!IsInspectionInProgress())
-	{
-		// Defensive — should already be unregistered, but a no-op is safer
-		// than a crash if the unregister somehow lagged.
-		return;
-	}
-
-	// Inspection is a "stand still and concentrate" activity. Any meaningful
-	// disturbance discards progress. UserCancel is intentionally skipped —
-	// the inventory UI calls CancelItemInspection directly on that path, so
-	// reacting here would double-fire.
-	switch (Context.Reason)
-	{
-	case EMOInterruptReason::Movement:
-	case EMOInterruptReason::Damage:
-	case EMOInterruptReason::Knockdown:
-	case EMOInterruptReason::Unconscious:
-	case EMOInterruptReason::Death:
-	case EMOInterruptReason::EnteredCombat:
-	case EMOInterruptReason::LostControl:
-	case EMOInterruptReason::External:
-		UE_LOG(LogMOFramework, Log,
-			TEXT("[MOCharUI] Interrupt reason=%d — cancelling item inspection (no progress saved)"),
-			(int32)Context.Reason);
-		// CancelItemInspection -> widget cancels -> HandleInspectionCancelled
-		// runs UnregisterFromInspectionInterrupts. Clean self-removal.
-		CancelItemInspection();
-		break;
-
-	case EMOInterruptReason::UserCancel:
-	case EMOInterruptReason::None:
-	default:
-		break;
-	}
-}
-
-void UMOCharacterUIController::RegisterForInspectionInterrupts()
-{
-	APlayerController* PC = ResolveOwningPlayerController();
-	if (!IsValid(PC))
-	{
-		return;
-	}
-	AMOCharacter* Pawn = Cast<AMOCharacter>(PC->GetPawn());
-	if (!IsValid(Pawn))
-	{
-		return;
-	}
-
-	Pawn->RegisterInterruptListener(this);
-	RegisteredInspectionCharacter = Pawn;
-}
-
-void UMOCharacterUIController::UnregisterFromInspectionInterrupts()
-{
-	if (AMOCharacter* Pawn = RegisteredInspectionCharacter.Get())
-	{
-		Pawn->UnregisterInterruptListener(this);
-	}
-	RegisteredInspectionCharacter.Reset();
 }
 
 // =============================================================================

@@ -21,7 +21,7 @@
  * - CraftingMenu: Full crafting interface with recipe selection
  * - StationContextMenu: Quick actions for crafting stations
  * - KeepOnHarvestContextMenu: Actions for harvestable PCG instances
- * - HarvestProgressWidget: Circular progress during harvesting
+ * - (a harvest's progress is the pawn's timed-action bar: the server times it, UMOCharacterUIController draws it)
  *
  * CONTEXT MENU TARGETS:
  * - StationContextMenu: AMOCraftingStationActor (campfire, forge, etc.)
@@ -37,16 +37,16 @@
  *    -> User clicks Open/Craft/Light -> Handler methods
  *
  * 3. Harvest Flow:
- *    ShowKeepOnHarvestContextMenu(Target) -> User selects recipe
- *    -> StartHarvestOperation(RecipeId) -> Show progress widget
- *    -> HandleHarvestCompleted() -> Award items, remove instance
+ *    ShowKeepOnHarvestContextMenu(Target) -> User selects an action
+ *    -> StartHarvestOperation(ActionId) -> AMOPlayerController::ServerBeginHarvest (FMOHarvestActions: the server runs and times it)
+ *    -> ClientHarvestOutcome -> ShowHarvestOutcome() -> notifications
  *
  * KNOWN PITFALLS:
  * 1. TARGET VALIDITY: FMOInteractionTarget can become invalid if ISM changes.
  *    Validate target before starting harvest operation.
  *
- * 2. HARVEST INTERRUPTION: Moving or being attacked cancels harvest.
- *    HandleHarvestCancelled() must clean up UI properly.
+ * 2. HARVEST INTERRUPTION: Moving or being attacked cancels the harvest on the server (the pawn's timed action and
+ *    the harvest subsystem's interrupts); the timed-action bar goes away by itself.
  *
  * 3. CONTEXT MENU POSITIONING: WorldPosition -> ScreenPosition conversion.
  *    Menu may appear offscreen if position is behind camera.
@@ -83,10 +83,10 @@
 class UMOCraftingMenu;
 class UMOStationContextMenu;
 class UMOKeepOnHarvestContextMenu;
-class UMOHarvestProgressWidget;
 class AMOCraftingStationActor;
 class UMOWorldActionMenu;
 struct FMOCraftResult;
+struct FMOHarvestOutcome;
 
 /**
  * Specialized UI controller for crafting-related UI.
@@ -180,6 +180,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|Harvest")
 	bool IsHarvestInProgress() const;
 
+	/** A harvest this player asked for finished (AMOPlayerController::ClientHarvestOutcome): the pickup notifications, or why nothing came. */
+	void ShowHarvestOutcome(const FMOHarvestOutcome& Outcome);
+
 	// ==========================================================================
 	// WORLD ACTIONS (IMOWorldActionProvider: a carcass's parts ...)
 	// ==========================================================================
@@ -244,20 +247,11 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOHarvestProgressWidget> HarvestProgressWidgetClass;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 KeepOnHarvestContextMenuZOrder = 60;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 HarvestProgressZOrder = 200;
-
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuWidget;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOHarvestProgressWidget> HarvestProgressWidget;
 
 	/** The current interaction target for harvest operations. */
 	FMOInteractionTarget CurrentHarvestTarget;
@@ -273,12 +267,6 @@ private:
 
 	UFUNCTION()
 	void HandleKeepOnHarvestContextMenuChopDownClicked();
-
-	UFUNCTION()
-	void HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result);
-
-	UFUNCTION()
-	void HandleHarvestCancelled();
 
 	// --- World Action Menu ---
 

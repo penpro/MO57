@@ -1,11 +1,14 @@
 #include "MOGameState.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldSyncSubsystem.h"
+#include "MODevMode.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 
 AMOGameState::AMOGameState()
 {
 	RemovedInstances.Owner = this;   // the client callback (FMORemovedInstance::PostReplicatedAdd) reaches the world through it
+	TerrainZones.Owner = this;       // likewise FMOReplicatedTerrainZone's callbacks
 }
 
 void AMOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -15,6 +18,19 @@ void AMOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AMOGameState, WorldClock);
 	DOREPLIFETIME(AMOGameState, WorldWeather);
 	DOREPLIFETIME(AMOGameState, RemovedInstances);
+	DOREPLIFETIME(AMOGameState, TerrainZones);
+	DOREPLIFETIME(AMOGameState, bHostDeveloperMode);
+}
+
+void AMOGameState::BeginPlay()
+{
+	Super::BeginPlay();
+	if (HasAuthority())
+	{
+		bHostDeveloperMode = FMODevMode::IsEnabled();
+		// The host can flip developer mode in Options at any time; replication sends only a change.
+		GetWorldTimerManager().SetTimer(DevModeRefreshHandle, FTimerDelegate::CreateWeakLambda(this, [this]() { bHostDeveloperMode = FMODevMode::IsEnabled(); }), 2.0f, true);
+	}
 }
 
 void AMOGameState::AddRemovedInstance(const FMORemovedInstance& Entry)
@@ -36,6 +52,35 @@ void AMOGameState::ResetRemovedInstances(const TArray<FMORemovedInstance>& All)
 		RemovedInstances.MarkItemDirty(Item);
 	}
 	RemovedInstances.MarkArrayDirty();
+}
+
+void AMOGameState::SyncTerrainZones(const TArray<FMOTerrainModifiedZone>& Zones)
+{
+	check(HasAuthority());
+	TerrainZones.Owner = this;
+	const bool bShrank = TerrainZones.Items.Num() > Zones.Num();
+	if (bShrank)
+	{
+		TerrainZones.Items.SetNum(Zones.Num());
+	}
+	for (int32 i = 0; i < Zones.Num(); ++i)
+	{
+		if (!TerrainZones.Items.IsValidIndex(i))
+		{
+			TerrainZones.Items.AddDefaulted();
+		}
+		FMOReplicatedTerrainZone& Item = TerrainZones.Items[i];
+		if (Item.ReplicationID == INDEX_NONE || !Item.Location.Equals(Zones[i].Location, 1.0) || Item.Radius != Zones[i].Radius)
+		{
+			Item.Location = Zones[i].Location;
+			Item.Radius = Zones[i].Radius;
+			TerrainZones.MarkItemDirty(Item);
+		}
+	}
+	if (bShrank)
+	{
+		TerrainZones.MarkArrayDirty();
+	}
 }
 
 void AMOGameState::SetWorldClockInfo(const FMOWorldClockInfo& NewInfo)

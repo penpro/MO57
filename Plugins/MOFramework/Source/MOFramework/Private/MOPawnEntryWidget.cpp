@@ -1,5 +1,6 @@
 #include "MOPawnEntryWidget.h"
 #include "MOCommonButton.h"
+#include "CommonButtonBase.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/ProgressBar.h"
@@ -13,6 +14,11 @@ void UMOPawnEntryWidget::NativeConstruct()
 		PossessButton->OnClicked().RemoveAll(this);
 		PossessButton->OnClicked().AddUObject(this, &UMOPawnEntryWidget::HandlePossessClicked);
 	}
+	if (EntryButton)
+	{
+		EntryButton->OnClicked().RemoveAll(this);
+		EntryButton->OnClicked().AddUObject(this, &UMOPawnEntryWidget::HandlePossessClicked);
+	}
 }
 
 void UMOPawnEntryWidget::NativeDestruct()
@@ -21,6 +27,10 @@ void UMOPawnEntryWidget::NativeDestruct()
 	if (PossessButton)
 	{
 		PossessButton->OnClicked().RemoveAll(this);
+	}
+	if (EntryButton)
+	{
+		EntryButton->OnClicked().RemoveAll(this);
 	}
 
 	Super::NativeDestruct();

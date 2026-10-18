@@ -13,6 +13,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
+#include "UObject/UObjectIterator.h"
 
 namespace
 {
@@ -283,13 +284,38 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 	World->OverlapMultiByChannel(Overlaps, AimPoint, FQuat::Identity, TraceConfig.TraceChannel.GetValue(),
 		FCollisionShape::MakeSphere(TraceConfig.AimAssistRadius), QueryParams);
 
-	// Each interactable actor once, by its overlapping component nearest the aim point (0 inside the component's bounds).
-	struct FCandidate { AActor* Actor; UPrimitiveComponent* Component; float DistSq; FVector Point; };
+	// Each interactable actor once, by its overlapping component nearest the aim point (0 inside the component's bounds); each harvestable instance
+	// (a stick, a flint, a bush) by its own pivot.
+	struct FCandidate { AActor* Actor; UPrimitiveComponent* Component; float DistSq; FVector Point; int32 InstanceIndex = INDEX_NONE; };
 	TArray<FCandidate> Candidates;
 	for (const FOverlapResult& Overlap : Overlaps)
 	{
 		AActor* Actor = Overlap.GetActor();
 		UPrimitiveComponent* Component = Overlap.GetComponent();
+		// An instance lying here: a ground item flush with the terrain (a flint half sunk in it) that neither the line nor the sweep meets. Only actors
+		// with an interactable component were candidates until Oct 18 2026, so such an item could not be picked up with E at all.
+		UInstancedStaticMeshComponent* ISM = Cast<UInstancedStaticMeshComponent>(Component);
+		if (CVarInteractDebug.GetValueOnGameThread() > 0)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor]   overlap %s/%s item %d%s"), *GetNameSafe(Actor), *GetNameSafe(Component), Overlap.ItemIndex,
+				ISM ? (IsHarvestableInstanceComponent(ISM, World) ? TEXT(" (harvestable instance)") : TEXT(" (instance, not harvestable)")) : TEXT(""));
+		}
+		if (IsValid(Actor) && ISM && IsHarvestableInstanceComponent(ISM, World))
+		{
+			// The overlap names the instance it met (one result per instance body); its pivot is where the item lies.
+			FTransform Xf;
+			if (Overlap.ItemIndex != INDEX_NONE && ISM->GetInstanceTransform(Overlap.ItemIndex, Xf, /*bWorldSpace=*/true))
+			{
+				const FVector Pivot = Xf.GetLocation();
+				const float DistSq = FVector::DistSquared(Pivot, AimPoint);
+				FCandidate* Same = Candidates.FindByPredicate([ISM, &Overlap](const FCandidate& C) { return C.Component == ISM && C.InstanceIndex == Overlap.ItemIndex; });
+				if (!Same)
+				{
+					Candidates.Add({Actor, ISM, DistSq, Pivot, Overlap.ItemIndex});
+				}
+			}
+			continue;
+		}
 		if (!IsValid(Actor) || !Component || !Actor->FindComponentByClass<UMOInteractableComponent>())
 		{
 			continue;
@@ -297,7 +323,7 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 		const FBox Box = Component->Bounds.GetBox();
 		const FVector Point = Box.GetClosestPointTo(AimPoint);
 		const float DistSq = FVector::DistSquared(Point, AimPoint);
-		FCandidate* Existing = Candidates.FindByPredicate([Actor](const FCandidate& C) { return C.Actor == Actor; });
+		FCandidate* Existing = Candidates.FindByPredicate([Actor](const FCandidate& C) { return C.Actor == Actor && C.InstanceIndex == INDEX_NONE; });
 		if (!Existing)
 		{
 			Candidates.Add({Actor, Component, DistSq, Point});
@@ -305,6 +331,28 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 		else if (DistSq < Existing->DistSq)
 		{
 			*Existing = {Actor, Component, DistSq, Point};
+		}
+	}
+	// Harvestable instances by their components' bounds: their bodies do not answer the overlap above (measured Oct 18 2026: a stick 2 cm from the
+	// aim point, and only the terrain's collision came back), so a ground item flush with the terrain was never a candidate.
+	const float RadiusSq = FMath::Square(TraceConfig.AimAssistRadius);
+	for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+	{
+		UInstancedStaticMeshComponent* ISM = *It;
+		if (!IsValid(ISM) || ISM->GetWorld() != World || ISM->GetInstanceCount() == 0 || ISM->Bounds.ComputeSquaredDistanceFromBoxToPoint(AimPoint) > RadiusSq
+			|| !IsHarvestableInstanceComponent(ISM, World))
+		{
+			continue;
+		}
+		for (const int32 Index : ISM->GetInstancesOverlappingSphere(AimPoint, TraceConfig.AimAssistRadius, /*bSphereInWorldSpace=*/true))
+		{
+			FTransform Xf;
+			if (!ISM->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true) || FVector::DistSquared(Xf.GetLocation(), AimPoint) > RadiusSq
+				|| Candidates.ContainsByPredicate([ISM, Index](const FCandidate& C) { return C.Component == ISM && C.InstanceIndex == Index; }))
+			{
+				continue;
+			}
+			Candidates.Add({ISM->GetOwner(), ISM, (float)FVector::DistSquared(Xf.GetLocation(), AimPoint), Xf.GetLocation(), Index});
 		}
 	}
 	Candidates.Sort([](const FCandidate& A, const FCandidate& B) { return A.DistSq < B.DistSq; });
@@ -327,9 +375,27 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 	{
 		FVector BoundsOrigin;
 		FVector BoundsExtent;
-		Candidate.Actor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
-		const bool bInReach = UMOInteractionSubsystem::IsWithinInteractReach(ViewLocation, FVector::ZeroVector, BoundsOrigin, BoundsExtent, MaxReach, 0.0f);
-		const bool bInSight = bInReach && UMOViewpointUtils::HasLineOfSight(World, ViewLocation, Candidate.Actor, Options);
+		bool bInReach = false;
+		bool bInSight = false;
+		if (Candidate.InstanceIndex != INDEX_NONE)
+		{
+			// An instance: reach to its pivot, and nothing solid between the eye and it but see-through cover (its PCG cell's actor bounds say nothing).
+			bInReach = UMOInteractionSubsystem::IsWithinInteractReach(ViewLocation, FVector::ZeroVector, Candidate.Point, FVector(15.0f), MaxReach, 0.0f);
+			FCollisionQueryParams SightParams(SCENE_QUERY_STAT(MOInteractorInstanceSight), false);
+			SightParams.AddIgnoredActor(GetOwner());
+			FHitResult Block;
+			FHitResult Cover;
+			const FVector Target = Candidate.Point + FVector(0.0f, 0.0f, 5.0f);
+			const bool bBlocked = UMOViewpointUtils::TraceThroughSeeThrough(World, ViewLocation, Target, TraceConfig.TraceChannel.GetValue(), SightParams, 0.0f,
+				&UMOInteractorComponent::IsSeeThroughForInteraction, Block, Cover);
+			bInSight = bInReach && (!bBlocked || Block.GetComponent() == Candidate.Component || FVector::Dist(Block.ImpactPoint, Target) < TraceConfig.AimAssistRadius);
+		}
+		else
+		{
+			Candidate.Actor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+			bInReach = UMOInteractionSubsystem::IsWithinInteractReach(ViewLocation, FVector::ZeroVector, BoundsOrigin, BoundsExtent, MaxReach, 0.0f);
+			bInSight = bInReach && UMOViewpointUtils::HasLineOfSight(World, ViewLocation, Candidate.Actor, Options);
+		}
 		if (CVarInteractDebug.GetValueOnGameThread() > 0)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor]   near the aim point %s: %s/%s %.0f cm from it, reach %s, sight %s"),
@@ -340,13 +406,23 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 		{
 			continue;
 		}
+		FHitResult Hit(Candidate.Actor, Candidate.Component, Candidate.Point, (ViewLocation - Candidate.Point).GetSafeNormal());
+		Hit.bBlockingHit = true;
+		Hit.TraceStart = ViewLocation;
+		Hit.TraceEnd = Candidate.Point;
+		Hit.Distance = FVector::Dist(ViewLocation, Candidate.Point);
+		if (Candidate.InstanceIndex != INDEX_NONE)
+		{
+			Hit.Item = Candidate.InstanceIndex;
+			if (EvaluateInteractionHit(Hit, OutTarget))   // the instance target, exactly as if the line had met it
+			{
+				return true;
+			}
+			continue;
+		}
 		OutTarget.Reset();
 		OutTarget.TargetActor = Candidate.Actor;
-		OutTarget.HitResult = FHitResult(Candidate.Actor, Candidate.Component, Candidate.Point, (ViewLocation - Candidate.Point).GetSafeNormal());
-		OutTarget.HitResult.bBlockingHit = true;
-		OutTarget.HitResult.TraceStart = ViewLocation;
-		OutTarget.HitResult.TraceEnd = Candidate.Point;
-		OutTarget.HitResult.Distance = FVector::Dist(ViewLocation, Candidate.Point);
+		OutTarget.HitResult = Hit;
 		return true;
 	}
 	return false;
@@ -517,24 +593,29 @@ bool UMOInteractorComponent::TryInteract()
 			}
 		}
 
-		AActor* OwnerOfISM = Target.TargetActor.Get();
-
-		if (Target.bIsHISM)
-		{
-			UHierarchicalInstancedStaticMeshComponent* HISMComp = Target.HISMComponent.Get();
-			ServerRequestHISMInteract(OwnerOfISM, HISMComp, Target.InstanceIndex);
-		}
-		else
-		{
-			UInstancedStaticMeshComponent* ISMComp = Target.ISMComponent.Get();
-			ServerRequestISMInteract(OwnerOfISM, ISMComp, Target.InstanceIndex);
-		}
-		return true;
+		return RequestInteractWithInstance(Target.ISMComponent.Get(), Target.InstanceIndex);
 	}
 
 	// Regular actor interaction
 	AActor* TargetActor = Target.TargetActor.Get();
 	ServerRequestInteract(TargetActor);
+	return true;
+}
+
+bool UMOInteractorComponent::RequestInteractWithInstance(const UInstancedStaticMeshComponent* ISM, int32 InstanceIndex)
+{
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!IsValid(OwnerPawn) || !OwnerPawn->IsLocallyControlled())
+	{
+		return false;
+	}
+	// By mesh + world location: the host has its own copy of this instance, under a component name and index of its own.
+	const FMOInstanceRef Instance = FMOInstanceRef::Make(ISM, InstanceIndex);
+	if (!Instance.IsSet())
+	{
+		return false;
+	}
+	ServerRequestInstanceInteract(Instance);
 	return true;
 }
 
@@ -755,65 +836,51 @@ bool UMOInteractorComponent::ValidateInstanceHarvestRequest(UInstancedStaticMesh
 	return true;
 }
 
-void UMOInteractorComponent::ServerRequestHISMInteract_Implementation(AActor* OwnerActor, UHierarchicalInstancedStaticMeshComponent* HISMComponent, int32 InstanceIndex)
+void UMOInteractorComponent::ServerRequestInstanceInteract_Implementation(const FMOInstanceRef& Instance)
 {
-	if (!ValidateInstanceHarvestRequest(HISMComponent, InstanceIndex, TEXT("ServerRequestHISMInteract")))
-	{
-		return;
-	}
-
+	UWorld* World = GetWorld();
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!IsValid(OwnerPawn))
+	if (!World || !IsValid(OwnerPawn))
 	{
 		return;
 	}
 
-	// First try: Use explicit HISM interactable component if present
-	if (IsValid(OwnerActor))
+	// The host's own copy of the instance the client aimed at. Not there: someone took it first, or the client sees a world the host does not.
+	UInstancedStaticMeshComponent* ISM = nullptr;
+	int32 InstanceIndex = INDEX_NONE;
+	if (!Instance.Resolve(World, ISM, InstanceIndex))
 	{
-		UMOHISMInteractableComponent* HISMInteractable = OwnerActor->FindComponentByClass<UMOHISMInteractableComponent>();
-		if (IsValid(HISMInteractable) && HISMInteractable->HandlesHISMComponent(HISMComponent))
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] ServerRequestInstanceInteract: %s asked for %s -- no such instance here (taken already?)"),
+			*OwnerPawn->GetName(), *Instance.ToString());
+		return;
+	}
+	if (!ValidateInstanceHarvestRequest(ISM, InstanceIndex, TEXT("ServerRequestInstanceInteract")))
+	{
+		return;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] instance interact: %s -> %s #%d"), *Instance.ToString(), *ISM->GetName(), InstanceIndex);
+
+	UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>();
+	FName OutItemId;
+	if (UHierarchicalInstancedStaticMeshComponent* HISM = Cast<UHierarchicalInstancedStaticMeshComponent>(ISM))
+	{
+		// First try: an explicit HISM interactable component on the instance's owner
+		AActor* OwnerActor = HISM->GetOwner();
+		UMOHISMInteractableComponent* HISMInteractable = OwnerActor ? OwnerActor->FindComponentByClass<UMOHISMInteractableComponent>() : nullptr;
+		if (IsValid(HISMInteractable) && HISMInteractable->HandlesHISMComponent(HISM))
 		{
-			HISMInteractable->HarvestInstance(HISMComponent, InstanceIndex, OwnerPawn);
+			HISMInteractable->HarvestInstance(HISM, InstanceIndex, OwnerPawn);
 			return;
 		}
-	}
-
-	// Second try: Use PCG interaction subsystem for automatic mesh-to-item mapping
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>();
+		// Second try: the PCG interaction subsystem's mesh-to-item mapping
 		if (PCGSubsystem)
 		{
-			FName OutItemId;
-			PCGSubsystem->HarvestHISMInstance(HISMComponent, InstanceIndex, OwnerPawn, OutItemId);
+			PCGSubsystem->HarvestHISMInstance(HISM, InstanceIndex, OwnerPawn, OutItemId);
 		}
-	}
-}
-
-void UMOInteractorComponent::ServerRequestISMInteract_Implementation(AActor* OwnerActor, UInstancedStaticMeshComponent* ISMComponent, int32 InstanceIndex)
-{
-	if (!ValidateInstanceHarvestRequest(ISMComponent, InstanceIndex, TEXT("ServerRequestISMInteract")))
-	{
 		return;
 	}
-
-	APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!IsValid(OwnerPawn))
+	if (PCGSubsystem)
 	{
-		return;
-	}
-
-	// Use PCG interaction subsystem for automatic mesh-to-item mapping
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>();
-		if (PCGSubsystem)
-		{
-			FName OutItemId;
-			PCGSubsystem->HarvestISMInstance(ISMComponent, InstanceIndex, OwnerPawn, OutItemId);
-		}
+		PCGSubsystem->HarvestISMInstance(ISM, InstanceIndex, OwnerPawn, OutItemId);
 	}
 }

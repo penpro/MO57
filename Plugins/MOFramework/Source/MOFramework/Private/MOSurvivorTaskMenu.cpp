@@ -1,4 +1,5 @@
 #include "MOSurvivorTaskMenu.h"
+#include "MOSurvivorCommands.h"
 #include "MOFramework.h"
 #include "CommonInputModeTypes.h"
 #include "MOSurvivorJobQueueComponent.h"
@@ -235,7 +236,7 @@ void UMOSurvivorTaskMenu::RefreshJobQueue()
 	}
 
 	TArray<FMOSurvivorJobEntry> Jobs = JobQueue->GetAllJobs();
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorTaskMenu] Displaying %d jobs in queue"), Jobs.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorTaskMenu] Displaying %d jobs in queue"), Jobs.Num());   // every replicated job change: verbose
 
 	// Create entry widgets for each job in queue
 	for (const FMOSurvivorJobEntry& Job : Jobs)
@@ -299,26 +300,13 @@ void UMOSurvivorTaskMenu::HandleTaskClicked(EMOSurvivorJobType JobType)
 		return;
 	}
 
-	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-	if (!JobQueue)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorTaskMenu] HandleTaskClicked: No JobQueue available"));
-		return;
-	}
-
-	// Enqueue the job with repeat count of 1 (can be adjusted later)
-	FGuid NewJobId = JobQueue->EnqueueJob(JobType, 1);
-
-	if (NewJobId.IsValid())
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorTaskMenu] Enqueued job type %d with ID %s"),
-			static_cast<int32>(JobType), *NewJobId.ToString());
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorTaskMenu] Failed to enqueue job type %d"),
-			static_cast<int32>(JobType));
-	}
+	// The order goes to the server (FMOSurvivorCommands): the job queue changes only there, and the new job arrives here by replication
+	// (OnQueueChanged). A joiner's direct EnqueueJob was refused ("called on non-authority").
+	FMOSurvivorCommand Command = FMOSurvivorCommand::Make(EMOSurvivorCommandKind::EnqueueJob);
+	Command.JobType = JobType;
+	Command.RepeatCount = 1;   // (can be adjusted later)
+	const bool bSent = FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), Command);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorTaskMenu] Job type %d %s"), static_cast<int32>(JobType), bSent ? TEXT("ordered") : TEXT("NOT ordered (no survivor)"));
 }
 
 void UMOSurvivorTaskMenu::HandleJobCancelled(FGuid JobId)
@@ -328,19 +316,8 @@ void UMOSurvivorTaskMenu::HandleJobCancelled(FGuid JobId)
 		return;
 	}
 
-	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-	if (!JobQueue)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorTaskMenu] HandleJobCancelled: No JobQueue available"));
-		return;
-	}
-
-	if (JobQueue->CancelJob(JobId))
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorTaskMenu] Cancelled job %s"), *JobId.ToString());
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorTaskMenu] Failed to cancel job %s"), *JobId.ToString());
-	}
+	FMOSurvivorCommand Command = FMOSurvivorCommand::Make(EMOSurvivorCommandKind::CancelJob);
+	Command.JobId = JobId;
+	const bool bSent = FMOSurvivorCommands::Submit(GetOwningPlayer(), TargetSurvivor.Get(), Command);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorTaskMenu] Cancel of job %s %s"), *JobId.ToString(), bSent ? TEXT("ordered") : TEXT("NOT ordered (no survivor)"));
 }

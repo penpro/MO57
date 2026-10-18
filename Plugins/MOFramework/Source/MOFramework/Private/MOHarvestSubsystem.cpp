@@ -13,6 +13,7 @@
 #include "MOHISMHarvestHelper.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "MOCharacter.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/DataTable.h"
@@ -474,6 +475,25 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 	}
 
 	return bHasTools;
+}
+
+bool UMOHarvestSubsystem::HasKnowledgeForAction(const FMOResourceHarvestAction& Action, const AActor* Harvester)
+{
+	const FName KnowledgeId = Action.RequiredKnowledgeId;
+	if (!Action.RequiresKnowledge() || KnowledgeId.IsNone())
+	{
+		return true;
+	}
+	if (!Harvester)
+	{
+		return false;
+	}
+	const UMOKnowledgeComponent* Knowledge = Harvester->FindComponentByClass<UMOKnowledgeComponent>();
+	const UMOSkillsComponent* Skills = Harvester->FindComponentByClass<UMOSkillsComponent>();
+	const UMORecipeDiscoveryComponent* Discovery = Harvester->FindComponentByClass<UMORecipeDiscoveryComponent>();
+	return (Knowledge && Knowledge->HasKnowledge(KnowledgeId))
+		|| (Skills && Skills->HasSkillLevel(KnowledgeId, 1))                 // a skill at level 1 or more counts as knowing how
+		|| (Discovery && Discovery->IsRecipeDiscovered(KnowledgeId));      // some actions are gated by a discovered recipe
 }
 
 bool UMOHarvestSubsystem::HasToolForAction(const FMOResourceHarvestAction& Action, const UMOInventoryComponent* Inventory)

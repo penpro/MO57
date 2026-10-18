@@ -1,9 +1,10 @@
 /**
  * MOGameState.h - Replicated, world-wide match state
  *
- * Today this carries exactly one thing: the world seed (see MOWorldSeedTypes.h for why). It is
- * the engine's canonical place for state every client needs about the world itself, so future
- * world-wide replicated facts belong here rather than on a bespoke always-relevant actor.
+ * It carries what every client needs about the world itself: the world seed (MOWorldSeedTypes.h), the host's
+ * clock and weather (MOWorldSyncTypes.h), the instances removed for good (MOWorldRemovalTypes.h) and the
+ * worked-ground zones (MOTerrainModificationTypes.h). It is the engine's canonical place for such state, so
+ * future world-wide replicated facts belong here rather than on a bespoke always-relevant actor.
  *
  * The GameState is set as AMOGameMode's GameStateClass in its constructor (BP_MOGameMode does
  * not override it). If a Blueprint ever overrides it with a non-AMOGameState class, the host
@@ -17,6 +18,7 @@
 #include "MOWorldSeedTypes.h"
 #include "MOWorldSyncTypes.h"
 #include "MOWorldRemovalTypes.h"
+#include "MOTerrainModificationTypes.h"
 #include "MOGameState.generated.h"
 
 UCLASS()
@@ -34,6 +36,19 @@ public:
 	void ResetRemovedInstances(const TArray<FMORemovedInstance>& All);
 
 	const TArray<FMORemovedInstance>& GetRemovedInstances() const { return RemovedInstances.Items; }
+
+	/**
+	 * Authority only (UMOTerrainModificationSubsystem): make the replicated worked-ground zones match the host's list, index for index. Only what
+	 * changed is marked dirty, so a new or grown zone sends itself and nothing else; every client, current and future, receives the list.
+	 */
+	void SyncTerrainZones(const TArray<FMOTerrainModifiedZone>& Zones);
+
+	const TArray<FMOReplicatedTerrainZone>& GetTerrainZones() const { return TerrainZones.Items; }
+
+	/** Whether the host is in developer mode (FMODevMode::IsHostInDevMode): the host refreshes it every couple of seconds (an Options toggle). */
+	bool IsHostDeveloperMode() const { return bHostDeveloperMode; }
+
+	virtual void BeginPlay() override;
 
 	/** What the host published. bPublished is false until then (and always on a menu map). */
 	const FMOWorldSeedInfo& GetWorldSeedInfo() const { return WorldSeed; }
@@ -71,6 +86,15 @@ private:
 	/** World instances removed for good (MOWorldRemovalTypes.h). FastArray: each new entry is sent once; a late joiner receives the whole record. */
 	UPROPERTY(Replicated)
 	FMORemovedInstanceArray RemovedInstances;
+
+	/** Worked ground (MOTerrainModificationTypes.h): every client sweeps the host's zones on its own PCG copy. */
+	UPROPERTY(Replicated)
+	FMOReplicatedTerrainZoneArray TerrainZones;
+
+	UPROPERTY(Replicated)
+	bool bHostDeveloperMode = false;
+
+	FTimerHandle DevModeRefreshHandle;
 
 	/** Client: hand the host's seed to UMOWorldSeedSubsystem, which regenerates the local terrain from it. */
 	UFUNCTION()

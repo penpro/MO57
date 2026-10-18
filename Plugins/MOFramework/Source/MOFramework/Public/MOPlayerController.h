@@ -7,6 +7,9 @@
 #include "MOPossessionTypes.h"
 #include "MONotificationWidget.h"   // EMONotificationType (ClientShowNotification)
 #include "MOInventoryRequest.h"      // FMOInventoryRequest (ServerInventoryRequest)
+#include "MOHarvestActions.h"        // FMOInstanceRef, FMOHarvestOutcome (ServerBeginHarvest, ClientHarvestOutcome)
+#include "MOKnowledgeComponent.h"     // FMOInspectionResult (ClientInspectionResult)
+#include "MOSurvivorCommands.h"       // FMOSurvivorCommand (ServerSurvivorCommand)
 #include "MOPlayerController.generated.h"
 
 /**
@@ -691,6 +694,38 @@ public:
 	 *  finds it itself, checks reach and tools, times it). EntryIndex INDEX_NONE = whatever is nearest. */
 	UFUNCTION(Server, Reliable)
 	void ServerGatherCover(FVector_NetQuantize Location, int32 EntryIndex);
+
+	/**
+	 * Harvest a resource node: ActionId (strip bark, gather twigs, chop down ...) on the instance Instance names (FMOHarvestActions::Begin: the server
+	 * resolves its own copy, checks reach, knowledge and tool, and times it on the pawn). The KeepOnHarvest menu's buttons send it, from the host and a
+	 * joiner alike. Before Oct 18 2026 the harvest ran in the clicking machine's UI: a joiner's every harvest said "Inventory Full!".
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerBeginHarvest(const FMOInstanceRef& Instance, FName ActionId);
+
+	/** A harvest this player asked for finished: what it gave, for the notifications (UMOCraftingUIController::ShowHarvestOutcome). */
+	UFUNCTION(Client, Reliable)
+	void ClientHarvestOutcome(const FMOHarvestOutcome& Outcome);
+
+	/** A skill / knowledge popup the server raised for this player (UMONotificationComponent forwards it: the server's copy has no screen). */
+	UFUNCTION(Client, Reliable)
+	void ClientShowSkillPopup(FName Id, bool bIsKnowledge, float Duration);
+
+	/**
+	 * Inspect ItemId to learn from it (FMOInspectionActions::Begin): the carried item ItemGuid, or one in the world -- Instance names the stick on the
+	 * ground or the tree its bark comes from. The server checks it is at hand, times the study on the pawn and inspects on its own copy, so what the
+	 * player learns is saved with the world. From the host and a joiner alike; before Oct 18 2026 a joiner's inspections changed only their own copy.
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerInspectItem(FName ItemId, FGuid ItemGuid, const FMOInstanceRef& Instance);
+
+	/** An inspection this player asked for finished: its result, for the popups and quest events (UMOCharacterUIController::ShowInspectionResult). */
+	UFUNCTION(Client, Reliable)
+	void ClientInspectionResult(FName ItemId, const FMOInspectionResult& Result);
+
+	/** An order to a recruited survivor (FMOSurvivorCommands::Execute): the survivor menus submit through FMOSurvivorCommands::Submit. */
+	UFUNCTION(Server, Reliable)
+	void ServerSurvivorCommand(APawn* Survivor, const FMOSurvivorCommand& Command);
 
 	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source

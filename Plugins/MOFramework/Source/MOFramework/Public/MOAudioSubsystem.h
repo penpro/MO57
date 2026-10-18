@@ -169,10 +169,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Audio|SFX")
 	bool PlayOneShot2D(FName AudioId);
 
-	/** Play a one-shot at a world location. Spatialized via the source asset's attenuation settings. */
+	/**
+	 * Play a one-shot at a world location, spatialized: by the source asset's own attenuation, or -- an asset with none -- by the event profile
+	 * (GetAmbientEventAttenuation). An asset without attenuation used to play at full volume wherever it happened.
+	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Audio|SFX",
 		meta=(WorldContext="WorldContextObject"))
 	bool PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale = 1.0f, float PitchScale = 1.0f);
+
+	/** The same with the attenuation to use when the asset has none of its own (footsteps pass GetFootstepAttenuation). */
+	bool PlayOneShotAtLocationAttenuated(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale, float PitchScale, USoundAttenuation* FallbackAttenuation);
+
+	/**
+	 * Footsteps: full volume within the third-person camera's distance of the feet (your own steps), fading out by ~29 m, muffled with distance. Every
+	 * pawn's steps played unattenuated before Oct 18 2026: in co-op the host heard the joiner's and the survivors' steps as if they were his own.
+	 */
+	USoundAttenuation* GetFootstepAttenuation() const { return FootstepAttenuation; }
 
 	/** True if the bank has a row with this id (no copy, no warning): callers with a fallback ask first instead of triggering the "not in bank" warning. */
 	bool HasAudioId(FName AudioId) const { return AudioIdLookup.Contains(AudioId); }
@@ -497,6 +509,10 @@ private:
 	 */
 	UPROPERTY()
 	TObjectPtr<USoundAttenuation> DefaultEventAttenuation;
+
+	/** GetFootstepAttenuation's profile, built at Initialize. */
+	UPROPERTY()
+	TObjectPtr<USoundAttenuation> FootstepAttenuation;
 
 	/** Loaded banks. Order matters — later banks override earlier ones. */
 	UPROPERTY()

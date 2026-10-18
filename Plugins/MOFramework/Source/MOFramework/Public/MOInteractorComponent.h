@@ -32,8 +32,7 @@
  * INTERACTION FLOW:
  * Player input -> TryInteract() -> FindInteractionTarget()
  * -> If actor: ServerRequestInteract()
- * -> If HISM: ServerRequestHISMInteract(owner, comp, index)
- * -> If ISM: ServerRequestISMInteract(owner, comp, index)
+ * -> If ISM/HISM: ServerRequestInstanceInteract(FMOInstanceRef: mesh + world location; the server resolves its OWN instance)
  *
  * CRITICAL PATTERNS:
  * 1. Finding Targets:
@@ -58,11 +57,13 @@
  *   FIX: Don't call TryInteract() in BeginPlay. Use player input callbacks
  *   which fire after camera is ready. Check log for "Failed to resolve viewpoint".
  *
- * [2024-02] ISM INDEX VALIDITY: Instance index can become stale.
- *   SYMPTOM: ServerRequestISMInteract fails silently, no interaction occurs.
- *   WHY: Another player harvested the ISM instance between trace and RPC.
- *   FIX: Server validates index against current ISM instance count. If invalid,
- *   interaction gracefully fails. Client should re-trace on next input.
+ * [2026-10-18] NO POINTERS TO PCG INSTANCES ACROSS THE WIRE.
+ *   SYMPTOM: a joining player's E on a stick / stone / flint did nothing (Steam test); the host logged "Unable to resolve default guid from
+ *   client: ObjectName: PCGPartitionActor_2147442263".
+ *   WHY: PCG partition actors and their ISM components are spawned at runtime under names that differ per machine, and instance indices
+ *   shift as instances are removed: the old ServerRequestISMInteract(owner, comp, index) arrived as null on the host.
+ *   FIX: the RPC carries FMOInstanceRef (MOInstanceRef.h: static mesh + world location) and the server resolves its own copy of the instance.
+ *   An instance another player already took no longer resolves, and the request is refused with a log line.
  *
  * [2024-02] TRACE CHANNEL: Default ECC_Visibility may miss custom collision.
  *   SYMPTOM: Can't interact with certain objects (doors, vehicles).
@@ -80,13 +81,6 @@
  *   WHY: CurrentTarget updated only when TryInteract/TrySecondaryInteract called.
  *   FIX: For real-time prompts, call FindInteractionTarget() each frame in Tick,
  *   or use a timer to refresh every 0.1s. Don't rely on cached CurrentTarget.
- *
- * [2024-02] ISM OWNER MISMATCH: Trace must hit ISM's owning actor.
- *   SYMPTOM: ServerRequestISMInteract fails even with valid instance index.
- *   WHY: RPC passes OwnerActor from trace. If trace hits Actor A but ISM belongs
- *   to Actor B, server validation fails.
- *   FIX: Ensure ISM is attached to same actor that has collision. Check
- *   HitResult.GetActor() == ISMComponent->GetOwner().
  *
  * [2024-02] VIEW OFFSET EDGE CASE: ViewStartForwardOffset (15u default).
  *   SYMPTOM: Can't interact while standing inside large interactable.
@@ -122,6 +116,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOInstanceRef.h"
 #include "MOInteractorComponent.generated.h"
 
 class UMOHISMInteractableComponent;
@@ -286,6 +281,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	void RequestInteractWithActor(AActor* TargetActor);
 
+	/**
+	 * Ask the server to interact with instance InstanceIndex of ISM (a stick, a stone on the ground): what E does on an instance, for a caller that
+	 * already chose it (the right-click menu's Pick Up). Sent as an FMOInstanceRef. False when the pawn is not locally controlled or the instance is
+	 * not valid here.
+	 */
+	bool RequestInteractWithInstance(const UInstancedStaticMeshComponent* ISM, int32 InstanceIndex);
+
 	/** Try secondary interaction with whatever we're looking at. */
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool TrySecondaryInteract();
@@ -316,13 +318,12 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestSecondaryInteract(AActor* TargetActor);
 
-	/** Server RPC for HISM interaction. */
+	/**
+	 * Server RPC for an ISM / HISM instance (a stick, a stone, a flint on the ground). It names the instance by mesh + world location, never by
+	 * component pointer or index: neither means the same thing on another machine (see KNOWN PITFALLS, 2026-10-18).
+	 */
 	UFUNCTION(Server, Reliable)
-	void ServerRequestHISMInteract(AActor* OwnerActor, UHierarchicalInstancedStaticMeshComponent* HISMComponent, int32 InstanceIndex);
-
-	/** Server RPC for ISM interaction. */
-	UFUNCTION(Server, Reliable)
-	void ServerRequestISMInteract(AActor* OwnerActor, UInstancedStaticMeshComponent* ISMComponent, int32 InstanceIndex);
+	void ServerRequestInstanceInteract(const FMOInstanceRef& Instance);
 
 private:
 	bool ResolveViewpoint(FVector& OutViewLocation, FRotator& OutViewRotation) const;

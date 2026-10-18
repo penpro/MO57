@@ -5,6 +5,7 @@
  */
 
 #include "MOTerrainModificationSubsystem.h"
+#include "MOGameState.h"
 #include "MOTickWatchdog.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOworldSaveGame.h"
@@ -116,6 +117,7 @@ void UMOTerrainModificationSubsystem::RegisterModifiedZone(const FVector& Locati
 				static_cast<int32>(&Existing - Zones.GetData()),
 				*Existing.Location.ToString(), OldRadius, Existing.Radius, Zones.Num());
 			ExtendBurstSweepWindow();
+			PublishZones();
 			return;
 		}
 	}
@@ -138,6 +140,7 @@ void UMOTerrainModificationSubsystem::RegisterModifiedZone(const FVector& Locati
 		NewIdx, *Location.ToString(), Radius, Zones.Num(), ZoneGrid.Num());
 
 	ExtendBurstSweepWindow();
+	PublishZones();
 }
 
 // ============================================================================
@@ -257,6 +260,7 @@ bool UMOTerrainModificationSubsystem::ApplySaveDataAuthority(const FMOTerrainMod
 	}
 
 	RebuildSpatialIndex();
+	PublishZones();
 
 	UE_LOG(LogMOFramework, Log,
 		TEXT("[MOTerrainMod] Loaded %d modified zone(s) from save (v%d)"),
@@ -598,6 +602,81 @@ void UMOTerrainModificationSubsystem::RebuildSpatialIndex()
 	{
 		IndexZone(i);
 	}
+}
+
+// ============================================================================
+// CO-OP: the host's zones on every client (MOTerrainModificationTypes.h)
+// ============================================================================
+
+void UMOTerrainModificationSubsystem::PublishZones()
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	if (AMOGameState* GameState = World->GetGameState<AMOGameState>())
+	{
+		GameState->SyncTerrainZones(Zones);
+	}
+}
+
+void UMOTerrainModificationSubsystem::HandleReplicatedZonesChanged()
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() != NM_Client || bReplicatedZonesPending)
+	{
+		return;
+	}
+	bReplicatedZonesPending = true;
+	World->GetTimerManager().SetTimerForNextTick(this, &UMOTerrainModificationSubsystem::ApplyReplicatedZones);
+}
+
+void UMOTerrainModificationSubsystem::ApplyReplicatedZones()
+{
+	bReplicatedZonesPending = false;
+	const UWorld* World = GetWorld();
+	const AMOGameState* GameState = World ? World->GetGameState<AMOGameState>() : nullptr;
+	if (!GameState)
+	{
+		return;
+	}
+	const TArray<FMOReplicatedTerrainZone>& HostZones = GameState->GetTerrainZones();
+	Zones.Reset(HostZones.Num());
+	for (const FMOReplicatedTerrainZone& Z : HostZones)
+	{
+		if (Z.Radius > 0.0f)
+		{
+			Zones.Emplace(FVector(Z.Location), Z.Radius);
+		}
+	}
+	RebuildSpatialIndex();
+	const int32 Swept = SweepModifiedZones();
+	ExtendBurstSweepWindow();   // PCG regenerating in a fresh zone right after is caught frame by frame, as on the host
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTerrainMod] client: %d worked-ground zone(s) from the host, swept %d instance(s)"), Zones.Num(), Swept);
+}
+
+void FMOReplicatedTerrainZoneArray::NotifyChanged() const
+{
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(Owner.Get()))
+	{
+		TerrainMod->HandleReplicatedZonesChanged();
+	}
+}
+
+void FMOReplicatedTerrainZone::PostReplicatedAdd(const FMOReplicatedTerrainZoneArray& InArraySerializer)
+{
+	InArraySerializer.NotifyChanged();
+}
+
+void FMOReplicatedTerrainZone::PostReplicatedChange(const FMOReplicatedTerrainZoneArray& InArraySerializer)
+{
+	InArraySerializer.NotifyChanged();
+}
+
+void FMOReplicatedTerrainZone::PreReplicatedRemove(const FMOReplicatedTerrainZoneArray& InArraySerializer)
+{
+	InArraySerializer.NotifyChanged();
 }
 
 // ---- IMOSaveDomain (TerrainModification) — see MOSaveDomainInterface.h ----

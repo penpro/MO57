@@ -10,7 +10,8 @@
 #include "MOCraftingMenu.h"
 #include "MOStationContextMenu.h"
 #include "MOKeepOnHarvestContextMenu.h"
-#include "MOHarvestProgressWidget.h"
+#include "MOHarvestActions.h"
+#include "MOTimedActionComponent.h"
 #include "MOCraftingStationActor.h"
 #include "MOWorldActionMenu.h"
 #include "MOPlayerController.h"
@@ -83,17 +84,6 @@ void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	KeepOnHarvestContextMenuWidget.Reset();
 
-	// Clean up harvest progress widget - unbind delegates first
-	if (UMOHarvestProgressWidget* ProgressWidget = HarvestProgressWidget.Get())
-	{
-		ProgressWidget->OnHarvestCompleted.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
-		ProgressWidget->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
-		if (ProgressWidget->IsInViewport())
-		{
-			ProgressWidget->RemoveFromParent();
-		}
-	}
-	HarvestProgressWidget.Reset();
 	CurrentHarvestTarget.Reset();
 
 	HideWorldActionMenu();
@@ -550,106 +540,80 @@ void UMOCraftingUIController::StartHarvestOperation(FName ActionId)
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartHarvestOperation: No valid harvest target"));
 		return;
 	}
-
-	if (!HarvestProgressWidgetClass)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartHarvestOperation: No HarvestProgressWidgetClass set"));
-		return;
-	}
-
-	APlayerController* PC = ResolveOwningPlayerController();
+	AMOPlayerController* PC = Cast<AMOPlayerController>(ResolveOwningPlayerController());
 	if (!PC)
 	{
 		return;
 	}
-
-	// Get action display name from resource definition (single source of truth)
-	FText ActionDisplayName = NSLOCTEXT("MO", "Harvesting", "Harvesting...");
-	UMOHarvestSubsystem* HarvestSubsystem = GetWorld()->GetSubsystem<UMOHarvestSubsystem>();
-	if (HarvestSubsystem)
+	// The server owns the harvest, from the host and a joiner alike (FMOHarvestActions): it resolves its own copy of the instance, times the action on the
+	// pawn (the timed-action bar shows it here) and sends the outcome back (ShowHarvestOutcome). The instance travels as mesh + place: a PCG component has
+	// no network identity. (Until Oct 18 2026 this started a progress widget whose UI timer harvested on THIS machine: on a joiner, "Inventory Full!".)
+	const FMOInstanceRef Instance = FMOInstanceRef::Make(CurrentHarvestTarget.ISMComponent.Get(), CurrentHarvestTarget.InstanceIndex);
+	if (!Instance.IsSet())
 	{
-		TArray<FName> TargetTags = HarvestSubsystem->CollectTargetTags(CurrentHarvestTarget.ISMComponent.Get());
-		FName ResourceNodeId = HarvestSubsystem->ExtractResourceNodeId(TargetTags);
-		if (!ResourceNodeId.IsNone())
-		{
-			if (const FMOResourceNodeDefinitionRow* ResourceDef = UMOResourceDatabaseSettings::GetResourceDefinition(ResourceNodeId))
-			{
-				if (const FMOResourceHarvestAction* Action = ResourceDef->FindAction(ActionId))
-				{
-					ActionDisplayName = FText::Format(NSLOCTEXT("MO", "HarvestingFormat", "{0}..."), Action->DisplayName);
-				}
-			}
-		}
-	}
-
-	// Create or reuse progress widget
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	bool bNeedsBindDelegates = false;
-
-	if (IsValid(WidgetInst))
-	{
-		// Try to reuse existing widget - push it to the layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst);
-
-		// CommonUI may have created a new widget (can't add existing instances to stacks)
-		if (ActualWidget && ActualWidget != WidgetInst)
-		{
-			WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
-			HarvestProgressWidget = WidgetInst;
-			bNeedsBindDelegates = true;
-		}
-	}
-	else
-	{
-		// Create new widget via layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
-		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
-		UMOUIManagerComponent::RegisterHUDElement(WidgetInst, EMOHUDElementKind::Feedback);
-		bNeedsBindDelegates = true;
-	}
-
-	if (!IsValid(WidgetInst))
-	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftUI] Failed to create Harvest Progress widget"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartHarvestOperation: the target instance is gone"));
 		return;
 	}
-
-	// Cache and bind delegates if this is a new widget
-	if (bNeedsBindDelegates)
-	{
-		HarvestProgressWidget = WidgetInst;
-		WidgetInst->OnHarvestCompleted.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
-		WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
-		WidgetInst->OnHarvestCompleted.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
-		WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
-	}
-
-	// Start the harvest with ActionId (MOHarvestSubsystem will look up the action from resource definition)
-	WidgetInst->StartHarvest(
-		CurrentHarvestTarget.ISMComponent.Get(),
-		CurrentHarvestTarget.InstanceIndex,
-		ActionId,
-		ActionDisplayName,
-		GetCachedInventory(),
-		GetCachedSkills()
-	);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Started harvest operation: %s"), *ActionId.ToString());
+	PC->ServerBeginHarvest(Instance, ActionId);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Asked the server to harvest: %s on %s"), *ActionId.ToString(), *Instance.ToString());
 }
 
 void UMOCraftingUIController::CancelHarvestOperation()
 {
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst && WidgetInst->IsHarvestInProgress())
+	const APlayerController* PC = ResolveOwningPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	if (Timed && Timed->IsActive() && Timed->GetState().ActionId == FMOHarvestActions::TimedActionId)
 	{
-		WidgetInst->CancelHarvest();
+		Timed->ServerCancel();
 	}
 }
 
 bool UMOCraftingUIController::IsHarvestInProgress() const
 {
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	return WidgetInst && WidgetInst->IsHarvestInProgress();
+	const APlayerController* PC = ResolveOwningPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	const UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	return Timed && Timed->IsActive() && Timed->GetState().ActionId == FMOHarvestActions::TimedActionId;
+}
+
+void UMOCraftingUIController::ShowHarvestOutcome(const FMOHarvestOutcome& Outcome)
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMONotificationComponent* NotifComp = UIManager ? UIManager->GetNotificationComponent() : nullptr;
+	if (NotifComp)
+	{
+		// Show notification for produced items
+		for (int32 i = 0; i < Outcome.ProducedIds.Num() && i < Outcome.ProducedCounts.Num(); ++i)
+		{
+			NotifComp->ShowItemPickupNotification(UMOItemDatabaseSettings::GetItemDisplayName(Outcome.ProducedIds[i]), Outcome.ProducedCounts[i]);
+		}
+
+		// Distinguish "node is depleted" from "your inventory is full". These are
+		// different problems and need different messages — players were dropping
+		// items trying to "fix" a full inventory when the actual issue was that
+		// the tree/rock had nothing left to give.
+		const bool bAnyProduced = Outcome.ProducedIds.Num() > 0;
+		if (Outcome.bFailed)
+		{
+			// The inventory add contract refused some output because capacity was exhausted.
+			NotifComp->ShowWarningNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory Full! Some items could not be picked up."), 5.0f);
+		}
+		else if (Outcome.bDepleted && !bAnyProduced)
+		{
+			// Every yield was skipped due to depletion AND nothing was produced — the node itself is exhausted.
+			NotifComp->ShowWarningNotification(NSLOCTEXT("MO", "NodeDepleted", "Nothing left here. Try another resource or wait for it to regrow."), 4.0f);
+		}
+		else if (Outcome.bOutOfSeason && !bAnyProduced)
+		{
+			// Everything this action yields is out of season — say so, don't pretend the node is broken or the inventory full.
+			NotifComp->ShowWarningNotification(NSLOCTEXT("MO", "OutOfSeason", "Out of season. Nothing to gather here this time of year."), 4.0f);
+		}
+		// If some yields produced and others depleted, the produced notifications
+		// already gave positive feedback — don't pile on a warning.
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest '%s' finished: produced %d kind(s), failed=%d depleted=%d outOfSeason=%d"), *Outcome.ActionId.ToString(),
+		Outcome.ProducedIds.Num(), Outcome.bFailed ? 1 : 0, Outcome.bDepleted ? 1 : 0, Outcome.bOutOfSeason ? 1 : 0);
 }
 
 void UMOCraftingUIController::HandleKeepOnHarvestContextMenuRequestClose()
@@ -673,10 +637,11 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuInspectClicked()
 		return;
 	}
 
-	// Delegate inspection to UIManager which will route to CharacterUIController
+	// Delegate inspection to UIManager which will route to CharacterUIController. The thing studied is in the world (the stick on the ground, the
+	// tree the bark comes from): the server checks it is within reach by its mesh + place.
 	if (UMOUIManagerComponent* UIManager = GetUIManager())
 	{
-		UIManager->StartItemInspection(ItemId, FGuid());
+		UIManager->StartItemInspectionAt(ItemId, FGuid(), FMOInstanceRef::Make(CurrentHarvestTarget.ISMComponent.Get(), CurrentHarvestTarget.InstanceIndex));
 	}
 
 	// Fire TreeInspected event for quest objectives
@@ -734,92 +699,6 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuChopDownClicked()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] No chop down recipe available"));
 	}
-}
-
-void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result)
-{
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (IsValid(WidgetInst))
-	{
-		WidgetInst->DeactivateWidget();
-	}
-
-	CurrentHarvestTarget.Reset();
-
-	if (bCompleted && Result.bSuccess)
-	{
-		// Get notification component via UIManager
-		if (UMOUIManagerComponent* UIManager = GetUIManager())
-		{
-			UMONotificationComponent* NotifComp = UIManager->GetNotificationComponent();
-			if (NotifComp)
-			{
-				// Show notification for produced items
-				for (const auto& Pair : Result.ProducedItems)
-				{
-					FText ItemName = UMOItemDatabaseSettings::GetItemDisplayName(Pair.Key);
-					NotifComp->ShowItemPickupNotification(ItemName, Pair.Value);
-				}
-
-				// Distinguish "node is depleted" from "your inventory is full". These are
-				// different problems and need different messages — players were dropping
-				// items trying to "fix" a full inventory when the actual issue was that
-				// the tree/rock had nothing left to give.
-				const bool bAnyProduced = Result.ProducedItems.Num() > 0;
-				if (Result.HasFailedItems())
-				{
-					// The inventory add contract refused some output because capacity was exhausted.
-					NotifComp->ShowWarningNotification(
-						NSLOCTEXT("MO", "InventoryFull", "Inventory Full! Some items could not be picked up."),
-						5.0f
-					);
-				}
-				else if (Result.HasDepletedItems() && !bAnyProduced)
-				{
-					// Every yield was skipped due to depletion AND nothing was produced —
-					// tell the player the node itself is exhausted.
-					NotifComp->ShowWarningNotification(
-						NSLOCTEXT("MO", "NodeDepleted", "Nothing left here. Try another resource or wait for it to regrow."),
-						4.0f
-					);
-				}
-				else if (Result.HasOutOfSeasonItems() && !bAnyProduced)
-				{
-					// Everything this action yields is out of season — say so,
-					// don't pretend the node is broken or the inventory full.
-					NotifComp->ShowWarningNotification(
-						NSLOCTEXT("MO", "OutOfSeason", "Out of season. Nothing to gather here this time of year."),
-						4.0f
-					);
-				}
-				// If some yields produced and others depleted, the produced notifications
-				// already gave positive feedback — don't pile on a warning.
-			}
-		}
-	}
-
-	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest completed: %s, Produced=%d, Failed=%d, Depleted=%d"),
-		bCompleted ? TEXT("success") : TEXT("cancelled"),
-		Result.ProducedItems.Num(),
-		Result.FailedItems.Num(),
-		Result.DepletedItems.Num());
-}
-
-void UMOCraftingUIController::HandleHarvestCancelled()
-{
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (IsValid(WidgetInst))
-	{
-		WidgetInst->DeactivateWidget();
-	}
-
-	CurrentHarvestTarget.Reset();
-
-	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest cancelled"));
 }
 
 // =============================================================================

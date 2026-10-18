@@ -760,7 +760,15 @@ FGuid UMOCraftingQueueComponent::GetActiveStationGuid() const
 
 AActor* UMOCraftingQueueComponent::GetActiveStation() const
 {
-	return ActiveStation.Get();
+	// The station the pawn last opened is "active" only while the pawn is at it. Nothing cleared it when the pawn walked off, so the crafting menu
+	// showed a campfire and its fuel from a mile away (Wes, Oct 18 2026); the crafting service refuses beyond the same reach anyway.
+	AActor* Station = ActiveStation.Get();
+	const AActor* Owner = GetOwner();
+	if (Station && Owner && FVector::DistSquared(Owner->GetActorLocation(), Station->GetActorLocation()) > FMath::Square(UMOCraftingSubsystem::StationReachCm))
+	{
+		return nullptr;
+	}
+	return Station;
 }
 
 // =============================================================================

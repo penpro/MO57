@@ -395,6 +395,13 @@ public:
 	 */
 	static bool HasToolForAction(const FMOResourceHarvestAction& Action, const UMOInventoryComponent* Inventory);
 
+	/**
+	 * Whether Harvester knows how to do Action: no RequiredKnowledgeId, or it is learned knowledge (UMOKnowledgeComponent), a skill at level 1 or more
+	 * (UMOSkillsComponent) or a discovered recipe (UMORecipeDiscoveryComponent). The one knowledge gate: the harvest menu enables its buttons by it and the
+	 * server's harvest (FMOHarvestActions) refuses by it, on the server's own copy of the harvester (it used to live in the menu alone).
+	 */
+	static bool HasKnowledgeForAction(const FMOResourceHarvestAction& Action, const AActor* Harvester);
+
 	bool BeginHarvest(
 		UInstancedStaticMeshComponent* ISMComponent,
 		int32 InstanceIndex,

@@ -83,7 +83,8 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
   `.Colony.*`, `.UI.*`, `.Audio.*`, `.Footsteps.*`, `.Light.*`, `.Graphics.*`, `.Inventory.*`, `.Crafting.*`, `.Survival.*`, `.BugReport.*` ...
 - Runtime harness verbs (in PIE / an instance): `MO.Test.*` (38: State, FindWidget, ClickWidget, HitTest, PressKey, Input, Craft, GrantRecipe,
   Forage, DropPickup, Attack, Build, ValidateData, ProgressionMap, RemovalPersists, DeathFlow, SystemicDeath, RescueTrace, EmbedPawn,
-  AfterReady ...); `MO.Delay` sequences commands after READY. `MO.UI.RunTest <name>` / `MO.UI.RunAllTests` for frame-stepped UI tests.
+  AfterReady ...; co-op instance verbs in MOCoopInstanceCheats.cpp: GroundItems, InstanceAt, InstanceInteract, ResourceNodes, Harvest, Inspect,
+  SurvivorCommand, Sweepable, NearestSweepable -- instances named by mesh + place, since their names differ per machine); `MO.Delay` sequences commands after READY. `MO.UI.RunTest <name>` / `MO.UI.RunAllTests` for frame-stepped UI tests.
 - Offline Python tests: `Tools/tests/` (test_ue_inst.py, test_ui_tooling.py ...).
 - Co-op and packaged gates: `ue.py nettest <mode>` (section 1); `Docs/Coop_And_Networking.md` §6 for the rules.
 - Naive-player passes: an instance driven by console verbs + `shot showui` (`r.setres 1920x1080w` first; wait for the SECOND READY line).

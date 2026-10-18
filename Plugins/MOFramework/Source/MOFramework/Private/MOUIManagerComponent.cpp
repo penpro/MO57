@@ -1362,6 +1362,12 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		{
 			Mode->SetVisibility(bMenuOpen ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 		}
+		// The tool / focus hint (the terraform mode's "Flatten", "Drink: fresh water") showed through every menu panel (Wes, Oct 18 2026). Its fades
+		// use render opacity and the HUD modes its colour alpha, so visibility is free for this.
+		if (UMOToolHintWidget* Hint = ToolHintWidget.Get())
+		{
+			Hint->SetVisibility(bMenuOpen ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		}
 	}
 
 	// The tutorial text (hint banner + quest tracker) yields to menus through the same chokepoint as the reticle: every open/close path already calls this.
@@ -1758,6 +1764,14 @@ void UMOUIManagerComponent::StartItemInspection(FName ItemDefinitionId, const FG
 	if (UMOCharacterUIController* CharController = GetCharacterController())
 	{
 		CharController->StartItemInspection(ItemDefinitionId, ItemGuid);
+	}
+}
+
+void UMOUIManagerComponent::StartItemInspectionAt(FName ItemDefinitionId, const FGuid& ItemGuid, const FMOInstanceRef& Instance)
+{
+	if (UMOCharacterUIController* CharController = GetCharacterController())
+	{
+		CharController->StartItemInspectionAt(ItemDefinitionId, ItemGuid, Instance);
 	}
 }
 

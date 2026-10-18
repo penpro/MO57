@@ -7,6 +7,9 @@
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOInteractorComponent.h"
+#include "MOItemDatabaseSettings.h"
+#include "GameFramework/Pawn.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -72,11 +75,28 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 	DestroyActionIndex = INDEX_NONE;
 	bCanExecuteDestroyAction = false;
 
-	// Debug: Log all collected tags
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Collected %d tags from target:"), TargetTags.Num());
+	// A ground item: the PCG item spawner tags it MOItem_<ItemId> (MOPCGMeshSpawnerSettings).
+	GroundItemId = NAME_None;
 	for (const FName& Tag : TargetTags)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu]   Tag: '%s'"), *Tag.ToString());
+		FString TagString = Tag.ToString();
+		FMOItemDefinitionRow ItemDef;
+		if (TagString.RemoveFromStart(TEXT("MOItem_")) && UMOItemDatabaseSettings::GetItemDefinition(FName(*TagString), ItemDef))
+		{
+			GroundItemId = FName(*TagString);
+			break;
+		}
+	}
+	if (!GroundItemId.IsNone() && SmartInspectItemId.IsNone())
+	{
+		SmartInspectItemId = GroundItemId;
+	}
+
+	// Debug: Log all collected tags
+	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Collected %d tags from target (ground item '%s'):"), TargetTags.Num(), *GroundItemId.ToString());
+	for (const FName& Tag : TargetTags)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu]   Tag: '%s'"), *Tag.ToString());
 	}
 
 	if (!CachedResourceNodeId.IsNone())
@@ -120,9 +140,9 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 				*CachedResourceNodeId.ToString());
 		}
 	}
-	else
+	else if (GroundItemId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] No ResourceNode_ tag found in target tags. ISM components must have 'ResourceNode_<RowName>' tag."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] No ResourceNode_ or MOItem_ tag found in target tags. ISM components must have a 'ResourceNode_<RowName>' tag (a resource) or an 'MOItem_<ItemId>' tag (a ground item)."));
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] This usually means the resource was spawned before the tag system was added, or PCG needs to regenerate."));
 	}
 
@@ -157,6 +177,11 @@ void UMOKeepOnHarvestContextMenu::RefreshDisplay()
 
 FText UMOKeepOnHarvestContextMenu::GetTargetDisplayName() const
 {
+	if (!GroundItemId.IsNone())
+	{
+		return UMOItemDatabaseSettings::GetItemDisplayName(GroundItemId);
+	}
+
 	// Look for "Name " tag prefix
 	for (const FName& Tag : TargetTags)
 	{
@@ -235,6 +260,22 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		CanInspect() ? TEXT("yes") : TEXT("no"),
 		AvailableHarvestActions.Num(),
 		DestroyActionIndex);
+
+	// 0. A ground item: Pick Up, the same request E sends (by mesh + location, so it works for a joining player too)
+	if (!GroundItemId.IsNone())
+	{
+		if (UMOCommonButton* PickUpBtn = CreateButton(NSLOCTEXT("MO", "PickUpButton", "Pick Up")))
+		{
+			PickUpBtn->OnClicked().AddWeakLambda(this, [this]()
+			{
+				const APawn* Pawn = GetOwningPlayerPawn();
+				UMOInteractorComponent* Interactor = Pawn ? Pawn->FindComponentByClass<UMOInteractorComponent>() : nullptr;
+				const bool bSent = Interactor && Interactor->RequestInteractWithInstance(CurrentTarget.ISMComponent.Get(), CurrentTarget.InstanceIndex);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Pick Up clicked (item: %s, sent: %s)"), *GroundItemId.ToString(), bSent ? TEXT("yes") : TEXT("no"));
+				RequestClose();
+			});
+		}
+	}
 
 	// 1. Inspect button (if available)
 	if (CanInspect())
@@ -357,48 +398,10 @@ bool UMOKeepOnHarvestContextMenu::HasToolOfType(EMOToolType ToolType) const
 
 bool UMOKeepOnHarvestContextMenu::HasRequiredKnowledge(FName KnowledgeId) const
 {
-	if (KnowledgeId.IsNone())
-	{
-		return true;
-	}
-
-	// Check KnowledgeComponent first (legacy system)
-	if (UMOKnowledgeComponent* Knowledge = CachedKnowledge.Get())
-	{
-		if (Knowledge->HasKnowledge(KnowledgeId))
-		{
-			return true;
-		}
-	}
-
-	// Check if player has this as a skill with level >= 1
-	// This bridges the gap between the unused KnowledgeComponent and the active SkillsComponent
-	if (UMOSkillsComponent* Skills = CachedSkills.Get())
-	{
-		if (Skills->HasSkillLevel(KnowledgeId, 1))
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Knowledge '%s' satisfied via SkillsComponent (level >= 1)"),
-				*KnowledgeId.ToString());
-			return true;
-		}
-	}
-
-	// Check if there's a recipe with this ID that's been discovered
-	// Some harvest actions may be gated by recipe discovery
-	if (AActor* Owner = GetOwningPlayerPawn())
-	{
-		if (UMORecipeDiscoveryComponent* Discovery = Owner->FindComponentByClass<UMORecipeDiscoveryComponent>())
-		{
-			if (Discovery->IsRecipeDiscovered(KnowledgeId))
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Knowledge '%s' satisfied via RecipeDiscoveryComponent"),
-					*KnowledgeId.ToString());
-				return true;
-			}
-		}
-	}
-
-	return false;
+	// The harvest subsystem's one knowledge gate (the server's harvest refuses by the same rule).
+	FMOResourceHarvestAction Probe;
+	Probe.RequiredKnowledgeId = KnowledgeId;
+	return UMOHarvestSubsystem::HasKnowledgeForAction(Probe, GetOwningPlayerPawn());
 }
 
 bool UMOKeepOnHarvestContextMenu::CanPerformAction(const FMOResourceHarvestAction& Action) const

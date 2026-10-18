@@ -524,6 +524,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
 	void StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid);
 
+	/** Inspect an item in the world the player is looking at: Instance names it (UMOCharacterUIController::StartItemInspectionAt). */
+	void StartItemInspectionAt(FName ItemDefinitionId, const FGuid& ItemGuid, const struct FMOInstanceRef& Instance);
+
 	/** Cancel any active inspection. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
 	void CancelItemInspection();

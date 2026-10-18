@@ -172,6 +172,22 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		// Air absorption (additional realism — high frequencies attenuate faster).
 		A.bEnableListenerFocus = false;
 	}
+	{
+		FootstepAttenuation = NewObject<USoundAttenuation>(this, TEXT("FootstepAttenuation"));
+		FSoundAttenuationSettings& F = FootstepAttenuation->Attenuation;
+		F.bAttenuate = true;
+		F.bSpatialize = true;
+		F.AttenuationShape = EAttenuationShape::Sphere;
+		F.AttenuationShapeExtents = FVector(400.0f, 0.0f, 0.0f);   // the third-person camera sits ~3-4 m from the feet: your own steps at full volume
+		F.DistanceAlgorithm = EAttenuationDistanceModel::NaturalSound;
+		F.FalloffDistance = 2500.0f;                               // gone ~29 m away (UMOFootstepComponent stops emitting at 35 m)
+		F.dBAttenuationAtMax = -60.0f;
+		F.bAttenuateWithLPF = true;
+		F.LPFRadiusMin = 800.0f;
+		F.LPFRadiusMax = 2900.0f;
+		F.LPFFrequencyAtMin = 22000.0f;
+		F.LPFFrequencyAtMax = 2500.0f;
+	}
 
 	// PRE-LOAD hook — stop all audio when a level is about to unload. Without
 	// this, music + ambient survive across map transitions (because the
@@ -581,6 +597,12 @@ bool UMOAudioSubsystem::PlayOneShot2D(FName AudioId)
 
 bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale, float PitchScale)
 {
+	return PlayOneShotAtLocationAttenuated(WorldContextObject, AudioId, Location, VolumeScale, PitchScale, GetAmbientEventAttenuation());
+}
+
+bool UMOAudioSubsystem::PlayOneShotAtLocationAttenuated(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale, float PitchScale,
+	USoundAttenuation* FallbackAttenuation)
+{
 	const FMOAudioBankRow* Row = AudioIdLookup.FindRef(AudioId);
 	if (!Row)
 	{
@@ -595,8 +617,11 @@ bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject,
 		return false;
 	}
 
-	UGameplayStatics::PlaySoundAtLocation(WorldContextObject, Sound, Location,
-		Row->VolumeMultiplier * VolumeScale, Row->PitchMultiplier * PitchScale);
+	// An asset with no attenuation of its own played at full volume wherever it happened: in co-op the host heard every pawn's footsteps as his own
+	// ("you can hear all the different pawns' sounds as the host", Oct 18 2026). It gets the caller's profile instead.
+	USoundAttenuation* Attenuation = Sound->GetAttenuationSettingsToApply() ? nullptr : FallbackAttenuation;
+	UGameplayStatics::PlaySoundAtLocation(WorldContextObject, Sound, Location, FRotator::ZeroRotator,
+		Row->VolumeMultiplier * VolumeScale, Row->PitchMultiplier * PitchScale, 0.0f, Attenuation);
 	return true;
 }
 

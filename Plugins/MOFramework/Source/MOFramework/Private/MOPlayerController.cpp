@@ -1,4 +1,5 @@
 #include "MOPlayerController.h"
+#include "MOInspectionActions.h"
 #include "MOFramework.h"
 #include "MODevMode.h"
 #include "HAL/IConsoleManager.h"
@@ -581,7 +582,37 @@ void AMOPlayerController::ClientShowNotification_Implementation(const FText& Mes
 {
 	if (NotificationComponent)
 	{
-		NotificationComponent->ShowNotification(Message, Duration, Type);
+		NotificationComponent->ShowNotificationHere(Message, Duration, Type);   // never the forwarding entry: see ShowNotificationHere
+	}
+}
+
+void AMOPlayerController::ServerInspectItem_Implementation(FName ItemId, FGuid ItemGuid, const FMOInstanceRef& Instance)
+{
+	FText Reason;
+	if (!FMOInspectionActions::Begin(GetPawn(), ItemId, ItemGuid, Instance, Reason))
+	{
+		ClientShowNotification(Reason, 2.5f, EMONotificationType::Warning);
+	}
+}
+
+void AMOPlayerController::ClientInspectionResult_Implementation(FName ItemId, const FMOInspectionResult& Result)
+{
+	if (UMOCharacterUIController* CharacterUI = UIManagerComponent ? UIManagerComponent->GetCharacterController() : nullptr)
+	{
+		CharacterUI->ShowInspectionResult(ItemId, Result);
+	}
+}
+
+void AMOPlayerController::ServerSurvivorCommand_Implementation(APawn* Survivor, const FMOSurvivorCommand& Command)
+{
+	FMOSurvivorCommands::Execute(this, Survivor, Command);
+}
+
+void AMOPlayerController::ClientShowSkillPopup_Implementation(FName Id, bool bIsKnowledge, float Duration)
+{
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowSkillPopupHere(Id, bIsKnowledge, Duration);   // never the forwarding entries: see ShowNotificationHere
 	}
 }
 
@@ -1365,6 +1396,23 @@ void AMOPlayerController::ServerGatherCover_Implementation(FVector_NetQuantize L
 	if (!Foraging || !Foraging->BeginGatherCover(GetPawn(), Location, EntryIndex, &Reason))
 	{
 		ClientShowNotification(Reason, 2.0f, EMONotificationType::Warning);
+	}
+}
+
+void AMOPlayerController::ServerBeginHarvest_Implementation(const FMOInstanceRef& Instance, FName ActionId)
+{
+	FText Reason;
+	if (!FMOHarvestActions::Begin(GetPawn(), Instance, ActionId, Reason))
+	{
+		ClientShowNotification(Reason, 2.5f, EMONotificationType::Warning);
+	}
+}
+
+void AMOPlayerController::ClientHarvestOutcome_Implementation(const FMOHarvestOutcome& Outcome)
+{
+	if (UMOCraftingUIController* Crafting = UIManagerComponent ? UIManagerComponent->GetCraftingController() : nullptr)
+	{
+		Crafting->ShowHarvestOutcome(Outcome);
 	}
 }
 
@@ -2159,6 +2207,8 @@ void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 			Options.Add({ Name, Row.DisplayName.IsEmpty() ? FText::FromString(FName::NameToDisplayString(Name.ToString(), false)) : Row.DisplayName });
 		}
 	});
+	// Caves are not world features (they are the generator's cave field, only in limestone): their own entry, searched by FMOWorldGen::FindNearestCaveMouth.
+	Options.Add({ FName(TEXT("CaveEntrance")), NSLOCTEXT("MOConsole", "PoiCave", "Cave entrance") });
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
 		[this](FName Id) { ServerDevTeleportToFeature(Id); });
 }
@@ -2170,6 +2220,37 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 		return;
 	}
 	AMOCharacter* Traveller = Cast<AMOCharacter>(GetPawn());
+	if (Traveller && FeatureId == FName(TEXT("CaveEntrance")))
+	{
+		// Caves are rare since generator v11 (limestone only, opening into steep slopes): Wes found none ("it looks like all the caves are gone").
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(this);
+		FVector Mouth;
+		float SlopeDeg = 0.0f;
+		const double Start = FPlatformTime::Seconds();
+		if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGen::FindNearestCaveMouth(*Params, Seeds->GetActiveTerrainSeed(), FVector2D(Traveller->GetActorLocation()), 3000000.0, Mouth, SlopeDeg))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi CaveEntrance: none within 30 km (searched %.1f s)"), FPlatformTime::Seconds() - Start);
+			if (NotificationComponent)
+			{
+				NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOConsole", "PoiNoCave", "No cave entrance within 30 km."), 5.0f);
+			}
+			return;
+		}
+		// Stand 8 m out from the mouth on the side the traveller came from, looking at it.
+		FVector2D Away = (FVector2D(Traveller->GetActorLocation()) - FVector2D(Mouth)).GetSafeNormal();
+		if (Away.IsNearlyZero())
+		{
+			Away = FVector2D(1.0, 0.0);
+		}
+		const FVector2D StandXY = FVector2D(Mouth) + Away * 800.0;
+		const float StandGround = FMOWorldGen::SampleHeightCm(*Params, StandXY.X, StandXY.Y, Seeds->GetActiveTerrainSeed(), Params->Tuning.VoxelSizeCm);
+		const FRotator Facing(-8.0f, FMath::RadiansToDegrees(FMath::Atan2(-Away.Y, -Away.X)), 0.0f);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi CaveEntrance: mouth at %s (slope %.0f deg), %.1f km away, found in %.1f s"), *Mouth.ToCompactString(), SlopeDeg,
+			FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Mouth)) / 100000.0, FPlatformTime::Seconds() - Start);
+		BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
+		return;
+	}
 	UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(this);
 	FMOWorldFeatureSite Site;
 	if (!Traveller || !Features || !Features->FindNearestSite(FeatureId, FVector2D(Traveller->GetActorLocation()), 3000000.0, Site))
