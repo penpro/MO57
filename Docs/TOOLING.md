@@ -230,6 +230,7 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 | `Tools/gen_moodle_icons.py`, `Content/Python/import_moodle_icons.py` | placeholder moodle icons |
 | `Tools/steam_scout.py`, `steam_art_build.py`, `steam_wordmark.py`, `Tools/look_sheet.py`, `Tools/biome_eye.py`, `Tools/biome_tour.py` | screenshots and Steam art (`SteamArt/README.md`) |
 | `Tools/terrain_lab/` | numpy replica of the world generator (iterate shapes in seconds) |
+| `Tools/motion_probe.py capture|track`, `Content/Python/foliage_wind_precision.py` | does on-screen motion flow or hold-and-snap: a timestamped frame burst of a game window + sub-pixel patch tracking and each patch's step share (foliage wind, `Docs/PCG.md` §9); the Pivot Painter wind precision patch |
 | Animation retarget (editor Python recipe) | `Docs/Water.md` §3 + `Docs/TRAPS.md` §10 (op-stack retargeters, root motion) |
 
 ## 7. Packaging, probing, profiling

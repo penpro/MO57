@@ -60,6 +60,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-039 | VERIFY | Claude | Far canopy appearance survives cooking (M_FarCanopy ISM usage flag) | Codex handoff | G04 |
 | N-040 | OPEN | Claude | Per-instance grounding of compositions exists only as a census (auto-apply OFF: it broke compositions) | wes-calls-oct16 | |
 | N-041 | OPEN | Claude | Unifying world-features design (caves / rivers / landmarks / ore / player builds) mostly unbuilt | World_Features_Architecture | |
+| N-167 | OPEN | Claude | Foliage wind follow-ups to N-166: (1) measure the other graphs that add time to a world-space term the same way (`Tools/motion_probe.py`, 10+ km from the origin vs near it): `MF_WindGust` (MSPresets + LATEST), Epic's `SimpleGrassWind` in the hornbeam master `MS_Foliage_Material_LATEST/M_Foliage` (ElectricForest hornbeams were not measured), Fab `QMF_WindAnimation`; (2) an automation test that every Pivot Painter wind graph carries the `MO_WindPrecision` Fmod (needs a build window); (3) three Pivot Painter data textures have mips + streaming where the rest have none (`T_BlackAlder_Forest_08_*`, `Sapling_01_*`, `Seedling_01_*`: 8x2 px) | `Docs/PCG.md` §9 | |
 
 ## Water, light, weather
 
@@ -239,6 +240,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-18 N-166 (Wes, Oct 18: the Megascans trees' wind "moves smoothly ... then freeze[s] ... then glitch[es]"): the Pivot Painter wind added time to a WORLD-space pivot term in float, so 5-15 km from the origin each branch level moved one texel at a time; `Content/Python/foliage_wind_precision.py` reduces the offset mod 1200 first (MF_AdvancedWind_Level, PN_WindAnimation). Step share 34-47 % -> 0-1 %, TSR jumps 4-7 per 15 s -> 0 (`Docs/PCG.md` §9).
 - DONE-2026-10-18 N-162: a joiner far from the host was corrected on every move (host's coarse render-chunk collision up to ~1 m high); every machine now refines the terrain around every other player (`RemotePlayerTerrainDetail`): +93.1 -> +2.8 cm, 0 of 136 corrected.
 - DONE-2026-10-17 N-021: the next Steam patch notes warn that worlds from generator v8 (0573ab31) load with the v11 terrain, and that extra Save As slots show as separate entries.
 - DONE-2026-10-17 co-op smoothness tools for Steam tests: [MONet] stats logged in every co-op session, [MONetEvent] hitch / rubber-band events, Net.* bug-report rows, MO.Net.Show, `Tools/ue_netdiag.py logs` for two machines' logs, `nettest netdiag` (instrument controls); findings in Coop §7 (N-160..N-164, F25).

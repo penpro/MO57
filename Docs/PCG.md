@@ -1,7 +1,8 @@
 # PCG: vegetation, ground clutter, removals and the world reveal
 
 > **Covers:** how the world is planted (biome spawner tiers, native chains, cave spawner), the chokepoints every chain passes,
-> how density is really realised, what keeps it fast, how removed things stay gone, and how the reveal waits for the world.
+> how density is really realised, what keeps it fast, how removed things stay gone, how the reveal waits for the world, and why the
+> foliage wind keeps its precision far from the origin (§9).
 > **Current state (2026-10-17):** one PCG component per level (on the `PCGVolume`, runtime hierarchical generation around the
 > local pawn/camera); vegetation comes from `DT_Biomes` palettes through the MO biome spawner in tiers; native biome-blind chains
 > are cut or biome-limited; removals are permanent, replicated and saved; new-game READY ~7-17 s packaged.
@@ -150,3 +151,35 @@ saved graphs keep their meaning.
 - Timings: packaged new-game READY 45.7 s -> 29.1 s (da3c8c22) -> 7.1 s (Oct 13 pm, far voxel chunks no longer resolve
   sub-voxel lakes: `FMOWorldGen::IsWaterTierResolved`) -> ~14-17 s after the Oct 14 coverage pass (more instances).
 - Bug reports carry `WorldBuild.*` fields from the readiness subsystem (for PCG stalls on Shipping, which writes no log).
+
+## 9. Foliage wind keeps its precision far from the origin (Oct 18 2026)
+
+- **Symptom (Wes, Oct 18):** "all the megascans trees seem to glitch every second or two ... move smoothly for like .75 seconds, then
+  freeze for .25 seconds, then glitch to where the animation would have been". Not co-op, not a hitch (his host's frames were 15.7 ms
+  average, 17-30 ms worst per second), not shadows (`mo.Foliage.RigidShadows 0`, `r.Shadow.Virtual.Cache 0` and a 4x
+  `r.Shadow.Virtual.Cache.FramesStaticThreshold` left it unchanged), not TSR, texture streaming or the sampler (`r.MaxAnisotropy 1`,
+  an explicitly linear UI texture group: unchanged).
+- **Cause:** the Megascans Pivot Painter wind (`MF_AdvancedWind_Level`, called once per branch level by `MA_Foliage`: Black Alder, Common
+  Hazel) and its copy in the PN plant packs (`PN_WindAnimation`: meadow flowers, wild berries) look up Epic's 64x64
+  `WindTurblenceVectorAndGustMagnitude` at `frac(Time * Speed + dot(pivot, windDir))` and `frac((...) / RandomRotationChangeRate)`.
+  `ms_PivotPainter2_DecodePostion` returns the pivot in WORLD space, and MO57's trees stand 5-15 km from the origin: the dot product is
+  ~1e5-1e6 cm, where a float's spacing is 1/64-1/16 of a UV, so `Time * Speed` (Speed = Local Wind Noise 0.1-0.4 x MPC Wind Strength
+  x 0.05 = 0.01-0.04 UV/s) can only move the lookup a whole texel at a time. Each branch level held its pose, then snapped, every
+  (1/64) / Speed = 1.56 / 0.78 / 0.52 / 0.39 s. Doubling `MPC_GlobalFoliageActor` Wind Strength halved the periods (the prediction);
+  the same trees 0.8 km from the origin swayed smoothly (0-1 % of the motion in jumps against 34-47 % at 11 km).
+- **Fix:** `Content/Python/foliage_wind_precision.py` (editor, idempotent) reduces the world-space offset modulo 1200 before time is
+  added (one `Fmod` per graph, description `MO_WindPrecision`). 1200 is a multiple of 1 (the texture's wrap) and of the default change
+  rates 1-4, so both lookups read exactly the texels they read before; only the sum stays small. Rerun it after reimporting MSPresets /
+  the PN packs (`PN_WildBerries` is a gitignored vendor folder: its copy is patched locally only).
+- **Rule:** any material term that adds a time-driven offset to a WORLD-space position (Pivot Painter pivots, `ObjectPivotPoint`,
+  `WorldPosition` demoted to float) must reduce the world term (frac / fmod by a period the consumer is blind to) BEFORE the add.
+  Still to measure the same way: `MF_WindGust`, Epic's `SimpleGrassWind` (the hornbeam master `MS_Foliage_Material_LATEST/M_Foliage`),
+  Fab `QMF_WindAnimation` (BACKLOG N-167).
+- **How it was measured (reuse it):** a timestamped `PrintWindow` burst of the game window, sub-pixel phase-correlation tracking of
+  64 px leaf / twig patches with AA off, "step share" = the share of a patch's travel made in frames over 4x its median speed (before
+  34-47 %, after 0-1 %) and a jump count with TSR on (before 4-7 per 15 s on the 1.56 / 0.78 s grid, after 0):
+  `python Tools/motion_probe.py capture <pid> 10 b.npz` then `track b.npz x:y,... --plot p.png`; this run's plots are in
+  `Saved/WindStutter/` (not tracked). Traps met on the way: an ROI that included the HUD FPS counter (refreshes every 0.25 s) read as
+  a periodic jump; `r.Test.OverrideTimeMaterialExpressions` also zeroes velocities, and TSR then blends small steps away (measure with
+  `r.AntiAliasingMethod 0`); `MaterialEditingLibrary.update_material_instance` and `EditorAssetLibrary.duplicate_asset` crash a `-game`
+  instance (graph edits belong in the editor).
