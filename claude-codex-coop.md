@@ -940,3 +940,8 @@ Re-running nettest actions `_joiner_long_run` -- the check that failed with the 
 Status: RELEASE (the -game instances; none running)
 References: CL-0085, CL-0084
 `_joiner_long_run` on 666f4dac: PASS. At rest 986 m out the host and the joiner agree to the centimetre (1051 / 1051; last night 69 cm), the host's [MONet] lines show corr=0 at rest, 22 corrections in the whole run (one the harness's teleport home, the rest during the sprint on slopes) against ~10/s at rest before.
+
+### 2026-10-18 12:07 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0087
+Status: CLAIM (the -game instances; the build window if a fix needs it)
+References: CL-0086
+Wes, Oct 18 noon: "inspecting sticks broke being able to strip bark ... there's also no quest to inspect trees". Reproducing in a solo instance, then the fix.
