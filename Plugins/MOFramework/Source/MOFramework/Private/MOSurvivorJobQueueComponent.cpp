@@ -3,6 +3,7 @@
 #include "MOSurvivorJobDatabaseSettings.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
+#include "MOCraftingQueueComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UMOSurvivorJobQueueComponent::UMOSurvivorJobQueueComponent()
@@ -264,14 +265,14 @@ bool UMOSurvivorJobQueueComponent::CancelJob(const FGuid& JobId)
 		return false;
 	}
 
-	FMOSurvivorJobEntry& Job = JobQueue.Jobs[Index];
-	Job.State = EMOSurvivorJobState::Cancelled;
+	const FMOSurvivorJobEntry Job = JobQueue.Jobs[Index];
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Cancelled job %s"), *JobId.ToString());
 
 	// Remove the cancelled job
 	JobQueue.Jobs.RemoveAt(Index);
 	MarkQueueDirty();
+	ReleaseJobCraft(Job, true);
 
 	OnQueueChanged.Broadcast();
 	return true;
@@ -286,8 +287,10 @@ void UMOSurvivorJobQueueComponent::CancelAllJobs()
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Cancelling all %d jobs"), JobQueue.Jobs.Num());
 
-	JobQueue.Jobs.Empty();
+	const auto Removed = MoveTemp(JobQueue.Jobs);
+	JobQueue.Jobs.Reset();
 	MarkQueueDirty();
+	for (const auto& Job : Removed) ReleaseJobCraft(Job, true);
 
 	OnQueueChanged.Broadcast();
 }
@@ -404,13 +407,15 @@ void UMOSurvivorJobQueueComponent::SetJobState(const FGuid& JobId, EMOSurvivorJo
 	}
 
 	Job->State = NewState;
+	const FMOSurvivorJobEntry Changed = *Job;
 
 	if (NewState == EMOSurvivorJobState::Active && OldState == EMOSurvivorJobState::Queued)
 	{
 		Job->StartTime = FDateTime::UtcNow();
 	}
 
-	MarkQueueDirty();
+	JobQueue.MarkItemDirty(*Job);
+	if (NewState == EMOSurvivorJobState::Failed || NewState == EMOSurvivorJobState::Cancelled) ReleaseJobCraft(Changed, true);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Job %s state: %d -> %d"),
 		*JobId.ToString(), static_cast<int32>(OldState), static_cast<int32>(NewState));
@@ -432,7 +437,7 @@ void UMOSurvivorJobQueueComponent::UpdateJobProgress(const FGuid& JobId, float P
 	}
 
 	Job->Progress = FMath::Clamp(Progress, 0.0f, 1.0f);
-	MarkQueueDirty();
+	JobQueue.MarkItemDirty(*Job);
 }
 
 void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
@@ -449,6 +454,7 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 	}
 
 	const FGuid JobId = CurrentJob->JobId;
+	const FMOSurvivorJobEntry Removed = *CurrentJob;
 	CurrentJob->State = bSuccess ? EMOSurvivorJobState::Completed : EMOSurvivorJobState::Failed;
 	CurrentJob->Progress = bSuccess ? 1.0f : CurrentJob->Progress;
 
@@ -463,6 +469,7 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 	}
 
 	MarkQueueDirty();
+	ReleaseJobCraft(Removed, !bSuccess);
 
 	OnJobCompleted.Broadcast(JobId, bSuccess);
 	OnQueueChanged.Broadcast();
@@ -470,34 +477,45 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 
 void UMOSurvivorJobQueueComponent::CompleteCurrentIteration()
 {
-	if (!GetOwner()->HasAuthority())
+	const auto Current = GetCurrentJob();
+	if (!Current.IsValid() || !RecordCompletedIteration(Current.JobId).IsRecorded()) return;
+	// The notification may have cancelled/replaced this assignment. Never finish its successor.
+	const auto* Remaining = JobQueue.GetCurrentJob();
+	if (Remaining && Remaining->JobId == Current.JobId && !Remaining->ShouldRepeat())
 	{
-		return;
-	}
-
-	FMOSurvivorJobEntry* CurrentJob = JobQueue.GetCurrentJob();
-	if (!CurrentJob)
-	{
-		return;
-	}
-
-	CurrentJob->CompletedCount++;
-	CurrentJob->Progress = 0.0f;
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Job %s iteration %d/%d completed"),
-		*CurrentJob->JobId.ToString(), CurrentJob->CompletedCount, CurrentJob->RepeatCount);
-
-	if (!CurrentJob->ShouldRepeat())
-	{
-		// All iterations done
 		CompleteCurrentJob(true);
 	}
-	else
-	{
-		// More iterations remaining
-		MarkQueueDirty();
-		OnQueueChanged.Broadcast();
-	}
+}
+
+FMOSurvivorIterationResult UMOSurvivorJobQueueComponent::RecordCompletedIteration(const FGuid& JobId)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return {EMOSurvivorIterationFailure::NotAuthority};
+	auto* Current = JobQueue.GetCurrentJob();
+	if (!JobId.IsValid() || !Current || Current->JobId != JobId) return {EMOSurvivorIterationFailure::WrongJob};
+	if (bRecordingIteration || Current->RepeatCount <= 0 || Current->CompletedCount < 0 || Current->CompletedCount >= Current->RepeatCount)
+		return {EMOSurvivorIterationFailure::InvalidState};
+	TGuardValue<bool> Recording(bRecordingIteration, true);
+	++Current->CompletedCount;
+	Current->Progress = 0;
+	// Count and next-iteration phase are one saved transition, including saves inside OnQueueChanged.
+	if (Current->JobType == EMOSurvivorJobType::CraftAtStation) Current->CraftExecution = {};
+	const FMOSurvivorIterationResult Result{EMOSurvivorIterationFailure::None, Current->CompletedCount};
+	JobQueue.MarkItemDirty(*Current);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Job %s iteration %d/%d completed"), *JobId.ToString(), Result.CompletedCount, Current->RepeatCount);
+	OnQueueChanged.Broadcast();
+	return Result;
+}
+
+bool UMOSurvivorJobQueueComponent::SetCraftExecution(const FGuid& JobId, const FMOSurvivorCraftExecution& Execution)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return false;
+	auto* Job = JobQueue.GetCurrentJob();
+	if (!Job || Job->JobId != JobId || Job->JobType != EMOSurvivorJobType::CraftAtStation ||
+		!FMath::IsFinite(Execution.HandlingSeconds) || Execution.HandlingSeconds < 0 ||
+		(Execution.Phase != 0 && (Execution.Phase < 10 || Execution.Phase > 16))) return false;
+	Job->CraftExecution = Execution;
+	JobQueue.MarkItemDirty(*Job);
+	return true;
 }
 
 // ============================================================================
@@ -586,6 +604,7 @@ bool UMOSurvivorJobQueueComponent::ApplySaveDataAuthority(const FMOSurvivorJobQu
 	}
 
 	JobQueue.Jobs = InSaveData.Jobs;
+	TGuardValue<bool> Restoring(bRestoringJobs, true);
 	HomeLocation = InSaveData.HomeLocation;
 	HomeBuildingGuid = InSaveData.HomeBuildingGuid;
 
@@ -620,6 +639,17 @@ FMOSurvivorJobEntry UMOSurvivorJobQueueComponent::CreateJobEntry(EMOSurvivorJobT
 	Entry.CompletedCount = 0;
 	Entry.Progress = 0.0f;
 	return Entry;
+}
+
+void UMOSurvivorJobQueueComponent::ReleaseJobCraft(const FMOSurvivorJobEntry& Job, bool bCancel)
+{
+	if (Job.JobType != EMOSurvivorJobType::CraftAtStation || !Job.CraftExecution.QueueEntryId.IsValid()) return;
+	if (auto* Queue = GetOwner()->FindComponentByClass<UMOCraftingQueueComponent>())
+	{
+		// Assignment was already removed/failed before refunds can notify observers. The pawn retains real cargo.
+		if (bCancel) Queue->CancelCraft(Job.CraftExecution.QueueEntryId, true);
+		Queue->AcknowledgeCompletionReceipt(Job.CraftExecution.QueueEntryId);
+	}
 }
 
 void UMOSurvivorJobQueueComponent::CleanupFinishedJobs()

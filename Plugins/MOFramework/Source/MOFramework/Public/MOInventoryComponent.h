@@ -30,7 +30,7 @@
  *
  * 3. When modifying inventory on server:
  *    - Call MarkItemDirty(Entry) after changes
- *    - Or use MarkArrayDirty() for bulk changes
+ *    - MarkArrayDirty() tracks removals; surviving changed entries still need MarkItemDirty().
  *
  * 4. Durability tracking:
  *    - CurrentDurability = -1 means "not applicable" (infinite)
@@ -101,6 +101,7 @@
 #include "MOworldSaveGame.h"
 #include "MOItemDefinitionRow.h"
 #include "MOItemInstanceState.h"
+#include "MOIngredientReservation.h"
 #include "MOInventoryComponent.generated.h"
 
 USTRUCT(BlueprintType)
@@ -166,6 +167,51 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOItemAddedSignature, FName, ItemD
 
 class UMOInventoryComponent;
 
+UENUM(BlueprintType)
+enum class EMOInventoryAddFailure : uint8
+{
+	None, InvalidInput, NotAuthority, UnknownDefinition, IdentityConflict, Capacity
+};
+
+/** Accepted is exact. Unless explicitly requested, a capacity failure changes nothing. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOInventoryAddResult
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory") int32 Requested = 0;
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory") int32 Accepted = 0;
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory") EMOInventoryAddFailure Failure = EMOInventoryAddFailure::None;
+	bool IsComplete() const { return Requested > 0 && Accepted == Requested && Failure == EMOInventoryAddFailure::None; }
+};
+
+struct FMOInventoryAddOptions
+{
+	FMOItemInstanceState State;
+	bool bAllowStacking = true;
+	bool bAllowPartial = false;
+	bool bReportPickup = true;
+};
+
+/** A haul can carry whole liquid vessels and return specifically borrowed items together with its ingredient cargo. */
+struct FMOIngredientTransferOptions
+{
+	bool bCarrySourceContainers = false;
+	/** These entries are additional cargo, never a substitute for physical recipe outputs of the same definition. */
+	TArray<FGuid> AlsoCarryItemGuids;
+};
+
+/** Defers observer callbacks until a compound mutation has installed its complete state. Does not roll back changes. */
+class MOFRAMEWORK_API FMOInventoryMutationScope
+{
+public:
+	explicit FMOInventoryMutationScope(UMOInventoryComponent* Inventory);
+	~FMOInventoryMutationScope();
+	FMOInventoryMutationScope(const FMOInventoryMutationScope&) = delete;
+	FMOInventoryMutationScope& operator=(const FMOInventoryMutationScope&) = delete;
+private:
+	TWeakObjectPtr<UMOInventoryComponent> Component;
+};
+
 /** Editor-friendly struct for pre-populating inventory slots. */
 USTRUCT(BlueprintType)
 struct FMOStartingInventoryItem
@@ -228,6 +274,14 @@ public:
 	// Basic inventory operations
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	bool AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
+
+	/** The add contract used by all variants: validates identity/state, stack limits and capacity before mutation. */
+	FMOInventoryAddResult TryAddItem(const FGuid& ItemGuid, FName ItemDefinitionId, int32 Quantity,
+		const FMOInventoryAddOptions& Options = FMOInventoryAddOptions());
+
+	/** Shared entry policy for normal adds and ingredient reservation/return plans. */
+	static int32 GetItemStackLimit(const FMOItemDefinitionRow& Definition);
+	static bool HasMatchingStackState(const FMOInventoryEntry& Entry, FName DefinitionId, const FMOItemInstanceState& State);
 
 	/**
 	 * Add an item with specific durability (for restoring equipped items).
@@ -337,6 +391,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory")
 	bool CanAddItemByDefinitionId(FName ItemDefinitionId, int32 Quantity = 1) const;
 
+	/** Joint capacity preview for fresh outputs; accounts for all requested types competing for the same free slots. */
+	bool CanAddItemsByDefinition(const TMap<FName, int32>& Items) const;
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const;
 
@@ -428,6 +485,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Transfer")
 	bool TransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory);
 
+	/** Whole-stack transfer. Refusal leaves both inventories unchanged; state and identity travel with the item. */
+	FMOInventoryAddResult TryTransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory);
+
 	/**
 	 * Transfer all items to another inventory.
 	 * @param TargetInventory The destination inventory
@@ -508,6 +568,16 @@ public:
 	 *  nothing: false (and nothing taken) when there is not enough. */
 	bool ConsumeIngredient(FName DefinitionId, int32 Quantity);
 
+	/** All-or-nothing reservation. A delayed action owns OutReservation and must persist it until consumed/returned. */
+	FMOIngredientOperationResult ReserveIngredients(const TMap<FName, int32>& Requirements, FMOIngredientReservation& OutReservation);
+	/** Return exact owned lots. Anything that does not fit remains in Reservation, including original liquid provenance. */
+	FMOIngredientOperationResult ReturnReservedIngredients(FMOIngredientReservation& Reservation);
+	/** Atomic transfer of physical/liquid recipe requirements; refusal changes neither inventory. */
+	/** Optional transport carries the source vessels intact, including their unrequested remaining liquid. Refusal changes neither inventory.
+	 * OutCarriedContainers is populated only on success so job logistics can return borrowed vessels by identity. */
+	FMOIngredientOperationResult TransferIngredientsTo(UMOInventoryComponent* Target, const TMap<FName, int32>& Requirements,
+		const FMOIngredientTransferOptions& Options = {}, TArray<FGuid>* OutCarriedContainers = nullptr);
+
 	/**
 	 * Server: gives Quantity of DefinitionId (a recipe's output, a cancelled craft's refund). An ordinary item is a new stack; a liquid measure is poured into
 	 * containers with room that hold nothing it would spoil or be spoiled by. Returns how many were placed; for a liquid measure the rest is spilled.
@@ -539,6 +609,16 @@ protected:
 	void ApplyStartingItems();
 
 private:
+	friend class FMOInventoryMutationScope;
+	friend struct FMOMedicalTreatmentActions;
+	int32 MutationDepth = 0;
+	bool bInventoryNotificationPending = false;
+	bool bSlotsNotificationPending = false;
+	TMap<FName, int32> PendingItemAdded;
+	TMap<FName, int32> PendingPickupCredit;
+	void EndMutation();
+	void BroadcastSlotsChanged();
+	int64 GetAddCapacity(FName DefinitionId, const FMOItemInstanceState& State, int32 MaxStack, bool bAllowStacking) const;
 	/** True while ApplyStartingItems runs: those adds are a spawn kit, not something the player gathered (no quest "pickup"). */
 	bool bApplyingStartingItems = false;
 
@@ -548,6 +628,7 @@ private:
 	TMap<FGuid, int32> GuidToEntryIndex;
 
 	void BroadcastInventoryChanged();
+	void InstallIngredientPlan(TArray<FMOInventoryEntry>&& Entries);
 
 	void EnsureSlotsInitialized();
 	bool IsSlotIndexValid(int32 SlotIndex) const;

@@ -70,6 +70,8 @@ bool UMOHISMInteractableComponent::HarvestInstance(UHierarchicalInstancedStaticM
 
 	// Calculate quantity
 	const int32 Quantity = CalculateQuantity();
+	if (!Inventory->CanAddItemByDefinitionId(ItemDefinitionId, Quantity)) return false;
+	FMOInventoryMutationScope InventoryMutation(Inventory);
 
 	// Get instance transform before removing (for effects/logging)
 	FTransform InstanceTransform;
@@ -86,7 +88,9 @@ bool UMOHISMInteractableComponent::HarvestInstance(UHierarchicalInstancedStaticM
 
 	// Add item to inventory
 	const FGuid NewItemGuid = FGuid::NewGuid();
-	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemDefinitionId, Quantity);
+	const FMOInventoryAddResult Added = Inventory->TryAddItem(NewItemGuid, ItemDefinitionId, Quantity);
+	const bool bAdded = Added.IsComplete();
+	if (!bAdded) return false;
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHISMInteractable] Harvested instance %d: %s x%d (added: %s) at %s"),
 		InstanceIndex,

@@ -5,6 +5,19 @@
 #include "MOItemDefinitionRow.h"
 #include "Net/UnrealNetwork.h"
 
+namespace MOEquipmentTransactions
+{
+	bool ReturnItem(UMOInventoryComponent* Inventory, const FMOEquippedItem& Item)
+	{
+		FMOInventoryAddOptions Options;
+		Options.State.Durability = Item.CurrentDurability;
+		Options.State.Liquid = Item.Liquid;
+		Options.bAllowStacking = false;
+		Options.bReportPickup = false;
+		return Inventory->TryAddItem(Item.ItemGuid, Item.ItemDefinitionId, 1, Options).IsComplete();
+	}
+}
+
 UMOEquipmentComponent::UMOEquipmentComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -37,41 +50,26 @@ void UMOEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	bool bStillSwapping = false;
-
-	// Update left hand swap
-	if (LeftHandSwapTimeRemaining > 0.0f)
-	{
-		LeftHandSwapTimeRemaining -= DeltaTime;
-		if (LeftHandSwapTimeRemaining <= 0.0f)
-		{
-			CompleteSwap(EMOEquipmentSlot::LeftHand);
-		}
-		else
-		{
-			bStillSwapping = true;
-		}
-	}
-
-	// Update right hand swap
-	if (RightHandSwapTimeRemaining > 0.0f)
-	{
-		RightHandSwapTimeRemaining -= DeltaTime;
-		if (RightHandSwapTimeRemaining <= 0.0f)
-		{
-			CompleteSwap(EMOEquipmentSlot::RightHand);
-		}
-		else
-		{
-			bStillSwapping = true;
-		}
-	}
-
-	// Disable tick when not swapping
-	if (!bStillSwapping)
+	if (!GetOwner() || !GetOwner()->HasAuthority())
 	{
 		SetComponentTickEnabled(false);
+		return;
 	}
+	TArray<EMOEquipmentSlot, TInlineAllocator<2>> Finished;
+	for (FMOEquipmentPendingSwap& Pending : PendingSwaps)
+	{
+		Pending.RemainingSeconds = FMath::Max(0.0f, Pending.RemainingSeconds - DeltaTime);
+		if (Pending.RemainingSeconds <= 0.0f)
+		{
+			Finished.Add(Pending.Slot);
+		}
+	}
+	// Completion broadcasts can start another swap; never keep references across them.
+	for (EMOEquipmentSlot Slot : Finished)
+	{
+		CompleteSwap(Slot);
+	}
+	SetComponentTickEnabled(PendingSwaps.Num() > 0);
 }
 
 // ============================================================================
@@ -130,162 +128,115 @@ bool UMOEquipmentComponent::EquipFromInventoryToNaturalSlot(UMOInventoryComponen
 
 bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: ItemGuid=%s, EquipSlot=%d"),
-		*ItemGuid.ToString(EGuidFormats::Short), static_cast<int32>(EquipSlot));
-
-	if (!IsValid(Inventory) || !ItemGuid.IsValid() || EquipSlot == EMOEquipmentSlot::MAX)
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bEquipmentMutationInProgress
+		|| !IsValid(Inventory) || !ItemGuid.IsValid() || !IsValidEquipmentSlot(EquipSlot) || IsSlotSwapping(EquipSlot))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Basic validation failed - Inventory=%s, GuidValid=%s, SlotValid=%s"),
-			IsValid(Inventory) ? TEXT("valid") : TEXT("NULL"),
-			ItemGuid.IsValid() ? TEXT("yes") : TEXT("no"),
-			EquipSlot != EMOEquipmentSlot::MAX ? TEXT("yes") : TEXT("no"));
 		return false;
 	}
-
+	FMOInventoryEntry Entry;
+	if (!Inventory->TryGetEntryByGuid(ItemGuid, Entry) || !CanEquipToSlot(Entry.ItemDefinitionId, EquipSlot))
+	{
+		return false;
+	}
 	EnsureSlotsInitialized();
 	const int32 SlotIndex = static_cast<int32>(EquipSlot);
-
-	// Get the item from inventory
-	FMOInventoryEntry Entry;
-	if (!Inventory->TryGetEntryByGuid(ItemGuid, Entry))
+	const FMOEquippedItem Previous = EquippedSlots[SlotIndex];
+	bool bFreesSlot = false;
+	for (int32 Index = 0; Entry.Quantity == 1 && Index < Inventory->GetSlotCount(); ++Index)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item not found in inventory: %s"), *ItemGuid.ToString());
-		return false;
-	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Found item '%s' in inventory"), *Entry.ItemDefinitionId.ToString());
-
-	// Get item definition for swap timing and slot validation
-	FMOItemDefinitionRow ItemDef;
-	if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item definition not found: %s"), *Entry.ItemDefinitionId.ToString());
-		return false;
-	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item def found - bEquippable=%s, EquipmentSlotType=%d"),
-		ItemDef.bEquippable ? TEXT("true") : TEXT("false"),
-		static_cast<int32>(ItemDef.EquipmentSlotType));
-
-	// Check if item can be equipped to this slot
-	if (!CanEquipToSlot(Entry.ItemDefinitionId, EquipSlot))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item %s cannot be equipped to slot %d"), *Entry.ItemDefinitionId.ToString(), static_cast<int32>(EquipSlot));
-		return false;
-	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: CanEquipToSlot passed"));
-
-	// Check if slot is currently swapping (only for hand slots)
-	if (IsHandSlot(EquipSlot) && IsSlotSwapping(EquipSlot))
-	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Slot is currently swapping, rejecting equip"));
-		return false;
-	}
-
-	// If slot already has an item, return it to inventory first
-	FMOEquippedItem& SlotRef = EquippedSlots[SlotIndex];
-	if (SlotRef.IsValid())
-	{
-		// Return current item to inventory
-		const FGuid NewGuid = FGuid::NewGuid();
-		if (!Inventory->AddItemByGuidWithDurability(NewGuid, SlotRef.ItemDefinitionId, 1, SlotRef.CurrentDurability))
+		FGuid Slotted;
+		if (Inventory->TryGetSlotGuid(Index, Slotted) && Slotted == ItemGuid)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] Failed to return current item to inventory"));
-			return false;
+			bFreesSlot = true;
+			break;
 		}
 	}
-
-	// Remove item from inventory (only 1 - equipment is single items)
+	if (Previous.IsValid() && !bFreesSlot && !Inventory->CanAddItemByDefinitionId(Previous.ItemDefinitionId, 1))
+	{
+		return false;
+	}
+	TGuardValue<bool> MutationGuard(bEquipmentMutationInProgress, true);
+	FMOInventoryMutationScope InventoryMutation(Inventory);
+	FMOEquipmentPendingSwap Pending;
+	Pending.Slot = EquipSlot;
+	Pending.Item.ItemGuid = Entry.Quantity == 1 ? Entry.ItemGuid : FGuid::NewGuid();
+	Pending.Item.ItemDefinitionId = Entry.ItemDefinitionId;
+	Pending.Item.CurrentDurability = Entry.CurrentDurability;
+	Pending.Item.Liquid = Entry.Liquid;
+	Pending.TotalSeconds = IsHandSlot(EquipSlot) ? FMath::Max(0.0f, GetSwapTimeForItem(Entry.ItemDefinitionId)) : 0.0f;
+	Pending.RemainingSeconds = Pending.TotalSeconds;
+	// Escrow is installed before Remove broadcasts: a synchronous save sees who owns the incoming item.
+	PendingSwaps.Add(Pending);
 	if (!Inventory->RemoveItemByGuid(ItemGuid, 1))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] Failed to remove item from inventory"));
+		PendingSwaps.RemoveAll([EquipSlot](const FMOEquipmentPendingSwap& P) { return P.Slot == EquipSlot; });
 		return false;
 	}
-
-	// Build equipped item data
-	FMOEquippedItem NewEquipped;
-	NewEquipped.ItemGuid = FGuid::NewGuid(); // New GUID for equipped instance
-	NewEquipped.ItemDefinitionId = Entry.ItemDefinitionId;
-	NewEquipped.CurrentDurability = Entry.CurrentDurability;
-
-	// Hand slots have swap delay, other slots are instant
-	if (IsHandSlot(EquipSlot))
+	EquippedSlots[SlotIndex].Clear();
+	if (Previous.IsValid() && !MOEquipmentTransactions::ReturnItem(Inventory, Previous))
 	{
-		float SwapTime = GetSwapTimeForItem(Entry.ItemDefinitionId);
-
-		if (SwapTime > 0.0f)
+		EquippedSlots[SlotIndex] = Previous;
+		// The incoming item was just removed, so restoring it uses the same slot/stack room.
+		PendingSwaps.RemoveAll([EquipSlot](const FMOEquipmentPendingSwap& P) { return P.Slot == EquipSlot; });
+		FMOInventoryAddOptions Restore;
+		Restore.State.Durability = Entry.CurrentDurability;
+		Restore.State.Liquid = Entry.Liquid;
+		Restore.bReportPickup = false;
+		const bool bRestored = Inventory->TryAddItem(Entry.ItemGuid, Entry.ItemDefinitionId, 1, Restore).IsComplete();
+		if (!bRestored)
 		{
-			// Start swap with delay
-			if (EquipSlot == EMOEquipmentSlot::LeftHand)
-			{
-				PendingLeftHandItem = NewEquipped;
-				bHasPendingLeftHand = true;
-			}
-			else
-			{
-				PendingRightHandItem = NewEquipped;
-				bHasPendingRightHand = true;
-			}
-			StartSwap(EquipSlot, SwapTime);
+			PendingSwaps.Add(Pending);
+			UE_LOG(LogMOFramework, Error, TEXT("[MOEquipment] Inventory disappeared during equip rollback; incoming item retained in saved escrow"));
 		}
-		else
-		{
-			// Instant equip
-			SlotRef = NewEquipped;
-			OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
-		}
+		return false;
+	}
+	OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[SlotIndex]);
+	if (Pending.TotalSeconds > 0.0f)
+	{
+		SetComponentTickEnabled(true);
+		OnSwapStarted.Broadcast(EquipSlot);
 	}
 	else
 	{
-		// Non-hand slots are always instant
-		SlotRef = NewEquipped;
-		OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
+		CompleteSwap(EquipSlot);
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Equipping %s to slot %d"),
-		*Entry.ItemDefinitionId.ToString(), SlotIndex);
-
 	return true;
 }
 
 bool UMOEquipmentComponent::UnequipToInventory(EMOEquipmentSlot EquipSlot, UMOInventoryComponent* Inventory)
 {
-	if (!IsValid(Inventory) || EquipSlot == EMOEquipmentSlot::MAX)
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bEquipmentMutationInProgress
+		|| !IsValid(Inventory) || !IsValidEquipmentSlot(EquipSlot) || IsSlotSwapping(EquipSlot))
 	{
 		return false;
 	}
 
 	EnsureSlotsInitialized();
 	const int32 SlotIndex = static_cast<int32>(EquipSlot);
-	FMOEquippedItem& SlotRef = EquippedSlots[SlotIndex];
+	const FMOEquippedItem Item = EquippedSlots[SlotIndex];
 
-	if (!SlotRef.IsValid())
+	if (!Item.IsValid())
 	{
 		return false; // Nothing to unequip
 	}
 
-	// Add back to inventory
-	const FGuid NewGuid = FGuid::NewGuid();
-	if (!Inventory->AddItemByGuidWithDurability(NewGuid, SlotRef.ItemDefinitionId, 1, SlotRef.CurrentDurability))
+	TGuardValue<bool> MutationGuard(bEquipmentMutationInProgress, true);
+	FMOInventoryMutationScope InventoryMutation(Inventory);
+	EquippedSlots[SlotIndex].Clear();
+	if (!MOEquipmentTransactions::ReturnItem(Inventory, Item))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] Failed to add item back to inventory"));
+		EquippedSlots[SlotIndex] = Item;
 		return false;
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Unequipped %s from slot %d"),
-		*SlotRef.ItemDefinitionId.ToString(), SlotIndex);
-
-	// Clear the slot
-	SlotRef.Clear();
-	OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
+	OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[SlotIndex]);
 
 	return true;
 }
 
 void UMOEquipmentComponent::SwapSlots(EMOEquipmentSlot SlotA, EMOEquipmentSlot SlotB)
 {
-	if (SlotA == SlotB || SlotA == EMOEquipmentSlot::MAX || SlotB == EMOEquipmentSlot::MAX)
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bEquipmentMutationInProgress || SlotA == SlotB
+		|| !IsValidEquipmentSlot(SlotA) || !IsValidEquipmentSlot(SlotB) || IsSlotSwapping(SlotA) || IsSlotSwapping(SlotB))
 	{
 		return;
 	}
@@ -293,6 +244,12 @@ void UMOEquipmentComponent::SwapSlots(EMOEquipmentSlot SlotA, EMOEquipmentSlot S
 	EnsureSlotsInitialized();
 	const int32 IndexA = static_cast<int32>(SlotA);
 	const int32 IndexB = static_cast<int32>(SlotB);
+	if ((EquippedSlots[IndexA].IsValid() && !CanEquipToSlot(EquippedSlots[IndexA].ItemDefinitionId, SlotB))
+		|| (EquippedSlots[IndexB].IsValid() && !CanEquipToSlot(EquippedSlots[IndexB].ItemDefinitionId, SlotA)))
+	{
+		return;
+	}
+	TGuardValue<bool> MutationGuard(bEquipmentMutationInProgress, true);
 
 	FMOEquippedItem Temp = EquippedSlots[IndexA];
 	EquippedSlots[IndexA] = EquippedSlots[IndexB];
@@ -302,32 +259,38 @@ void UMOEquipmentComponent::SwapSlots(EMOEquipmentSlot SlotA, EMOEquipmentSlot S
 	OnEquipmentChanged.Broadcast(SlotB, EquippedSlots[IndexB]);
 }
 
+bool UMOEquipmentComponent::ReduceEquippedDurability(EMOEquipmentSlot Slot, int32 Amount, bool& bOutDestroyed)
+{
+	bOutDestroyed = false;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bEquipmentMutationInProgress || Amount <= 0
+		|| !IsValidEquipmentSlot(Slot) || IsSlotSwapping(Slot)) return false;
+	EnsureSlotsInitialized();
+	auto& Item = EquippedSlots[static_cast<int32>(Slot)];
+	if (!Item.IsValid() || Item.CurrentDurability < 0) return false;
+	TGuardValue<bool> Mutation(bEquipmentMutationInProgress, true);
+	Item.CurrentDurability = FMath::Max(0, Item.CurrentDurability - Amount);
+	if (Item.CurrentDurability == 0)
+	{
+		Item.Clear();
+		bOutDestroyed = true;
+		OnEquipmentChanged.Broadcast(Slot, Item);
+	}
+	else OnEquipmentDurabilityChanged.Broadcast(Slot, Item.CurrentDurability);
+	return true;
+}
+
 bool UMOEquipmentComponent::IsSlotSwapping(EMOEquipmentSlot EquipSlot) const
 {
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
-	{
-		return LeftHandSwapTimeRemaining > 0.0f;
-	}
-	if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		return RightHandSwapTimeRemaining > 0.0f;
-	}
-	return false;
+	return IsValidEquipmentSlot(EquipSlot) && PendingSwaps.ContainsByPredicate(
+		[EquipSlot](const FMOEquipmentPendingSwap& P) { return P.Slot == EquipSlot; });
 }
 
 float UMOEquipmentComponent::GetSwapProgress(EMOEquipmentSlot EquipSlot) const
 {
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
-	{
-		if (LeftHandSwapTimeTotal <= 0.0f) return 1.0f;
-		return 1.0f - FMath::Clamp(LeftHandSwapTimeRemaining / LeftHandSwapTimeTotal, 0.0f, 1.0f);
-	}
-	else if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		if (RightHandSwapTimeTotal <= 0.0f) return 1.0f;
-		return 1.0f - FMath::Clamp(RightHandSwapTimeRemaining / RightHandSwapTimeTotal, 0.0f, 1.0f);
-	}
-	return 1.0f;
+	const FMOEquipmentPendingSwap* Pending = PendingSwaps.FindByPredicate(
+		[EquipSlot](const FMOEquipmentPendingSwap& P) { return P.Slot == EquipSlot; });
+	return Pending && Pending->TotalSeconds > 0.0f
+		? 1.0f - FMath::Clamp(Pending->RemainingSeconds / Pending->TotalSeconds, 0.0f, 1.0f) : 1.0f;
 }
 
 // ============================================================================
@@ -336,7 +299,7 @@ float UMOEquipmentComponent::GetSwapProgress(EMOEquipmentSlot EquipSlot) const
 
 FMOEquippedItem UMOEquipmentComponent::GetEquippedItem(EMOEquipmentSlot EquipSlot) const
 {
-	if (EquipSlot == EMOEquipmentSlot::MAX)
+	if (!IsValidEquipmentSlot(EquipSlot))
 	{
 		return FMOEquippedItem();
 	}
@@ -368,6 +331,10 @@ void UMOEquipmentComponent::GetAllEquippedItems(TArray<FMOEquippedItem>& OutItem
 
 bool UMOEquipmentComponent::CanEquipToSlot(FName ItemDefinitionId, EMOEquipmentSlot EquipSlot) const
 {
+	if (!IsValidEquipmentSlot(EquipSlot))
+	{
+		return false;
+	}
 	FMOItemDefinitionRow ItemDef;
 	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 	{
@@ -433,56 +400,30 @@ float UMOEquipmentComponent::GetSwapTimeForItem(FName ItemDefinitionId) const
 	}
 }
 
-void UMOEquipmentComponent::StartSwap(EMOEquipmentSlot EquipSlot, float Duration)
-{
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
-	{
-		LeftHandSwapTimeRemaining = Duration;
-		LeftHandSwapTimeTotal = Duration;
-	}
-	else if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		RightHandSwapTimeRemaining = Duration;
-		RightHandSwapTimeTotal = Duration;
-	}
-	else
-	{
-		return; // Only hand slots have swap delays
-	}
-
-	SetComponentTickEnabled(true);
-	OnSwapStarted.Broadcast(EquipSlot);
-}
-
 void UMOEquipmentComponent::CompleteSwap(EMOEquipmentSlot EquipSlot)
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !IsValidEquipmentSlot(EquipSlot))
+	{
+		return;
+	}
+	const int32 PendingIndex = PendingSwaps.IndexOfByPredicate(
+		[EquipSlot](const FMOEquipmentPendingSwap& P) { return P.Slot == EquipSlot; });
+	if (PendingIndex == INDEX_NONE)
+	{
+		return;
+	}
 	EnsureSlotsInitialized();
-
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
+	const int32 SlotIndex = static_cast<int32>(EquipSlot);
+	if (EquippedSlots[SlotIndex].IsValid())
 	{
-		LeftHandSwapTimeRemaining = 0.0f;
-		if (bHasPendingLeftHand)
-		{
-			EquippedSlots[static_cast<int32>(EMOEquipmentSlot::LeftHand)] = PendingLeftHandItem;
-			bHasPendingLeftHand = false;
-			OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[static_cast<int32>(EMOEquipmentSlot::LeftHand)]);
-		}
+		return; // Preserve both owners if a failed rollback retained an escrow item.
 	}
-	else if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		RightHandSwapTimeRemaining = 0.0f;
-		if (bHasPendingRightHand)
-		{
-			EquippedSlots[static_cast<int32>(EMOEquipmentSlot::RightHand)] = PendingRightHandItem;
-			bHasPendingRightHand = false;
-			OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[static_cast<int32>(EMOEquipmentSlot::RightHand)]);
-		}
-	}
-
+	TGuardValue<bool> MutationGuard(bEquipmentMutationInProgress, true);
+	EquippedSlots[SlotIndex] = PendingSwaps[PendingIndex].Item;
+	PendingSwaps.RemoveAt(PendingIndex);
+	const FMOEquippedItem Equipped = EquippedSlots[SlotIndex];
+	OnEquipmentChanged.Broadcast(EquipSlot, Equipped);
 	OnSwapCompleted.Broadcast(EquipSlot);
-
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Swap completed for slot %d"),
-		static_cast<int32>(EquipSlot));
 }
 
 // ============================================================================
@@ -492,6 +433,7 @@ void UMOEquipmentComponent::CompleteSwap(EMOEquipmentSlot EquipSlot)
 void UMOEquipmentComponent::BuildSaveData(FMOEquipmentSaveData& OutData) const
 {
 	OutData.Slots.Reset();
+	OutData.PendingSwaps = PendingSwaps;
 	for (int32 i = 0; i < EquippedSlots.Num(); ++i)
 	{
 		if (EquippedSlots[i].IsValid())
@@ -506,7 +448,15 @@ void UMOEquipmentComponent::BuildSaveData(FMOEquipmentSaveData& OutData) const
 
 void UMOEquipmentComponent::ApplySaveData(const FMOEquipmentSaveData& InData)
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bEquipmentMutationInProgress)
+	{
+		return;
+	}
+	TGuardValue<bool> MutationGuard(bEquipmentMutationInProgress, true);
 	EnsureSlotsInitialized();
+	PendingSwaps.Reset();
+	SetComponentTickEnabled(false);
+	TSet<FGuid> RestoredItems;
 
 	// Clear all slots first
 	for (FMOEquippedItem& Item : EquippedSlots)
@@ -517,27 +467,81 @@ void UMOEquipmentComponent::ApplySaveData(const FMOEquipmentSaveData& InData)
 	// Apply saved data
 	for (const FMOEquipmentSlotSaveData& SlotData : InData.Slots)
 	{
-		if (SlotData.Slot != EMOEquipmentSlot::MAX)
+		if (IsValidEquipmentSlot(SlotData.Slot) && SlotData.EquippedItem.IsValid()
+			&& !RestoredItems.Contains(SlotData.EquippedItem.ItemGuid))
 		{
 			const int32 SlotIndex = static_cast<int32>(SlotData.Slot);
 			if (SlotIndex < EquippedSlots.Num())
 			{
 				EquippedSlots[SlotIndex] = SlotData.EquippedItem;
-				OnEquipmentChanged.Broadcast(SlotData.Slot, EquippedSlots[SlotIndex]);
+				RestoredItems.Add(SlotData.EquippedItem.ItemGuid);
 			}
 		}
 	}
+	for (const FMOEquipmentPendingSwap& Saved : InData.PendingSwaps)
+	{
+		if (!IsValidEquipmentSlot(Saved.Slot) || !Saved.Item.IsValid() || RestoredItems.Contains(Saved.Item.ItemGuid)
+			|| IsSlotSwapping(Saved.Slot) || !FMath::IsFinite(Saved.TotalSeconds) || !FMath::IsFinite(Saved.RemainingSeconds)
+			|| Saved.TotalSeconds < 0.0f || Saved.RemainingSeconds < 0.0f)
+		{
+			continue;
+		}
+		FMOEquipmentPendingSwap Pending = Saved;
+		Pending.RemainingSeconds = FMath::Min(Pending.RemainingSeconds, Pending.TotalSeconds);
+		PendingSwaps.Add(Pending);
+		RestoredItems.Add(Pending.Item.ItemGuid);
+	}
+	// Broadcast only after the whole state is installed, including pending ownership.
+	for (int32 Index = 0; Index < EquippedSlots.Num(); ++Index)
+	{
+		OnEquipmentChanged.Broadcast(static_cast<EMOEquipmentSlot>(Index), EquippedSlots[Index]);
+	}
+	SetComponentTickEnabled(PendingSwaps.Num() > 0);
 }
 
 // ============================================================================
 // REPLICATION
 // ============================================================================
 
+void UMOEquipmentComponent::OnRep_EquippedSlots(const TArray<FMOEquippedItem>& PreviousSlots)
+{
+	for (int32 Index = 0; Index < FMath::Max(EquippedSlots.Num(), PreviousSlots.Num()) && Index < static_cast<int32>(EMOEquipmentSlot::MAX); ++Index)
+	{
+		const FMOEquippedItem Item = EquippedSlots.IsValidIndex(Index) ? EquippedSlots[Index] : FMOEquippedItem();
+		const FMOEquippedItem Before = PreviousSlots.IsValidIndex(Index) ? PreviousSlots[Index] : FMOEquippedItem();
+		const auto Slot = static_cast<EMOEquipmentSlot>(Index);
+		if (Item.ItemGuid != Before.ItemGuid || Item.ItemDefinitionId != Before.ItemDefinitionId || !(Item.Liquid == Before.Liquid))
+			OnEquipmentChanged.Broadcast(Slot, Item);
+		else if (Item.CurrentDurability != Before.CurrentDurability)
+			OnEquipmentDurabilityChanged.Broadcast(Slot, Item.CurrentDurability);
+	}
+}
+
+void UMOEquipmentComponent::OnRep_PendingSwaps()
+{
+	TSet<EMOEquipmentSlot> Current;
+	for (const FMOEquipmentPendingSwap& Pending : PendingSwaps)
+	{
+		Current.Add(Pending.Slot);
+	}
+	const TSet<EMOEquipmentSlot> Previous = MoveTemp(NotifiedPendingSlots);
+	NotifiedPendingSlots = Current;
+	for (EMOEquipmentSlot Slot : Current)
+	{
+		if (!Previous.Contains(Slot)) OnSwapStarted.Broadcast(Slot);
+	}
+	for (EMOEquipmentSlot Slot : Previous)
+	{
+		if (!Current.Contains(Slot)) OnSwapCompleted.Broadcast(Slot);
+	}
+}
+
 void UMOEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UMOEquipmentComponent, EquippedSlots);
+	DOREPLIFETIME(UMOEquipmentComponent, PendingSwaps);
 }
 
 // ---- IMOInsulationSource (codex review: equipment owns clothing policy) ----

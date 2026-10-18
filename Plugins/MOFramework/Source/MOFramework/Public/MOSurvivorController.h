@@ -116,6 +116,7 @@
 class UMOSurvivorJobQueueComponent;
 class UMOSkillsComponent;
 class UInstancedStaticMeshComponent;
+struct FMOCraftResult;
 
 /**
  * Delegate fired when survivor command state changes.
@@ -374,6 +375,9 @@ private:
 
 	/** Complete the current simple job. */
 	void CompleteSimpleJob(bool bSuccess);
+	/** Shared gather/craft iteration acknowledgement on the owning persisted job entry. */
+	void CompleteSimpleJobIteration(const FGuid& ExpectedJobId);
+	bool bUpdatingSimpleJob = false;
 
 	/** Check if a job type can be executed simply (without BT). */
 	bool CanExecuteSimply(EMOSurvivorJobType JobType) const;
@@ -403,8 +407,12 @@ private:
 	/** Move recipe ingredients storage -> pawn. False if storage lacks them. */
 	bool TransferCraftIngredients();
 
-	/** Move recipe outputs pawn -> storage. */
-	void DepositCraftOutputs();
+	/** Move actual completed outputs plus borrowed vessels together; capacity refusal retains all cargo. */
+	bool DepositCraftOutputs();
+	void ReleaseCraftJob(bool bCancelOwnedCraft, bool bForgetReceipt = true);
+	bool PersistCraftExecution();
+	UFUNCTION()
+	void HandleJobCraftCompleted(const FGuid& EntryId, const FMOCraftResult& Result);
 
 	/** Inventory of a container/station actor (holder interface or component). */
 	class UMOInventoryComponent* GetActorInventory(AActor* Actor) const;
@@ -417,6 +425,11 @@ private:
 
 	/** Recipe the craft job runs. */
 	FName CraftJobRecipeId;
+	TWeakObjectPtr<class UMOCraftingQueueComponent> CraftJobQueue;
+	FGuid CraftQueueEntryId;
+	TArray<FGuid> CraftBorrowedContainers;
+	TMap<FName, int32> CraftCompletedProducts;
+	bool bJobCraftCompleted = false;
 
 	/** Seconds of handling time for the withdraw/deposit legs (one combined
 	 *  gesture for the batch — QoL batching, not an instant transfer). */

@@ -54,13 +54,13 @@ void UMOCraftingQueueWidget::UpdateProgress()
 bool UMOCraftingQueueWidget::IsQueueEmpty() const
 {
 	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	return !Queue || Queue->IsQueueEmpty();
+	return !Queue || (Queue->IsQueueEmpty() && Queue->GetPendingMaterialLotCount() == 0 && Queue->GetUnresolvedLegacyRefundCount() == 0);
 }
 
 int32 UMOCraftingQueueWidget::GetQueueLength() const
 {
 	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	return Queue ? Queue->GetQueueLength() : 0;
+	return Queue ? Queue->GetQueueLength() + (Queue->GetPendingMaterialLotCount() > 0 ? 1 : 0) + (Queue->GetUnresolvedLegacyRefundCount() > 0 ? 1 : 0) : 0;
 }
 
 float UMOCraftingQueueWidget::GetCurrentProgress() const
@@ -141,7 +141,34 @@ void UMOCraftingQueueWidget::BuildDisplayRows_Implementation(TArray<FMOQueueDisp
 	for (int32 i = 0; i < QueueEntries.Num(); ++i)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(QueueEntries[i].RecipeId);
-		OutRows.Add(BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining));
+		FMOQueueDisplayRow Row = BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining);
+		if (i == 0 && !Queue->IsCraftingActive())
+		{
+			Row.State = EMOQueueRowState::Paused;
+			if (Queue->IsWaitingForCraftingContext()) Row.TimeRemainingText = Queue->GetCraftingBlockReason();
+		}
+		OutRows.Add(MoveTemp(Row));
+	}
+	if (Queue->GetPendingMaterialLotCount() > 0)
+	{
+		FMOQueueDisplayRow Row;
+		Row.RowId = FGuid(0xA0D17C02, 0, 0, 1);
+		Row.Title = FText::FromString(TEXT("Materials awaiting delivery"));
+		Row.State = EMOQueueRowState::Paused;
+		Row.bCancellable = false;
+		Row.Progress = 1.0f;
+		Row.TimeRemainingText = FText::FromString(TEXT("Make inventory room or provide a compatible liquid vessel. Materials are saved."));
+		OutRows.Add(MoveTemp(Row));
+	}
+	if (Queue->GetUnresolvedLegacyRefundCount() > 0)
+	{
+		FMOQueueDisplayRow Row;
+		Row.RowId = FGuid(0xA0D17C02, 0, 0, 2);
+		Row.Title = FText::FromString(TEXT("Legacy refund needs recovery"));
+		Row.State = EMOQueueRowState::Paused;
+		Row.bCancellable = false;
+		Row.TimeRemainingText = FText::FromString(TEXT("The old save omitted original material state. Its recovery record is retained."));
+		OutRows.Add(MoveTemp(Row));
 	}
 }
 
@@ -151,7 +178,7 @@ void UMOCraftingQueueWidget::GetHeaderDisplay_Implementation(FMOQueueHeaderDispl
 	// (row 0 shows the per-craft values via the live-progress hook).
 	OutHeader = FMOQueueHeaderDisplay();
 	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	if (!Queue || Queue->IsQueueEmpty())
+	if (!Queue || IsQueueEmpty())
 	{
 		return;
 	}
@@ -169,7 +196,7 @@ void UMOCraftingQueueWidget::GetHeaderDisplay_Implementation(FMOQueueHeaderDispl
 bool UMOCraftingQueueWidget::GetActiveRowLiveProgress_Implementation(float& OutProgress, float& OutRemainingSeconds) const
 {
 	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	if (!Queue || Queue->IsQueueEmpty())
+	if (!Queue || Queue->IsQueueEmpty() || !Queue->IsCraftingActive())
 	{
 		return false;
 	}
@@ -180,9 +207,7 @@ bool UMOCraftingQueueWidget::GetActiveRowLiveProgress_Implementation(float& OutP
 
 void UMOCraftingQueueWidget::ExecuteCancelRow_Implementation(const FGuid& RowId)
 {
-	// Domain-owned cancellation: authority + refund policy live here (the
-	// component rejects non-authority calls). Refund remaining ingredients —
-	// the legacy policy, now expressed at the adapter boundary.
+	// The component transports the owner's intent to the server; refund policy is server-owned.
 	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
 	{
 		Queue->CancelCraft(RowId, /*bRefundIngredients=*/true);

@@ -63,9 +63,11 @@ public:
 	/**
 	 * Start an action of GameSeconds on the game clock (server). Cancels one already running. OnComplete runs on the server when the time is up and the pawn is still
 	 * where it started (within MaxDriftCm) and undisturbed; OnCancelled (optional) if not. MaxDriftCm <= 100 is a stay-put action (the first step ends it); a wider
-	 * one lets the pawn move about inside that radius (tending a fire). Returns false off the server.
+	 * one lets the pawn move about inside that radius (tending a fire). CanContinue is an optional side-effect-free context query,
+	 * checked on every server tick before completion. Returns false off the server or during reentrant replacement.
 	 */
-	bool Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled = nullptr, float MaxDriftCm = 75.0f);
+	bool Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled = nullptr, float MaxDriftCm = 75.0f,
+		TFunction<bool()> CanContinue = nullptr);
 
 	/** Stop the running action without completing it (server). */
 	void Cancel(const TCHAR* Why);
@@ -105,6 +107,9 @@ private:
 
 	TFunction<void()> PendingComplete;
 	TFunction<void()> PendingCancelled;
+	/** Optional server query, checked before completion on every action tick (target reach, supplies, capability). */
+	TFunction<bool()> PendingCanContinue;
+	bool bStarting = false;
 	FVector StartLocation = FVector::ZeroVector;
 	float MaxDrift = 75.0f;
 	bool bListening = false;

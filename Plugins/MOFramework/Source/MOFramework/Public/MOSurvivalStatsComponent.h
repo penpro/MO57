@@ -36,6 +36,8 @@
  *
  * [2024-02] NUTRITION FROM ITEMS: ConsumeItem() gets nutrition from
  *   FMOItemNutrition in item definition. Requires valid inventory GUID.
+ * [2026-10] PERSISTENCE: Pawn records save current meters/nutrition with an
+ *   explicit valid/version marker. Restore never changes class-authored rates.
  *
  * =============================================================================
  * RELATED FILES: MOVitalsComponent.h, MOMetabolismComponent.h, MOItemDefinitionRow.h
@@ -127,6 +129,17 @@ struct MOFRAMEWORK_API FMONutritionStatus
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Survival|Nutrition|Minerals")
 	float Sodium = 50.0f;
+};
+
+/** Runtime meters only. Class-authored limits and simulation rates remain configuration, not save payload. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOSurvivalSaveData
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save") bool bHasValidData = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save") int32 Version = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save") TMap<FName, float> CurrentValues;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save") FMONutritionStatus Nutrition;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnSurvivalStatChanged, FName, StatName, float, OldValue, float, NewValue);
@@ -231,6 +244,10 @@ public:
 	/** Run every stat's regen / decay over GameSeconds of world-clock time. The timer calls it with the clock-scaled tick; tests and
 	 *  cheats call it to fast-forward. */
 	void AdvanceStats(float GameSeconds);
+
+	void BuildSaveData(FMOSurvivalSaveData& OutData) const;
+	/** Missing legacy data, unsupported versions or corrupt payloads leave all live state unchanged. */
+	bool ApplySaveDataAuthority(const FMOSurvivalSaveData& InData);
 
 protected:
 	virtual void BeginPlay() override;

@@ -114,6 +114,7 @@ void AMOCraftingStationActor::InitializeBuilding(FName InRecipeId)
 	{
 		// Get station type directly from recipe
 		StationType = Recipe->ProvidedStationType;
+		AchievableProcessTemperatureCelsius = Recipe->ProvidedProcessTemperatureCelsius;
 
 		// Fuel settings
 		bRequiresFuel = Recipe->bRequiresFuel;
@@ -625,6 +626,7 @@ void AMOCraftingStationActor::ApplySaveData(const FMOPersistedBuildingRecord& In
 	if (Recipe)
 	{
 		StationType = Recipe->ProvidedStationType;
+		AchievableProcessTemperatureCelsius = Recipe->ProvidedProcessTemperatureCelsius;
 		bRequiresFuel = Recipe->bRequiresFuel;
 		MaxFuel = Recipe->MaxFuel;
 		FuelConsumptionRate = Recipe->FuelConsumptionRate;

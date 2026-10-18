@@ -1,4 +1,10 @@
 #include "MOCraftingSubsystem.h"
+#include "MOCraftingQueueComponent.h"
+#include "MOCraftingStationActor.h"
+#include "MOIdentifiableInterface.h"
+#include "MOViewpointUtils.h"
+#include "GameFramework/Pawn.h"
+
 #include "MOQuestSubsystem.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
@@ -191,6 +197,57 @@ void UMOCraftingSubsystem::GetCraftableRecipes(
 	}
 }
 
+FMOCraftingExecutionContext UMOCraftingSubsystem::ResolveExecutionContext(FName RecipeId, AActor* Crafter, AActor* StationActor) const
+{
+	FMOCraftingExecutionContext Context;
+	auto Refuse = [&Context](EMOCraftingContextFailure Failure, const TCHAR* Reason)
+	{
+		Context.Failure = Failure;
+		Context.FailureReason = FText::FromString(Reason);
+		return Context;
+	};
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe || Recipe->bIsBuilding) return Refuse(EMOCraftingContextFailure::InvalidRecipe, TEXT("This is not a crafting recipe."));
+	if (Recipe->bIsHarvestRecipe) return Refuse(EMOCraftingContextFailure::HarvestActionRequired, TEXT("Gathering requires a resource target and a harvest action."));
+	if (!FMath::IsFinite(Recipe->CraftTime) || Recipe->CraftTime <= 0.0f) return Refuse(EMOCraftingContextFailure::InvalidDuration, TEXT("Crafting requires a positive action duration."));
+	if (!IsValid(Crafter) || !Crafter->GetWorld()) return Refuse(EMOCraftingContextFailure::InvalidCrafter, TEXT("No valid crafter."));
+	if (Recipe->RequiredStation == EMOCraftingStation::None && Recipe->MinimumProcessTemperatureCelsius <= 0.0f) return Context;
+	AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(StationActor);
+	if (!IsValid(Station) || Station->GetWorld() != Crafter->GetWorld()) return Refuse(EMOCraftingContextFailure::MissingStation, TEXT("A real crafting station is required."));
+	Context.StationType = Station->GetStationType();
+	Context.StationGuid = IMOIdentifiableInterface::Execute_GetPersistentGuid(Station);
+	Context.AchievableTemperatureCelsius = Station->GetAchievableProcessTemperatureCelsius();
+	if (!Context.StationGuid.IsValid()) return Refuse(EMOCraftingContextFailure::MissingStation, TEXT("The station has no persistent identity."));
+	if (Recipe->RequiredStation != EMOCraftingStation::None && Context.StationType != Recipe->RequiredStation) return Refuse(EMOCraftingContextFailure::WrongStation, TEXT("Wrong crafting station."));
+	if (!Station->IsComplete()) return Refuse(EMOCraftingContextFailure::IncompleteStation, TEXT("Finish building this station first."));
+	if (FVector::DistSquared(Crafter->GetActorLocation(), Station->GetActorLocation()) > FMath::Square(400.0f)) return Refuse(EMOCraftingContextFailure::OutOfRange, TEXT("Return to the crafting station."));
+	FVector View = Crafter->GetActorLocation();
+	FRotator Rotation;
+	if (APawn* Pawn = Cast<APawn>(Crafter)) UMOViewpointUtils::ResolveViewpointForPawn(Pawn, View, Rotation);
+	UMOViewpointUtils::FLineOfSightOptions Sight;
+	Sight.IgnoredActor = Crafter;
+	if (!UMOViewpointUtils::HasLineOfSight(Crafter->GetWorld(), View, Station, Sight)) return Refuse(EMOCraftingContextFailure::Obstructed, TEXT("The crafting station is obstructed."));
+	if (!Station->IsStationActive()) return Refuse(EMOCraftingContextFailure::InactiveStation, TEXT("The crafting station is inactive or has no fuel."));
+	if (!FMath::IsFinite(Context.AchievableTemperatureCelsius) || Context.AchievableTemperatureCelsius < Recipe->MinimumProcessTemperatureCelsius)
+		return Refuse(EMOCraftingContextFailure::InsufficientTemperature, TEXT("The station cannot reach this recipe's required temperature."));
+	return Context;
+}
+
+FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipeAtStation(FName RecipeId, UMOKnowledgeComponent* Knowledge,
+	UMOSkillsComponent* Skills, UMOInventoryComponent* Inventory, AActor* Station) const
+{
+	const auto Context = ResolveExecutionContext(RecipeId, Inventory ? Inventory->GetOwner() : nullptr, Station);
+	if (!Context.IsUsable())
+	{
+		FMOCraftingValidation Result;
+		Result.bCorrectStation = false;
+		Result.bHasFuel = Context.Failure != EMOCraftingContextFailure::InactiveStation;
+		Result.FailureReason = Context.FailureReason;
+		return Result;
+	}
+	return CanCraftRecipe(RecipeId, Knowledge, Skills, Inventory, Context.StationType);
+}
+
 FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	FName RecipeId,
 	UMOKnowledgeComponent* KnowledgeComponent,
@@ -205,6 +262,12 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	if (!Recipe)
 	{
 		Result.FailureReason = FText::FromString(TEXT("Recipe not found."));
+		return Result;
+	}
+
+	if (Recipe->bIsHarvestRecipe || Recipe->bIsBuilding)
+	{
+		Result.FailureReason = FText::FromString(TEXT("This recipe requires its own world action, not the crafting queue."));
 		return Result;
 	}
 
@@ -313,144 +376,72 @@ void UMOCraftingSubsystem::AddOutput(UMOInventoryComponent* Inventory, const FMO
 	}
 }
 
-FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
-	FName RecipeId,
-	UMOInventoryComponent* InventoryComponent,
-	UMOSkillsComponent* SkillsComponent
-)
+FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(FName RecipeId, UMOInventoryComponent* InventoryComponent, UMOSkillsComponent* SkillsComponent)
 {
+	// Legacy entry point submits timed work. It must never be an instant bypass around the authoritative queue.
 	FMOCraftResult Result;
-
-	if (!IsValid(InventoryComponent))
+	AActor* Owner = IsValid(InventoryComponent) ? InventoryComponent->GetOwner() : nullptr;
+	if (Owner)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ExecuteCraft: Invalid inventory component"));
-		return Result;
-	}
-
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ExecuteCraft: Recipe '%s' not found"), *RecipeId.ToString());
-		return Result;
-	}
-
-	// Verify we have all ingredients (UMOInventoryComponent::CountIngredient: items, or a liquid measure from containers)
-	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
-	{
-		const int32 Available = InventoryComponent->CountIngredient(Ingredient.ItemDefinitionId);
-		if (Available < Ingredient.Quantity)
+		if (UMOCraftingQueueComponent* Queue = Owner->FindComponentByClass<UMOCraftingQueueComponent>())
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ExecuteCraft: Not enough '%s' (have %d, need %d)"),
-				*Ingredient.ItemDefinitionId.ToString(), Available, Ingredient.Quantity);
-			return Result;
+			Result.bSuccess = Queue->EnqueueCraft(RecipeId, 1);
 		}
 	}
-
-	// Consume ingredients
-	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
-	{
-		InventoryComponent->ConsumeIngredient(Ingredient.ItemDefinitionId, Ingredient.Quantity);
-	}
-
-	// Produce outputs
-	for (const FMORecipeOutput& Output : Recipe->Outputs)
-	{
-		// Check chance
-		if (Output.Chance < 1.0f)
-		{
-			const float Roll = FMath::FRand();
-			if (Roll > Output.Chance)
-			{
-				continue;
-			}
-		}
-
-		AddOutput(InventoryComponent, Output, Result);
-	}
-
-	// Grant skill XP
-	if (IsValid(SkillsComponent) && !Recipe->RequiredSkillId.IsNone() && Recipe->SkillXPReward > 0.0f)
-	{
-		SkillsComponent->AddExperience(Recipe->RequiredSkillId, Recipe->SkillXPReward);
-		Result.XPGranted.Add(Recipe->RequiredSkillId, Recipe->SkillXPReward);
-	}
-
-	// Degrade tools
-	DegradeToolsForRecipe(RecipeId, InventoryComponent);
-
-	Result.bSuccess = true;
-
-	OnCraftCompleted.Broadcast(RecipeId, Result);
-	// Quests: the crafter (the inventory's owner) gets the ItemCraft credit, on their own machine (UMOQuestSubsystem::ReportForActor).
-	for (const TPair<FName, int32>& Produced : Result.ProducedItems)
-	{
-		UMOQuestSubsystem::ReportForActor(InventoryComponent ? InventoryComponent->GetOwner() : nullptr, EMOObjectiveType::ItemCraft, Produced.Key, Produced.Value);
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Crafted '%s' successfully"), *RecipeId.ToString());
-
 	return Result;
 }
 
 FMOCraftResult UMOCraftingSubsystem::ProduceOutputsOnly(
-	FName RecipeId,
-	UMOInventoryComponent* InventoryComponent,
-	UMOSkillsComponent* SkillsComponent
-)
+	FName RecipeId, UMOInventoryComponent* InventoryComponent, UMOSkillsComponent* SkillsComponent, AActor* StationActor)
 {
+	// Retained Blueprint signature: an unbacked output request must go through timed reservation.
 	FMOCraftResult Result;
-
-	if (!IsValid(InventoryComponent))
+	AActor* Owner = IsValid(InventoryComponent) ? InventoryComponent->GetOwner() : nullptr;
+	if (Owner)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Invalid inventory component"));
-		return Result;
+		if (auto* Queue = Owner->FindComponentByClass<UMOCraftingQueueComponent>())
+			Result.bSuccess = Queue->EnqueueCraftAtStation(RecipeId, 1, StationActor);
 	}
-
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Recipe '%s' not found"), *RecipeId.ToString());
-		return Result;
-	}
-
-	// Produce outputs (no ingredient consumption)
-	for (const FMORecipeOutput& Output : Recipe->Outputs)
-	{
-		// Check chance
-		if (Output.Chance < 1.0f)
-		{
-			const float Roll = FMath::FRand();
-			if (Roll > Output.Chance)
-			{
-				continue;
-			}
-		}
-
-		AddOutput(InventoryComponent, Output, Result);
-	}
-
-	// Grant skill XP
-	if (IsValid(SkillsComponent) && !Recipe->RequiredSkillId.IsNone() && Recipe->SkillXPReward > 0.0f)
-	{
-		SkillsComponent->AddExperience(Recipe->RequiredSkillId, Recipe->SkillXPReward);
-		Result.XPGranted.Add(Recipe->RequiredSkillId, Recipe->SkillXPReward);
-	}
-
-	// Degrade tools
-	DegradeToolsForRecipe(RecipeId, InventoryComponent);
-
-	Result.bSuccess = true;
-
-	OnCraftCompleted.Broadcast(RecipeId, Result);
-	// Quests: the crafter (the inventory's owner) gets the ItemCraft credit, on their own machine (UMOQuestSubsystem::ReportForActor).
-	for (const TPair<FName, int32>& Produced : Result.ProducedItems)
-	{
-		UMOQuestSubsystem::ReportForActor(InventoryComponent ? InventoryComponent->GetOwner() : nullptr, EMOObjectiveType::ItemCraft, Produced.Key, Produced.Value);
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Produced outputs for '%s' successfully (ingredients pre-consumed)"), *RecipeId.ToString());
-
 	return Result;
+}
+
+bool UMOCraftingSubsystem::PrepareCraftOutputs(FName RecipeId, FMOIngredientReservation& Outputs, FMOCraftResult& Result) const
+{
+	const auto* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe || Recipe->bIsHarvestRecipe || Recipe->bIsBuilding) return false;
+	TMap<FName, int32> Quantities;
+	for (const auto& Output : Recipe->Outputs)
+	{
+		FMOItemDefinitionRow Item;
+		if (Output.ItemDefinitionId.IsNone() || Output.Quantity <= 0 || !FMath::IsFinite(Output.Chance)
+			|| Output.Chance < 0 || Output.Chance > 1 || !UMOItemDatabaseSettings::GetItemDefinition(Output.ItemDefinitionId, Item)) return false;
+		if (Output.Chance < 1.0f && FMath::FRand() >= Output.Chance) continue;
+		const int64 Total = int64(Quantities.FindRef(Output.ItemDefinitionId)) + Output.Quantity;
+		if (Total > MAX_int32) return false;
+		Quantities.Add(Output.ItemDefinitionId, int32(Total));
+	}
+	if (!MOIngredientPlans::CreateProducts(Quantities, Outputs, UMOItemDatabaseSettings::GetItemDefinition).IsComplete()) return false;
+	Result.ProducedItems = MoveTemp(Quantities);
+	return true;
+}
+
+void UMOCraftingSubsystem::FinalizeReservedCraft(FName RecipeId, UMOInventoryComponent* Inventory, UMOSkillsComponent* Skills, FMOCraftResult& Result)
+{
+	const auto* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe || !Inventory || !Inventory->GetOwner() || !Inventory->GetOwner()->HasAuthority()) return;
+	// Snapshot rewards before tool/XP delegates can change recipe caches.
+	const FName SkillId = Recipe->RequiredSkillId;
+	const float XP = Recipe->SkillXPReward;
+	DegradeToolsForRecipe(RecipeId, Inventory);
+	if (IsValid(Skills) && !SkillId.IsNone() && FMath::IsFinite(XP) && XP > 0)
+	{
+		Skills->AddExperience(SkillId, XP);
+		Result.XPGranted.Add(SkillId, XP);
+	}
+	Result.bSuccess = true;
+	OnCraftCompleted.Broadcast(RecipeId, Result);
+	for (const auto& Produced : Result.ProducedItems)
+		UMOQuestSubsystem::ReportForActor(Inventory->GetOwner(), EMOObjectiveType::ItemCraft, Produced.Key, Produced.Value);
 }
 
 float UMOCraftingSubsystem::GetRecipeCraftTime(FName RecipeId) const

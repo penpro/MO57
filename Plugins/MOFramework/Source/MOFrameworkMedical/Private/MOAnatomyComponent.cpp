@@ -272,67 +272,61 @@ bool UMOAnatomyComponent::HealWound(const FGuid& WoundId, float HealAmount)
 
 bool UMOAnatomyComponent::ApplyTreatment(const FGuid& WoundId, FName TreatmentId, int32 MedicSkillLevel, bool bIsSelfTreatment)
 {
-	if (GetOwnerRole() != ROLE_Authority)
-	{
-		return false;
-	}
-
-	FMOWound* Wound = Wounds.FindWoundById(WoundId);
-	if (!Wound)
-	{
-		return false;
-	}
-
-	// Get treatment definition from DataTable via MOMedicalSubsystem
 	FMOMedicalTreatmentRow TreatmentDef;
-	bool bHasDefinition = false;
-
-	if (UWorld* World = GetWorld())
-	{
-		if (UGameInstance* GameInstance = World->GetGameInstance())
-		{
-			if (UMOMedicalSubsystem* MedicalSubsystem = GameInstance->GetSubsystem<UMOMedicalSubsystem>())
-			{
-				bHasDefinition = MedicalSubsystem->GetTreatmentDefinition(TreatmentId, TreatmentDef);
-			}
-		}
-	}
-
-	// Use DataTable values if available, otherwise use defaults
-	float BleedReduction = bHasDefinition ? TreatmentDef.BleedReduction : 0.5f;
-	float InfectionReduction = bHasDefinition ? TreatmentDef.InfectionReduction : 0.3f;
-	float SelfTreatmentPenalty = bHasDefinition ? TreatmentDef.SelfTreatmentPenalty : 0.3f;
-	float QualitySkillScaling = bHasDefinition ? TreatmentDef.QualitySkillScaling : 0.5f;
-	int32 MinimumSkillLevel = bHasDefinition ? TreatmentDef.MinimumSkillLevel : 1;
-
-	// Check minimum skill requirement
-	if (MedicSkillLevel < MinimumSkillLevel)
+	if (ValidateTreatment(WoundId, TreatmentId, MedicSkillLevel, bIsSelfTreatment, TreatmentDef) != EMOWoundTreatmentFailure::None)
 	{
 		return false;
 	}
-
-	// Calculate quality based on skill and self-treatment
-	float Quality = FMath::Clamp(static_cast<float>(MedicSkillLevel) / 100.0f, 0.1f, 1.0f);
-	Quality += (MedicSkillLevel - MinimumSkillLevel) * QualitySkillScaling * 0.01f;
-
-	if (bIsSelfTreatment)
-	{
-		// Check if this body part can be self-treated
-		if (bHasDefinition && TreatmentDef.UnreachableForSelf.Contains(Wound->BodyPart))
-		{
-			return false;
-		}
-		Quality *= (1.0f - SelfTreatmentPenalty);
-	}
-
-	Quality = FMath::Clamp(Quality, 0.1f, 1.5f);
-
-	// Apply treatment effects
-	Wound->BleedRate *= (1.0f - (BleedReduction * Quality));
-	Wound->InfectionRisk *= (1.0f - (InfectionReduction * Quality));
-
-	Wounds.MarkItemDirty(*Wound);
+	ApplyResolvedTreatment(WoundId, TreatmentDef, MedicSkillLevel, bIsSelfTreatment);
 	return true;
+}
+
+EMOWoundTreatmentFailure UMOAnatomyComponent::ValidateTreatment(const FGuid& WoundId, FName TreatmentId, int32 MedicSkillLevel,
+	bool bIsSelfTreatment, FMOMedicalTreatmentRow& OutDefinition) const
+{
+	if (!GetOwner() || GetOwnerRole() != ROLE_Authority) return EMOWoundTreatmentFailure::NotAuthority;
+	const FMOWound* Wound = Wounds.FindWoundById(WoundId);
+	if (!Wound) return EMOWoundTreatmentFailure::MissingWound;
+	const UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	const UMOMedicalSubsystem* Medical = GI ? GI->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	if (TreatmentId.IsNone() || !Medical || !Medical->GetTreatmentDefinition(TreatmentId, OutDefinition))
+	{
+		return EMOWoundTreatmentFailure::UnknownTreatment;
+	}
+	return ValidateTreatmentDefinition(*Wound, OutDefinition, MedicSkillLevel, bIsSelfTreatment);
+}
+
+EMOWoundTreatmentFailure UMOAnatomyComponent::ValidateTreatmentDefinition(const FMOWound& Wound, const FMOMedicalTreatmentRow& Def,
+	int32 MedicSkillLevel, bool bIsSelfTreatment)
+{
+	auto Fraction = [](float Value) { return FMath::IsFinite(Value) && Value >= 0 && Value <= 1; };
+	if (Def.TreatmentId.IsNone() || !FMath::IsFinite(Def.TreatmentDuration) || Def.TreatmentDuration <= 0 ||
+		Def.MinimumSkillLevel < 0 || !Fraction(Def.BleedReduction) || !Fraction(Def.InfectionReduction) ||
+		!Fraction(Def.SelfTreatmentPenalty) || !Fraction(Def.QualitySkillScaling) ||
+		!FMath::IsFinite(Def.SkillXPGrant) || Def.SkillXPGrant < 0 || (Def.RequiredSkillId.IsNone() && Def.MinimumSkillLevel > 0))
+	{
+		return EMOWoundTreatmentFailure::InvalidDefinition;
+	}
+	if (!FMath::IsFinite(Wound.BleedRate) || Wound.BleedRate < 0 || !FMath::IsFinite(Wound.InfectionRisk) || Wound.InfectionRisk < 0 ||
+		!FMath::IsFinite(Wound.HealingProgress) || Wound.HealingProgress >= 100) return EMOWoundTreatmentFailure::InvalidWound;
+	if (!Def.TreatsWoundTypes.Contains(Wound.WoundType)) return EMOWoundTreatmentFailure::WrongWoundType;
+	if (MedicSkillLevel < Def.MinimumSkillLevel) return EMOWoundTreatmentFailure::InsufficientSkill;
+	if (bIsSelfTreatment && Def.UnreachableForSelf.Contains(Wound.BodyPart)) return EMOWoundTreatmentFailure::UnreachableForSelf;
+	return EMOWoundTreatmentFailure::None;
+}
+
+void UMOAnatomyComponent::ApplyResolvedTreatment(const FGuid& WoundId, const FMOMedicalTreatmentRow& TreatmentDef, int32 MedicSkillLevel, bool bIsSelfTreatment)
+{
+	FMOWound* Wound = Wounds.FindWoundById(WoundId);
+	check(Wound);
+	// Preserve the established quality model. Clamp reductions so high skill cannot create negative bleeding/infection.
+	float Quality = FMath::Clamp(static_cast<float>(MedicSkillLevel) / 100.0f, 0.1f, 1.0f);
+	Quality += (MedicSkillLevel - TreatmentDef.MinimumSkillLevel) * TreatmentDef.QualitySkillScaling * 0.01f;
+	if (bIsSelfTreatment) Quality *= (1.0f - TreatmentDef.SelfTreatmentPenalty);
+	Quality = FMath::Clamp(Quality, 0.1f, 1.5f);
+	Wound->BleedRate *= 1.0f - FMath::Clamp(TreatmentDef.BleedReduction * Quality, 0.0f, 1.0f);
+	Wound->InfectionRisk *= 1.0f - FMath::Clamp(TreatmentDef.InfectionReduction * Quality, 0.0f, 1.0f);
+	Wounds.MarkItemDirty(*Wound);
 }
 
 bool UMOAnatomyComponent::ApplyBandage(const FGuid& WoundId, float Quality)

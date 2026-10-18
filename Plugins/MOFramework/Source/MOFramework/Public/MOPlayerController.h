@@ -683,6 +683,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerWorldAction(AActor* Target, FName ActionId);
 
+	/** Wound treatment request. The owning pawn supplies skill/materials; the server derives duration and self-treatment. */
+	UFUNCTION(Server, Reliable)
+	void ServerTreatWound(AActor* Patient, FGuid WoundId, FName TreatmentId);
+
 	/** Gather the clump of ground cover of kind EntryIndex (UMOCoverForageSettings) nearest Location (UMOForagingSubsystem::BeginGatherCover: the server
 	 *  finds it itself, checks reach and tools, times it). EntryIndex INDEX_NONE = whatever is nearest. */
 	UFUNCTION(Server, Reliable)
@@ -729,11 +733,10 @@ protected:
 	 * POLICY: MO57 is pure real-time. SetPause is always refused and a
 	 * warning is logged. See Docs/PAUSE_POLICY.md for the rationale.
 	 *
-	 * Override at PlayerController because every pause path in UE
-	 * (UGameplayStatics::SetGamePaused, AGameMode::SetPause, BP nodes,
-	 * console "pause" command) ultimately calls APlayerController::SetPause
-	 * — this is the single chokepoint. Returning false means the world
-	 * never enters paused state, regardless of caller.
+	 * PlayerController paths (UGameplayStatics::SetGamePaused, its Blueprint
+	 * node and the console "pause" command) reach this override and refuse.
+	 * A direct AGameModeBase::SetPause call bypasses the controller; MO57
+	 * must never call it. See the policy's Enforcement section for that boundary.
 	 */
 	virtual bool SetPause(bool bPause, FCanUnpause CanUnpauseDelegate = FCanUnpause()) override;
 

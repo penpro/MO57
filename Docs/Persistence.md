@@ -22,8 +22,15 @@
   service that needs saving gets an adapter in the upper module), `Colony`, `Designation` (pri 80), `Quest`, `ResourceDepletion`,
   `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`.
 - Pawns: the persistence subsystem captures each pawn's components through the shared `ApplyPawnComponentState` on BOTH load paths
-  (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters were NOT saved
-  (Deep Dive #6; Codex batch D persists them, uncommitted 2026-10-17).
+  (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters now save in a
+  valid/versioned snapshot (six values plus nutrition), through the same restore path, without changing rates or offline policy.
+- Equipment snapshots own in-flight hand swaps (original item GUID/wear/liquid state and remaining time); the incoming item does not
+  also live in inventory or an occupied slot. Both hands can resume independently without duplicating the returned item.
+- Craft queue saves retain exact reserved lots, per-repeat requirements, bound station GUID, pending products/refunds and opt-in native
+  completion receipts. An offline completion may precede survivor job/controller restoration; its receipt survives that ordering.
+  Survivor job entries save their craft leg/handling time, owned entry ID, borrowed vessel IDs, actual products and repeat count.
+  Delivery installs a saved pending-acknowledgement phase before inventory callbacks; acknowledgement clears it with the count increment.
+  Full destination inventories retain cargo, and unavailable actor GUIDs wait for hydration. Missing old provenance is not reconstructed.
 - Component pattern: `BuildSaveData(FMO...SaveData&) const` (any caller) / `ApplySaveDataAuthority(const FMO...SaveData&)` (server only).
 - **One save per world (Wes, F24, 2026-10-17):** a world's identity is its one slot: a new game's `World_<time>`
   (`ResetForNewWorld(PendingNewGameSlot)`), the slot a loaded world came from, or `AutoSave_<map>_<time>` when a world started without

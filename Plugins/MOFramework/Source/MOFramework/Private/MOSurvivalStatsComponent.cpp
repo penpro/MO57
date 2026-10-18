@@ -9,6 +9,12 @@
 #include "MOFramework.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "UObject/UnrealType.h"
+
+namespace MOSurvivalPersistence
+{
+	const FName StatNames[] = {TEXT("Health"), TEXT("Stamina"), TEXT("Hunger"), TEXT("Thirst"), TEXT("Temperature"), TEXT("Energy")};
+}
 
 UMOSurvivalStatsComponent::UMOSurvivalStatsComponent()
 {
@@ -287,6 +293,46 @@ bool UMOSurvivalStatsComponent::IsStatCritical(FName StatName) const
 {
 	const FMOSurvivalStat* Stat = GetStatByName(StatName);
 	return Stat ? Stat->IsCritical(CriticalThreshold) : true;
+}
+
+void UMOSurvivalStatsComponent::BuildSaveData(FMOSurvivalSaveData& OutData) const
+{
+	OutData = FMOSurvivalSaveData();
+	for (const auto& Name : MOSurvivalPersistence::StatNames) OutData.CurrentValues.Add(Name, GetStatCurrent(Name));
+	OutData.Nutrition = NutritionStatus;
+	OutData.bHasValidData = true;
+}
+
+bool UMOSurvivalStatsComponent::ApplySaveDataAuthority(const FMOSurvivalSaveData& InData)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !InData.bHasValidData || InData.Version != 1) return false;
+	struct FChange { FName Name; float Before; float After; };
+	TArray<FChange> Changes;
+	for (const auto& Name : MOSurvivalPersistence::StatNames)
+	{
+		const auto* Value = InData.CurrentValues.Find(Name);
+		const auto* Stat = GetStatByName(Name);
+		if (!Value || !FMath::IsFinite(*Value) || *Value < 0 || !FMath::IsFinite(Stat->Max) || Stat->Max < 0)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvival] Invalid saved meter %s; no survival state restored"), *Name.ToString());
+			return false;
+		}
+		Changes.Add({Name, Stat->Current, FMath::Min(*Value, Stat->Max)});
+	}
+	for (TFieldIterator<FFloatProperty> Field(FMONutritionStatus::StaticStruct()); Field; ++Field)
+	{
+		if (!FMath::IsFinite(Field->GetPropertyValue_InContainer(&InData.Nutrition)))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvival] Invalid saved nutrition; no survival state restored"));
+			return false;
+		}
+	}
+	// Install the whole snapshot before a UI/save observer sees the first changed meter.
+	for (const auto& Change : Changes) GetStatByName(Change.Name)->Current = Change.After;
+	NutritionStatus = InData.Nutrition;
+	for (const auto& Change : Changes)
+		if (!FMath::IsNearlyEqual(Change.Before, Change.After)) OnStatChanged.Broadcast(Change.Name, Change.Before, Change.After);
+	return true;
 }
 
 void UMOSurvivalStatsComponent::TickStats()

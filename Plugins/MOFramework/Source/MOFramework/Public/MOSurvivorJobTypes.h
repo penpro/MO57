@@ -128,6 +128,20 @@ enum class EMOSurvivorJobState : uint8
 	Cancelled		// Job was cancelled
 };
 
+/** Pawn-owned execution checkpoint. Phase follows the craft executor's 10-16 legs; zero is a fresh iteration.
+ * No elapsed travel/offline handling is credited: movement resumes from the pawn's real position. */
+USTRUCT()
+struct MOFRAMEWORK_API FMOSurvivorCraftExecution
+{
+	GENERATED_BODY()
+	UPROPERTY() uint8 Phase = 0;
+	UPROPERTY() float HandlingSeconds = 0;
+	UPROPERTY() FGuid QueueEntryId;
+	UPROPERTY() TArray<FGuid> BorrowedContainers;
+	UPROPERTY() TMap<FName, int32> CompletedProducts;
+	UPROPERTY() bool bCraftCompleted = false;
+};
+
 /**
  * A single entry in a survivor's job queue.
  * Uses FastArraySerializerItem for efficient network replication.
@@ -181,6 +195,9 @@ struct MOFRAMEWORK_API FMOSurvivorJobEntry : public FFastArraySerializerItem
 	/** Recipe to craft for CraftAtStation jobs. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
 	FName CraftRecipeId;
+
+	UPROPERTY()
+	FMOSurvivorCraftExecution CraftExecution;
 
 	/** Storage actor (communal container) for ingredient withdraw / output
 	 *  deposit. Not replicated - resolved via StorageActorGuid if needed.

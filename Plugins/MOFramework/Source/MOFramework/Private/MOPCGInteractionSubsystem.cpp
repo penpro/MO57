@@ -242,6 +242,7 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		return false;
 	}
 
+	FMOInventoryMutationScope InventoryMutation(Inventory);
 	// Remove instance using helper (handles KeepOnHarvest check automatically)
 	if (!FMOHISMHarvestHelper::RemoveInstance(HISMComponent, InstanceIndex, true))
 	{
@@ -253,7 +254,9 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 
 	// Add item to inventory (we already verified space exists)
 	const FGuid NewItemGuid = FGuid::NewGuid();
-	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
+	const FMOInventoryAddResult Added = Inventory->TryAddItem(NewItemGuid, ItemId, Quantity);
+	const bool bAdded = Added.IsComplete();
+	if (!bAdded) return false;
 
 	OutItemId = ItemId;
 
@@ -354,6 +357,7 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		return false;
 	}
 
+	FMOInventoryMutationScope InventoryMutation(Inventory);
 	// Remove instance using helper (handles KeepOnHarvest check automatically)
 	if (!FMOHISMHarvestHelper::RemoveInstance(ISMComponent, InstanceIndex, true))
 	{
@@ -365,7 +369,9 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 
 	// Add item to inventory (we already verified space exists)
 	const FGuid NewItemGuid = FGuid::NewGuid();
-	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
+	const FMOInventoryAddResult Added = Inventory->TryAddItem(NewItemGuid, ItemId, Quantity);
+	const bool bAdded = Added.IsComplete();
+	if (!bAdded) return false;
 
 	MOHARVEST_LOG(this, "PCG",
 		"HarvestISMInstance OK: removed instance=%d ItemId='%s' Quantity=%d AddItemByGuid=%s Inventory.Entries=%d",

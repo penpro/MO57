@@ -106,6 +106,8 @@ void AMOSurvivorController::OnPossess(APawn* InPawn)
 			SetupBlackboardForSurvivor();
 		}
 	}
+	// A restored pawn may receive its AI controller after its job snapshot was installed.
+	HandleJobQueueChanged();
 }
 
 void AMOSurvivorController::OnUnPossess()
@@ -116,6 +118,13 @@ void AMOSurvivorController::OnUnPossess()
 		JobQueue->OnQueueChanged.RemoveDynamic(this, &AMOSurvivorController::HandleJobQueueChanged);
 	}
 
+	// Execution belongs to the pawn. Controller replacement/possession must not refund its paid craft
+	// or discard the haul manifest; a new executor rebinds to the saved leg and completion receipt.
+	if (CurrentJob.JobType == EMOSurvivorJobType::CraftAtStation)
+	{
+		ReleaseCraftJob(false, false);
+		SimpleJobState = 0;
+	}
 	// Clear state
 	ClearAllCommands();
 	CachedJobQueue.Reset();
@@ -233,6 +242,7 @@ void AMOSurvivorController::GoToHome()
 
 void AMOSurvivorController::ClearAllCommands()
 {
+	ReleaseCraftJob(true);
 	bIsFollowing = false;
 	FollowTarget.Reset();
 	bShouldStay = false;
@@ -373,6 +383,7 @@ void AMOSurvivorController::AbortCurrentJob()
 	{
 		return;
 	}
+	ReleaseCraftJob(true);
 
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	if (JobQueue && CurrentJob.IsValid())
@@ -545,13 +556,20 @@ void AMOSurvivorController::BroadcastCommandChange(FName CommandName)
 
 void AMOSurvivorController::HandleJobQueueChanged()
 {
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	if (JobQueue && JobQueue->IsRestoringJobs())
+	{
+		// Loading over an already possessed pawn replaces the execution checkpoint as well as its queue.
+		ReleaseCraftJob(false, false);
+		bIsProcessingJob = false;
+		SimpleJobState = 0;
+	}
 	// Skip if already processing a job
 	if (bIsProcessingJob)
 	{
 		return;
 	}
 
-	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	if (!JobQueue || !JobQueue->HasJobs())
 	{
 		return;
@@ -728,6 +746,9 @@ void AMOSurvivorController::StartSimpleJobExecution()
 
 void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 {
+	// Item/job notifications can synchronously re-enter the controller. One interval can perform its work only once.
+	if (bUpdatingSimpleJob) return;
+	TGuardValue<bool> Updating(bUpdatingSimpleJob, true);
 	APawn* ControlledPawn = GetPawn();
 	if (!ControlledPawn)
 	{
@@ -815,20 +836,10 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 
 			if (SimpleJobTimer >= EffectiveDuration)
 			{
-				// Action complete - perform the actual foraging/digging
+				// Item/XP callbacks may change the assignment; retain the identity of the work just performed.
+				const FGuid IterationJobId = CurrentJob.JobId;
 				PerformSimpleJobAction();
-
-				// Check if we need to repeat
-				CurrentJob.CompletedCount++;
-				if (CurrentJob.CompletedCount >= CurrentJob.RepeatCount)
-				{
-					CompleteSimpleJob(true);
-				}
-				else
-				{
-					// Start next repeat
-					StartSimpleJobExecution();
-				}
+				CompleteSimpleJobIteration(IterationJobId);
 			}
 			break;
 		}
@@ -840,8 +851,29 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 	}
 }
 
+void AMOSurvivorController::CompleteSimpleJobIteration(const FGuid& ExpectedJobId)
+{
+	if (!bIsProcessingJob || CurrentJob.JobId != ExpectedJobId) return;
+	auto* Queue = GetJobQueue();
+	const auto Result = Queue ? Queue->RecordCompletedIteration(ExpectedJobId) : FMOSurvivorIterationResult{EMOSurvivorIterationFailure::WrongJob};
+	// A queue observer may have cancelled or replaced the assignment while recording.
+	if (!bIsProcessingJob || CurrentJob.JobId != ExpectedJobId) return;
+	if (!Result.IsRecorded() || Queue->GetCurrentJob().JobId != ExpectedJobId)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Iteration acknowledgement refused for %s (failure %d)"), *ExpectedJobId.ToString(), int32(Result.Failure));
+		CompleteSimpleJob(false);
+		return;
+	}
+	CurrentJob.CompletedCount = Result.CompletedCount;
+	CurrentJob.CraftExecution = {};
+	if (CurrentJob.CompletedCount >= CurrentJob.RepeatCount) CompleteSimpleJob(true);
+	else StartSimpleJobExecution();
+}
+
 void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 {
+	const FGuid CompletedJobId = CurrentJob.JobId;
+	ReleaseCraftJob(!bSuccess);
 	SimpleJobState = 0;
 	SimpleJobTimer = 0.0f;
 	SimpleJobTargetLocation = FVector::ZeroVector;
@@ -869,7 +901,7 @@ void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 	ExcavateDumpLocation = FVector::ZeroVector;
 
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-	if (JobQueue && CurrentJob.IsValid())
+	if (JobQueue && CurrentJob.IsValid() && JobQueue->GetCurrentJob().JobId == CompletedJobId)
 	{
 		JobQueue->CompleteCurrentJob(bSuccess);
 	}
@@ -1079,14 +1111,37 @@ UMOInventoryComponent* AMOSurvivorController::GetActorInventory(AActor* Actor) c
 
 void AMOSurvivorController::StartCraftJobExecution()
 {
+	ReleaseCraftJob(false, false);
+	auto* Queue = GetPawn() ? GetPawn()->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr;
+	const auto Saved = CurrentJob.CraftExecution;
+	if (!Queue || (Saved.Phase == 0 && (!Queue->IsQueueEmpty() || Queue->GetPendingMaterialLotCount() > 0)))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft job requires an available pawn crafting queue"));
+		CompleteSimpleJob(false);
+		return;
+	}
+	CraftJobQueue = Queue;
+	Queue->OnCraftCompleted.RemoveDynamic(this, &AMOSurvivorController::HandleJobCraftCompleted);
+	Queue->OnCraftCompleted.AddDynamic(this, &AMOSurvivorController::HandleJobCraftCompleted);
 	// Resolve job data. TargetActor carries the station, StorageActor the
 	// container (see EnqueueCraftJob).
 	CraftStationActor = CurrentJob.TargetActor;
 	CraftStorageActor = CurrentJob.StorageActor;
 	CraftJobRecipeId = CurrentJob.CraftRecipeId;
+	CraftQueueEntryId = Saved.QueueEntryId;
+	CraftBorrowedContainers = Saved.BorrowedContainers;
+	CraftCompletedProducts = Saved.CompletedProducts;
+	bJobCraftCompleted = Saved.bCraftCompleted;
 
 	AActor* Station = CraftStationActor.Get();
 	AActor* Storage = CraftStorageActor.Get();
+	if ((!Station && CurrentJob.TargetActorGuid.IsValid()) || (!Storage && CurrentJob.StorageActorGuid.IsValid()))
+	{
+		// Actor records can hydrate later than the pawn record. Retain ownership and retry GUID resolution.
+		SimpleJobState = 17;
+		SimpleJobTimer = 0;
+		return;
+	}
 	if (!Station || !Storage || CraftJobRecipeId.IsNone() ||
 		!UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId))
 	{
@@ -1099,17 +1154,47 @@ void AMOSurvivorController::StartCraftJobExecution()
 		return;
 	}
 
-	SimpleJobState = 10; // moving to storage (withdraw leg)
-	SimpleJobTimer = 0.0f;
+	if (CurrentJob.CompletedCount >= CurrentJob.RepeatCount) { CompleteSimpleJob(true); return; }
+	if (Saved.Phase != 0 && (Saved.Phase < 10 || Saved.Phase > 16 ||
+		!FMath::IsFinite(Saved.HandlingSeconds) || Saved.HandlingSeconds < 0))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Invalid saved craft checkpoint; cargo is retained on pawn"));
+		CompleteSimpleJob(false);
+		return;
+	}
+	SimpleJobState = Saved.Phase == 0 ? 10 : Saved.Phase;
+	SimpleJobTimer = Saved.HandlingSeconds;
+	FMOCraftingCompletionReceipt Receipt;
+	if (Queue->GetCompletionReceipt(CraftQueueEntryId, Receipt))
+	{
+		bJobCraftCompleted = true;
+		CraftCompletedProducts = Receipt.ProducedItems;
+	}
+	// Handling/work can resume after player possession moved the pawn. It must physically return first.
+	if ((SimpleJobState == 11 || SimpleJobState == 15) &&
+		FVector::DistSquared(GetPawn()->GetActorLocation(), Storage->GetActorLocation()) > FMath::Square(250.0f))
+	{
+		SimpleJobState = SimpleJobState == 11 ? 10 : 14;
+		SimpleJobTimer = 0;
+	}
+	if (SimpleJobState == 13 && !bJobCraftCompleted &&
+		FVector::DistSquared(GetPawn()->GetActorLocation(), Station->GetActorLocation()) > FMath::Square(250.0f))
+	{
+		SimpleJobState = 12;
+		SimpleJobTimer = 0;
+	}
 	SimpleJobTotalSeconds = 0.0f;
 	MoveLegBestDistance = FLT_MAX;
 	MoveLegNoProgressSeconds = 0.0f;
-	SimpleJobTargetLocation = Storage->GetActorLocation();
-	MoveToLocation(SimpleJobTargetLocation, 150.0f);
+	SimpleJobTargetLocation = SimpleJobState == 12 ? Station->GetActorLocation() : Storage->GetActorLocation();
+	if (SimpleJobState == 10 || SimpleJobState == 12 || SimpleJobState == 14)
+		MoveToLocation(SimpleJobTargetLocation, 150.0f);
+	PersistCraftExecution();
 
 	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
 	{
-		JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget);
+		JobQueue->SetJobState(CurrentJob.JobId, SimpleJobState == 14 ? EMOSurvivorJobState::Returning :
+			(SimpleJobState == 10 || SimpleJobState == 12 ? EMOSurvivorJobState::MovingToTarget : EMOSurvivorJobState::Performing));
 	}
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft job started: %s at %s (storage %s)"),
@@ -1126,22 +1211,22 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 		return;
 	}
 
-	// GLOBAL JOB WATCHDOG (B1): a full craft cycle takes ~35s real; any job
-	// alive past 120s is wedged SOMEWHERE (a silent state is exactly how a
-	// soak bricked twice on 2026-07-07). Fail loudly, NAME the state, free
-	// the quota slot for reassignment.
+	// Recipe work may take hours. Each movement leg already detects lack of
+	// progress; a fixed whole-job timeout would fail valid simulated work.
 	SimpleJobTotalSeconds += DeltaTime;
-	if (SimpleJobTotalSeconds > 120.0f)
+	if (!JobQueue || JobQueue->GetCurrentJob().JobId != CurrentJob.JobId)
 	{
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOSurvivorController] Craft job WEDGED in state %d after %.0fs (recipe %s) - failing"),
-			SimpleJobState, SimpleJobTotalSeconds, *CraftJobRecipeId.ToString());
-		CompleteSimpleJob(false);
+		// The job was cancelled/replaced externally. Do not complete the next job in its place.
+		ReleaseCraftJob(true);
+		bIsProcessingJob = false;
+		SimpleJobState = 0;
+		HandleJobQueueChanged();
 		return;
 	}
 
 	auto SetProgress = [&](float Progress)
 	{
+		PersistCraftExecution();
 		if (JobQueue)
 		{
 			JobQueue->UpdateJobProgress(CurrentJob.JobId, Progress);
@@ -1158,6 +1243,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 			{
 				SimpleJobState = 11;
 				SimpleJobTimer = 0.0f;
+				PersistCraftExecution();
 				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
 			}
 			SetProgress(0.05f);
@@ -1183,6 +1269,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				SimpleJobTimer = 0.0f;
 				SimpleJobTargetLocation = Station->GetActorLocation();
 				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				PersistCraftExecution();
 				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget); }
 			}
 			break;
@@ -1201,16 +1288,20 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 					CompleteSimpleJob(false);
 					return;
 				}
-				// We are standing at the station: pass its type (or the
-				// recipe's requirement as fallback) so station-gated recipes
-				// validate. The REAL crafting queue takes over from here -
-				// real ingredient consume, real duration, real outputs.
-				EMOCraftingStation StationType = Recipe->RequiredStation;
-				if (const AMOCraftingStationActor* StationActor = Cast<AMOCraftingStationActor>(CraftStationActor.Get()))
-				{
-					StationType = StationActor->GetStationType();
-				}
-				if (!CraftQueue->EnqueueCraft(CraftJobRecipeId, 1, StationType))
+				// The queue derives requirements from the real station, never from the recipe's enum as a fallback.
+				FMOCraftingQueueEntry Existing;
+				FMOCraftingCompletionReceipt Completed;
+				const bool bEnqueued = CraftQueueEntryId.IsValid()
+					? (CraftQueue->GetQueueEntry(CraftQueueEntryId, Existing) || CraftQueue->GetCompletionReceipt(CraftQueueEntryId, Completed))
+					: CraftQueue->EnqueueCraftAtStationWithId(CraftJobRecipeId, 1, CraftStationActor.Get(), CraftQueueEntryId,
+					[this](const FGuid& EntryId)
+					{
+						CraftQueueEntryId = EntryId;
+						SimpleJobState = 13;
+						SimpleJobTimer = 0;
+						PersistCraftExecution();
+					});
+				if (!bEnqueued)
 				{
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft enqueue failed for %s"),
 						*CraftJobRecipeId.ToString());
@@ -1219,6 +1310,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				}
 				SimpleJobState = 13;
 				SimpleJobTimer = 0.0f;
+				PersistCraftExecution();
 				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
 			}
 			SetProgress(0.25f);
@@ -1233,8 +1325,24 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				CompleteSimpleJob(false);
 				return;
 			}
-			if (CraftQueue->IsQueueEmpty())
+			FMOCraftingQueueEntry OwnedEntry;
+			FMOCraftingCompletionReceipt Receipt;
+			if (CraftQueue->GetCompletionReceipt(CraftQueueEntryId, Receipt))
 			{
+				CraftCompletedProducts = Receipt.ProducedItems;
+				bJobCraftCompleted = true;
+				PersistCraftExecution();
+			}
+			if (!bJobCraftCompleted && !CraftQueue->GetQueueEntry(CraftQueueEntryId, OwnedEntry))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Owned craft was cancelled before completion"));
+				CompleteSimpleJob(false);
+				return;
+			}
+			if (bJobCraftCompleted)
+			{
+				CraftQueue->DeliverPendingMaterials();
+				if (CraftQueue->GetPendingMaterialLotCount() > 0) break;
 				// Craft finished - outputs are in the pawn inventory. Head back.
 				AActor* Storage = CraftStorageActor.Get();
 				if (!Storage) { CompleteSimpleJob(false); return; }
@@ -1244,6 +1352,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				SimpleJobTimer = 0.0f;
 				SimpleJobTargetLocation = Storage->GetActorLocation();
 				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				PersistCraftExecution();
 				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Returning); }
 				break;
 			}
@@ -1269,6 +1378,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 			{
 				SimpleJobState = 15;
 				SimpleJobTimer = 0.0f;
+				PersistCraftExecution();
 				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
 			}
 			SetProgress(0.85f);
@@ -1281,21 +1391,31 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 			SetProgress(0.85f + 0.15f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, CraftHandlingDuration), 0.0f, 1.0f));
 			if (SimpleJobTimer >= CraftHandlingDuration)
 			{
-				DepositCraftOutputs();
+				const FGuid IterationJobId = CurrentJob.JobId;
+				if (!DepositCraftOutputs())
+				{
+					// Keep the job/cargo and retry after another real handling interval.
+					SimpleJobTimer = 0.0f;
+					PersistCraftExecution();
+					break;
+				}
 
-				CurrentJob.CompletedCount++;
-				if (CurrentJob.CompletedCount >= CurrentJob.RepeatCount)
-				{
-					CompleteSimpleJob(true);
-				}
-				else
-				{
-					StartSimpleJobExecution(); // next iteration: full loop again
-				}
+				CompleteSimpleJobIteration(IterationJobId);
 			}
 			break;
 		}
 
+	case 16: // Cargo was delivered; a save inside its inventory notification precedes iteration acknowledgement.
+		CompleteSimpleJobIteration(CurrentJob.JobId);
+		break;
+	case 17: // Waiting for saved actor identities to hydrate. Never withdraw again while holding prior cargo.
+		SimpleJobTimer += DeltaTime;
+		if (SimpleJobTimer >= 0.5f)
+		{
+			CurrentJob = JobQueue->GetCurrentJob();
+			StartCraftJobExecution();
+		}
+		break;
 	default:
 		CompleteSimpleJob(false);
 		break;
@@ -1840,68 +1960,105 @@ bool AMOSurvivorController::TransferCraftIngredients()
 		return false;
 	}
 
-	// All-or-nothing check first so a partial withdraw never strands materials.
+	TMap<FName, int32> Requirements;
 	for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
 	{
-		if (!Ing.ItemDefinitionId.IsNone() && !StorageInv->HasItem(Ing.ItemDefinitionId, Ing.Quantity))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Storage lacks %dx %s for %s"),
-				Ing.Quantity, *Ing.ItemDefinitionId.ToString(), *CraftJobRecipeId.ToString());
-			return false;
-		}
+		const int64 Total = int64(Requirements.FindRef(Ing.ItemDefinitionId)) + Ing.Quantity;
+		if (Ing.ItemDefinitionId.IsNone() || Ing.Quantity <= 0 || Total > MAX_int32) return false;
+		Requirements.Add(Ing.ItemDefinitionId, int32(Total));
 	}
-
-	for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
+	FMOIngredientTransferOptions Carry;
+	Carry.bCarrySourceContainers = true;
+	FMOInventoryMutationScope StorageMutation(StorageInv);
+	FMOInventoryMutationScope PawnMutation(PawnInv);
+	const auto Result = StorageInv->TransferIngredientsTo(PawnInv, Requirements, Carry, &CraftBorrowedContainers);
+	if (!Result.IsComplete())
 	{
-		if (Ing.ItemDefinitionId.IsNone())
-		{
-			continue;
-		}
-		// Stackable material transfer: fresh GUID on the receiving side (same
-		// as the crafting subsystem's material-gather path). Identity-tracked
-		// transfer of specific instances is a non-goal for materials.
-		StorageInv->RemoveItemByDefinitionId(Ing.ItemDefinitionId, Ing.Quantity);
-		PawnInv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Ingredient haul refused: failure=%d ingredient=%s missing=%d"),
+			int32(Result.Failure), *Result.IngredientId.ToString(), Result.MissingUnits);
+		return false;
 	}
 
+	SimpleJobState = 12;
+	SimpleJobTimer = 0;
+	PersistCraftExecution();
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Withdrew ingredients for %s from %s"),
 		*CraftJobRecipeId.ToString(), *CraftStorageActor->GetName());
 	return true;
 }
 
-void AMOSurvivorController::DepositCraftOutputs()
+bool AMOSurvivorController::DepositCraftOutputs()
 {
 	APawn* ControlledPawn = GetPawn();
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId);
 	UMOInventoryComponent* StorageInv = GetActorInventory(CraftStorageActor.Get());
 	UMOInventoryComponent* PawnInv = ControlledPawn ? ControlledPawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
-	if (!Recipe || !StorageInv || !PawnInv)
+	if (!StorageInv || !PawnInv || !bJobCraftCompleted)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft deposit skipped: recipe/storage/pawn inventory missing"));
-		return;
+		return false;
 	}
+	FMOIngredientTransferOptions Carry;
+	Carry.bCarrySourceContainers = true;
+	for (const auto& Guid : CraftBorrowedContainers)
+	{
+		FMOInventoryEntry Entry;
+		// A vessel explicitly consumed as a recipe ingredient no longer exists to return.
+		if (PawnInv->TryGetEntryByGuid(Guid, Entry)) Carry.AlsoCarryItemGuids.Add(Guid);
+	}
+	FMOInventoryMutationScope PawnMutation(PawnInv);
+	FMOInventoryMutationScope StorageMutation(StorageInv);
+	const auto Result = PawnInv->TransferIngredientsTo(StorageInv, CraftCompletedProducts, Carry);
+	if (!Result.IsComplete())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Deposit waiting: failure=%d ingredient=%s; cargo stays on pawn"),
+			int32(Result.Failure), *Result.IngredientId.ToString());
+		return false;
+	}
+	// Update cargo ownership before deferred inventory observers can save/cancel the job.
+	CraftCompletedProducts.Reset();
+	CraftBorrowedContainers.Reset();
+	SimpleJobState = 16;
+	SimpleJobTimer = 0;
+	PersistCraftExecution();
+	if (auto* Queue = CraftJobQueue.Get()) Queue->AcknowledgeCompletionReceipt(CraftQueueEntryId);
+	return true;
+}
 
-	for (const FMORecipeOutput& Out : Recipe->Outputs)
+void AMOSurvivorController::HandleJobCraftCompleted(const FGuid& EntryId, const FMOCraftResult& Result)
+{
+	if (EntryId != CraftQueueEntryId || !Result.bSuccess) return;
+	CraftCompletedProducts = Result.ProducedItems;
+	bJobCraftCompleted = true;
+	PersistCraftExecution();
+}
+
+bool AMOSurvivorController::PersistCraftExecution()
+{
+	if (SimpleJobState < 10 || SimpleJobState > 16) return false;
+	FMOSurvivorCraftExecution State;
+	State.Phase = SimpleJobState;
+	State.HandlingSeconds = SimpleJobTimer;
+	State.QueueEntryId = CraftQueueEntryId;
+	State.BorrowedContainers = CraftBorrowedContainers;
+	State.CompletedProducts = CraftCompletedProducts;
+	State.bCraftCompleted = bJobCraftCompleted;
+	auto* Jobs = GetJobQueue();
+	return Jobs && Jobs->SetCraftExecution(CurrentJob.JobId, State);
+}
+
+void AMOSurvivorController::ReleaseCraftJob(bool bCancelOwnedCraft, bool bForgetReceipt)
+{
+	const FGuid OwnedId = CraftQueueEntryId;
+	CraftQueueEntryId.Invalidate();
+	if (auto* Queue = CraftJobQueue.Get())
 	{
-		if (Out.ItemDefinitionId.IsNone())
-		{
-			continue;
-		}
-		const int32 Have = PawnInv->GetItemCountByDefinitionId(Out.ItemDefinitionId);
-		const int32 Move = FMath::Min(Have, Out.Quantity);
-		if (Move > 0)
-		{
-			PawnInv->RemoveItemByDefinitionId(Out.ItemDefinitionId, Move);
-			StorageInv->AddItemByGuid(FGuid::NewGuid(), Out.ItemDefinitionId, Move);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Deposited %dx %s to %s"),
-				Move, *Out.ItemDefinitionId.ToString(), *CraftStorageActor->GetName());
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Expected output %s not in pawn inventory - nothing to deposit"),
-				*Out.ItemDefinitionId.ToString());
-		}
+		Queue->OnCraftCompleted.RemoveDynamic(this, &AMOSurvivorController::HandleJobCraftCompleted);
+		if (bCancelOwnedCraft && OwnedId.IsValid()) Queue->CancelCraft(OwnedId, true);
+		if (bForgetReceipt) Queue->AcknowledgeCompletionReceipt(OwnedId);
 	}
+	CraftJobQueue.Reset();
+	CraftBorrowedContainers.Reset();
+	CraftCompletedProducts.Reset();
+	bJobCraftCompleted = false;
 }
 
 bool AMOSurvivorController::FindNearestGatherResource(EMOSurvivorJobType JobType)

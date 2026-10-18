@@ -768,8 +768,7 @@ void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOC
 				const bool bAnyProduced = Result.ProducedItems.Num() > 0;
 				if (Result.HasFailedItems())
 				{
-					// Real inventory rejection (currently only invalid-input cases, since
-					// AddItemByGuid does not enforce hard slot limits).
+					// The inventory add contract refused some output because capacity was exhausted.
 					NotifComp->ShowWarningNotification(
 						NSLOCTEXT("MO", "InventoryFull", "Inventory Full! Some items could not be picked up."),
 						5.0f

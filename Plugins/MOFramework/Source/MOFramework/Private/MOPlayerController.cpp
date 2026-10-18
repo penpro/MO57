@@ -32,6 +32,7 @@
 #include "MOWaterActions.h"
 #include "MOItemActions.h"
 #include "MOFireActions.h"
+#include "MOMedicalTreatmentActions.h"
 #include "MOWorldActionProvider.h"
 #include "MOCraftingStationActor.h"
 #include "MOWaterSourceSettings.h"
@@ -1378,6 +1379,17 @@ void AMOPlayerController::ServerStationAction_Implementation(AMOCraftingStationA
 void AMOPlayerController::ServerWorldAction_Implementation(AActor* Target, FName ActionId)
 {
 	FMOWorldActions::Execute(this, Target, ActionId);
+}
+
+void AMOPlayerController::ServerTreatWound_Implementation(AActor* Patient, FGuid WoundId, FName TreatmentId)
+{
+	if (!HasAuthority()) return;
+	const auto Result = FMOMedicalTreatmentActions::Begin(GetPawn(), Patient, WoundId, TreatmentId);
+	if (!Result.IsAccepted())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTreatment] %s requested %s: %s"), *GetName(), *TreatmentId.ToString(), *Result.Describe().ToString());
+		ClientShowNotification(Result.Describe(), 3.0f, EMONotificationType::Warning);
+	}
 }
 
 void AMOPlayerController::ServerInventoryRequest_Implementation(const FMOInventoryRequest& Request)

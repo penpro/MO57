@@ -51,6 +51,15 @@
 #include "MOSurvivorJobTypes.h"
 #include "MOSurvivorJobQueueComponent.generated.h"
 
+enum class EMOSurvivorIterationFailure : uint8 { None, NotAuthority, WrongJob, InvalidState };
+
+struct FMOSurvivorIterationResult
+{
+	EMOSurvivorIterationFailure Failure = EMOSurvivorIterationFailure::None;
+	int32 CompletedCount = 0;
+	bool IsRecorded() const { return Failure == EMOSurvivorIterationFailure::None; }
+};
+
 class UDataTable;
 
 /**
@@ -243,6 +252,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
 	void CompleteCurrentIteration();
 
+	/** Record one real iteration on the current job, identified explicitly. Keeps the job until its executor finishes cleanup.
+	 * Saves/replicates the owning entry before observers run; callers must recheck identity after callbacks. */
+	FMOSurvivorIterationResult RecordCompletedIteration(const FGuid& JobId);
+
+	/** Silent native checkpoint: install before inventory/queue observers, dirty the owning replicated entry. */
+	bool SetCraftExecution(const FGuid& JobId, const FMOSurvivorCraftExecution& Execution);
+	bool IsRestoringJobs() const { return bRestoringJobs; }
+
 	// ============================================================================
 	// HOME LOCATION
 	// ============================================================================
@@ -343,6 +360,8 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	bool bRecordingIteration = false;
+	bool bRestoringJobs = false;
 	/** The job queue (replicated via FastArray). */
 	UPROPERTY(Replicated)
 	FMOSurvivorJobList JobQueue;
@@ -355,6 +374,7 @@ private:
 	 *  null after a disk load). No-op when the refs are already live or the
 	 *  GUIDs are unset — cheap in the common live-session path. (H39 residual) */
 	void ResolveJobActorRefs(FMOSurvivorJobEntry& Job) const;
+	void ReleaseJobCraft(const FMOSurvivorJobEntry& Job, bool bCancel);
 
 	/** Remove completed/failed jobs from the queue. */
 	void CleanupFinishedJobs();

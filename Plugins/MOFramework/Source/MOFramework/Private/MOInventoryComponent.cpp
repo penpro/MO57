@@ -95,227 +95,127 @@ void UMOInventoryComponent::RebuildGuidIndex()
 	}
 }
 
-bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd)
+int32 UMOInventoryComponent::GetItemStackLimit(const FMOItemDefinitionRow& Definition)
 {
-	AActor* OwnerActor = GetOwner();
-	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	return (Definition.bIsTool || Definition.LiquidCapacityMl > 0.0f) ? 1 : FMath::Max(1, Definition.MaxStackSize);
+}
+
+bool UMOInventoryComponent::HasMatchingStackState(const FMOInventoryEntry& Entry, FName DefinitionId, const FMOItemInstanceState& State)
+{
+	return Entry.ItemDefinitionId == DefinitionId && Entry.CurrentDurability == State.Durability && Entry.Liquid == State.Liquid;
+}
+
+namespace MOInventoryAdds
+{
+
+	FMOItemInstanceState NormalizeState(const FMOItemDefinitionRow& Def, FMOItemInstanceState State)
 	{
-		MOHARVEST_LOG(this, "Inventory",
-			"AddItemByGuid REJECT: no authority (Owner='%s', ItemId='%s', Qty=%d)",
-			*GetNameSafe(OwnerActor), *ItemDefinitionId.ToString(), QuantityToAdd);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuid requires authority"));
-		return false;
+		if (State.Durability < 0 && Def.bIsTool && Def.MaxDurability > 0) State.Durability = Def.MaxDurability;
+		return State;
 	}
 
-	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
+}
+
+int64 UMOInventoryComponent::GetAddCapacity(FName DefinitionId, const FMOItemInstanceState& State, int32 MaxStack, bool bAllowStacking) const
+{
+	// Entries reserve capacity even during a starting-kit batch with slot assignment disabled.
+	int64 Room = int64(FMath::Max(0, FMath::Max(1, SlotCount) - Inventory.Entries.Num())) * MaxStack;
+	if (bAllowStacking && MaxStack > 1)
 	{
-		MOHARVEST_LOG(this, "Inventory",
-			"AddItemByGuid REJECT: invalid input (GuidValid=%d, ItemId='%s', Qty=%d)",
-			ItemGuid.IsValid() ? 1 : 0, *ItemDefinitionId.ToString(), QuantityToAdd);
-		return false;
+		for (const FMOInventoryEntry& Entry : Inventory.Entries)
+		{
+			if (HasMatchingStackState(Entry, DefinitionId, State)) Room += FMath::Max(0, MaxStack - Entry.Quantity);
+		}
 	}
+	return Room;
+}
 
-	EnsureSlotsInitialized();
-
-	MOHARVEST_LOG(this, "Inventory",
-		"AddItemByGuid entry: ItemId='%s' Qty=%d (before: Entries=%d, SlotItemGuids=%d)",
-		*ItemDefinitionId.ToString(), QuantityToAdd,
-		Inventory.Entries.Num(), SlotItemGuids.Num());
-
-	// Check if this exact GUID already exists (stacking onto same item)
+FMOInventoryAddResult UMOInventoryComponent::TryAddItem(const FGuid& ItemGuid, FName ItemDefinitionId, int32 Quantity,
+	const FMOInventoryAddOptions& Options)
+{
+	FMOInventoryAddResult Result;
+	Result.Requested = Quantity;
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		Result.Failure = EMOInventoryAddFailure::NotAuthority;
+		return Result;
+	}
+	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || Quantity <= 0)
+	{
+		Result.Failure = EMOInventoryAddFailure::InvalidInput;
+		return Result;
+	}
+	FMOItemDefinitionRow Def;
+	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, Def))
+	{
+		Result.Failure = EMOInventoryAddFailure::UnknownDefinition;
+		return Result;
+	}
+	const FMOItemInstanceState State = MOInventoryAdds::NormalizeState(Def, Options.State);
+	const int32 MaxStack = GetItemStackLimit(Def);
 	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
-	if (ExistingIndex != INDEX_NONE)
+	if (ExistingIndex != INDEX_NONE && (!Options.bAllowStacking || MaxStack == 1
+		|| !HasMatchingStackState(Inventory.Entries[ExistingIndex], ItemDefinitionId, State)))
 	{
-		FMOInventoryEntry& ExistingEntry = Inventory.Entries[ExistingIndex];
-		ExistingEntry.Quantity += QuantityToAdd;
-
-		Inventory.MarkItemDirty(ExistingEntry);
-		BroadcastInventoryChanged();
-
-		// Slot array unchanged.
-		return true;
+		Result.Failure = EMOInventoryAddFailure::IdentityConflict;
+		return Result;
 	}
-
-	// Get item definition for max stack size
-	FMOItemDefinitionRow ItemDef;
-	int32 MaxStackSize = 99; // Default fallback
-	bool bIsTool = false;
-	int32 MaxDurability = -1;
-
-	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
+	const int64 Capacity = GetAddCapacity(ItemDefinitionId, State, MaxStack, Options.bAllowStacking);
+	if (Capacity < Quantity)
 	{
-		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
-		bIsTool = ItemDef.bIsTool;
-		MaxDurability = ItemDef.MaxDurability;
+		Result.Failure = EMOInventoryAddFailure::Capacity;
+		if (!Options.bAllowPartial || Capacity <= 0) return Result;
 	}
-
-	int32 RemainingToAdd = QuantityToAdd;
-	bool bAnyChange = false;
-
-	// First, try to fill existing stacks of the same item type (only for stackable non-tools)
-	// Tools should not stack since they have individual durability
-	if (!bIsTool && MaxStackSize > 1)
+	int32 Remaining = int32(FMath::Min<int64>(Capacity, Quantity));
+	Result.Accepted = Remaining;
+	FMOInventoryMutationScope Mutation(this);
+	EnsureSlotsInitialized();
+	if (Options.bAllowStacking && MaxStack > 1)
 	{
 		for (FMOInventoryEntry& Entry : Inventory.Entries)
 		{
-			if (Entry.ItemDefinitionId != ItemDefinitionId)
-			{
-				continue;
-			}
-
-			// Check if this stack has room
-			int32 SpaceInStack = MaxStackSize - Entry.Quantity;
-			if (SpaceInStack <= 0)
-			{
-				continue;
-			}
-
-			// Add as much as we can to this stack
-			int32 ToAddToThisStack = FMath::Min(RemainingToAdd, SpaceInStack);
-			Entry.Quantity += ToAddToThisStack;
-			RemainingToAdd -= ToAddToThisStack;
-
+			if (Remaining <= 0) break;
+			if (!HasMatchingStackState(Entry, ItemDefinitionId, State)) continue;
+			const int32 Added = FMath::Min(Remaining, FMath::Max(0, MaxStack - Entry.Quantity));
+			if (Added == 0) continue;
+			Entry.Quantity += Added;
+			Remaining -= Added;
 			Inventory.MarkItemDirty(Entry);
-			bAnyChange = true;
-
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Stacked %d of %s into existing stack (now %d/%d)"),
-				ToAddToThisStack, *ItemDefinitionId.ToString(), Entry.Quantity, MaxStackSize);
-
-			if (RemainingToAdd <= 0)
-			{
-				break;
-			}
 		}
 	}
-
-	// If there's remaining quantity, create new entry(ies)
-	while (RemainingToAdd > 0)
+	bool bUsedGuid = ExistingIndex != INDEX_NONE;
+	while (Remaining > 0)
 	{
-		// Check if we have an empty slot for new entries
-		int32 EmptySlotIndex = INDEX_NONE;
-		bool bHasEmptySlot = bAutoAssignNewItemsToSlots && FindFirstEmptySlot(EmptySlotIndex);
-
-		// For the first new entry, use the provided GUID; subsequent entries get new GUIDs
-		FGuid NewEntryGuid = bAnyChange ? FGuid::NewGuid() : ItemGuid;
-
-		// Make sure this GUID isn't already used
-		if (FindEntryIndexByGuid(NewEntryGuid) != INDEX_NONE)
-		{
-			NewEntryGuid = FGuid::NewGuid();
-		}
-
-		FMOInventoryEntry NewEntry;
-		NewEntry.ItemGuid = NewEntryGuid;
-		NewEntry.ItemDefinitionId = ItemDefinitionId;
-		NewEntry.Quantity = FMath::Min(RemainingToAdd, MaxStackSize);
-		RemainingToAdd -= NewEntry.Quantity;
-
-		// Initialize durability for tools
-		if (bIsTool && MaxDurability > 0)
-		{
-			NewEntry.CurrentDurability = MaxDurability;
-		}
-		else
-		{
-			NewEntry.CurrentDurability = -1; // Infinite/not applicable
-		}
-
-		const int32 NewIndex = Inventory.Entries.Add(NewEntry);
-		Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
-		bAnyChange = true;
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Created new stack of %s with %d items"),
-			*ItemDefinitionId.ToString(), NewEntry.Quantity);
-
-		// Optionally slot into first empty slot
-		if (bAutoAssignNewItemsToSlots && TryAutoAssignGuidToEmptySlot(NewEntry.ItemGuid))
-		{
-			MarkSlotItemGuidsDirty();
-			OnSlotsChanged.Broadcast();
-		}
+		FMOInventoryEntry Entry;
+		Entry.ItemGuid = bUsedGuid ? FGuid::NewGuid() : ItemGuid;
+		bUsedGuid = true;
+		Entry.ItemDefinitionId = ItemDefinitionId;
+		Entry.Quantity = FMath::Min(Remaining, MaxStack);
+		Entry.CurrentDurability = State.Durability;
+		Entry.Liquid = State.Liquid;
+		Remaining -= Entry.Quantity;
+		const int32 Index = Inventory.Entries.Add(Entry);
+		Inventory.MarkItemDirty(Inventory.Entries[Index]);
 	}
+	if (bAutoAssignNewItemsToSlots) ReconcileSlots();
+	BroadcastInventoryChanged();
+	PendingItemAdded.FindOrAdd(ItemDefinitionId) += Result.Accepted;
+	if (Options.bReportPickup && !bApplyingStartingItems) PendingPickupCredit.FindOrAdd(ItemDefinitionId) += Result.Accepted;
+	return Result;
+}
 
-	if (bAnyChange)
-	{
-		BroadcastInventoryChanged();
-
-		// Notify that items were added (for quest system etc.)
-		const int32 ActuallyAdded = QuantityToAdd - RemainingToAdd;
-		if (ActuallyAdded > 0)
-		{
-			OnItemAdded.Broadcast(ItemDefinitionId, ActuallyAdded);
-
-			// Quests: credit the PLAYER whose pawn gathered it (UMOQuestSubsystem::ReportForActor: a joiner's own machine, nobody for a survivor or a
-			// container), never a spawn kit (ApplyStartingItems). Every add used to count as the host's "pickup": the player's own kit completed the
-			// gather tutorial steps at spawn and a survivor spawning nearby counted again (logs, Oct 13 2026).
-			if (!bApplyingStartingItems)
-			{
-				UMOQuestSubsystem::ReportForActor(GetOwner(), EMOObjectiveType::ItemPickup, ItemDefinitionId, ActuallyAdded);
-			}
-		}
-	}
-
-	// Count slotted vs unslotted entries so we can spot the silent-overflow bug
-	// (AddItemByGuid does not enforce slot capacity; entries beyond slot count exist
-	// in Inventory.Entries but never appear in SlotItemGuids).
-	int32 UsedSlots = 0;
-	for (const FGuid& Guid : SlotItemGuids)
-	{
-		if (Guid.IsValid()) ++UsedSlots;
-	}
-	MOHARVEST_LOG(this, "Inventory",
-		"AddItemByGuid OK: ItemId='%s' AddedTotal=%d RemainingNotAdded=%d (after: Entries=%d, SlotItemGuids=%d, UsedSlots=%d)",
-		*ItemDefinitionId.ToString(), QuantityToAdd - RemainingToAdd, RemainingToAdd,
-		Inventory.Entries.Num(), SlotItemGuids.Num(), UsedSlots);
-
-	return true;
+bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd)
+{
+	return TryAddItem(ItemGuid, ItemDefinitionId, QuantityToAdd).IsComplete();
 }
 
 bool UMOInventoryComponent::AddItemByGuidWithDurability(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd, int32 InitialDurability)
 {
-	AActor* OwnerActor = GetOwner();
-	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidWithDurability requires authority"));
-		return false;
-	}
-
-	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
-	{
-		return false;
-	}
-
-	EnsureSlotsInitialized();
-
-	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
-	if (ExistingIndex != INDEX_NONE)
-	{
-		FMOInventoryEntry& ExistingEntry = Inventory.Entries[ExistingIndex];
-		ExistingEntry.Quantity += QuantityToAdd;
-
-		Inventory.MarkItemDirty(ExistingEntry);
-		BroadcastInventoryChanged();
-
-		return true;
-	}
-
-	FMOInventoryEntry NewEntry;
-	NewEntry.ItemGuid = ItemGuid;
-	NewEntry.ItemDefinitionId = ItemDefinitionId;
-	NewEntry.Quantity = QuantityToAdd;
-	NewEntry.CurrentDurability = InitialDurability;
-
-	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
-	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
-	BroadcastInventoryChanged();
-
-	if (TryAutoAssignGuidToEmptySlot(ItemGuid))
-	{
-		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
-	}
-
-	return true;
+	FMOInventoryAddOptions Options;
+	Options.State.Durability = InitialDurability;
+	Options.bAllowStacking = false;
+	Options.bReportPickup = false;
+	return TryAddItem(ItemGuid, ItemDefinitionId, QuantityToAdd, Options).IsComplete();
 }
 
 bool UMOInventoryComponent::RemoveItemByGuid(const FGuid& ItemGuid, int32 QuantityToRemove)
@@ -345,10 +245,10 @@ bool UMOInventoryComponent::RemoveItemByGuid(const FGuid& ItemGuid, int32 Quanti
 	{
 		RemoveGuidFromSlotsInternal(ItemGuid);
 		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
-
 		Inventory.Entries.RemoveAt(ExistingIndex);
 		Inventory.MarkArrayDirty();
+		RebuildGuidIndex();
+		BroadcastSlotsChanged();
 		BroadcastInventoryChanged();
 		return true;
 	}
@@ -535,10 +435,45 @@ bool UMOInventoryComponent::GetItemDurability(const FGuid& ItemGuid, int32& OutD
 	return true;
 }
 
+FMOInventoryMutationScope::FMOInventoryMutationScope(UMOInventoryComponent* Inventory) : Component(Inventory)
+{
+	if (Inventory) ++Inventory->MutationDepth;
+}
+
+FMOInventoryMutationScope::~FMOInventoryMutationScope()
+{
+	if (Component.IsValid()) Component->EndMutation();
+}
+
+void UMOInventoryComponent::EndMutation()
+{
+	check(MutationDepth > 0);
+	if (--MutationDepth > 0) return;
+	// Move the pending notifications out before callbacks, so a listener may start a new transaction.
+	const bool bInventoryChanged = bInventoryNotificationPending;
+	const bool bSlotsChanged = bSlotsNotificationPending;
+	bInventoryNotificationPending = bSlotsNotificationPending = false;
+	TMap<FName, int32> Added = MoveTemp(PendingItemAdded);
+	TMap<FName, int32> Pickups = MoveTemp(PendingPickupCredit);
+	PendingItemAdded.Reset();
+	PendingPickupCredit.Reset();
+	if (bSlotsChanged) OnSlotsChanged.Broadcast();
+	if (bInventoryChanged) OnInventoryChanged.Broadcast();
+	for (const auto& Pair : Added) OnItemAdded.Broadcast(Pair.Key, Pair.Value);
+	for (const auto& Pair : Pickups) UMOQuestSubsystem::ReportForActor(GetOwner(), EMOObjectiveType::ItemPickup, Pair.Key, Pair.Value);
+}
+
+void UMOInventoryComponent::BroadcastSlotsChanged()
+{
+	if (MutationDepth > 0) bSlotsNotificationPending = true;
+	else OnSlotsChanged.Broadcast();
+}
+
 void UMOInventoryComponent::BroadcastInventoryChanged()
 {
 	RebuildGuidIndex();
-	OnInventoryChanged.Broadcast();
+	if (MutationDepth > 0) bInventoryNotificationPending = true;
+	else OnInventoryChanged.Broadcast();
 }
 
 /*
@@ -611,130 +546,45 @@ int32 UMOInventoryComponent::GetSlotCount() const
 bool UMOInventoryComponent::HasEmptySlot() const
 {
 	int32 EmptySlotIndex = INDEX_NONE;
-	return FindFirstEmptySlot(EmptySlotIndex);
+	return Inventory.Entries.Num() < FMath::Max(1, SlotCount) && FindFirstEmptySlot(EmptySlotIndex);
 }
 
 bool UMOInventoryComponent::CanAddItem(const FGuid& ItemGuid) const
 {
-	if (!ItemGuid.IsValid())
-	{
-		MOHARVEST_LOG(this, "Inventory", "CanAddItem(<invalid GUID>) -> false");
-		return false;
-	}
-
-	// If the GUID already exists in inventory, it will stack - no new slot needed
-	if (FindEntryIndexByGuid(ItemGuid) != INDEX_NONE)
-	{
-		MOHARVEST_LOG(this, "Inventory",
-			"CanAddItem('%s') -> true (GUID already exists, stacks onto same entry)",
-			*ItemGuid.ToString(EGuidFormats::Short));
-		return true;
-	}
-
-	// If there's an empty slot, we can always add
-	const bool bEmpty = HasEmptySlot();
-
-	// SLOT-AWARE-BUT-NOT-STACK-AWARE: This check ignores room available in partial
-	// stacks. A fresh GUID with a full slot grid will report 'can't add' even when
-	// every slot has space for more of the same item. Callers that know the
-	// ItemDefinitionId should use CanAddItemByDefinitionId for an accurate check.
-	MOHARVEST_LOG(this, "Inventory",
-		"CanAddItem('%s') -> %s (new GUID, HasEmptySlot=%s, SlotItemGuids.Num=%d, Entries.Num=%d)",
-		*ItemGuid.ToString(EGuidFormats::Short),
-		bEmpty ? TEXT("true") : TEXT("false"),
-		bEmpty ? TEXT("true") : TEXT("false"),
-		SlotItemGuids.Num(), Inventory.Entries.Num());
-	return bEmpty;
+	if (!ItemGuid.IsValid()) return false;
+	const int32 Index = FindEntryIndexByGuid(ItemGuid);
+	if (Index == INDEX_NONE) return Inventory.Entries.Num() < FMath::Max(1, SlotCount);
+	const FMOInventoryEntry& Entry = Inventory.Entries[Index];
+	FMOItemDefinitionRow Def;
+	if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, Def)) return false;
+	const int32 MaxStack = GetItemStackLimit(Def);
+	return MaxStack > 1 && GetAddCapacity(Entry.ItemDefinitionId, GetInstanceState(ItemGuid), MaxStack, true) > 0;
 }
 
 bool UMOInventoryComponent::CanAddItemByDefinitionId(FName ItemDefinitionId, int32 Quantity) const
 {
-	if (ItemDefinitionId.IsNone() || Quantity <= 0)
+	FMOItemDefinitionRow Def;
+	if (Quantity <= 0 || !UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, Def)) return false;
+	const FMOItemInstanceState State = MOInventoryAdds::NormalizeState(Def, FMOItemInstanceState());
+	return GetAddCapacity(ItemDefinitionId, State, GetItemStackLimit(Def), true) >= Quantity;
+}
+
+bool UMOInventoryComponent::CanAddItemsByDefinition(const TMap<FName, int32>& Items) const
+{
+	const int64 FreeSlots = FMath::Max(0, FMath::Max(1, SlotCount) - Inventory.Entries.Num());
+	int64 NeededSlots = 0;
+	for (const auto& Pair : Items)
 	{
-		MOHARVEST_LOG(this, "Inventory",
-			"CanAddItemByDefinitionId('%s', %d) -> false (invalid input)",
-			*ItemDefinitionId.ToString(), Quantity);
-		return false;
+		FMOItemDefinitionRow Def;
+		if (Pair.Value <= 0 || !UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, Def)) return false;
+		const int32 MaxStack = GetItemStackLimit(Def);
+		const auto State = MOInventoryAdds::NormalizeState(Def, FMOItemInstanceState());
+		const int64 ExistingRoom = GetAddCapacity(Pair.Key, State, MaxStack, true) - FreeSlots * MaxStack;
+		const int64 Remaining = FMath::Max<int64>(0, int64(Pair.Value) - ExistingRoom);
+		NeededSlots += (Remaining + MaxStack - 1) / MaxStack;
+		if (NeededSlots > FreeSlots) return false;
 	}
-
-	// Get item definition for max stack size
-	FMOItemDefinitionRow ItemDef;
-	int32 MaxStackSize = 99;
-	bool bIsTool = false;
-	bool bHasDefinition = false;
-
-	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
-	{
-		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
-		bIsTool = ItemDef.bIsTool;
-		bHasDefinition = true;
-	}
-
-	// Count empty slots up front for diagnostics.
-	int32 EmptySlots = 0;
-	for (const FGuid& SlotGuid : SlotItemGuids)
-	{
-		if (!SlotGuid.IsValid())
-		{
-			++EmptySlots;
-		}
-	}
-
-	int32 RemainingQuantity = Quantity;
-
-	// Tools don't stack, so check if we have enough empty slots
-	if (bIsTool || MaxStackSize <= 1)
-	{
-		const int32 SlotsNeeded = Quantity; // Each tool needs its own slot
-		const bool bResult = EmptySlots >= SlotsNeeded;
-		MOHARVEST_LOG(this, "Inventory",
-			"CanAddItemByDefinitionId('%s', %d) -> %s [non-stackable path: bIsTool=%d, MaxStack=%d, EmptySlots=%d, SlotsNeeded=%d, SlotItemGuids.Num=%d, HasDef=%d]",
-			*ItemDefinitionId.ToString(), Quantity,
-			bResult ? TEXT("true") : TEXT("false"),
-			bIsTool ? 1 : 0, MaxStackSize, EmptySlots, SlotsNeeded,
-			SlotItemGuids.Num(), bHasDefinition ? 1 : 0);
-		return bResult;
-	}
-
-	// For stackable items, first check how much room exists in current stacks
-	int32 RoomInExistingStacks = 0;
-	int32 MatchingEntries = 0;
-	for (const FMOInventoryEntry& Entry : Inventory.Entries)
-	{
-		if (Entry.ItemDefinitionId != ItemDefinitionId)
-		{
-			continue;
-		}
-		++MatchingEntries;
-		const int32 SpaceInStack = MaxStackSize - Entry.Quantity;
-		if (SpaceInStack > 0)
-		{
-			RoomInExistingStacks += SpaceInStack;
-			RemainingQuantity -= SpaceInStack;
-			if (RemainingQuantity <= 0)
-			{
-				MOHARVEST_LOG(this, "Inventory",
-					"CanAddItemByDefinitionId('%s', %d) -> true [stack-fit: MaxStack=%d, RoomInStacks=%d, EmptySlots=%d, MatchingEntries=%d, SlotItemGuids.Num=%d, HasDef=%d]",
-					*ItemDefinitionId.ToString(), Quantity,
-					MaxStackSize, RoomInExistingStacks, EmptySlots, MatchingEntries,
-					SlotItemGuids.Num(), bHasDefinition ? 1 : 0);
-				return true;
-			}
-		}
-	}
-
-	// Calculate how many new slots we need for remaining quantity
-	const int32 NewSlotsNeeded = (RemainingQuantity + MaxStackSize - 1) / MaxStackSize;
-
-	const bool bResult = EmptySlots >= NewSlotsNeeded;
-	MOHARVEST_LOG(this, "Inventory",
-		"CanAddItemByDefinitionId('%s', %d) -> %s [stack+slot: MaxStack=%d, MatchingEntries=%d, RoomInStacks=%d, RemainingAfterStacks=%d, NewSlotsNeeded=%d, EmptySlots=%d, SlotItemGuids.Num=%d, Entries.Num=%d, HasDef=%d]",
-		*ItemDefinitionId.ToString(), Quantity,
-		bResult ? TEXT("true") : TEXT("false"),
-		MaxStackSize, MatchingEntries, RoomInExistingStacks, RemainingQuantity,
-		NewSlotsNeeded, EmptySlots, SlotItemGuids.Num(), Inventory.Entries.Num(),
-		bHasDefinition ? 1 : 0);
-	return bResult;
+	return true;
 }
 
 bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const
@@ -894,7 +744,7 @@ int32 UMOInventoryComponent::ReconcileSlots()
 	if (bChanged)
 	{
 		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
+		BroadcastSlotsChanged();
 	}
 	if (Unslotted > 0)
 	{
@@ -925,7 +775,7 @@ bool UMOInventoryComponent::SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid)
 	{
 		SlotItemGuids[SlotIndex].Invalidate();
 		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
+		BroadcastSlotsChanged();
 		return true;
 	}
 
@@ -941,7 +791,7 @@ bool UMOInventoryComponent::SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid)
 
 	SlotItemGuids[SlotIndex] = ItemGuid;
 	MarkSlotItemGuidsDirty();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 	return true;
 }
 
@@ -976,7 +826,7 @@ bool UMOInventoryComponent::SwapSlots(int32 SlotIndexA, int32 SlotIndexB)
 	SlotItemGuids[SlotIndexB] = TempGuid;
 
 	MarkSlotItemGuidsDirty();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 	return true;
 }
 
@@ -989,7 +839,7 @@ void UMOInventoryComponent::MarkSlotItemGuidsDirty()
 
 void UMOInventoryComponent::OnRep_SlotItemGuids()
 {
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 }
 
 /*
@@ -1017,7 +867,7 @@ void UMOInventoryComponent::ClearInventoryAndSlots()
 	}
 
 	MarkSlotItemGuidsDirty();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 }
 
 bool UMOInventoryComponent::SetSlotCountAuthority(int32 NewSlotCount)
@@ -1033,7 +883,7 @@ bool UMOInventoryComponent::SetSlotCountAuthority(int32 NewSlotCount)
 	SlotItemGuids.SetNum(SlotCount);
 
 	MarkSlotItemGuidsDirty();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 	return true;
 }
 
@@ -1050,76 +900,9 @@ bool UMOInventoryComponent::AddItemByGuidWithoutSlotAutoAssign(const FGuid& Item
 
 bool UMOInventoryComponent::AddItemByGuidNoStack(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd)
 {
-	AActor* OwnerActor = GetOwner();
-	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidNoStack requires authority"));
-		return false;
-	}
-
-	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
-	{
-		return false;
-	}
-
-	EnsureSlotsInitialized();
-
-	// Check if this exact GUID already exists (would be an error - caller should use a new GUID)
-	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
-	if (ExistingIndex != INDEX_NONE)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidNoStack: GUID already exists, use AddItemByGuid for stacking"));
-		return false;
-	}
-
-	// Get item definition for max stack size and durability
-	FMOItemDefinitionRow ItemDef;
-	int32 MaxStackSize = 99;
-	bool bIsTool = false;
-	int32 MaxDurability = -1;
-
-	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
-	{
-		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
-		bIsTool = ItemDef.bIsTool;
-		MaxDurability = ItemDef.MaxDurability;
-	}
-
-	// Create new entry directly (no stacking into existing entries)
-	FMOInventoryEntry NewEntry;
-	NewEntry.ItemGuid = ItemGuid;
-	NewEntry.ItemDefinitionId = ItemDefinitionId;
-	NewEntry.Quantity = FMath::Min(QuantityToAdd, MaxStackSize);
-
-	// Initialize durability for tools
-	if (bIsTool && MaxDurability > 0)
-	{
-		NewEntry.CurrentDurability = MaxDurability;
-	}
-	else
-	{
-		NewEntry.CurrentDurability = -1;
-	}
-
-	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
-	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] AddItemByGuidNoStack: Created new stack of %s with %d items (no stacking)"),
-		*ItemDefinitionId.ToString(), NewEntry.Quantity);
-
-	// Auto-assign to slot if enabled
-	if (bAutoAssignNewItemsToSlots && TryAutoAssignGuidToEmptySlot(NewEntry.ItemGuid))
-	{
-		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
-	}
-
-	BroadcastInventoryChanged();
-
-	// Notify that items were added
-	OnItemAdded.Broadcast(ItemDefinitionId, NewEntry.Quantity);
-
-	return true;
+	FMOInventoryAddOptions Options;
+	Options.bAllowStacking = false;
+	return TryAddItem(ItemGuid, ItemDefinitionId, QuantityToAdd, Options).IsComplete();
 }
 
 void UMOInventoryComponent::BuildSaveData(FMOInventorySaveData& OutSaveData) const
@@ -1208,6 +991,7 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 		return false;
 	}
 
+	FMOInventoryMutationScope Mutation(this);
 	const int32 DesiredSlotCount = FMath::Max(1, InSaveData.SlotCount);
 
 	const bool bPreviousAutoAssign = bAutoAssignNewItemsToSlots;
@@ -1230,7 +1014,8 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 		NewEntry.Quantity = ItemSaveEntry.Quantity;
 		NewEntry.CurrentDurability = ItemSaveEntry.CurrentDurability;
 		NewEntry.Liquid = ItemSaveEntry.Liquid;
-		Inventory.Entries.Add(NewEntry);
+		const int32 Index = Inventory.Entries.Add(NewEntry);
+		Inventory.MarkItemDirty(Inventory.Entries[Index]);
 	}
 
 	Inventory.MarkArrayDirty();
@@ -1242,7 +1027,7 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 	SlotItemGuids.SetNum(SlotCount);
 
 	MarkSlotItemGuidsDirty();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 
 	bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
 
@@ -1600,37 +1385,44 @@ AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quan
 
 bool UMOInventoryComponent::TransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory)
 {
-	if (!IsValid(TargetInventory) || !ItemGuid.IsValid())
-	{
-		return false;
-	}
+	return TryTransferItem(ItemGuid, TargetInventory).IsComplete();
+}
 
+FMOInventoryAddResult UMOInventoryComponent::TryTransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory)
+{
+	FMOInventoryAddResult Result;
 	FMOInventoryEntry Entry;
-	if (!TryGetEntryByGuid(ItemGuid, Entry))
+	if (!IsValid(TargetInventory) || TargetInventory == this || !TryGetEntryByGuid(ItemGuid, Entry))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Item GUID %s not found"), *ItemGuid.ToString(EGuidFormats::Short));
-		return false;
+		Result.Failure = EMOInventoryAddFailure::InvalidInput;
+		return Result;
 	}
-
-	// Carry the item's current durability across the transfer so a chest
-	// round-trip no longer silently repairs a worn tool to full. (H31)
-	FGuid NewGuid = FGuid::NewGuid();
-	if (!TargetInventory->AddItemByGuidWithDurability(NewGuid, Entry.ItemDefinitionId, Entry.Quantity, Entry.CurrentDurability))
+	Result.Requested = Entry.Quantity;
+	if (!GetOwner() || !GetOwner()->HasAuthority())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Failed to add to target inventory (full?)"));
-		return false;
+		Result.Failure = EMOInventoryAddFailure::NotAuthority;
+		return Result;
 	}
-
-	// ... and its contents (a container keeps its water).
-	TargetInventory->SetLiquid(NewGuid, Entry.Liquid);
-
-	// Remove from source
-	RemoveItemByGuid(ItemGuid, Entry.Quantity);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] TransferItem: Transferred %s x%d"),
-		*Entry.ItemDefinitionId.ToString(), Entry.Quantity);
-
-	return true;
+	FMOInventoryEntry Existing;
+	if (TargetInventory->TryGetEntryByGuid(ItemGuid, Existing))
+	{
+		Result.Failure = EMOInventoryAddFailure::IdentityConflict;
+		return Result;
+	}
+	FMOInventoryMutationScope SourceMutation(this);
+	FMOInventoryMutationScope TargetMutation(TargetInventory);
+	FMOInventoryAddOptions Options;
+	Options.State.Durability = Entry.CurrentDurability;
+	Options.State.Liquid = Entry.Liquid;
+	Options.bReportPickup = false;
+	Result = TargetInventory->TryAddItem(ItemGuid, Entry.ItemDefinitionId, Entry.Quantity, Options);
+	if (Result.IsComplete())
+	{
+		// Neither inventory has dispatched callbacks since the snapshot: the source still owns exactly this stack.
+		const bool bRemoved = RemoveItemByGuid(ItemGuid, Entry.Quantity);
+		check(bRemoved);
+	}
+	return Result;
 }
 
 int32 UMOInventoryComponent::TransferAllTo(UMOInventoryComponent* TargetInventory)
@@ -1674,182 +1466,86 @@ int32 UMOInventoryComponent::TransferAllFrom(UMOInventoryComponent* SourceInvent
 
 void UMOInventoryComponent::StackAndOrganize()
 {
-	// Step 1: Consolidate stacks of the same item type, respecting max stack size
-	TMap<FName, TArray<int32>> ItemTypeToEntryIndices;
-
-	for (int32 i = 0; i < Inventory.Entries.Num(); ++i)
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	FMOInventoryMutationScope Mutation(this);
+	for (int32 TargetIndex = 0; TargetIndex < Inventory.Entries.Num(); ++TargetIndex)
 	{
-		const FMOInventoryEntry& Entry = Inventory.Entries[i];
-		ItemTypeToEntryIndices.FindOrAdd(Entry.ItemDefinitionId).Add(i);
-	}
-
-	// For each item type with multiple entries, consolidate respecting stack limits
-	TArray<int32> IndicesToRemove;
-
-	for (auto& Pair : ItemTypeToEntryIndices)
-	{
-		TArray<int32>& Indices = Pair.Value;
-		if (Indices.Num() <= 1)
+		FMOInventoryEntry& Target = Inventory.Entries[TargetIndex];
+		FMOItemDefinitionRow Def;
+		if (Target.Quantity <= 0 || !UMOItemDatabaseSettings::GetItemDefinition(Target.ItemDefinitionId, Def)) continue;
+		const int32 MaxStack = GetItemStackLimit(Def);
+		if (MaxStack <= 1) continue;
+		FMOItemInstanceState State;
+		State.Durability = Target.CurrentDurability;
+		State.Liquid = Target.Liquid;
+		for (int32 SourceIndex = TargetIndex + 1; SourceIndex < Inventory.Entries.Num() && Target.Quantity < MaxStack; ++SourceIndex)
 		{
-			continue;
-		}
-
-		// Get max stack size for this item type
-		FMOItemDefinitionRow ItemDef;
-		int32 MaxStack = 99;  // Default fallback
-		if (UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef))
-		{
-			MaxStack = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
-		}
-
-		// Sort so we process in order
-		Indices.Sort();
-
-		// Calculate total quantity across all stacks
-		int32 TotalQuantity = 0;
-		for (int32 Idx : Indices)
-		{
-			TotalQuantity += Inventory.Entries[Idx].Quantity;
-		}
-
-		// Distribute quantity across entries, respecting max stack size
-		int32 RemainingQuantity = TotalQuantity;
-		int32 EntriesNeeded = (TotalQuantity + MaxStack - 1) / MaxStack;  // Ceiling division
-		int32 EntriesUsed = 0;
-
-		for (int32 j = 0; j < Indices.Num(); ++j)
-		{
-			if (EntriesUsed < EntriesNeeded && RemainingQuantity > 0)
-			{
-				// Keep this entry with proper stack amount
-				int32 StackAmount = FMath::Min(RemainingQuantity, MaxStack);
-				Inventory.Entries[Indices[j]].Quantity = StackAmount;
-				RemainingQuantity -= StackAmount;
-				EntriesUsed++;
-			}
-			else
-			{
-				// Remove excess entries
-				IndicesToRemove.Add(Indices[j]);
-			}
+			FMOInventoryEntry& Source = Inventory.Entries[SourceIndex];
+			if (!HasMatchingStackState(Source, Target.ItemDefinitionId, State)) continue;
+			const int32 Moved = FMath::Min(MaxStack - Target.Quantity, Source.Quantity);
+			if (Moved <= 0) continue;
+			Target.Quantity += Moved;
+			Source.Quantity -= Moved;
+			Inventory.MarkItemDirty(Target);
+			Inventory.MarkItemDirty(Source);
 		}
 	}
-
-	// Remove merged entries (in reverse order to preserve indices)
-	IndicesToRemove.Sort();
-	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
+	const int32 Removed = Inventory.Entries.RemoveAll([](const FMOInventoryEntry& Entry) { return Entry.Quantity <= 0; });
+	if (Removed > 0) Inventory.MarkArrayDirty();
+	SlotItemGuids.Init(FGuid(), FMath::Max(1, SlotCount));
+	for (int32 Index = 0; Index < Inventory.Entries.Num() && Index < SlotItemGuids.Num(); ++Index)
 	{
-		// Clear slot if assigned
-		FGuid GuidToRemove = Inventory.Entries[IndicesToRemove[i]].ItemGuid;
-		RemoveGuidFromSlotsInternal(GuidToRemove);
-
-		Inventory.Entries.RemoveAt(IndicesToRemove[i]);
+		SlotItemGuids[Index] = Inventory.Entries[Index].ItemGuid;
 	}
-
-	// Step 2: Reassign all items to lowest index slots
-	SlotItemGuids.Init(FGuid(), SlotCount);
-
-	for (int32 i = 0; i < Inventory.Entries.Num() && i < SlotCount; ++i)
-	{
-		SlotItemGuids[i] = Inventory.Entries[i].ItemGuid;
-	}
-
 	MarkSlotItemGuidsDirty();
-	Inventory.MarkArrayDirty();
+	BroadcastSlotsChanged();
 	BroadcastInventoryChanged();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] StackAndOrganize: Complete. %d entries remaining"),
-		Inventory.Entries.Num());
 }
 
 int32 UMOInventoryComponent::FillStacksFrom(UMOInventoryComponent* SourceInventory)
 {
-	if (!IsValid(SourceInventory))
-	{
-		return 0;
-	}
-
+	if (!IsValid(SourceInventory) || SourceInventory == this || !GetOwner() || !GetOwner()->HasAuthority()
+		|| !SourceInventory->GetOwner() || !SourceInventory->GetOwner()->HasAuthority()) return 0;
+	FMOInventoryMutationScope TargetMutation(this);
+	FMOInventoryMutationScope SourceMutation(SourceInventory);
 	int32 TotalFilled = 0;
-
-	// For each item type in this inventory, check if we have partial stacks
-	for (FMOInventoryEntry& TargetEntry : Inventory.Entries)
+	for (FMOInventoryEntry& Target : Inventory.Entries)
 	{
-		// Get max stack size for this item
-		FMOItemDefinitionRow ItemDef;
-		if (!UMOItemDatabaseSettings::GetItemDefinition(TargetEntry.ItemDefinitionId, ItemDef))
+		FMOItemDefinitionRow Def;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(Target.ItemDefinitionId, Def)) continue;
+		const int32 MaxStack = GetItemStackLimit(Def);
+		if (MaxStack <= 1 || Target.Quantity >= MaxStack) continue;
+		FMOItemInstanceState State;
+		State.Durability = Target.CurrentDurability;
+		State.Liquid = Target.Liquid;
+		for (FMOInventoryEntry& Source : SourceInventory->Inventory.Entries)
 		{
-			continue;
-		}
-
-		int32 MaxStack = ItemDef.MaxStackSize;
-		if (MaxStack <= 0)
-		{
-			MaxStack = 1;  // Non-stackable
-		}
-
-		if (TargetEntry.Quantity >= MaxStack)
-		{
-			continue;  // Already full
-		}
-
-		int32 SpaceInStack = MaxStack - TargetEntry.Quantity;
-
-		// Find matching items in source inventory
-		for (FMOInventoryEntry& SourceEntry : SourceInventory->Inventory.Entries)
-		{
-			if (SourceEntry.ItemDefinitionId != TargetEntry.ItemDefinitionId)
-			{
-				continue;
-			}
-
-			if (SourceEntry.Quantity <= 0)
-			{
-				continue;
-			}
-
-			int32 ToTransfer = FMath::Min(SpaceInStack, SourceEntry.Quantity);
-			if (ToTransfer <= 0)
-			{
-				break;  // Target stack is full
-			}
-
-			TargetEntry.Quantity += ToTransfer;
-			SourceEntry.Quantity -= ToTransfer;
-			TotalFilled += ToTransfer;
-			SpaceInStack -= ToTransfer;
-
-			// Remove source entry if empty
-			if (SourceEntry.Quantity <= 0)
-			{
-				SourceInventory->RemoveGuidFromSlotsInternal(SourceEntry.ItemGuid);
-			}
-
-			if (SpaceInStack <= 0)
-			{
-				break;  // Target stack is full
-			}
+			if (Target.Quantity >= MaxStack) break;
+			if (!HasMatchingStackState(Source, Target.ItemDefinitionId, State)) continue;
+			const int32 Moved = FMath::Min(MaxStack - Target.Quantity, Source.Quantity);
+			if (Moved <= 0) continue;
+			Target.Quantity += Moved;
+			Source.Quantity -= Moved;
+			TotalFilled += Moved;
+			Inventory.MarkItemDirty(Target);
+			SourceInventory->Inventory.MarkItemDirty(Source);
 		}
 	}
-
-	// Clean up empty entries in source
-	for (int32 i = SourceInventory->Inventory.Entries.Num() - 1; i >= 0; --i)
+	for (int32 Index = SourceInventory->Inventory.Entries.Num() - 1; Index >= 0; --Index)
 	{
-		if (SourceInventory->Inventory.Entries[i].Quantity <= 0)
+		if (SourceInventory->Inventory.Entries[Index].Quantity <= 0)
 		{
-			SourceInventory->Inventory.Entries.RemoveAt(i);
+			SourceInventory->RemoveGuidFromSlotsInternal(SourceInventory->Inventory.Entries[Index].ItemGuid);
+			SourceInventory->Inventory.Entries.RemoveAt(Index);
+			SourceInventory->Inventory.MarkArrayDirty();
+			SourceInventory->BroadcastSlotsChanged();
 		}
 	}
-
 	if (TotalFilled > 0)
 	{
-		Inventory.MarkArrayDirty();
-		SourceInventory->Inventory.MarkArrayDirty();
 		BroadcastInventoryChanged();
 		SourceInventory->BroadcastInventoryChanged();
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] FillStacksFrom: Filled %d items into existing stacks"), TotalFilled);
-
 	return TotalFilled;
 }
 
@@ -1949,7 +1645,7 @@ void UMOInventoryComponent::ApplyStartingItems()
 	}
 
 	ReconcileSlots();
-	OnSlotsChanged.Broadcast();
+	BroadcastSlotsChanged();
 }
 
 // ============================================================================
@@ -1962,7 +1658,8 @@ namespace MOIngredients
 	bool GetLiquidMeasure(FName DefinitionId, float& OutMl, bool& bOutSafe)
 	{
 		FMOItemDefinitionRow Def;
-		if (DefinitionId.IsNone() || !UMOItemDatabaseSettings::GetItemDefinition(DefinitionId, Def) || Def.LiquidMeasureMl <= 0.0f)
+		if (DefinitionId.IsNone() || !UMOItemDatabaseSettings::GetItemDefinition(DefinitionId, Def)
+			|| !FMath::IsFinite(Def.LiquidMeasureMl) || Def.LiquidMeasureMl <= 0.0f)
 		{
 			return false;
 		}
@@ -1977,8 +1674,6 @@ namespace MOIngredients
 		return UMOItemDatabaseSettings::GetItemDefinition(DefinitionId, Def) ? Def.LiquidCapacityMl : 0.0f;
 	}
 
-	/** Liquid that is a whole number of measures within half a millilitre counts as that many (float drift from mixing). */
-	constexpr float MeasureToleranceMl = 0.5f;
 }
 
 int32 UMOInventoryComponent::CountIngredient(FName DefinitionId) const
@@ -1993,122 +1688,167 @@ int32 UMOInventoryComponent::CountIngredient(FName DefinitionId) const
 	float Ml = 0.0f;
 	for (const FMOInventoryEntry& Entry : Inventory.Entries)
 	{
-		if (Entry.Liquid.IsSuitableMeasure(bSafe))
+		if (Entry.Quantity > 0 && FMath::IsFinite(Entry.Liquid.Millilitres) && MOIngredients::CapacityOf(Entry.ItemDefinitionId) > 0.0f
+			&& Entry.Liquid.IsSuitableMeasure(bSafe))
 		{
 			Ml += Entry.Liquid.Millilitres;
 		}
 	}
-	return Items + FMath::FloorToInt((Ml + MOIngredients::MeasureToleranceMl) / MeasureMl);
+	return Items + FMath::FloorToInt((Ml + MOIngredientPlans::MeasureToleranceMl(MeasureMl)) / MeasureMl);
+}
+
+void UMOInventoryComponent::InstallIngredientPlan(TArray<FMOInventoryEntry>&& Entries)
+{
+	bool bChanged = Entries.Num() != Inventory.Entries.Num();
+	bool bRemoved = false;
+	TMap<FName, int32> Added;
+	for (const auto& Before : Inventory.Entries)
+	{
+		Added.FindOrAdd(Before.ItemDefinitionId) -= Before.Quantity;
+		if (!Entries.ContainsByPredicate([&Before](const auto& Entry) { return Entry.ItemGuid == Before.ItemGuid; })) bRemoved = true;
+	}
+	for (auto& Entry : Entries)
+	{
+		Added.FindOrAdd(Entry.ItemDefinitionId) += Entry.Quantity;
+		const int32 OldIndex = FindEntryIndexByGuid(Entry.ItemGuid);
+		// FFastArraySerializerItem deliberately clears replication metadata on copy.
+		// Snapshot planning must preserve the live serializer identity of every survivor,
+		// including unchanged entries, before replacing the array's storage.
+		if (OldIndex != INDEX_NONE)
+		{
+			const auto& Before = Inventory.Entries[OldIndex];
+			Entry.ReplicationID = Before.ReplicationID;
+			Entry.ReplicationKey = Before.ReplicationKey;
+			Entry.MostRecentArrayReplicationKey = Before.MostRecentArrayReplicationKey;
+		}
+		else
+		{
+			Entry.ReplicationID = INDEX_NONE;
+			Entry.ReplicationKey = INDEX_NONE;
+			Entry.MostRecentArrayReplicationKey = INDEX_NONE;
+		}
+		if (OldIndex == INDEX_NONE || Inventory.Entries[OldIndex].Quantity != Entry.Quantity
+			|| Inventory.Entries[OldIndex].ItemDefinitionId != Entry.ItemDefinitionId
+			|| Inventory.Entries[OldIndex].CurrentDurability != Entry.CurrentDurability
+			|| !(Inventory.Entries[OldIndex].Liquid == Entry.Liquid))
+		{
+			Inventory.MarkItemDirty(Entry);
+			bChanged = true;
+		}
+	}
+	if (!bChanged) return;
+	Inventory.Entries = MoveTemp(Entries);
+	if (bRemoved) Inventory.MarkArrayDirty();
+	RebuildGuidIndex();
+	ReconcileSlots();
+	for (const auto& Pair : Added) if (Pair.Value > 0) PendingItemAdded.FindOrAdd(Pair.Key) += Pair.Value;
+	BroadcastInventoryChanged();
+}
+
+FMOIngredientOperationResult UMOInventoryComponent::ReserveIngredients(const TMap<FName, int32>& Requirements, FMOIngredientReservation& OutReservation)
+{
+	FMOIngredientOperationResult Result;
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		Result.Failure = EMOIngredientFailure::NotAuthority;
+		return Result;
+	}
+	TArray<FMOInventoryEntry> Plan = Inventory.Entries;
+	Result = MOIngredientPlans::Reserve(Plan, Requirements, OutReservation, UMOItemDatabaseSettings::GetItemDefinition);
+	if (Result.IsComplete())
+	{
+		FMOInventoryMutationScope Mutation(this);
+		InstallIngredientPlan(MoveTemp(Plan));
+	}
+	return Result;
+}
+
+FMOIngredientOperationResult UMOInventoryComponent::ReturnReservedIngredients(FMOIngredientReservation& Reservation)
+{
+	FMOIngredientOperationResult Result;
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		Result.Failure = EMOIngredientFailure::NotAuthority;
+		return Result;
+	}
+	TArray<FMOInventoryEntry> Plan = Inventory.Entries;
+	FMOIngredientReservation Remaining = Reservation;
+	Result = MOIngredientPlans::Return(Plan, SlotCount, Remaining, UMOItemDatabaseSettings::GetItemDefinition);
+	FMOInventoryMutationScope Mutation(this);
+	Reservation = MoveTemp(Remaining);
+	InstallIngredientPlan(MoveTemp(Plan));
+	return Result;
+}
+
+FMOIngredientOperationResult UMOInventoryComponent::TransferIngredientsTo(UMOInventoryComponent* Target, const TMap<FName, int32>& Requirements,
+	const FMOIngredientTransferOptions& Options, TArray<FGuid>* OutCarriedContainers)
+{
+	FMOIngredientOperationResult Result;
+	if (!IsValid(Target) || Target == this || !GetOwner() || !Target->GetOwner() || GetWorld() != Target->GetWorld())
+	{
+		Result.Failure = EMOIngredientFailure::InvalidInput;
+		return Result;
+	}
+	if (!GetOwner()->HasAuthority() || !Target->GetOwner()->HasAuthority())
+	{
+		Result.Failure = EMOIngredientFailure::NotAuthority;
+		return Result;
+	}
+	TArray<FMOInventoryEntry> SourcePlan = Inventory.Entries, TargetPlan = Target->Inventory.Entries;
+	FMOIngredientReservation Transfer;
+	TSet<FGuid> AdditionalItems;
+	for (const auto& Guid : Options.AlsoCarryItemGuids)
+	{
+		if (!Guid.IsValid() || AdditionalItems.Contains(Guid) || !Inventory.Entries.ContainsByPredicate([&Guid](const auto& Entry) { return Entry.ItemGuid == Guid; }))
+		{
+			Result.Failure = EMOIngredientFailure::IdentityConflict;
+			return Result;
+		}
+		AdditionalItems.Add(Guid);
+	}
+	Result = MOIngredientPlans::Reserve(SourcePlan, Requirements, Transfer, UMOItemDatabaseSettings::GetItemDefinition, &AdditionalItems);
+	if (!Result.IsComplete()) return Result;
+	TArray<FGuid> CarriedContainers;
+	if (Options.bCarrySourceContainers)
+	{
+		Result = MOIngredientPlans::CarrySourceContainers(SourcePlan, Transfer, CarriedContainers, UMOItemDatabaseSettings::GetItemDefinition);
+		if (!Result.IsComplete()) return Result;
+	}
+	Result = MOIngredientPlans::CarryItems(SourcePlan, Transfer, Options.AlsoCarryItemGuids);
+	if (!Result.IsComplete()) return Result;
+	Result = MOIngredientPlans::Return(TargetPlan, Target->SlotCount, Transfer, UMOItemDatabaseSettings::GetItemDefinition);
+	if (!Result.IsComplete()) return Result;
+	FMOInventoryMutationScope SourceMutation(this);
+	FMOInventoryMutationScope TargetMutation(Target);
+	InstallIngredientPlan(MoveTemp(SourcePlan));
+	Target->InstallIngredientPlan(MoveTemp(TargetPlan));
+	if (OutCarriedContainers) *OutCarriedContainers = MoveTemp(CarriedContainers);
+	return Result;
 }
 
 bool UMOInventoryComponent::ConsumeIngredient(FName DefinitionId, int32 Quantity)
 {
-	if (Quantity <= 0)
-	{
-		return true;
-	}
-	if (!GetOwner() || !GetOwner()->HasAuthority() || CountIngredient(DefinitionId) < Quantity)
-	{
-		return false;
-	}
-	const int32 FromItems = FMath::Min(Quantity, GetItemCountByDefinitionId(DefinitionId));
-	if (FromItems > 0 && !RemoveItemByDefinitionId(DefinitionId, FromItems))
-	{
-		return false;
-	}
-	float MeasureMl = 0.0f;
-	bool bSafe = false;
-	if (FromItems == Quantity || !MOIngredients::GetLiquidMeasure(DefinitionId, MeasureMl, bSafe))
-	{
-		return FromItems == Quantity;
-	}
-	// The rest is liquid: draw it from the fullest suitable containers first (fewest containers touched).
-	TArray<TPair<FGuid, FMOLiquidContents>> Sources;
-	for (const FMOInventoryEntry& Entry : Inventory.Entries)
-	{
-		if (Entry.Liquid.IsSuitableMeasure(bSafe))
-		{
-			Sources.Emplace(Entry.ItemGuid, Entry.Liquid);
-		}
-	}
-	Sources.Sort([](const TPair<FGuid, FMOLiquidContents>& A, const TPair<FGuid, FMOLiquidContents>& B) { return A.Value.Millilitres > B.Value.Millilitres; });
-	float NeedMl = (Quantity - FromItems) * MeasureMl;
-	for (TPair<FGuid, FMOLiquidContents>& Source : Sources)
-	{
-		if (NeedMl <= MOIngredients::MeasureToleranceMl)
-		{
-			break;
-		}
-		const float Take = FMath::Min(NeedMl, Source.Value.Millilitres);
-		Source.Value.Millilitres -= Take;
-		NeedMl -= Take;
-		SetLiquid(Source.Key, Source.Value.IsEmpty() ? FMOLiquidContents() : Source.Value);
-	}
-	return NeedMl <= MOIngredients::MeasureToleranceMl;
+	if (Quantity <= 0) return Quantity == 0;
+	FMOIngredientReservation Consumed;
+	return ReserveIngredients({{DefinitionId, Quantity}}, Consumed).IsComplete();
 }
 
 int32 UMOInventoryComponent::AddIngredient(FName DefinitionId, int32 Quantity)
 {
-	if (Quantity <= 0 || !GetOwner() || !GetOwner()->HasAuthority())
+	if (Quantity <= 0 || !GetOwner() || !GetOwner()->HasAuthority()) return 0;
+	FMOIngredientReservation Products;
+	if (!MOIngredientPlans::CreateProducts({{DefinitionId, Quantity}}, Products, UMOItemDatabaseSettings::GetItemDefinition).IsComplete()) return 0;
+	const float Measure = Products.Lots.IsEmpty() ? 0.0f : Products.Lots[0].MeasureMl;
+	ReturnReservedIngredients(Products);
+	double RemainingUnits = 0.0;
+	for (const auto& Lot : Products.Lots)
 	{
-		return 0;
+		RemainingUnits += Lot.IsLiquid() ? double(Lot.State.Liquid.Millilitres) / Lot.MeasureMl : Lot.Quantity;
 	}
-	float MeasureMl = 0.0f;
-	bool bSafe = false;
-	if (!MOIngredients::GetLiquidMeasure(DefinitionId, MeasureMl, bSafe))
-	{
-		return AddItemByGuid(FGuid::NewGuid(), DefinitionId, Quantity) ? Quantity : 0;
-	}
-	// What is poured: safe water is boiled fresh water; any other measure is untreated water of unknown source (a pond's risk: assume the worst fresh).
-	FMOLiquidContents Pour;
-	if (bSafe)
-	{
-		Pour.bBoiled = true;
-	}
-	else
-	{
-		const FMOWaterSourceProfile Untreated = UMOWaterSourceSettings::GetProfile(EMOWaterBodyKind::Pond);
-		Pour.SalinityGPerL = Untreated.SalinityGPerL;
-		Pour.IllnessChancePerLitre = Untreated.IllnessChancePerLitre;
-		Pour.Source = EMOWaterBodyKind::Pond;
-	}
-	float LeftMl = Quantity * MeasureMl;
-	// Containers with room, those already holding the same kind first, then empty ones; never mix safe and unsafe water (it would spoil the safe).
-	TArray<TPair<FGuid, FMOLiquidContents>> Targets;
-	TArray<float> Room;
-	for (const FMOInventoryEntry& Entry : Inventory.Entries)
-	{
-		const float Capacity = MOIngredients::CapacityOf(Entry.ItemDefinitionId);
-		const bool bHeldSafe = Entry.Liquid.IsSuitableMeasure(true);
-		if (Capacity - Entry.Liquid.Millilitres < 1.0f || (!Entry.Liquid.IsEmpty() && bHeldSafe != bSafe))
-		{
-			continue;
-		}
-		Targets.Emplace(Entry.ItemGuid, Entry.Liquid);
-		Room.Add(Capacity - Entry.Liquid.Millilitres);
-	}
-	for (int32 Pass = 0; Pass < 2 && LeftMl > MOIngredients::MeasureToleranceMl; ++Pass)
-	{
-		for (int32 I = 0; I < Targets.Num() && LeftMl > MOIngredients::MeasureToleranceMl; ++I)
-		{
-			if (Targets[I].Value.IsEmpty() != (Pass == 1) || Room[I] < 1.0f)
-			{
-				continue;   // pass 0: containers already holding this kind; pass 1: empty ones
-			}
-			FMOLiquidContents Part = Pour;
-			Part.Millilitres = FMath::Min(Room[I], LeftMl);
-			Targets[I].Value.Mix(Part);
-			Room[I] -= Part.Millilitres;
-			LeftMl -= Part.Millilitres;
-			SetLiquid(Targets[I].Key, Targets[I].Value);
-		}
-	}
-	const int32 Placed = Quantity - FMath::CeilToInt((LeftMl - MOIngredients::MeasureToleranceMl) / MeasureMl);
-	if (LeftMl > MOIngredients::MeasureToleranceMl)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] %s: %.0f ml of %s spilled -- no container with room"), *GetNameSafe(GetOwner()), LeftMl, *DefinitionId.ToString());
-	}
-	return FMath::Clamp(Placed, 0, Quantity);
+	// This compatibility API reports placed whole measures; queue products keep the exact remainder instead.
+	const double Tolerance = Measure > 0 ? MOIngredientPlans::MeasureToleranceMl(Measure) / Measure : 0.0;
+	const int32 Unplaced = FMath::CeilToInt(FMath::Max(0.0, RemainingUnits - Tolerance));
+	return FMath::Clamp(Quantity - Unplaced, 0, Quantity);
 }
 
 float UMOInventoryComponent::GetBestToolEffectiveness(EMOToolType ToolType) const

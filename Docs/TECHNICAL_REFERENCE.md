@@ -404,6 +404,23 @@ All existing timers follow this pattern correctly. New timers must too.
 
 Measurement methods, hitch hunts and benchmark results: `Docs/Performance.md`.
 
+## Inventory and equipment ownership
+
+- `UMOInventoryComponent::TryAddItem` is the shared capacity/stack/state boundary. It returns requested/accepted quantities and a typed
+  failure; partial placement requires explicit opt-in. Bool compatibility APIs require complete acceptance. Entries reserve slots even
+  while automatic slot assignment is disabled; state-incompatible items do not merge, and individually worn tools/vessels remain distinct.
+- `TryTransferItem` and `TransferIngredientsTo` plan both sides before mutation. The ingredient service jointly reserves physical and
+  liquid requirements, preserving GUIDs, wear and liquid provenance; hauling can move intact source vessels and explicit borrowed cargo.
+  Pure snapshot copies clear Unreal FastArray metadata, so installation restores surviving live identities/keys before dirtying changes.
+- Changed surviving FastArray entries need `MarkItemDirty`; `MarkArrayDirty` alone only covers collection membership changes.
+  `FMOInventoryMutationScope` coalesces callbacks around an already validated compound change; it is not rollback.
+- Equipment validates every slot byte before indexing. A pending swap is its item's sole durable owner; its old slot is cleared before
+  returning the previous item. Conflicting operations and reentrant callbacks refuse. Save/replication includes both hand timers and
+  item state. `ReduceEquippedDurability` is authority-only: ordinary wear emits `OnEquipmentDurabilityChanged`; depletion clears ownership
+  and emits the equipment change. Wear-only replication does not rebuild the held mesh. Infinite durability/pending swaps refuse wear.
+- Shared consumers use these contracts for pickups, harvest output capacity, split/fill/consolidate, equipment returns and queued materials.
+  Do not add a caller-specific remove-then-add transfer or infer an inventory failure from a depletion result.
+
 ## Character movement
 
 ### Crouch

@@ -66,6 +66,7 @@
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
 #include "MOItemInstanceState.h"
+#include "MOSurvivalStatsComponent.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -176,6 +177,10 @@ struct FMOPersistedPawnRecord
     /** Metabolism component state (nutrition, digestion, body composition) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOMetabolismSaveData MetabolismData;
+
+    /** HUD/AI survival meters. Old records default to bHasValidData=false and preserve class defaults. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOSurvivalSaveData SurvivalData;
 
     /** Mental state component (consciousness, shock, effects) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
@@ -360,7 +365,7 @@ public:
      * The terrain generator that made this world: FMOWorldGenParams::GeneratorVersion and its parameter hash (tuning + biomes). The seed alone does not
      * pin the land -- a newer generator (v7 took the caves out from under high ground) regenerates different ground under the saved buildings and
      * terrain edits. 0 = a save from before this field. Compared on load (UMOPersistenceSubsystem: a mismatch is logged and reported in FMOLoadResult);
-     * whether old worlds may change or must be migrated is Wes's policy call (Docs/Handoff_2026-10-13.md, H13).
+     * whether old worlds may change or must be migrated is Wes's policy call (Docs/Archive/Handoff_2026-10-13.md, H13).
      */
     UPROPERTY()
     int32 GeneratorVersion = 0;

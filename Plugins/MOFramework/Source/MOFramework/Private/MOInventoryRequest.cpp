@@ -173,20 +173,23 @@ bool FMOInventoryRequests::Execute(APlayerController* PC, const FMOInventoryRequ
 			break;   // nothing to split
 		}
 		const int32 SplitAmount = Entry.Quantity / 2;
-		if (!Source->RemoveItemByGuid(R.ItemGuid, SplitAmount))
-		{
-			break;
-		}
+		FMOInventoryMutationScope Mutation(Source);
 		const FGuid NewGuid = FGuid::NewGuid();
 		if (Source->HasEmptySlot())
 		{
-			bOk = Source->AddItemByGuidNoStack(NewGuid, Entry.ItemDefinitionId, SplitAmount);   // NoStack: it must not merge straight back
+			FMOInventoryAddOptions Options;
+			Options.State = Source->GetInstanceState(R.ItemGuid);
+			Options.bAllowStacking = false;
+			Options.bReportPickup = false;
+			bOk = Source->TryAddItem(NewGuid, Entry.ItemDefinitionId, SplitAmount, Options).IsComplete();
 		}
 		else
 		{
-			const FTransform At = ComputeDropTransform(Pawn);   // no room: the split half goes on the ground
-			bOk = Source->SpawnWorldItem(Entry.ItemDefinitionId, SplitAmount, NewGuid, At.GetLocation(), At.Rotator()) != nullptr;
+			const FTransform At = ComputeDropTransform(Pawn);
+			bOk = Source->SpawnWorldItem(Entry.ItemDefinitionId, SplitAmount, NewGuid, At.GetLocation(), At.Rotator(), Source->GetInstanceState(R.ItemGuid)) != nullptr;
 		}
+		if (bOk) Source->RemoveItemByGuid(R.ItemGuid, SplitAmount);
+
 		Count = bOk ? SplitAmount : 0;
 		break;
 	}
@@ -209,7 +212,11 @@ bool FMOInventoryRequests::Execute(APlayerController* PC, const FMOInventoryRequ
 			break;
 		}
 		const int32 SplitAmount = ItemComp->Quantity / 2;
-		if (Target->AddItemByGuidNoStack(FGuid::NewGuid(), ItemComp->ItemDefinitionId, SplitAmount))
+		FMOInventoryMutationScope Mutation(Target);
+		FMOInventoryAddOptions Options;
+		Options.State = ItemComp->InstanceState;
+		Options.bAllowStacking = false;
+		if (Target->TryAddItem(FGuid::NewGuid(), ItemComp->ItemDefinitionId, SplitAmount, Options).IsComplete())
 		{
 			ItemComp->Quantity -= SplitAmount;   // replicated
 			bOk = true;
@@ -225,6 +232,12 @@ bool FMOInventoryRequests::Execute(APlayerController* PC, const FMOInventoryRequ
 		const EMOEquipmentSlot Slot = static_cast<EMOEquipmentSlot>(R.EquipSlot);
 		if (!Equipment)
 		{
+			break;
+		}
+		const bool bNaturalSlot = R.Op == EMOInventoryOp::Equip && Slot == EMOEquipmentSlot::MAX;
+		if (!bNaturalSlot && !UMOEquipmentComponent::IsValidEquipmentSlot(Slot))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryReq] invalid equipment slot %u refused"), R.EquipSlot);
 			break;
 		}
 		if (R.Op == EMOInventoryOp::Equip)

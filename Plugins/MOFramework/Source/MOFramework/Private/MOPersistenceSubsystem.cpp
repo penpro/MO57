@@ -27,6 +27,7 @@
 #include "MOVitalsComponent.h"
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
+#include "MOSurvivalStatsComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
@@ -1255,6 +1256,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             MetabolismComp->BuildSaveData(PawnRecord.MetabolismData);
             PawnRecord.bHasComponentData = true;
         }
+		if (UMOSurvivalStatsComponent* SurvivalComp = Pawn->FindComponentByClass<UMOSurvivalStatsComponent>())
+		{
+			SurvivalComp->BuildSaveData(PawnRecord.SurvivalData);
+			PawnRecord.bHasComponentData = true;
+		}
         if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
         {
             MentalStateComp->BuildSaveData(PawnRecord.MentalStateData);
@@ -1692,6 +1698,10 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOMetabolismComponent* MetabolismComp = Pawn->FindComponentByClass<UMOMetabolismComponent>())
     {
         MetabolismComp->ApplySaveDataAuthority(PawnRecord.MetabolismData);
+    }
+    if (UMOSurvivalStatsComponent* SurvivalComp = Pawn->FindComponentByClass<UMOSurvivalStatsComponent>())
+    {
+        SurvivalComp->ApplySaveDataAuthority(PawnRecord.SurvivalData);
     }
     // Apply mental state
     if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())

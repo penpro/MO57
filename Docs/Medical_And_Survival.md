@@ -74,7 +74,10 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
 - **Eating is a timed action** (Wes, Oct 16): `FMOItemActions::EatSeconds` (mass at 2 g/s, floor 4 s) on `UMOTimedActionComponent`;
   moving cancels and nothing is eaten (a4207587).
 - **Drinking** from water bodies (Oct 15): `Docs/Water_And_Illness.md` (salinity, illness per litre, timed drink, containers, boiling).
-- Known defect: the legacy meters are NOT saved (Deep Dive #6): a pawn restored from a save starts at full hunger/thirst/energy.
+- **Meter persistence:** the pawn record captures `FMOSurvivalSaveData` through the shared live-load/possession-spawn restore path.
+  Its valid/version marker, six meter values and nutrition restore atomically on authority after finite-data validation, clamped to
+  the owning class's limits. Missing legacy data leaves defaults alone. It neither changes the approved clock pacing nor advances
+  an extra offline interval. Tests: `MOFramework.Survival.Persistence` and the existing pacing gates. The F1 model choice stays open.
 
 ## 4. Body temperature (open fork F2)
 
@@ -96,7 +99,7 @@ Drowning comes from the vitals (SpO2), never from a timer. Details and the swim 
 Untreated water gives an illness as a condition COURSE on the anatomy component (incubation -> triangular peak at 1/3 -> cleared),
 applied to the body through the survival stats. Chances per litre and the research: `Docs/Water_And_Illness.md`.
 
-## 7. Wound treatment (Codex, Oct 17; uncommitted when written)
+## 7. Wound treatment (authoritative timed service)
 
 - `FMOMedicalTreatmentActions::Begin(Healer, Patient, WoundId, TreatmentId)` is the one native player / AI entry point; a player's
   owning `AMOPlayerController::ServerTreatWound(Patient, WoundId, TreatmentId)` resolves its own healer. Clients send no skill,
@@ -104,6 +107,12 @@ applied to the body through the survival stats. Chances per litre and the resear
   runs the shared `UMOTimedActionComponent` (replicated label / duration; movement and damage interrupt). Supplies use the crafting
   ingredient planner and are charged at completion. Unknown treatment ids are refused (no fallback effect).
 - Verified: headless 9/9; live host + joiner self-treatment 12/12 (ApplyBandage 15 s, bandages 1 -> 0, bleed .200 -> .186).
+- Continuation checks patient movement, reach/LOS, capability, actual skill, wound and supplies. Physical/liquid supply planning is
+  atomic with the clinical effect at completion, before observers; no early material charge, effect or XP. Tools are reusable presence
+  requirements under the authored item definitions. Cancel/reload retains supplies and a new attempt takes its full interval.
+- The clinical primitive refuses unknown IDs and inapplicable wounds; authored bleed/infection reductions preserve the existing quality
+  scaling with safe bounds. The common timer guards reentrant replacement and derives remaining time from bounded progress, including
+  a freshly joined client's initial server-clock skew. No treatment duration or physiology policy is changed.
 - **Not built:** a treatment-picker UI, an assigned medic job, treating ANOTHER patient from a client (anatomy wounds replicate
   owner-only: needs a deliberate inspection request), `HealingSpeedBonus` / `PainReduction` effects, condition-only rows and CPR.
   Detail and acceptance steps: `Docs/agent/audit/MEDICAL_HANDOFF.md`.

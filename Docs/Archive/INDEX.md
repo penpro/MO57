@@ -15,6 +15,7 @@ content, what it was, where its live content went. The extraction record per ite
 | `BugReports_2026-10-14.md` | 2026-10-14 | Tracker for 29 playtest reports + crash uploads (all done / not reproduced) | `BACKLOG.md` (BR14-n), `DECISIONS.md` |
 | `BugReports_2026-10-16.md` | 2026-10-16 | Tracker for 22 Steam co-op playtest reports + 6 crashes; Wes's Oct 16 calls | `BACKLOG.md` (BR16-n), `DECISIONS.md` 2026-10-16 |
 | `Claude_Handoff_Goals_2026-10-13.md` | 2026-10-13 | Codex's work plan for Claude (H00-H26) | `BACKLOG.md` (G00-G26 aliases; status table in the ledger) |
+| `Handoff_2026-10-13.md` | 2026-10-13..16 | Dated implementation handoff and ranked follow-ups; archived with the source-comment link in the audit publication | `BACKLOG.md` (G00-G26), per-system docs in `Docs/INDEX.md` |
 | `Night_Report_2026-10-17.md` | 2026-10-17 | Night report: torch, geology, Wes's four calls | `DECISIONS.md` 2026-10-17, `Light_Sources.md`, `BACKLOG.md` |
 | `OVERNIGHT_LOG.md` | 2026-10-07..09 | Overnight runs: co-op seed / pawns / host-a-save, bug-report form, host-pawn fixes | `Coop_And_Networking.md`, `Persistence.md`, `DECISIONS.md` (F19, standing rules), `BACKLOG.md` |
 | `OVERNIGHT_PLAN_2026-10-09.md` | 2026-10-08 | Approved overnight plan + standing rules | `DECISIONS.md` "Earlier" (standing rules) |

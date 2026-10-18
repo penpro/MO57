@@ -70,7 +70,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 
 | Doc | Answers |
 |---|---|
-| `Docs/agent/` (Codex) | Codex's audit records: UI consolidation (`ui/`: SESSION_STATE, MIGRATION_PLAN, TOUCH_LOG, findings), the July repo / MCP audit, and the Oct 16-17 remediation (`audit/SESSION_STATE.md`, `audit/MEDICAL_HANDOFF.md`, untracked until Codex commits). Finished knowledge lands in the system docs above (Wes N7). |
-| `Docs/Deep_Dive_Top_10_Flaws_2026-10-16.md` | Codex's ranked source audit (untracked); its items are tracked in BACKLOG N-001 |
-| `Docs/Handoff_2026-10-13.md` | Dated handoff, extracted; moves to `Docs/Archive/` when Codex commits `MOworldSaveGame.h` (BACKLOG N-004) |
+| `Docs/agent/` (Codex) | Codex's audit records: UI consolidation (`ui/`: SESSION_STATE, MIGRATION_PLAN, TOUCH_LOG, findings), the July repo / MCP audit, and the Oct 16-18 remediation (`audit/SESSION_STATE.md`, `audit/MEDICAL_HANDOFF.md`). Finished knowledge lands in the system docs above (Wes N7). |
+| `Docs/Deep_Dive_Top_10_Flaws_2026-10-16.md` | Codex's historical ranked source audit; subsequent remediation evidence is in `Docs/agent/audit/SESSION_STATE.md` (BACKLOG N-001) |
+| `Docs/Archive/Handoff_2026-10-13.md` | Dated handoff, extracted; archived with its source-comment reference during the audit handoff (BACKLOG N-004) |
 | `claude-codex-coop.md` (repo root) | The append-only Claude-Codex coordination log (older entries in `Docs/Archive/coop/`) |

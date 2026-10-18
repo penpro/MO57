@@ -267,12 +267,12 @@ bool UMOCraftingMenu::CraftSelectedRecipe(int32 Count)
 		return false;
 	}
 
-	const FMOCraftingValidation Validation = CraftingSub->CanCraftRecipe(
+	const FMOCraftingValidation Validation = CraftingSub->CanCraftRecipeAtStation(
 		SelectedRecipeId,
 		KnowledgeComponent.Get(),
 		SkillsComponent.Get(),
 		InventoryComponent.Get(),
-		CurrentStation);
+		ActiveStationActor.Get());
 	if (!Validation.bCanCraft)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingMenu] Craft rejected: %s"), *Validation.FailureReason.ToString());
@@ -282,28 +282,10 @@ bool UMOCraftingMenu::CraftSelectedRecipe(int32 Count)
 	// If we have a queue component, enqueue the craft
 	if (UMOCraftingQueueComponent* Queue = CraftingQueueComponent.Get())
 	{
-		return Queue->EnqueueCraft(SelectedRecipeId, Count, CurrentStation);
+		return Queue->EnqueueCraftAtStation(SelectedRecipeId, Count, ActiveStationActor.Get());
 	}
 
-	// Otherwise, try immediate craft via subsystem
-	if (CraftingSub)
-	{
-		for (int32 i = 0; i < Count; ++i)
-		{
-			FMOCraftResult Result = CraftingSub->ExecuteCraft(
-				SelectedRecipeId,
-				InventoryComponent.Get(),
-				SkillsComponent.Get()
-			);
-
-			if (!Result.bSuccess)
-			{
-				return i > 0; // Return true if at least one craft succeeded
-			}
-		}
-		return true;
-	}
-
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingMenu] Timed crafting requires a crafting queue."));
 	return false;
 }
 

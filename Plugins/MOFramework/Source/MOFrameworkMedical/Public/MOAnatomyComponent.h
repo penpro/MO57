@@ -40,8 +40,9 @@
  *    Lungs destroyed -> StartDeathTimer() -> Player has X seconds
  *
  * 3. Treatment Application:
- *    ApplyTreatment() -> Check skill/requirements -> Modify wound state
- *    -> Reduce bleed rate, infection risk based on effectiveness
+ *    FMOMedicalTreatmentActions owns gameplay timing/supplies and derives healer skill.
+ *    ApplyTreatment() is the clinical primitive: validate row/wound/skill/self reach,
+ *    then reduce bleed rate/infection risk. Unknown IDs never apply fallback effects.
  *
  * KNOWN PITFALLS:
  * 1. BODY PART ENUM SYNC: EMOBodyPartType must match DT_BodyParts row names.
@@ -87,6 +88,12 @@ class UMOVitalsComponent;
 class UMOMentalStateComponent;
 struct FMOBodyPartDefinitionRow;
 struct FMOWoundTypeDefinitionRow;
+struct FMOMedicalTreatmentRow;
+
+enum class EMOWoundTreatmentFailure : uint8
+{
+	None, NotAuthority, UnknownTreatment, MissingWound, WrongWoundType, InsufficientSkill, UnreachableForSelf, InvalidDefinition, InvalidWound
+};
 
 // ============================================================================
 // DELEGATES
@@ -319,15 +326,21 @@ public:
 	// ============================================================================
 
 	/**
-	 * Apply medical treatment to a wound.
+	 * Clinical primitive for trusted server code. Gameplay requests must use FMOMedicalTreatmentActions
+	 * to enforce the authored duration and supplies. This function validates the clinical definition.
 	 * @param WoundId The wound to treat.
 	 * @param TreatmentId ID of the treatment from DataTable.
 	 * @param MedicSkillLevel Skill level of the person applying treatment.
 	 * @param bIsSelfTreatment True if treating oneself.
 	 * @return True if treatment was successfully applied.
 	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Anatomy|Treatment")
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="MO|Anatomy|Treatment")
 	bool ApplyTreatment(const FGuid& WoundId, FName TreatmentId, int32 MedicSkillLevel, bool bIsSelfTreatment = false);
+
+	EMOWoundTreatmentFailure ValidateTreatment(const FGuid& WoundId, FName TreatmentId, int32 MedicSkillLevel,
+		bool bIsSelfTreatment, FMOMedicalTreatmentRow& OutDefinition) const;
+	static EMOWoundTreatmentFailure ValidateTreatmentDefinition(const FMOWound& Wound, const FMOMedicalTreatmentRow& Definition,
+		int32 MedicSkillLevel, bool bIsSelfTreatment);
 
 	/**
 	 * Apply bandage to a wound.
@@ -492,6 +505,9 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	friend struct FMOMedicalTreatmentActions;
+	/** Called only after clinical validation and a complete supply plan, without observer callbacks between them. */
+	void ApplyResolvedTreatment(const FGuid& WoundId, const FMOMedicalTreatmentRow& Definition, int32 MedicSkillLevel, bool bIsSelfTreatment);
 	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================

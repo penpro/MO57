@@ -32,12 +32,15 @@
  * - EquippedSlots array indexed by EMOEquipmentSlot enum
  * - Items move out of inventory when equipped (not duplicated)
  * - Swap timing uses Tick with countdown timers
- * - Pending items held until swap completes
+ * - Pending items have one equipment-owned escrow entry until the swap completes;
+ *   the previous item is returned and its slot cleared before the delay starts.
+ * - Escrow items and remaining swap time are replicated and saved.
  *
  * CRITICAL PATTERNS:
  * 1. Equip Flow:
  *    EquipFromInventory() -> Check CanEquipToSlot() -> Remove from inventory
- *    -> For hand slots: StartSwap() with delay
+ *    -> Escrow the incoming item and clear the returned item's slot
+ *    -> For hand slots: tick the saved/replicated remaining delay
  *    -> On complete: Set slot data -> Broadcast OnEquipmentChanged
  *
  * 2. Unequip Flow:
@@ -45,7 +48,7 @@
  *    -> Clear slot -> Broadcast OnEquipmentChanged
  *
  * 3. Swap Timing:
- *    StartSwap() -> Set PendingItem + timer -> Tick decrements
+ *    Escrow item + remaining time -> Tick decrements
  *    -> Timer hits 0 -> CompleteSwap() -> Apply pending item
  *
  * KNOWN PITFALLS:
@@ -55,8 +58,8 @@
  * 2. BACKPACK CONTENTS: Back slot container contents only accessible when
  *    placed on ground. Don't allow direct access to backpack inventory.
  *
- * 3. SWAP INTERRUPTION: If player is interrupted during swap, pending item
- *    state may be inconsistent. Consider cancel/rollback logic.
+ * 3. SWAP OWNERSHIP: Never leave a returned item in its old slot. Conflicting
+ *    slot operations are refused while its replacement is in escrow.
  *
  * 4. SLOT VALIDATION: CanEquipToSlot() must check item's EquipSlot field.
  *    Don't allow equipping weapons to armor slots or vice versa.
@@ -75,7 +78,7 @@
  * [ ] Save/load preserves equipment state
  * [ ] Cannot equip incompatible items to slots
  *
- * LAST UPDATED: 2026-02-24 - Initial audit header
+ * LAST UPDATED: 2026-10-16 - Slot validation and persisted swap ownership
  * =============================================================================
  */
 
@@ -84,6 +87,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOInsulationSourceInterface.h"
+#include "MOItemInstanceState.h"
 #include "MOEquipmentComponent.generated.h"
 
 class UMOInventoryComponent;
@@ -126,6 +130,10 @@ struct MOFRAMEWORK_API FMOEquippedItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
 	int32 CurrentDurability = -1;
 
+	/** Contents travel with an equipped container just as durability does. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
+	FMOLiquidContents Liquid;
+
 	/** Check if this slot has an item equipped. */
 	bool IsValid() const { return ItemGuid.IsValid() && !ItemDefinitionId.IsNone(); }
 
@@ -135,6 +143,7 @@ struct MOFRAMEWORK_API FMOEquippedItem
 		ItemGuid.Invalidate();
 		ItemDefinitionId = NAME_None;
 		CurrentDurability = -1;
+		Liquid = FMOLiquidContents();
 	}
 
 	bool operator==(const FMOEquippedItem& Other) const
@@ -163,9 +172,26 @@ struct MOFRAMEWORK_API FMOEquipmentSlotSaveData
 	FMOEquippedItem EquippedItem;
 };
 
-/**
- * Save data for full equipment state.
- */
+/** One item owned by equipment while it is being put into a slot. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOEquipmentPendingSwap
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
+	EMOEquipmentSlot Slot = EMOEquipmentSlot::MAX;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
+	FMOEquippedItem Item;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
+	float RemainingSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment")
+	float TotalSeconds = 0.0f;
+};
+
+/** Save data for full equipment state, including in-flight item ownership. */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOEquipmentSaveData
 {
@@ -173,10 +199,15 @@ struct MOFRAMEWORK_API FMOEquipmentSaveData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
 	TArray<FMOEquipmentSlotSaveData> Slots;
+
+	/** Empty in older saves. Restoring a timed swap does not skip its remaining work. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	TArray<FMOEquipmentPendingSwap> PendingSwaps;
 };
 
 // Delegates
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentChanged, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, EquippedItem);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentDurabilityChanged, EMOEquipmentSlot, EquipSlot, int32, NewDurability);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapStarted, EMOEquipmentSlot, EquipSlot);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapCompleted, EMOEquipmentSlot, EquipSlot);
 
@@ -211,6 +242,12 @@ public:
 	static float ComputeInsulationFromWarmth(const TArray<float>& ItemWarmths, float MaxClothingInsulation = 0.4f);
 
 	UMOEquipmentComponent();
+
+	/** Shared range rule for native callers and untrusted request bytes; MAX is not a slot. */
+	static bool IsValidEquipmentSlot(EMOEquipmentSlot Slot)
+	{
+		return static_cast<uint8>(Slot) < static_cast<uint8>(EMOEquipmentSlot::MAX);
+	}
 
 	// ============================================================================
 	// EQUIPMENT OPERATIONS
@@ -252,6 +289,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Equipment")
 	void SwapSlots(EMOEquipmentSlot SlotA, EMOEquipmentSlot SlotB);
+
+	/** Server-only wear. Infinite durability and in-flight swaps refuse. Depletion clears ownership and emits OnEquipmentChanged;
+	 * ordinary wear emits only OnEquipmentDurabilityChanged, including on replicated clients. */
+	bool ReduceEquippedDurability(EMOEquipmentSlot Slot, int32 Amount, bool& bOutDestroyed);
 
 	/**
 	 * Check if a slot is currently swapping (in cooldown).
@@ -328,6 +369,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Equipment")
 	FMOOnEquipmentChanged OnEquipmentChanged;
 
+	UPROPERTY(BlueprintAssignable, Category="MO|Equipment")
+	FMOOnEquipmentDurabilityChanged OnEquipmentDurabilityChanged;
+
 	/** Broadcast when a swap animation/delay starts. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Equipment")
 	FMOOnSwapStarted OnSwapStarted;
@@ -357,26 +401,27 @@ private:
 	// SLOT DATA (indexed by EMOEquipmentSlot)
 	// ============================================================================
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing=OnRep_EquippedSlots)
 	TArray<FMOEquippedItem> EquippedSlots;
 
 	// ============================================================================
 	// SWAP TIMING STATE (for hand slots only)
 	// ============================================================================
 
-	/** Time remaining on left hand swap. */
-	float LeftHandSwapTimeRemaining = 0.0f;
-	float LeftHandSwapTimeTotal = 0.0f;
+	/** These items are not also in an inventory or EquippedSlots. */
+	UPROPERTY(ReplicatedUsing=OnRep_PendingSwaps)
+	TArray<FMOEquipmentPendingSwap> PendingSwaps;
 
-	/** Time remaining on right hand swap. */
-	float RightHandSwapTimeRemaining = 0.0f;
-	float RightHandSwapTimeTotal = 0.0f;
+	TSet<EMOEquipmentSlot> NotifiedPendingSlots;
 
-	/** Pending equip data during swap. */
-	FMOEquippedItem PendingLeftHandItem;
-	FMOEquippedItem PendingRightHandItem;
-	bool bHasPendingLeftHand = false;
-	bool bHasPendingRightHand = false;
+	UFUNCTION()
+	void OnRep_EquippedSlots(const TArray<FMOEquippedItem>& PreviousSlots);
+
+	UFUNCTION()
+	void OnRep_PendingSwaps();
+
+	/** Inventory delegates are synchronous: reject re-entrant equipment operations. */
+	bool bEquipmentMutationInProgress = false;
 
 	// ============================================================================
 	// INTERNAL
@@ -385,7 +430,6 @@ private:
 	void EnsureSlotsInitialized();
 	bool IsHandSlot(EMOEquipmentSlot EquipSlot) const;
 	float GetSwapTimeForItem(FName ItemDefinitionId) const;
-	void StartSwap(EMOEquipmentSlot EquipSlot, float Duration);
 	void CompleteSwap(EMOEquipmentSlot EquipSlot);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

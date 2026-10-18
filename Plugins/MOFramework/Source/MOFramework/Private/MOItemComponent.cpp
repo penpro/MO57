@@ -123,34 +123,15 @@ bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorControll
 		return false;
 	}
 
-	// Precheck: ensure there's room in the inventory before attempting to add.
-	// Use the definition-id check so partial stacks count as room — CanAddItem(FGuid)
-	// only succeeds when an entire slot is empty, which gives spurious "full" results
-	// any time the player has any partially-stacked slot.
-	MOHARVEST_LOG(this, "ItemPickup",
-		"GiveToInteractorInventory entry: ItemId='%s' Quantity=%d Inventory.SlotCount=%d Inventory.Entries=%d",
-		*ItemDefinitionId.ToString(), Quantity,
-		InventoryComponent->GetSlotCount(),
-		InventoryComponent->GetEntryCount());
-
-	if (!InventoryComponent->CanAddItemByDefinitionId(ItemDefinitionId, Quantity))
+	FMOInventoryMutationScope Mutation(InventoryComponent);
+	FMOInventoryAddOptions Options;
+	Options.State = InstanceState;
+	const FMOInventoryAddResult Added = InventoryComponent->TryAddItem(ItemGuid, ItemDefinitionId, Quantity, Options);
+	if (!Added.IsComplete())
 	{
-		MOHARVEST_LOG(this, "ItemPickup",
-			"GiveToInteractorInventory ABORT: CanAddItemByDefinitionId('%s', %d) returned false",
-			*ItemDefinitionId.ToString(), Quantity);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: Inventory is full, cannot add item"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] Pickup refused: %s x%d, accepted=%d reason=%d"),
+			*ItemDefinitionId.ToString(), Quantity, Added.Accepted, int32(Added.Failure));
 		return false;
-	}
-
-	const bool bAdded = InventoryComponent->AddItemByGuid(ItemGuid, ItemDefinitionId, Quantity);
-	if (!bAdded)
-	{
-		return false;
-	}
-	// Back in a pack: the item takes up what it carried on the ground (a worn tool stays worn, a container keeps its water).
-	if (!InstanceState.IsDefault())
-	{
-		InventoryComponent->ApplyInstanceState(ItemGuid, InstanceState);
 	}
 
 	// Do not destroy yet. We replicate "inactive" so everyone sees it gone.

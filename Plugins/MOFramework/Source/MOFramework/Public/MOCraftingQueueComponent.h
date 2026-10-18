@@ -14,8 +14,8 @@
  * KEY RESPONSIBILITIES:
  * 1. Maintain ordered queue of crafting entries (FMOCraftingQueueList)
  * 2. Track craft progress using real timestamps (not delta time)
- * 3. Consume ingredients on enqueue, refund on cancel
- * 4. Produce outputs via MOCraftingSubsystem::ProduceOutputsOnly()
+ * 3. Reserve original material lots on enqueue, consume one repeat on completion
+ * 4. Persist products and undelivered refunds until inventory can receive them
  * 5. Support offline progress calculation on save load
  * 6. Track active station for station-specific recipes
  *
@@ -25,11 +25,11 @@
  *
  * QUEUE ENTRY LIFECYCLE:
  * EnqueueCraft(RecipeId, Count, Station)
- * -> ConsumeIngredientsForCraft()
+ * -> ReserveIngredientsForCraft()
  * -> Add FMOCraftingQueueEntry to Queue
  * -> OnQueueChanged broadcast
  * -> Tick processes active entry
- * -> CompletCurrentCraft() -> ProduceOutputsOnly()
+ * -> CompletCurrentCraft() -> consume captured inputs, install products, then reward/notify
  * -> Entry removed, next started
  *
  * TIMESTAMP-BASED PROGRESS:
@@ -44,10 +44,11 @@
  * - ClearActiveStation() when leaving station range
  *
  * CRITICAL PATTERNS:
- * 1. INGREDIENTS: Consumed on ENQUEUE, not completion
- * 2. REFUND: CancelCraft(bRefundIngredients) returns materials
- * 3. OFFLINE: ApplySaveData with bCalculateOfflineProgress=true
- * 4. FASTARRAY: Queue uses FFastArraySerializer for replication
+ * 1. INGREDIENTS: Reserved on enqueue; captured per-craft quantities consume owned lots on completion.
+ * 2. REFUND: Cancellation retains exact state; full-inventory remainders remain persisted and visible.
+ * 3. LEGACY: Old preconsumed saves have no provenance; unresolved cancellation records are preserved.
+ * 4. OFFLINE: ApplySaveData with bCalculateOfflineProgress=true
+ * 5. FASTARRAY: Queue uses FFastArraySerializer for replication
  *
  * KNOWN PITFALLS:
  * 1. STATION REFERENCE: ActiveStation may become invalid if destroyed
@@ -68,7 +69,7 @@
  * [ ] Save/load preserves queue state
  * [ ] Offline progress calculates correctly
  *
- * LAST UPDATED: 2026-02-24 - Initial audit header
+ * LAST UPDATED: 2026-10-17 - Authoritative context and persisted material ownership
  * =============================================================================
  */
 
@@ -100,11 +101,9 @@ public:
 	 *   Death                 -> Cancel current craft with refund
 	 *   UserCancel            -> ignored (UI calls CancelCraft directly)
 	 *
-	 * Crafting uses real-time timestamps, so "pause" actually has to record
-	 * a paused-at time and freeze advancement — the current PauseCrafting()
-	 * just flips bIsCraftingActive. That's enough for now; if and when paused
-	 * crafts need to resume from the exact second they paused, the queue
-	 * model can be extended without touching this handler.
+	 * Pausing captures elapsed progress. Resume back-dates the timestamp by that
+	 * saved progress. Context suspension retries the same station identity and
+	 * never accrues progress while the station is unusable.
 	 */
 	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 	UMOCraftingQueueComponent();
@@ -130,14 +129,33 @@ public:
 	// --- Queue Management ---
 
 	/**
-	 * Add a craft to the queue. Ingredients are consumed immediately.
+	 * Add a craft to the queue. Ingredients transfer into a persisted reservation immediately.
 	 * @param RecipeId Recipe to craft
 	 * @param Count Number of times to repeat (default 1)
-	 * @param Station Station type being used (for validation)
+	 * @param Station Legacy display hint; execution resolves the active station actor instead.
 	 * @return True if successfully enqueued
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
 	bool EnqueueCraft(FName RecipeId, int32 Count = 1, EMOCraftingStation Station = EMOCraftingStation::None);
+
+	/** Submit a real station actor. The server resolves its type, identity, reach, active state and heat capability. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
+	bool EnqueueCraftAtStation(FName RecipeId, int32 Count, AActor* StationActor);
+
+	/** Native authoritative receipt for an assigning job. EntryId is assigned before queue/inventory observers run. */
+	bool EnqueueCraftAtStationWithId(FName RecipeId, int32 Count, AActor* StationActor, FGuid& OutEntryId,
+		TFunction<void(const FGuid&)> OnInstalled = {});
+
+	/** Opt-in native assignments retain one result (Count must be one). OnInstalled installs the assignment's
+	 * saved ownership before any observers; it must not call delegates or mutate the crafting queue. */
+	bool GetCompletionReceipt(const FGuid& EntryId, FMOCraftingCompletionReceipt& OutReceipt) const;
+	void AcknowledgeCompletionReceipt(const FGuid& EntryId);
+
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	bool IsWaitingForCraftingContext() const { return bAwaitingContext; }
+
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	FText GetCraftingBlockReason() const { return CraftingBlockReason; }
 
 	/**
 	 * Cancel a specific craft in the queue.
@@ -190,6 +208,17 @@ public:
 	/** Check if the queue is empty. */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
 	bool IsQueueEmpty() const { return Queue.Entries.Num() == 0; }
+
+	/** Owned material lots awaiting room/a compatible vessel. They survive save/load and retry delivery. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	int32 GetPendingMaterialLotCount() const { return PendingMaterialLotCount; }
+
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	int32 GetUnresolvedLegacyRefundCount() const { return UnresolvedLegacyRefundCount; }
+
+	/** Retry retained materials, e.g. after making inventory room. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
+	void DeliverPendingMaterials();
 
 	/** Get the currently active craft (first in queue). Returns false if queue empty. */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
@@ -286,22 +315,55 @@ protected:
 	 * (authority); the replicated Queue then updates the requesting client's UI (#132/H20).
 	 */
 	UFUNCTION(Server, Reliable)
-	void ServerRequestEnqueueCraft(FName RecipeId, int32 Count, EMOCraftingStation Station);
+	void ServerRequestEnqueueCraft(FName RecipeId, int32 Count, AActor* StationActor);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestCancelCraft(FGuid EntryId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestCancelAllCrafts();
 
 private:
 	// --- Internal Methods ---
+	AActor* ResolveEntryStation(const FMOCraftingQueueEntry& Entry) const;
+	bool ValidateEntryContext(const FMOCraftingQueueEntry& Entry, FText& OutReason) const;
+	void WaitForContext(const FText& Reason);
+	TMap<FGuid, TWeakObjectPtr<AActor>> KnownStations;
+	float ContextRetryElapsed = 0.0f;
+
+	UPROPERTY(ReplicatedUsing=OnRep_MaterialStatus)
+	bool bAwaitingContext = false;
+
+	UPROPERTY(ReplicatedUsing=OnRep_MaterialStatus)
+	FText CraftingBlockReason;
 
 	/** Process crafting progress. Called by tick or timer. */
 	void ProcessCraftingTick(float DeltaTime);
 
 	/** Complete the current craft and start the next one. */
-	void CompletCurrentCraft();
+	bool CompletCurrentCraft();
 
-	/** Consume ingredients for a craft. Returns true if successful. */
-	bool ConsumeIngredientsForCraft(FName RecipeId, int32 Count);
+	bool ReserveIngredientsForCraft(FMOCraftingQueueEntry& Entry);
+	bool RetainCancelledIngredients(const FMOCraftingQueueEntry& Entry);
+	void RefreshTickEnabled();
 
-	/** Refund ingredients for a cancelled craft. */
-	void RefundIngredientsForCraft(FName RecipeId, int32 Count);
+	UPROPERTY()
+	FMOIngredientReservation PendingReturns;
+	UPROPERTY()
+	FMOIngredientReservation PendingProducts;
+	UPROPERTY()
+	TArray<FMOCraftingCompletionReceipt> CompletionReceipts;
+	UPROPERTY()
+	TArray<FMOCraftingQueueEntry> UnresolvedLegacyRefunds;
+	float MaterialRetryElapsed = 0.0f;
+	bool bDeliveringMaterials = false;
+	bool bProcessingCompletion = false;
+	UPROPERTY(ReplicatedUsing=OnRep_MaterialStatus)
+	int32 PendingMaterialLotCount = 0;
+	UPROPERTY(ReplicatedUsing=OnRep_MaterialStatus)
+	int32 UnresolvedLegacyRefundCount = 0;
+	UFUNCTION()
+	void OnRep_MaterialStatus();
 
 	/** Calculate progress based on real time elapsed. */
 	float CalculateProgressFromTime(const FMOCraftingQueueEntry& Entry, float CraftDuration) const;
@@ -334,7 +396,7 @@ private:
 	FMOCraftingQueueList Queue;
 
 	/** Whether crafting is currently active. */
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing=OnRep_MaterialStatus)
 	bool bIsCraftingActive = false;
 
 	/** Real-world timestamp when current craft started (for accurate time tracking). */

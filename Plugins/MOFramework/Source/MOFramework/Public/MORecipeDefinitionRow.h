@@ -393,6 +393,10 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirements")
 	EMOCraftingStation RequiredStation = EMOCraftingStation::None;
 
+	/** Required process-temperature capability. Zero preserves existing recipes until their heat requirements are authored. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirements", meta=(ClampMin="0.0"))
+	float MinimumProcessTemperatureCelsius = 0.0f;
+
 	/** Skill ID that governs this recipe (for level requirements and XP). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirements")
 	FName RequiredSkillId = NAME_None;
@@ -474,6 +478,10 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	/** For crafting station buildings: the station type this building provides. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding", EditConditionHides))
 	EMOCraftingStation ProvidedStationType = EMOCraftingStation::None;
+
+	/** Station's achievable process temperature, distinct from warmth radiated to nearby pawns. Fuel/air simulation may lower it at runtime. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0.0"))
+	float ProvidedProcessTemperatureCelsius = 0.0f;
 
 	/** For container buildings: number of inventory slots. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Container", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))

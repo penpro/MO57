@@ -33,8 +33,8 @@
  * 4. Two-phase crafting: CanCraftRecipe() validates, ExecuteCraft() executes.
  *    Never skip validation before execution.
  *
- * 5. For queued crafting, use ProduceOutputsOnly() when ingredients were
- *    already consumed at queue time.
+ * 5. Queues privately plan owned outputs and finalize rewards after committing material ownership.
+ *    ExecuteCraft / ProduceOutputsOnly are compatibility wrappers that request timed queue work.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -108,6 +108,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MORecipeDefinitionRow.h"
 
+#include "MOCraftingExecutionContext.h"
 #include "MOCraftingSubsystem.generated.h"
 
 class UMOKnowledgeComponent;
@@ -246,6 +247,10 @@ struct MOFRAMEWORK_API FMOCraftResult
 	/** Items produced (ItemDefId -> quantity). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> ProducedItems;
+
+	/** Produced goods still owned by the queue because delivery needs room or a compatible vessel. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> PendingDeliveryItems;
 
 	/** Items that couldn't be added due to inventory full (ItemDefId -> quantity). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
@@ -387,12 +392,19 @@ public:
 		EMOCraftingStation Station
 	) const;
 
+	/** World-derived station/target validation shared by queueing, progress, completion and load. Pure query; mutators still require authority. */
+	FMOCraftingExecutionContext ResolveExecutionContext(FName RecipeId, AActor* Crafter, AActor* Station) const;
+
+	/** UI/query variant that derives station type and heat from the actual actor. */
+	FMOCraftingValidation CanCraftRecipeAtStation(FName RecipeId, UMOKnowledgeComponent* Knowledge,
+		UMOSkillsComponent* Skills, UMOInventoryComponent* Inventory, AActor* Station) const;
+
 	/**
-	 * Execute a craft, consuming ingredients and producing outputs.
+	 * Legacy timed-craft request wrapper. Submits to the owner's queue; output arrives on queue completion.
 	 * @param RecipeId The recipe to craft
 	 * @param InventoryComponent Inventory to consume from and add to
 	 * @param SkillsComponent Skills to grant XP to
-	 * @return Result of the craft
+	 * @return bSuccess means the timed request was enqueued; ProducedItems is empty until completion.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
 	FMOCraftResult ExecuteCraft(
@@ -402,18 +414,19 @@ public:
 	);
 
 	/**
-	 * Produce outputs for a recipe without consuming ingredients.
-	 * Use this when ingredients have already been consumed (e.g., from crafting queue).
+	 * Legacy compatibility signature: requests a timed reserved craft at the real station.
+	 * Immediate unbacked production is no longer exposed. Outputs arrive on queue completion.
 	 * @param RecipeId The recipe to produce outputs for
-	 * @param InventoryComponent Inventory to add outputs to
+	 * @param InventoryComponent Inventory supplying the queue's reservation
 	 * @param SkillsComponent Skills to grant XP to
-	 * @return Result of the production
+	 * @return bSuccess means queued; ProducedItems remains empty until timed completion
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
 	FMOCraftResult ProduceOutputsOnly(
 		FName RecipeId,
 		UMOInventoryComponent* InventoryComponent,
-		UMOSkillsComponent* SkillsComponent
+		UMOSkillsComponent* SkillsComponent,
+		AActor* StationActor = nullptr
 	);
 
 	/**
@@ -480,6 +493,12 @@ public:
 	) const;
 
 private:
+	friend class UMOCraftingQueueComponent;
+	/** Planning creates owned output lots without inventory mutation, rewards or broadcasts. */
+	bool PrepareCraftOutputs(FName RecipeId, struct FMOIngredientReservation& Outputs, FMOCraftResult& Result) const;
+	/** Called only after the queue has consumed this repeat and installed all produced material ownership. */
+	void FinalizeReservedCraft(FName RecipeId, UMOInventoryComponent* Inventory, UMOSkillsComponent* Skills, FMOCraftResult& Result);
+
 	/**
 	 * Check if player has required knowledge for a recipe.
 	 * Checks KnowledgeComponent first, then falls back to SkillsComponent

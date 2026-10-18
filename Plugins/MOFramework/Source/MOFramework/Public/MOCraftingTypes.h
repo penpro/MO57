@@ -14,8 +14,8 @@
  * 1. Player opens crafting menu (station or hand crafting)
  * 2. Recipes filtered by: knowledge, skill level, station type
  * 3. Player queues craft -> FMOCraftingQueueEntry created
- * 4. Queue ticks -> Ingredients consumed -> Progress updates
- * 5. Craft completes -> Outputs spawned -> XP granted
+ * 4. Queue owns reserved materials; timed work updates progress
+ * 5. Completion consumes one repeat, installs owned outputs, then grants XP/notifies
  *
  * KEY TYPES:
  * - EMODiscoveryMethod: How a recipe was learned
@@ -31,8 +31,8 @@
  * 1. Use EntryId (GUID) to reference queue entries, not array indices.
  *    Indices change during replication; GUIDs are stable.
  *
- * 2. bIngredientsConsumed flag is critical for crash recovery. If true,
- *    don't consume ingredients again on resume.
+ * 2. bHasCapturedReservation distinguishes owned lots from old preconsumed saves.
+ *    Never recreate refunds from a live recipe or consume inventory again on resume.
  *
  * 3. FastArraySerializer pattern is used for efficient replication.
  *    See MOInventoryComponent.h for detailed FastArray documentation.
@@ -47,8 +47,8 @@
  * [2024-02] STATION VALIDATION: Station enum is stored in queue entry to
  *   validate on resume. If player moves away from station, craft may fail.
  *
- * [2024-02] PROGRESS TIMING: Progress is 0.0-1.0 normalized. StartTime is
- *   world time when craft started. Don't use wall clock time.
+ * [2026-10] PROGRESS TIMING: Progress is 0.0-1.0 normalized. The queue uses
+ *   a UTC anchor for elapsed real-time work and persists its current progress.
  *
  * [2024-02] SAVE/LOAD TIMING: PausedAt timestamp in save data is used to
  *   calculate offline crafting progress. Uses FDateTime, not game time.
@@ -70,6 +70,7 @@
 #include "CoreMinimal.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOIngredientReservation.h"
 
 #include "MOCraftingTypes.generated.h"
 
@@ -100,6 +101,10 @@ struct MOFRAMEWORK_API FMOCraftingQueueEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting", meta=(IgnoreForMemberInitializationTest))
 	FGuid EntryId;
 
+	/** Native assignment requested a durable result, acknowledged after its cargo is delivered. */
+	UPROPERTY()
+	bool bRetainCompletionReceipt = false;
+
 	/** Recipe being crafted. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	FName RecipeId = NAME_None;
@@ -120,9 +125,24 @@ struct MOFRAMEWORK_API FMOCraftingQueueEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	EMOCraftingStation Station = EMOCraftingStation::None;
 
-	/** Whether ingredients have been consumed for current craft. */
+	/** Physical station bound at enqueue. Menu changes never retarget work already queued. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	FGuid StationGuid;
+
+	/** Materials have left inventory. New entries retain them in ReservedIngredients; old saves preconsumed them. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	bool bIngredientsConsumed = false;
+
+	/** New entries own exact material lots; false identifies pre-ledger saves with unavailable provenance. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bHasCapturedReservation = false;
+
+	/** Captured at enqueue, combined across duplicate ingredient rows. Never reread a changed recipe to refund. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> IngredientsPerCraft;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	FMOIngredientReservation ReservedIngredients;
 
 	/** Timestamp when this craft was started. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
@@ -149,6 +169,7 @@ struct MOFRAMEWORK_API FMOCraftingQueueList : public FFastArraySerializer
 	TObjectPtr<class UMOCraftingQueueComponent> OwnerComponent;
 
 	void SetOwner(UMOCraftingQueueComponent* InOwner) { OwnerComponent = InOwner; }
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
 	{
@@ -165,9 +186,16 @@ struct TStructOpsTypeTraits<FMOCraftingQueueList> : public TStructOpsTypeTraitsB
 	};
 };
 
-/**
- * Save data for a pawn's crafting queue.
- */
+/** Result ownership survives offline completion before an assignment executor binds. No material is copied here. */
+USTRUCT()
+struct MOFRAMEWORK_API FMOCraftingCompletionReceipt
+{
+	GENERATED_BODY()
+	UPROPERTY() FGuid EntryId;
+	UPROPERTY() TMap<FName, int32> ProducedItems;
+};
+
+/** Save data for a pawn's crafting queue. */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOCraftingQueueSaveData
 {
@@ -175,6 +203,9 @@ struct MOFRAMEWORK_API FMOCraftingQueueSaveData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
 	TArray<FMOCraftingQueueEntry> QueuedCrafts;
+
+	UPROPERTY()
+	TArray<FMOCraftingCompletionReceipt> CompletionReceipts;
 
 	/** Timestamp when crafting was paused (for calculating elapsed time on load). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
@@ -184,9 +215,24 @@ struct MOFRAMEWORK_API FMOCraftingQueueSaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
 	bool bWasActive = false;
 
+	/** Work is suspended until the bound station becomes usable again. No offline credit while suspended. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	bool bAwaitingContext = false;
+
 	/** Station GUID that was being used (to resume at correct station). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
 	FGuid ActiveStationGuid;
+
+	/** Materials continue to exist when a full inventory or a missing vessel prevents delivery. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	FMOIngredientReservation PendingReturns;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	FMOIngredientReservation PendingProducts;
+
+	/** Cancelled old-save entries whose material identity/liquid provenance was never recorded. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	TArray<FMOCraftingQueueEntry> UnresolvedLegacyRefunds;
 };
 
 /**

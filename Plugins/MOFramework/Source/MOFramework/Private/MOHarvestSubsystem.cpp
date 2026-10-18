@@ -706,6 +706,30 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	}
 	UMOResourceDepletionSubsystem* Depletion = UMOResourceDepletionSubsystem::Get(this);
 
+	int32 SeasonIndex = 1;
+	if (const UMOWeatherIntegrationSubsystem* Weather = GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>())
+	{
+		SeasonIndex = Weather->GetCurrentSeasonIndex();
+	}
+	TMap<FName, int32> RequiredOutputRoom;
+	for (FName ItemId : HarvestAction->YieldsItems)
+	{
+		FMOItemDefinitionRow Def;
+		if (ItemId.IsNone() || (Depletion && !NodeKey.IsEmpty() && !Depletion->CanYield(NodeKey, ItemId))) continue;
+		if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, Def) && !Def.IsInForageSeason(SeasonIndex)) continue;
+		RequiredOutputRoom.FindOrAdd(ItemId) += 1;
+	}
+	if (!IsValid(Inventory) || !Inventory->CanAddItemsByDefinition(RequiredOutputRoom))
+	{
+		Result.FailedItems = RequiredOutputRoom;
+		const FName ActionId = Ctx.ActiveActionId;
+		UnregisterFromHarvesterInterrupts(Harvester);
+		ContextsByHarvester.Remove(Harvester);
+		OnHarvestComplete.Broadcast(ActionId, false);
+		return Result;
+	}
+	FMOInventoryMutationScope InventoryMutation(Inventory);
+
 	// If bDestroysResource, remove the instance -- through the helper, which records it as removed for good (the felled tree does not regrow with its PCG
 	// cell, co-op clients drop their copy, the save keeps it).
 	if (HarvestAction->bDestroysResource)
@@ -743,15 +767,6 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			*YieldList);
 	}
 
-	// Season for forage windows (V2.4) — resolved once per harvest.
-	int32 SeasonIndex = 1;
-	if (const UWorld* World = GetWorld())
-	{
-		if (const UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>())
-		{
-			SeasonIndex = WeatherSys->GetCurrentSeasonIndex();
-		}
-	}
 
 	if (IsValid(Inventory))
 	{
@@ -804,20 +819,19 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			// Add 1 of each yielded item (quantity can be enhanced later with tool quality/skill bonuses)
 			int32 Quantity = 1;
 
-			if (Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity))
+			const FMOInventoryAddResult Added = Inventory->TryAddItem(NewItemGuid, ItemId, Quantity);
+			if (Added.IsComplete())
 			{
 				Result.ProducedItems.FindOrAdd(ItemId) += Quantity;
 				MOHARVEST_LOG(this, "Harvest", "  Produced '%s' x%d", *ItemId.ToString(), Quantity);
 			}
 			else
 			{
-				// Real inventory rejection. AddItemByGuid currently always returns true
-				// for valid inputs, so reaching this branch means invalid GUID / no
-				// authority / empty ItemId — not actually a full inventory.
+				// Preserve the producer's refusal reason in diagnostics; never report an unplaced item as produced.
 				Result.FailedItems.FindOrAdd(ItemId) += Quantity;
 				MOHARVEST_LOG(this, "Harvest",
-					"  AddItemByGuid REJECTED '%s' x%d — invalid input or no authority (not inventory-full)",
-					*ItemId.ToString(), Quantity);
+					"  TryAddItem REJECTED '%s' x%d reason=%d",
+					*ItemId.ToString(), Quantity, int32(Added.Failure));
 			}
 		}
 	}

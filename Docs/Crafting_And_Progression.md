@@ -6,8 +6,9 @@
 > **Current state (2026-10-17):** 126 of 136 recipes reachable from bare hands; one tool gate; water is an ingredient measured in
 > carried containers; discovery is taught by inspecting precursors; heat fields exist but carry no values yet. Codex's audit
 > batches A-F (inventory capacity, stack replication, equipment slots, server-derived station context, ingredient reservation,
-> cancel RPCs, survivor ingredient transfer, survival meters persistence, timed wound treatment) are built + tested but
-> **uncommitted** as of 2026-10-17 13:39 (`Docs/agent/audit/SESSION_STATE.md`).
+> cancel RPCs, survivor ingredient transfer, survival meters persistence, timed wound treatment) are implemented. Survivor craft
+> phase/cargo recovery also lives on the saved job, with durable crafting results. Exact validation and commit checkpoints:
+> `Docs/agent/audit/SESSION_STATE.md`.
 > **Entry points:** `UMOCraftingSubsystem` (validation, execution), `UMOCraftingQueueComponent` (queue; ticks on real `UtcNow`),
 > `AMOCraftingStationActor`, `UMOHarvestSubsystem` (`HasToolForAction`, per-harvester context), `UMOForagingSubsystem`
 > (`GetDigTableAt`, `FindGatherableCover(Kinds)`, `BeginGatherCover`), `UMOInventoryComponent` (`CountIngredient` /
@@ -23,8 +24,9 @@
 ## 1. Recipes, validation, queue
 
 ```cpp
-CanCraftRecipe(RecipeId, Inventory, Skills, Knowledge)  // returns bool + reasons
-  → ExecuteCraft(RecipeId, Inventory)                    // only after CanCraft passes
+CanCraftRecipeAtStation(RecipeId, Knowledge, Skills, Inventory, ActualStation)
+  → EnqueueCraftAtStation(RecipeId, Count, ActualStation)  // repeats the authoritative checks
+  → ReserveIngredients → timed queue → consume one repeat → retain/deliver products → reward/notify
 ```
 Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pattern verbatim from TECHNICAL_REFERENCE, May 2026.)
 
@@ -35,9 +37,23 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   back-dated by Progress x Duration, d8331172). Offline catch-up is capped at 4 h, the clock's cap (`Docs/Weather_And_Time.md`).
 - Results distinguish failure kinds at the data layer (`FMOCraftResult`: `FailedItems` vs `DepletedItems`, `SpilledLiquid`).
 - Recipe queuing and workshop batches are the approved QoL: N items at N x their real duration (`Docs/ENGINEERING_PRINCIPLES.md` tedium).
-- **In flight (Codex, uncommitted):** server-derived station / harvest context per queue entry (the client's station enum is not
-  trusted), ingredient lots reserved with their physical / liquid state and refunded exactly, cancel intents through owning server
-  RPCs, survivor jobs moving ingredients through the same reservation service, completion receipts across reload.
+- **Execution context is server-derived from the actual station:** identity, type, completed building state, reach, line of sight,
+  active/fuel state and configured process-temperature capability. Each entry keeps its station GUID; opening another menu cannot
+  retarget it. A lost context suspends work and retries that station without earning blocked offline time. Harvest/build recipes and
+  nonpositive/nonfinite durations cannot enter this queue. Legacy `ExecuteCraft`/`ProduceOutputsOnly` request timed work; completion
+  production is private to the queue, not an instant public gameplay path.
+- **Material ownership:** `MOIngredientPlans` builds joint physical/liquid plans before mutation. Queue entries save the original
+  ingredient lots and per-repeat requirements; a completion consumes one repeat, installs durable products and a requested native
+  completion receipt before observers. Cancellation retains exact remaining lots. Full inventories/missing vessels leave persisted
+  pending products/refunds, retried without deleting them. Owning-client cancel RPCs provide intent, not a refund-policy choice.
+- **Survivor crafts use the same service:** `TransferIngredientsTo` can carry the actual source vessel, preserving its GUID, wear
+  and liquid profile. The saved job checkpoint owns its leg, handling interval, exact queued entry, borrowed vessels and actual product
+  counts. It resumes paid work or a result completed before the controller rebound, and returns products plus borrowed vessels together.
+  A blocked deposit retains cargo and retries after real handling time. Deposit and iteration acknowledgement have separate saved phases;
+  the owning repeat count and fresh phase install atomically. Cancellation releases only that saved craft entry, including without AI.
+  Actor references rehydrate by GUID; controller replacement does not invent another withdrawal or skip travel/handling.
+- Pre-reservation saves lack material provenance: cancellation preserves an unresolved legacy record rather than inventing liquid refunds.
+  Full save-slot/live-network survivor reload acceptance remains a separate gate from the reflected snapshot/controller regressions.
 
 ## 2. Stations and heat
 
@@ -78,9 +94,10 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
 - `FMOItemInstanceState` (durability + `FMOLiquidContents`) travels through inventory, transfer, save, drop and pickup.
 - **Water is an ingredient measured in containers:** Water01 / CleanWater01 are liquid MEASURES (`LiquidMeasureMl` 250;
   `bMeasureNeedsSafeWater` counts only boiled fresh water). Every recipe count / consume / refund goes through
-  `UMOInventoryComponent::CountIngredient / ConsumeIngredient / AddIngredient`; a liquid output pours into a container that holds
+  `UMOInventoryComponent::CountIngredient / ConsumeIngredient / AddIngredient` for ordinary actions; queued crafting and medical work use
+  the shared joint reservation planner. A liquid output pours into a container that holds
   nothing it would spoil; what does not fit is `FMOCraftResult::SpilledLiquid`, not "inventory full". Test
-  `MOFramework.Inventory.LiquidIngredient`.
+  `MOFramework.Inventory.LiquidIngredient`. Queue products that cannot be delivered remain owned and saved rather than spilling/deleting.
 - **Registries, not per-widget buttons:** `FMOItemActions` (Drink / Fill / PourOut / BoilWithStones 20 min, 4 stones, 95 % kept /
   BoilOverFire 12 min / Eat on a timer), `FMOFireActions`, world actions (`IMOWorldActionProvider` + `UMOWorldActionMenu` +
   `AMOPlayerController::ServerWorldAction`, e.g. carcass butchering on the pawn's timed action). Menus, server RPCs and AI pawns read
@@ -113,6 +130,6 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
 
 - "Flint01 / RawHide01 / DryTinder01" and 12 twin rows (Snare01/SnareWire01 ...) were merged into the referenced ids on Oct 14
   (b0753b0a, ee2fe069); the orphan rows are deleted so `ValidateData` catches anyone re-adding them.
-- "Medical treatments are unwired" (Oct 15): Codex's timed treatment service (Oct 17, uncommitted) wires them through
-  `ConsumeIngredient`; see `Docs/Medical_And_Survival.md` §7.
+- "Medical treatments are unwired" (Oct 15): the timed treatment service uses the shared joint ingredient planner; see
+  `Docs/Medical_And_Survival.md` §7 for its request seam and explicit clinical/UI limits.
 - The Feb 2026 progression (`TechProgression.txt` generated from Items.csv / Recipes.csv / Skills.csv) is archived: the live DTs replaced it.

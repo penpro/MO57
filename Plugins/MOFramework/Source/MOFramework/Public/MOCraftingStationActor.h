@@ -167,6 +167,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation")
 	EMOCraftingStation StationType = EMOCraftingStation::None;
 
+	/** Process capability of this built station, not its warming effect on nearby characters. Zero = no authored heat capability. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Heat")
+	float AchievableProcessTemperatureCelsius = 0.0f;
+
+	virtual float GetAchievableProcessTemperatureCelsius() const { return IsStationActive() ? AchievableProcessTemperatureCelsius : 0.0f; }
+
 	/** Whether this station requires fuel to operate. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
 	bool bRequiresFuel = false;

@@ -47,8 +47,8 @@ pause paths all reach it (checked in the UE 5.8.3 source, 2026-10-17):
 - Auto-pause behaviors that go through the player controller (gamepad disconnect, window deactivation if configured)
 
 `AGameModeBase::SetPause(PC, ...)` called DIRECTLY does not go through the player controller (it sets the world's pauser itself), so it
-is not caught by the override. No MO57 code calls it; never add a call (the header comment in `MOPlayerController.h` lists it; that
-list predates this check).
+is not caught by the override. No MO57 code calls it; never add a call. The `MOPlayerController.h` comment documents this boundary
+alongside the controller-routed paths.
 
 ```cpp
 bool AMOPlayerController::SetPause(bool bPause, FCanUnpause CanUnpauseDelegate)

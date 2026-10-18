@@ -27,12 +27,14 @@ double UMOTimedActionComponent::ServerNow() const
 	return GameState ? GameState->GetServerWorldTimeSeconds() : (World ? World->GetTimeSeconds() : 0.0);
 }
 
-bool UMOTimedActionComponent::Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled, float MaxDriftCm)
+bool UMOTimedActionComponent::Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled, float MaxDriftCm, TFunction<bool()> CanContinue)
 {
-	if (GetOwnerRole() != ROLE_Authority || !GetOwner())
+	if (GetOwnerRole() != ROLE_Authority || !GetOwner() || bStarting)
 	{
 		return false;
 	}
+	// A cancellation observer must not start an action that this Begin would silently overwrite.
+	TGuardValue<bool> Starting(bStarting, true);
 	if (State.bActive)
 	{
 		Finish(false, TEXT("replaced by another action"));
@@ -49,6 +51,7 @@ bool UMOTimedActionComponent::Begin(FName ActionId, const FText& Label, float Ga
 	++State.Serial;
 	PendingComplete = MoveTemp(OnComplete);
 	PendingCancelled = MoveTemp(OnCancelled);
+	PendingCanContinue = MoveTemp(CanContinue);
 	StartLocation = GetOwner()->GetActorLocation();
 	MaxDrift = MaxDriftCm;
 
@@ -83,7 +86,9 @@ float UMOTimedActionComponent::GetProgress01() const
 
 float UMOTimedActionComponent::GetRemainingRealSeconds() const
 {
-	return State.bActive ? FMath::Max(0.0f, State.RealSeconds - static_cast<float>(ServerNow() - State.StartServerSeconds)) : 0.0f;
+	// A newly joined client's server clock can briefly trail the replicated start. Project
+	// from the same bounded progress as the bar, so remaining time never exceeds the full course.
+	return State.bActive ? State.RealSeconds * (1.0f - GetProgress01()) : 0.0f;
 }
 
 void UMOTimedActionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -98,6 +103,11 @@ void UMOTimedActionComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	if (GetOwner() && FVector::Dist2D(GetOwner()->GetActorLocation(), StartLocation) > MaxDrift)
 	{
 		Finish(false, TEXT("moved away"));
+		return;
+	}
+	if (PendingCanContinue && !PendingCanContinue())
+	{
+		Finish(false, TEXT("action context lost"));
 		return;
 	}
 	if (ServerNow() - State.StartServerSeconds >= State.RealSeconds)
@@ -138,7 +148,9 @@ void UMOTimedActionComponent::Finish(bool bCompleted, const TCHAR* Why)
 	TFunction<void()> Cancelled = MoveTemp(PendingCancelled);
 	PendingComplete = nullptr;
 	PendingCancelled = nullptr;
+	PendingCanContinue = nullptr;
 	const FName Id = State.ActionId;
+	const uint8 FinishedSerial = State.Serial;
 	State.bActive = false;
 	SetComponentTickEnabled(false);
 	if (bListening)
@@ -150,7 +162,6 @@ void UMOTimedActionComponent::Finish(bool bCompleted, const TCHAR* Why)
 		bListening = false;
 	}
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTimedAction] %s: %s %s (%s)"), *GetNameSafe(GetOwner()), *Id.ToString(), bCompleted ? TEXT("completed") : TEXT("cancelled"), Why);
-	OnStateChanged.Broadcast(State);
 	if (bCompleted && Complete)
 	{
 		Complete();
@@ -158,6 +169,12 @@ void UMOTimedActionComponent::Finish(bool bCompleted, const TCHAR* Why)
 	else if (!bCompleted && Cancelled)
 	{
 		Cancelled();
+	}
+	// Install the result before notifying observers. Completion may intentionally begin the next
+	// action (butchering a second part); that Begin already published its own state.
+	if (!State.bActive && State.Serial == FinishedSerial)
+	{
+		OnStateChanged.Broadcast(State);
 	}
 }
 
