@@ -283,10 +283,11 @@ struct MOFRAMEWORK_API FMOSurvivorJobList : public FFastArraySerializer
 	UPROPERTY(NotReplicated)
 	TWeakObjectPtr<UMOSurvivorJobQueueComponent> OwnerComponent;
 
-	// FastArraySerializer callbacks
-	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
+	// FastArraySerializer callbacks. OnQueueChanged goes out once per receive from PostReplicatedReceive, after removals are applied: the
+	// engine calls PreReplicatedRemove / PostReplicatedAdd / PostReplicatedChange while removed jobs are still in the array, so a queue
+	// re-read from those showed a finished job on a joiner (see FMOInventoryList).
 	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
-	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams)
 	{

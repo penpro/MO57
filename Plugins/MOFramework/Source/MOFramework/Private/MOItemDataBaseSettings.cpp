@@ -8,6 +8,7 @@
 TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::CachedItemDefinitions;
 TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::ModItemDefinitions;
 bool UMOItemDatabaseSettings::bCacheBuilt = false;
+TMap<uint32, FName> UMOItemDatabaseSettings::SimplestToolItemCache;
 TWeakObjectPtr<UDataTable> UMOItemDatabaseSettings::CachedDataTable;
 bool UMOItemDatabaseSettings::bDataTableLoggedOnce = false;
 
@@ -234,6 +235,7 @@ void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 void UMOItemDatabaseSettings::InvalidateCache()
 {
 	CachedItemDefinitions.Empty();
+	SimplestToolItemCache.Empty();
 	bCacheBuilt = false;
 	UE_LOG(LogMOFramework, Log,
 		TEXT("[MOItemDatabase] Cache invalidated (mod overlay retained: %d items)"),
@@ -254,6 +256,7 @@ void UMOItemDatabaseSettings::RegisterModItem(FName ItemId, const FMOItemDefinit
 
 	const bool bWasReplaced = ModItemDefinitions.Contains(ItemId);
 	ModItemDefinitions.Add(ItemId, Row);
+	SimplestToolItemCache.Empty();   // a mod tool can be the new simplest one
 
 	// If the live cache is already built, write through so callers see the
 	// new row immediately. Without this, the row would only appear after
@@ -382,6 +385,53 @@ FText UMOItemDatabaseSettings::GetItemDisplayName(FName ItemDefinitionId)
 	}
 
 	return Definition.DisplayName;
+}
+
+FName UMOItemDatabaseSettings::FindSimplestToolItem(EMOToolType ToolType, float MinEffectiveness)
+{
+	if (ToolType == EMOToolType::None)
+	{
+		return NAME_None;
+	}
+	const uint32 Key = HashCombine(GetTypeHash(static_cast<uint8>(ToolType)), GetTypeHash(FMath::RoundToInt(MinEffectiveness * 1000.0f)));
+	if (const FName* Cached = SimplestToolItemCache.Find(Key))
+	{
+		return *Cached;
+	}
+
+	// The same test the tool searches use (UMOCraftingSubsystem::FindBestTool, UMOInventoryComponent::GetBestToolEffectiveness): a tool row whose
+	// effectiveness for the type is above zero and at least the minimum. The lowest such effectiveness is the most primitive tool.
+	TArray<FName> Ids;
+	GetAllItemIds(Ids);
+	Ids.Sort(FNameLexicalLess());   // a stable pick between equals
+	FName Best = NAME_None;
+	float BestEffectiveness = TNumericLimits<float>::Max();
+	for (const FName Id : Ids)
+	{
+		FMOItemDefinitionRow Row;
+		if (!GetItemDefinition(Id, Row) || !Row.bIsTool)
+		{
+			continue;
+		}
+		const float Effectiveness = Row.GetToolEffectiveness(ToolType);
+		if (Effectiveness > 0.0f && Effectiveness >= MinEffectiveness && Effectiveness < BestEffectiveness)
+		{
+			Best = Id;
+			BestEffectiveness = Effectiveness;
+		}
+	}
+	SimplestToolItemCache.Add(Key, Best);
+	return Best;
+}
+
+FText UMOItemDatabaseSettings::DescribeToolNeed(EMOToolType ToolType, float MinEffectiveness)
+{
+	const FText Tool = UEnum::GetDisplayValueAsText(ToolType);
+	const FName Item = FindSimplestToolItem(ToolType, MinEffectiveness);
+	const FText ItemName = Item.IsNone() ? FText::GetEmpty() : GetItemDisplayName(Item);
+	return ItemName.IsEmpty()
+		? FText::Format(NSLOCTEXT("MOItems", "NeedsTool", "Needs a tool: {0}."), Tool)
+		: FText::Format(NSLOCTEXT("MOItems", "NeedsToolItem", "Needs a tool: {0} ({1} or better)."), Tool, ItemName);
 }
 
 bool UMOItemDatabaseSettings::IsConfigured()

@@ -73,6 +73,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static FText GetItemDisplayName(FName ItemDefinitionId);
 
+	/**
+	 * THE wording of a missing tool, for every refusal that needs one (crafting, harvesting, cover gathering, carcasses): the tool and the simplest
+	 * item that serves, "Needs a tool: Hammer (Hammerstone or better).", or "Needs a tool: Hammer." when no item does. Wes, Oct 18 2026: the stone
+	 * maul said "missing required tool" but not which.
+	 */
+	static FText DescribeToolNeed(EMOToolType ToolType, float MinEffectiveness = 0.0f);
+
+	/** The least effective item that still works as ToolType at MinEffectiveness (the first one a player can make); NAME_None when none does. Cached. */
+	static FName FindSimplestToolItem(EMOToolType ToolType, float MinEffectiveness = 0.0f);
+
 	/** Check if the Item Database is properly configured. Logs a warning if not. */
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static bool IsConfigured();
@@ -142,6 +152,9 @@ private:
 
 	/** Whether the cache has been built. */
 	static bool bCacheBuilt;
+
+	/** FindSimplestToolItem's answers by (tool, minimum): emptied with the item cache and on every mod change. */
+	static TMap<uint32, FName> SimplestToolItemCache;
 
 	/** Cached DataTable pointer to avoid repeated loading. */
 	static TWeakObjectPtr<UDataTable> CachedDataTable;

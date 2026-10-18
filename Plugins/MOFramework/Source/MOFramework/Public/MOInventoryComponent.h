@@ -60,12 +60,9 @@
  * REPLICATION NOTES
  * =============================================================================
  *
- * FastArraySerializer efficiently replicates only changed entries:
- * - PostReplicatedAdd: Called on clients when new items arrive
- * - PostReplicatedChange: Called on clients when items change (quantity/durability)
- * - PostReplicatedRemove: Called on clients before items are removed
- *
- * All three callbacks broadcast OnInventoryChanged for UI updates.
+ * FastArraySerializer efficiently replicates only changed entries. On a client, FMOInventoryList::PostReplicatedReceive rebuilds the GUID
+ * index and broadcasts OnInventoryChanged once per receive, after adds, changes and removals are all applied. (The engine's
+ * PostReplicatedAdd / PostReplicatedChange run before removed entries leave the array, and there is no PostReplicatedRemove.)
  *
  * =============================================================================
  * RELATED FILES
@@ -141,10 +138,10 @@ public:
 
 	void SetOwner(UMOInventoryComponent* InOwner) { OwnerComponent = InOwner; }
 
-	// Replication callbacks
-	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
-	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
-	void PostReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+	// The ONE client notification: the engine calls it after a receive has applied its adds, changes AND removals. Its PostReplicatedAdd /
+	// PostReplicatedChange run while the removed entries are still in the array, and it has no PostReplicatedRemove (ours never ran), so a
+	// stack a joiner lost entirely stayed on screen (BR18-28: "Simple Cordage (2/2)" after the craft took both, Begin Crafting still lit).
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams)
 	{

@@ -498,6 +498,7 @@ public:
 	void OnConditionReplicatedAdd(const FMOCondition& Condition);
 	void OnConditionReplicatedChange(const FMOCondition& Condition);
 	void OnConditionReplicatedRemove(const FMOCondition& Condition);
+	virtual void OnConditionListReplicated() override;
 
 protected:
 	virtual void BeginPlay() override;

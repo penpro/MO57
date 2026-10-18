@@ -154,6 +154,8 @@ public:
 	virtual void OnConditionReplicatedAdd(const FMOCondition& Condition) = 0;
 	virtual void OnConditionReplicatedChange(const FMOCondition& Condition) = 0;
 	virtual void OnConditionReplicatedRemove(const FMOCondition& Condition) = 0;
+	/** Once per replicated receive, after adds, changes AND removals are applied: the time to re-read the whole list. */
+	virtual void OnConditionListReplicated() {}
 };
 
 USTRUCT(BlueprintType)
@@ -270,6 +272,8 @@ struct MOFRAMEWORKCORE_API FMOConditionList : public FFastArraySerializer
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
 	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
 	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+	// The engine runs the three above while removed conditions are still in the array: whole-list readers wait for this one.
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams)
 	{

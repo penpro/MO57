@@ -1,14 +1,6 @@
 #include "MOSurvivorJobTypes.h"
 #include "MOSurvivorJobQueueComponent.h"
 
-void FMOSurvivorJobList::PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize)
-{
-	if (UMOSurvivorJobQueueComponent* Owner = OwnerComponent.Get())
-	{
-		Owner->OnQueueChanged.Broadcast();
-	}
-}
-
 void FMOSurvivorJobList::PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize)
 {
 	if (UMOSurvivorJobQueueComponent* Owner = OwnerComponent.Get())
@@ -21,11 +13,10 @@ void FMOSurvivorJobList::PostReplicatedChange(const TArrayView<int32>& ChangedIn
 				Owner->OnJobStateChanged.Broadcast(Job.JobId, Job.State);
 			}
 		}
-		Owner->OnQueueChanged.Broadcast();
 	}
 }
 
-void FMOSurvivorJobList::PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize)
+void FMOSurvivorJobList::PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& /*Parameters*/)
 {
 	if (UMOSurvivorJobQueueComponent* Owner = OwnerComponent.Get())
 	{

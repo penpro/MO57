@@ -171,8 +171,9 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | BR18-25 | DONE-2026-10-18 | Claude | Crafting / building menus: a highlighted pick with an empty preview on reopening; every opening now starts with nothing selected | `Docs/BugReports_2026-10-18.md` | |
 | BR18-26 | DONE-2026-10-18 | Claude | Survivor task menu hard to read: restyled to the kit look (`ui_specs/kit_survivor_tasks.py`) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-27 | DONE-2026-10-18 | Claude | ">>" / "<<" acted on a hidden or stale container: the buttons now follow the visible panel (GetTransferTarget) and reopening clears the old container | `Docs/BugReports_2026-10-18.md` | |
-| BR18-28 | OPEN | Claude | Stone maul: "missing required tool" doesn't name the tool (joiner) | `Docs/BugReports_2026-10-18.md` | |
-| BR18-29 | DONE-2026-10-18 | Claude | Bark container: a 1 L water vessel at its real size (14 x 13 x 12 cm); teaching it is fork F28 | `Docs/BugReports_2026-10-18.md` | |
+| BR18-28 | DONE-2026-10-18 | Claude | Tool refusals name the tool and the simplest item ("Needs a tool: Hammer (Hammerstone or better).") | `Docs/BugReports_2026-10-18.md` | |
+| BR18-29 | DONE-2026-10-18 | Claude | Bark container: a 1 L water vessel at its real size (14 x 13 x 12 cm); teaching it is fork F28 |
+| BR18-31 | DONE-2026-10-18 | Claude | Joiner UI kept removed stacks / jobs / conditions: FastArray notifications moved to PostReplicatedReceive | `Docs/BugReports_2026-10-18.md` | | `Docs/BugReports_2026-10-18.md` | |
 | BR18-30 | DONE-2026-10-18 | Claude | Survivor job typos in DT_SurvivorJobs fixed | `Docs/BugReports_2026-10-18.md` | |
 
 ## UI

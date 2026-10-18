@@ -1,6 +1,7 @@
 #include "MOCoverForageSettings.h"
 #include "Engine/StaticMesh.h"
 #include "MOInventoryComponent.h"
+#include "MOItemDatabaseSettings.h"
 
 #define LOCTEXT_NAMESPACE "MOCoverForage"
 
@@ -82,7 +83,7 @@ bool FMOCoverForage::CanBeWorkedBy(const UMOInventoryComponent* Inventory, FText
 	}
 	if (OutReason)
 	{
-		*OutReason = FText::Format(LOCTEXT("NeedsTool", "Needs a {0}."), UEnum::GetDisplayValueAsText(RequiredTool).ToLower());
+		*OutReason = UMOItemDatabaseSettings::DescribeToolNeed(RequiredTool, MinToolQuality);
 	}
 	return false;
 }

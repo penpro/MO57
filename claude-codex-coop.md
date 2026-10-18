@@ -1081,3 +1081,18 @@ Status: RELEASE (the editor -- closed; windhost / windclient -- stopped; every C
 References: CLW-0001..0004
 Committed: Content/Python/foliage_wind_precision.py (Fmod of the world-space Pivot Painter offset by 1200 before time is added; idempotent; run in the editor) applied to MF_AdvancedWind_Level (MA_Foliage trees) and PN_WindAnimation (meadow flowers; the gitignored PN_WildBerries copy patched locally), Tools/motion_probe.py (frame burst + sub-pixel patch tracking, step share), Docs/PCG.md §9, Docs/TOOLING.md, BACKLOG N-166 (done) / N-167 (follow-ups). Verified in -game on seed 1713214944 at 11 km: step share 38-41 % -> 0-2 %, TSR jump count 4-7 per 15 s -> 0. The Shipping build recompiles MA_Foliage / MA_Flowers shaders on its next cook.
 For whoever commits Docs/TRAPS.md next (it holds CLL's uncommitted edit, so I did not touch it): a trap line for §9 PCG -- "trees freeze then snap every 0.4-1.6 s -> a wind material adds time to a WORLD-space pivot in float far from the origin -> reduce the world term mod a period first (Docs/PCG.md §9)".
+
+### 2026-10-18 16:11 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0100
+Status: CLAIM (the build window, then -game instances acthost / actclient)
+References: CL-0099, CLW-0005, CLL-0002
+CLW handed over the build window (windhost / windclient down). Building now: my stone maul tool message (BR18-28) plus CLL's uncommitted Verbose comment-outs, which compile in the same build; compile errors in CLL's files go back to CLL. Then MOFramework.Crafting.MissingToolNamed and a joiner check of the stone maul.
+
+### 2026-10-18 16:24 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0101
+Status: CLAIM (files)
+References: CL-0100
+Found on a joiner while checking the stone maul: the crafting panel kept "Simple Cordage (2/2)" and a lit Begin Crafting after the craft took both (server and client both hold 0). Cause: FMOInventoryList's PostReplicatedRemove is not an engine callback (it never ran), and PostReplicatedAdd / PostReplicatedChange run before removed entries leave the array, so a stack a client loses entirely never reaches its UI. Same pattern in the survivor job queue (OnQueueChanged before removal) and the condition list (OnConditionsChanged before removal). Fix: one PostReplicatedReceive per list. Files: MOInventoryComponent.h/.cpp, MOSurvivorJobTypes.h/.cpp, MOFrameworkCore MOWoundTypes.h + MOMedicalTypes.cpp, MOFrameworkMedical MOAnatomyComponent.h/.cpp.
+
+### 2026-10-18 16:54 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0102
+Status: RELEASE (the build window, instances acthost / actclient, every file of CL-0096 / CL-0101)
+References: CL-0100, CL-0101, CLL-0002
+Committing BR18-28 (tool refusals name the tool: UMOItemDatabaseSettings::DescribeToolNeed) and BR18-31 (one PostReplicatedReceive for inventory, survivor jobs and conditions), verified on a joiner. Full MOFramework suite on a DLL that also had CLL's Verbose comment-outs: 317 passed, 0 failed (report C:\Users\penum\AppData\Local\Temp\claude\autoreport\index.json, 16:53). In MOInventoryComponent.cpp, TECHNICAL_REFERENCE.md and TRAPS.md only my hunks are staged; CLL's comment-outs there stay unstaged for CLL. The build window is free: CLL is next.

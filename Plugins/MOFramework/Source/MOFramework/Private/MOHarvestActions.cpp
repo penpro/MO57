@@ -7,6 +7,7 @@
 #include "MOTimedActionComponent.h"
 #include "MOPlayerController.h"
 #include "MOResourceDatabaseSettings.h"
+#include "MOItemDatabaseSettings.h"
 #include "MOFramework.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/World.h"
@@ -82,7 +83,8 @@ bool FMOHarvestActions::Begin(APawn* Harvester, const FMOInstanceRef& Instance, 
 	}
 	if (!Harvest->BeginHarvest(ISM, Index, ActionId, Inventory))
 	{
-		OutReason = Action && !UMOHarvestSubsystem::HasToolForAction(*Action, Inventory) ? LOCTEXT("NeedsTool", "You need a better tool for that.") : OutReason;
+		OutReason = Action && !UMOHarvestSubsystem::HasToolForAction(*Action, Inventory)
+			? UMOItemDatabaseSettings::DescribeToolNeed(Action->RequiredToolType, Action->MinToolQuality) : OutReason;
 		return false;   // BeginHarvest logged why
 	}
 	const FMOHarvestContext* Ctx = Harvest->GetHarvestContext(Harvester);

@@ -306,6 +306,7 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	// Check tools - separate required vs optional
 	TArray<EMOToolType> MissingRequiredTools;
 	TArray<EMOToolType> MissingOptionalTools;
+	TArray<FText> MissingToolNeeds;   // the refusal names each tool (UMOItemDatabaseSettings::DescribeToolNeed)
 	float TimeMultiplier = 1.0f;
 	float QualityMultiplier = 1.0f;
 
@@ -327,6 +328,7 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 			{
 				// Absolutely required - blocks crafting
 				MissingRequiredTools.Add(ToolReq.ToolType);
+				MissingToolNeeds.Add(UMOItemDatabaseSettings::DescribeToolNeed(ToolReq.ToolType, ToolReq.MinQuality));
 			}
 			else
 			{
@@ -350,7 +352,7 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	// Only block if REQUIRED tools are missing
 	if (MissingRequiredTools.Num() > 0)
 	{
-		Result.FailureReason = FText::FromString(TEXT("Missing required tools."));
+		Result.FailureReason = FText::Join(FText::FromString(TEXT(" ")), MissingToolNeeds);
 		return Result;
 	}
 

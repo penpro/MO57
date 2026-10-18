@@ -191,7 +191,7 @@ bool AMOCarcassActor::CanPawnCutPart(const APawn* Pawn, FName PartId, FText& Out
 		if (Tool != INDEX_NONE && Tool != static_cast<int64>(EMOToolType::None)
 			&& (!Inventory || Inventory->GetBestToolEffectiveness(static_cast<EMOToolType>(Tool)) <= 0.0f))
 		{
-			OutReason = FText::Format(NSLOCTEXT("MOCarcass", "NeedsTool", "Needs a tool: {0}."), ToolEnum->GetDisplayNameTextByValue(Tool));
+			OutReason = UMOItemDatabaseSettings::DescribeToolNeed(static_cast<EMOToolType>(Tool));
 			return false;
 		}
 	}

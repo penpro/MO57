@@ -130,6 +130,14 @@ void FMOConditionList::PreReplicatedRemove(const TArrayView<int32>& RemovedIndic
 	}
 }
 
+void FMOConditionList::PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& /*Parameters*/)
+{
+	if (IMOWoundListOwner* Owner = OwnerComponent)
+	{
+		Owner->OnConditionListReplicated();
+	}
+}
+
 FMOCondition* FMOConditionList::FindConditionById(const FGuid& ConditionId)
 {
 	return Conditions.FindByPredicate([&ConditionId](const FMOCondition& Condition)

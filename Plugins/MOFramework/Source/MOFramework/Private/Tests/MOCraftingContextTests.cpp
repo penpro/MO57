@@ -865,4 +865,37 @@ bool FMOCraftingSurvivorReloadDetachedCancel::RunTest(const FString&)
 	}
 	return true;
 }
+
+// BR18-28 (Wes, Oct 18): the stone maul said "Missing required tools." without naming one. The refusal names the tool and the simplest item that
+// serves it, and that item really does satisfy the requirement (the control: carrying it lets the craft through).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCraftingMissingToolNamed, "MOFramework.Crafting.MissingToolNamed", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOCraftingMissingToolNamed::RunTest(const FString&)
+{
+	using namespace MOCraftingContextTests;
+	FWorld F;
+	FMOToolRequirement Hammer;
+	Hammer.ToolType = EMOToolType::Hammer;
+	Hammer.MinQuality = 0.3f;   // the stone maul's requirement
+	Hammer.bIsRequired = true;
+	F.Recipe.RequiredStation = EMOCraftingStation::None;
+	F.Recipe.RequiredTools = {Hammer};
+	F.PublishRecipe();
+
+	const FName Simplest = UMOItemDatabaseSettings::FindSimplestToolItem(EMOToolType::Hammer, 0.3f);
+	if (!TestFalse(TEXT("Some item works as a hammer of quality 0.3"), Simplest.IsNone()))
+	{
+		return false;
+	}
+	const FMOCraftingValidation Without = F.Crafting->CanCraftRecipe(RecipeId, nullptr, nullptr, F.Inventory, EMOCraftingStation::None);
+	const FString Reason = Without.FailureReason.ToString();
+	TestFalse(TEXT("No hammer: the craft is refused"), Without.bCanCraft);
+	TestTrue(FString::Printf(TEXT("The refusal names the tool: '%s'"), *Reason), Reason.Contains(TEXT("Hammer")));
+	TestTrue(FString::Printf(TEXT("The refusal names an item that serves (%s): '%s'"), *Simplest.ToString(), *Reason),
+		Reason.Contains(UMOItemDatabaseSettings::GetItemDisplayName(Simplest).ToString()));
+
+	F.Inventory->AddItemByGuid(FGuid::NewGuid(), Simplest, 1);
+	const FMOCraftingValidation With = F.Crafting->CanCraftRecipe(RecipeId, nullptr, nullptr, F.Inventory, EMOCraftingStation::None);
+	TestTrue(FString::Printf(TEXT("Carrying the named item lets the craft through ('%s')"), *With.FailureReason.ToString()), With.bCanCraft);
+	return true;
+}
 #endif

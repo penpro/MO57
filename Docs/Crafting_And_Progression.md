@@ -36,6 +36,9 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   resume, before the craft completes and empties the queue. Partial progress survives pause/resume and save/load (H25: the anchor is
   back-dated by Progress x Duration, d8331172). Offline catch-up is capped at 4 h, the clock's cap (`Docs/Weather_And_Time.md`).
 - Results distinguish failure kinds at the data layer (`FMOCraftResult`: `FailedItems` vs `DepletedItems`, `SpilledLiquid`).
+- **A missing tool is named, everywhere** (crafting, harvesting, cover gathering, carcasses): `UMOItemDatabaseSettings::DescribeToolNeed` gives the
+  tool and the simplest item that serves it, "Needs a tool: Hammer (Hammerstone or better)." (`FindSimplestToolItem`, cached). New tool gates
+  use it instead of their own text (BR18-28).
 - Recipe queuing and workshop batches are the approved QoL: N items at N x their real duration (`Docs/ENGINEERING_PRINCIPLES.md` tedium).
 - **Execution context is server-derived from the actual station:** identity, type, completed building state, reach, line of sight,
   active/fuel state and configured process-temperature capability. Each entry keeps its station GUID; opening another menu cannot

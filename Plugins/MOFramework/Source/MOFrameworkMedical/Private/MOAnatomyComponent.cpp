@@ -778,17 +778,20 @@ void UMOAnatomyComponent::OnWoundReplicatedRemove(const FMOWound& Wound)
 void UMOAnatomyComponent::OnConditionReplicatedAdd(const FMOCondition& Condition)
 {
 	OnConditionAdded.Broadcast(Condition.ConditionId, Condition.ConditionType);
-	OnConditionsChanged.Broadcast();
 }
 
 void UMOAnatomyComponent::OnConditionReplicatedChange(const FMOCondition& Condition)
 {
-	OnConditionsChanged.Broadcast();
 }
 
 void UMOAnatomyComponent::OnConditionReplicatedRemove(const FMOCondition& Condition)
 {
 	OnConditionRemoved.Broadcast(Condition.ConditionId, Condition.ConditionType);
+}
+
+void UMOAnatomyComponent::OnConditionListReplicated()
+{
+	// After the receive is applied (a removed condition is gone): the status panel and moodles re-read the whole list on this.
 	OnConditionsChanged.Broadcast();
 }
 

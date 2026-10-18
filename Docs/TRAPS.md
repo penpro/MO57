@@ -149,6 +149,10 @@
 
 ## 6. Co-op and RPC
 
+- **A joiner's UI keeps an item, job or condition the server already removed ("Simple Cordage (2/2)" with 0 carried)** -> FastArray
+  `PostReplicatedAdd` / `PostReplicatedChange` / `PreReplicatedRemove` run while removed entries are still in the array, and there is no
+  array-level `PostReplicatedRemove` (ours never ran) -> whole-list notifications go in `PostReplicatedReceive`, once per receive
+  (`TECHNICAL_REFERENCE.md` Replication Patterns). A UI test on the host can't see this: check on a joiner. (Oct 18, BR18-31)
 - Full list: `Docs/Coop_And_Networking.md` §6. The ones that bite: editor-Python RPCs run local (§3 above); **PIE can't test sessions** (use
   `ue.py inst` / `nettest`); **Steam is off in editor / PIE by design**; one Steam account can't join its own lobby; **the FIRST
   `NetDriverDefinitions` entry wins and a missing driver class falls back to IpNetDriver silently** (assert the driver class); the Null OSS

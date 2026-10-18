@@ -158,10 +158,12 @@ struct FMOWoundList : public FFastArraySerializer
     UPROPERTY()
     TArray<FMOWound> Wounds;
 
-    // Required callbacks
+    // Per-entry events (the entry is still in the array in all three, removed ones included)
     void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
     void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
     void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+    // "The list changed, re-read it": ONLY here, after the receive has applied adds, changes and removals
+    void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
 
     bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams) { /*...*/ }
 };
@@ -173,6 +175,11 @@ struct TStructOpsTypeTraits<FMOWoundList> : public TStructOpsTypeTraitsBase2<FMO
     enum { WithNetDeltaSerializer = true };
 };
 ```
+
+The engine calls `PreReplicatedRemove`, `PostReplicatedAdd` and `PostReplicatedChange` while removed entries are still in the array, then
+deletes them (`RemoveAtSwap`), then calls `PostReplicatedReceive`. There is no array-level `PostReplicatedRemove`: a function of that name
+never runs. So a whole-list notification (UI refresh, index rebuild) belongs in `PostReplicatedReceive`, once per receive. Inventory, the
+survivor job queue and the condition list do this since Oct 18 (BR18-31: a stack a joiner lost entirely stayed in its UI).
 
 **GUID-Based Identity** - Stable cross-session references:
 - `UMOIdentityComponent` generates/stores FGuid per actor

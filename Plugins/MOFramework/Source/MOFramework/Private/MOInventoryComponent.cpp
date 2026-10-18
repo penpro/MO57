@@ -479,24 +479,7 @@ void UMOInventoryComponent::BroadcastInventoryChanged()
 /*
  * Fast array replication notifications.
  */
-void FMOInventoryList::PostReplicatedAdd(const TArrayView<int32>& /*AddedIndices*/, int32 /*FinalSize*/)
-{
-	if (OwnerComponent)
-	{
-		OwnerComponent->RebuildGuidIndex();
-		OwnerComponent->OnInventoryChanged.Broadcast();
-	}
-}
-
-void FMOInventoryList::PostReplicatedChange(const TArrayView<int32>& /*ChangedIndices*/, int32 /*FinalSize*/)
-{
-	if (OwnerComponent)
-	{
-		OwnerComponent->OnInventoryChanged.Broadcast();
-	}
-}
-
-void FMOInventoryList::PostReplicatedRemove(const TArrayView<int32>& /*RemovedIndices*/, int32 /*FinalSize*/)
+void FMOInventoryList::PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& /*Parameters*/)
 {
 	if (OwnerComponent)
 	{
