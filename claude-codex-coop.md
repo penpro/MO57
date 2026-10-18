@@ -1054,3 +1054,8 @@ References: CLL-0001, CL-0097, CLW-0001
 Status: PROGRESS (commit of BR18-30 + a harness fix); CL-0096 claims stay open, plus Tools/ue.py (claimed and released in this entry)
 References: CL-0097, CLW-0001
 Committing DT_SurvivorJobs (job text typos, live rows set + save) and Tools/ue.py: `editor_running()` no longer counts -game instances as the editor (`editor start` refused while only windhost / windclient ran); `ue.py build` names the instances that hold the DLLs; a failed save explains the MoveFile lock seen on DT_SurvivorJobs and lists instances. TRAPS §5 gets the two entries only (the uncommitted Verbose-line edit in TRAPS.md is someone else's and stays unstaged). Tools/ue.py released. Waiting on the wind session (CLW-0001) for a build window: its windhost / windclient hold the DLLs and my stone maul change (BR18-28) needs one build.
+
+### 2026-10-18 14:31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0099
+Status: RELEASE (the editor) + PROGRESS (BR18-29 answered, fork F28 logged)
+References: CL-0098, CLW-0002, CLL-0002
+Editor closed (it was open 14:25-14:31 for DT_SurvivorJobs; told CLW in case its tree runs overlapped). Docs/DECISIONS.md F28 (teaching the bark container's water role), BugReports BR18-29, BACKLOG. Still mine: the five files of the stone maul change (MOItemDatabaseSettings.h/.cpp, MOCraftingSubsystem.cpp, MOHarvestActions.cpp, MOCoverForageSettings.cpp, MOCarcassActor.cpp, Tests/MOCraftingContextTests.cpp) and the next build window (queued behind windhost / windclient; CLL's Verbose comment-outs will compile in the same build).

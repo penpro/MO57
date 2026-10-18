@@ -171,7 +171,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | BR18-26 | DONE-2026-10-18 | Claude | Survivor task menu hard to read: restyled to the kit look (`ui_specs/kit_survivor_tasks.py`) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-27 | DONE-2026-10-18 | Claude | ">>" / "<<" acted on a hidden or stale container: the buttons now follow the visible panel (GetTransferTarget) and reopening clears the old container | `Docs/BugReports_2026-10-18.md` | |
 | BR18-28 | OPEN | Claude | Stone maul: "missing required tool" doesn't name the tool (joiner) | `Docs/BugReports_2026-10-18.md` | |
-| BR18-29 | OPEN | Claude | Bark container: about 10 cm in the world; purpose and contents unclear | `Docs/BugReports_2026-10-18.md` | |
+| BR18-29 | DONE-2026-10-18 | Claude | Bark container: a 1 L water vessel at its real size (14 x 13 x 12 cm); teaching it is fork F28 | `Docs/BugReports_2026-10-18.md` | |
 | BR18-30 | DONE-2026-10-18 | Claude | Survivor job typos in DT_SurvivorJobs fixed | `Docs/BugReports_2026-10-18.md` | |
 
 ## UI
