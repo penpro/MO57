@@ -192,3 +192,19 @@ on a current build is not confirmed yet (N-164). Nothing measured smoothness the
   PCGPartitionActor... NOT Supported` warnings on the host in 25 min (rocks, stones, scrub tiers): most likely a pawn standing on a PCG rock
   (its movement base) (N-163).
 - Pawns are relevant within 150 m (`NetCullDistanceSquared` 225,000,000): further apart, players do not see each other.
+
+**First Steam session with the tools (Oct 18, 06:22-07:46 UTC, build `afb9aabc`, 27 bug reports; read with `Tools/ue_netdiag.py`).**
+Wes: "it looks like we did fix the weird laggy no running stuff, and it no longer kicks the client out of the pawn when you interact".
+- Bandwidth: 1.9 KB/s on average of the 100 KB/s cap, 9 of 2,923 s saturated: not the problem over Steam either.
+- Visible corrections (30 cm or more): 49, and 48 had no hitch, saturation or stall just before them. They are FLOOR-HEIGHT
+  disagreements. Of about 2,200 `[MONetCorr]` lines:
+  - 1,064 are height only with the host HIGHER (dz median +3 to +17 cm, 90th percentile up to +38 cm), mostly a sprinting joiner
+    (700 cm/s) in the mountains with the joiner at 11-30 fps. That fits N-112: the voxel collision around a fast-moving pawn is still coarse;
+  - 412 are a joiner standing still with the host a constant 4.7 cm higher (one report: 1,529 of 2,429 moves corrected; invisible, but constant);
+  - 451 are "walking on the host, falling on the joiner" while standing at the camp. The host was looking at a `BP_BuildableFloorBase`:
+    probably a building floor with collision on the host only;
+  - sideways-only lines, which a bush present on one machine only would give, are about 4%.
+- Two host frames of 5-6 s, and a 1.7 km correction at 07:22:44 (the joiner's pawn teleported).
+- Next: the correction lines and events name the position and the floor (actor class and mesh) on both machines, so the next session says
+  which floor disagrees. A joiner's report field `Session.WorldSeed` showed the joiner's own old worlds (384, 21354), not the host's
+  seed: it reads `UMOGameSettings`, which a joiner never updates. The terrain itself follows the replicated seed.
