@@ -209,6 +209,9 @@
 
 ## 12. Light, rendering, materials
 
+- **A tint that reads well on the icon can look too dark in game** -> the icon studio renders under studio light, while in-game sun
+  on low-roughness metal mostly reflects the surroundings -> judge a tint in PIE: material instance edits show live there (saves are
+  refused, so save after ending PIE). Steel needed Brightness 2.8 in game against 1.6 on the icon. (Oct 17)
 - **A test light renders dark** -> UE point-light default units are UNITLESS -> `SetIntensityUnits(Candelas)` BEFORE `SetIntensity`; changing
   `intensity_units` on a live light doesn't refresh the proxy. (carried-light)
 - **Caves glow** -> UDS Captured Scene Sky Light casts no shadow -> UDS interior adjustments. **A torch blows out white** -> the histogram meters

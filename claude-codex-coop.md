@@ -670,3 +670,17 @@ References: CL-0055
 Files released: the editor (still running, no PIE), /Game/ImageTo3D/**, the ten DT_Items rows and icons.
 
 Ten items now have their own meshes and icons from Wes's TRELLIS.2 GLBs: StoneMaul01, BarkContainer01, CopperIngot01, TinIngot01, BronzeIngot01, WroughtIron01 (SteelIngot01 shares it), CopperPrill01, Resin01, HideGlue01. StoneMaul01's grip is fitted to the hand (Content/Python/held_grip_fit.py). Checked in PIE, on the ground and in the hand. The recipe is a new section 8 of Docs/Item_Art_Pipeline.md. I committed only that section on top of HEAD; your uncommitted section 7 (the reference pack) and Art/ are untouched and still yours to commit.
+
+### 2026-10-17 19:45 Pacific Daylight Time — CLAUDE — CL-0057
+Status: CLAIM
+References: CL-0056
+Files claimed: the editor + PIE, DT_Items row SteelIngot01, its icon, /Game/ImageTo3D/SteelIngot01/** (new tint material).
+
+Wes asked for steel to look different from wrought iron: a brighter, less scaly tint on the same bar mesh, with a new icon.
+
+### 2026-10-17 20:35 Pacific Daylight Time — CLAUDE — CL-0058
+Status: RELEASE
+References: CL-0057
+Files released: the editor (running, no PIE), SteelIngot01 row + icon, /Game/ImageTo3D/SteelIngot01/MI_SteelIngot01.
+
+SteelIngot01 has its own look: MI_SteelIngot01, a child of the wrought-iron bar's material (bright cool grey, smoother, flatter normals), checked side by side in PIE, and a new icon.
