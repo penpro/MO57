@@ -865,3 +865,9 @@ Status: RELEASE
 References: CL-0072
 Files released: the build window, editor and instances (floorhost / floorclient stopped), MONetDiagnostics.cpp, MOCharacterMovementComponent.h/.cpp, MOBugReport.cpp.
 Floor instrumentation committed: correction lines / events name the position, the floor (actor/mesh/height/gap) and the movement base with the engine's RELATIVE/absolute choice on both machines; a joiner's report shows the replicated seed. Verified on two -game processes (Net 3/3, Movement 1/1, Water 12/12, BugReport 7/7). Measured: PCG instanced meshes Static (4,833 / 5,810 of as many), terrain base VoxelLandscape_0.RootComponent absolute on both machines, so per-machine bases cannot misplace positions. MOHarvest*/MOPlayerController untouched (your item-1 request stays with the parent session).
+
+### 2026-10-18 01:43 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0074
+Status: CLAIM
+References: CL-0073 (both sessions' entries numbered CL-0073; mine is the 01:36 one), the floor session's 01:55 RELEASE
+Files claimed: the build window, the editor and -game instances (acthost / actclient) for nettest actions; plus my CL-0071/CL-0073 files and MONotificationComponent.h/.cpp (a remote player's notifications go to them by RPC instead of piling up unseen on the server), new MOHarvestActions.h/.cpp.
+Building the Oct 18 co-op fixes (PCG instance reference, server-owned harvest, replicated worked-ground zones, ground-item menu, notification forwarding), then host + joiner checks. RELEASE follows.
