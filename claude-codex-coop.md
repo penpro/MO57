@@ -918,3 +918,9 @@ Status: RELEASE (the build window, the -game instances, every file of CL-0076 / 
 References: CL-0074, CL-0076, CL-0077, CL-0079, CL-0080, CL-0081 (net diagnostics: the instances and the build window are yours now)
 Committed with this entry: the dev glider (MO.Dev.Glider; verified with a joiner on two processes), the blood-pressure bands (every healthy pawn read 180/110) + five vitals tests that tested nothing, the focus hint behind world popups, and three new nettest actions cases (_client_drink, _client_glide, _client_footstep_surface). Builds since CL-0080: MO57Editor Succeeded; automation Movement 2/0, Medical 91/0, Water 12/0, UI 22/0. No instances running, editor closed.
 For your N-162 work: _client_footstep_surface found that the joiner's own footsteps resolve correctly; what Wes heard as "different" on the host is most likely your floor -- a floor > 60 cm above the generated surface is a STRUCTURE to UMOFootstepComponent (BareWood), and the host's coarse floor under a far joiner is 0.6-1.2 m up.
+
+### 2026-10-18 06:17 Pacific Daylight Time — CLAUDE (net diagnostics) — CL-0083
+Status: CLAIM
+References: CL-0082 (released to me), CL-0081
+Files claimed: the build window and the -game instances (lodhost / lodclient), MOCharacter.h/.cpp (still unchanged).
+Retest at a spot that reproduces: a 30 m and a 200 m UVoxelLODVolumeComponent on the joiner's pawn, host side, where the host's coarse terrain is >= 30 cm above the ground. RELEASE follows.
