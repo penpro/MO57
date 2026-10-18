@@ -19,14 +19,14 @@ F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megas
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
 F25 co-op rubber band after a joiner hitch (Steam A/B first).
 
-## In flight (built, uncommitted, other agent)
+## Collaboration dependencies and recent handoffs
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
-| N-001 | WAITING | Codex | Commit audit batches A-F (equipment slot validation, hand-swap ownership, stack replication, inventory capacity, server-derived station context, cancel RPCs, ingredient reservation + exact refunds, survivor liquid transfer, survival meters persisted, timed wound treatment). Wes now says "commit always" (N1) | `Docs/agent/audit/SESSION_STATE.md` | Deep Dive #1-#10, M18 |
-| N-002 | WAITING | Claude | Commit torch wear (`MOCarriedLightComponent.h/.cpp` + the Light_Sources torch-wear text) right after Codex's equipment commit (it calls `UMOEquipmentComponent::ReduceEquippedDurability`) | Night report | |
-| N-003 | OPEN | Codex | C3 reload recovery: `SurvivorReload.ActiveLoadAndPossession` fails (the no-nav fixture trips the unreachable move-leg guard; do NOT weaken the guard) | CX-0064 | |
-| N-004 | WAITING | Claude | Archive `Docs/Handoff_2026-10-13.md` once Codex commits `MOworldSaveGame.h` (its comment names the doc); then point the comment at `Docs/Archive/` | CL-0048 | |
+| N-001 | DONE-2026-10-18 | Codex | Published audit A-G foundations: equipment/hand swaps, inventory capacity/state/replication, authoritative crafting/cancel, exact material ownership/logistics, survivor craft reload, persisted survival meters and timed wound treatment. Shared build 45/45; six focused filters 131 passed, 0 failed/notRun; explicit clinical/UI/full-slot/network limits remain | `7f73356b`; `Docs/agent/audit/SESSION_STATE.md` | Deep Dive #1-#10, M18 |
+| N-002 | OPEN | Claude | Commit own verified torch wear (`MOCarriedLightComponent.h/.cpp` + Light_Sources text). Dependency UNBLOCKED: `UMOEquipmentComponent::ReduceEquippedDurability` published in `7f73356b`; Codex source RELEASE CX-0078 | Night report; CX-0078 | |
+| N-003 | DONE-2026-10-18 | Codex | Corrected no-nav ActiveLoadAndPossession fixture; unreachable guard preserved and explicit failed-return cargo conservation covered. Crafting 16/16, including five SurvivorReload gates; full save-slot/live-network acceptance remains separate | `7f73356b`; Saved/AuditBatchH | |
+| N-004 | DONE-2026-10-18 | Codex | Moved dated Handoff_2026-10-13 unchanged to Docs/Archive; updated MOworldSaveGame source comment and both indexes. Survival single-source fork brief stays live | `7f73356b`; CX-0078 | |
 
 ## World: terrain, caves, geology
 
@@ -78,7 +78,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first).
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
-| N-155 | OPEN | Codex / Claude | Permadeath gear: a deceased pawn record is skipped entirely on load (`MOPersistenceSubsystem` full-load loop), so the dead pawn's body and gear vanish after a reload; the design says the gear stays where it fell. Spawn the body as a dead, lootable corpse (or drop its inventory as world items at save). `MOPersistenceSubsystem.cpp` has Codex's uncommitted edits: after N-001 | `Docs/Persistence.md` §1; CL-0051 | |
+| N-155 | OPEN | Codex / Claude | Permadeath gear: a deceased pawn record is skipped entirely on load (`MOPersistenceSubsystem` full-load loop), so the dead pawn's body and gear vanish after a reload; the design says the gear stays where it fell. Spawn the body as a dead, lootable corpse (or drop its inventory as world items at save). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | `Docs/Persistence.md` §1; CL-0051 | |
 | N-157 | OPEN | Claude | No timed autosave: a crash or a killed process loses everything since the last exit (and killing the process is the one scum route left). Autosave on a game-time interval through the same `SaveThisWorld` step Design + measured save cost in `Docs/Persistence.md` §1 (Oct 17); build after Wes's Steam test (the machine must stay quiet). | `Docs/PAUSE_POLICY.md` "Leaving a world" | |
 | N-060 | WAITING | Wes | Survival single source (F1); thermal model (F2) | DECISIONS | G10, G11, H10/H11 of the Oct 13 handoff |
 | N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
@@ -200,8 +200,8 @@ re-checked defects were already fixed): **re-verify against current code before 
 |---|---|---|---|---|
 | N-150 | OPEN | Claude | Record the last Steam patch (date / time / commit) in `Docs/STEAM_RELEASES.md` whenever Wes asks for Steam patch notes (N9) | `Docs/TOOLING.md` § Steam patch notes |
 | N-151 | OPEN | Wes | CS399: weekly progress is updated every Sunday (last entry Week 2, Oct 5); check-in Nov 18 | `Docs/CS399/CS399_WEEKLY_PROGRESS.md` |
-| N-156 | WAITING | Claude | `MOPlayerController.h`'s SetPause comment lists `AGameMode::SetPause` as caught; a direct `AGameModeBase::SetPause` call bypasses the override (engine source, Oct 17). Fix the comment once Codex commits that file | `Docs/PAUSE_POLICY.md` § Enforcement |
-| N-158 | WAITING | Claude | Store an explicit WorldId (FGuid) in `UMOWorldSaveGame`, made at new game and carried by every save, so a world's identity no longer rides on its slot name (F24). `MOworldSaveGame.h` / `MOPersistenceSubsystem.cpp` hold Codex's uncommitted batches: after N-001 | DECISIONS 2026-10-17 F24 |
+| N-156 | DONE-2026-10-18 | Codex | Corrected MOPlayerController SetPause comment and policy reference: controller-routed paths refuse, direct AGameModeBase::SetPause bypasses and must never be called. No runtime pause change | `7f73356b`; `Docs/PAUSE_POLICY.md` § Enforcement |
+| N-158 | OPEN | Claude | Store an explicit WorldId (FGuid) in UMOWorldSaveGame, made at new game and carried by every save, so identity no longer rides on the slot name (F24). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | DECISIONS 2026-10-17 F24 |
 | N-159 | OPEN | Claude | Optional cleanup: remove the unreachable `WBP_SavePanel` child from `WBP_MOInGameMenu` (`python Tools/ue.py ui remove`); `UMOInGameMenu::ShowSavePanel` / `UMOSavePanel::CreateNewSave` then have no caller | `Docs/UI.md` § 3 |
 | N-152 | OPEN | Claude | Codex's July audit docs in `Docs/agent/` say "Status: In progress" and were never closed: ask Codex to close or archive them | `Docs/agent/` |
 | N-153 | OPEN | Wes | Global CLAUDE.md and `D:\ClaudeMaster\CLAUDE_BIBLE.md` were corrected for the engine type and the principles' new home on 2026-10-17; Law 6 still says "commit only when asked" globally (MO57 overrides it per N1) | DECISIONS N1, N4 |
