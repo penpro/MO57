@@ -148,7 +148,11 @@ on a current build is not confirmed yet (N-164). Nothing measured smoothness the
   behind the loading screen: not counted) and `st=` (the server clock; NOT for lining up: it is world time, which stops at 0.4 s a frame,
   and drifted 3-6 s apart between a hitching host and joiner).
 - **`[MONetEvent]` lines, always:** a host correction or joiner snap of 30 cm or more, a frame of 250 ms or more while a player moves, a saturated second, a moving
-  remote pawn silent for 500 ms. `[MONetCorr]` lines (6 a second at most while stats log) detail corrections: the error, both modes, speeds.
+  remote pawn silent for 500 ms. `[MONetCorr]` lines (6 a second at most while stats log) detail corrections: the error, both modes, speeds,
+  the position, the FLOOR each machine stands on (actor class and mesh, the floor's height, the gap) and the movement BASE with the engine's
+  own choice of `RELATIVE` or `absolute` positions over it (on the terrain the floor is a per-chunk voxel collision component, the base
+  is `VoxelLandscape_0`'s root: a level actor both machines have under one name); the correction / rubber-band events carry the position and the floors too (host: its floor; joiner: before and
+  after the snap), so a pair of reports names the floor the machines disagree about.
 - **Bug reports** carry `Net.*`: the last 60 s, `Net.Events`, `Net.Clock` (UTC: match the host's and the joiner's reports by it) and the
   last line. That is the only record a Shipping build keeps.
 - **On screen:** `MO.Net.Show 1` (development builds). **Positions:** `MO.Net.Trace 1` logs every player pawn 20 times a second.
@@ -205,6 +209,9 @@ Wes: "it looks like we did fix the weird laggy no running stuff, and it no longe
     probably a building floor with collision on the host only;
   - sideways-only lines, which a bush present on one machine only would give, are about 4%.
 - Two host frames of 5-6 s, and a 1.7 km correction at 07:22:44 (the joiner's pawn teleported).
-- Next: the correction lines and events name the position and the floor (actor class and mesh) on both machines, so the next session says
-  which floor disagrees. A joiner's report field `Session.WorldSeed` showed the joiner's own old worlds (384, 21354), not the host's
-  seed: it reads `UMOGameSettings`, which a joiner never updates. The terrain itself follows the replicated seed.
+- Since then the correction lines and events name the position and the floor on both machines (above), so the next session says which
+  floor disagrees. PCG rocks and logs as movement bases: PCG partition actors keep their root Static and their instanced meshes inherit it,
+  so positions over them travel absolute and the per-machine names that cannot resolve ("Unable to resolve default guid", "SupportsObject
+  ... NOT Supported") cost a warning, not a position error (measured on two processes: 4,833 and 5,810 of as many PCG instanced meshes Static, and the
+  terrain's movement base `VoxelLandscape_0.RootComponent absolute` on both machines; the lines say `RELATIVE` if a base ever is). A joiner's
+  `Session.WorldSeed` showed its own old worlds (384, 21354), not the host's: the row now reads the replicated seed.

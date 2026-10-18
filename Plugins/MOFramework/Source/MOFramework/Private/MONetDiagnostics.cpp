@@ -100,12 +100,7 @@ void FMONetCounters::NoteServerMoveChecked(const AActor* Pawn, bool bNeedsCorrec
 		GCounts.ServerErrSum += Err;
 		GCounts.ServerErrXYSum += ServerMinusClient.Size2D();
 		GCounts.ServerErrZSum += FMath::Abs(ServerMinusClient.Z);
-		GCounts.ServerErrMax = FMath::Max(GCounts.ServerErrMax, Err);
-		if (Err >= EventCorrectionCm)
-		{
-			NoteEvent(Pawn, FString::Printf(TEXT("host corrected joiner pawn %s by %.0f cm (dx %.0f dy %.0f dz %.0f)"),
-				*GetNameSafe(Pawn), Err, ServerMinusClient.X, ServerMinusClient.Y, ServerMinusClient.Z));
-		}
+		GCounts.ServerErrMax = FMath::Max(GCounts.ServerErrMax, Err);   // (the event for a visible one: UMOCharacterMovementComponent, which knows the floor)
 	}
 }
 
@@ -118,11 +113,7 @@ void FMONetCounters::NoteClientCorrectionSnap(const AActor* Pawn, float SnapCm)
 {
 	++GCounts.ClientSnaps;
 	GCounts.ClientSnapSum += SnapCm;
-	GCounts.ClientSnapMax = FMath::Max(GCounts.ClientSnapMax, SnapCm);
-	if (SnapCm >= EventCorrectionCm)
-	{
-		NoteEvent(Pawn, FString::Printf(TEXT("joiner rubber-banded %.0f cm (a server correction)"), SnapCm));
-	}
+	GCounts.ClientSnapMax = FMath::Max(GCounts.ClientSnapMax, SnapCm);   // (the event for a visible one: UMOCharacterMovementComponent)
 }
 
 void FMONetCounters::NoteRemotePawnUpdate(const AActor* Pawn, bool bMoving)

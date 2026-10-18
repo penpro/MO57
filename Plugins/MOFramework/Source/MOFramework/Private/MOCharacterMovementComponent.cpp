@@ -7,6 +7,8 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PhysicsVolume.h"
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
 #include "CollisionQueryParams.h"
 
 // ---- gait in the saved moves (see SetWantedGait) ----
@@ -275,6 +277,48 @@ APhysicsVolume* UMOCharacterMovementComponent::GetPhysicsVolume() const
 
 // ---- co-op smoothness counters (MONetDiagnostics.h) ----
 
+namespace
+{
+	/** What a character stands on, for the co-op correction lines: the floor's actor class and mesh (a PCG rock, a building floor, the voxel
+	 *  landscape), the floor's height and the gap. The Oct 18 Steam session's corrections were floor-height disagreements (host higher by 3-38 cm,
+	 *  a constant 4.7 cm while standing still, "walking" on the host but "falling" on the joiner): the two machines' lines name the two floors. */
+	FString DescribeFloor(const FFindFloorResult& Floor)
+	{
+		if (!Floor.bBlockingHit)
+		{
+			return TEXT("none");
+		}
+		const AActor* Owner = Floor.HitResult.GetActor();
+		const UPrimitiveComponent* Component = Floor.HitResult.GetComponent();
+		FString What = Owner ? Owner->GetClass()->GetName() : FString(TEXT("?"));
+		if (const UStaticMeshComponent* Mesh = Cast<UStaticMeshComponent>(Component))
+		{
+			What += TEXT("/") + (Mesh->GetStaticMesh() ? Mesh->GetStaticMesh()->GetName() : FString(TEXT("?")));
+		}
+		else if (Component)
+		{
+			What += TEXT("/") + Component->GetClass()->GetName();
+		}
+		return FString::Printf(TEXT("%s z=%.1f gap=%.1f%s"), *What, Floor.HitResult.ImpactPoint.Z, Floor.FloorDist, Floor.bWalkableFloor ? TEXT("") : TEXT(" not-walkable"));
+	}
+
+	/** The movement BASE (not the same object as the floor hit: on the voxel terrain the floor is a per-chunk collision component, the base the
+	 *  landscape actor's root) and whether the engine sends positions RELATIVE to it. A relative base the other machine cannot resolve -- a
+	 *  per-machine PCG or voxel component -- would turn a relative position into a wrong world position there. */
+	FString DescribeBase(const ACharacter* Character)
+	{
+		const UObject* Base = Character ? Character->GetMovementBaseObject() : nullptr;
+		if (!Base)
+		{
+			return TEXT("none");
+		}
+		const UActorComponent* Component = Cast<UActorComponent>(Base);
+		const AActor* Owner = Component ? Component->GetOwner() : Cast<AActor>(Base);
+		const bool bRelative = MovementBaseUtility::UseRelativeLocation(Character->GetMovementBaseInterfaceData());
+		return FString::Printf(TEXT("%s.%s %s"), Owner ? *Owner->GetName() : TEXT("?"), *Base->GetName(), bRelative ? TEXT("RELATIVE") : TEXT("absolute"));
+	}
+}
+
 bool UMOCharacterMovementComponent::ServerCheckClientError(float ClientTimeStamp, float DeltaTime, const FVector& Accel, const FVector& ClientWorldLocation,
 	const FVector& RelativeClientLocation, FMovementBaseInterfaceData* ClientMovementBaseInterfaceData, FName ClientBaseBoneName, uint8 ClientMovementMode)
 {
@@ -282,15 +326,22 @@ bool UMOCharacterMovementComponent::ServerCheckClientError(float ClientTimeStamp
 		ClientMovementBaseInterfaceData, ClientBaseBoneName, ClientMovementMode);
 	const FVector ServerMinusClient = UpdatedComponent ? UpdatedComponent->GetComponentLocation() - ClientWorldLocation : FVector::ZeroVector;
 	FMONetCounters::NoteServerMoveChecked(CharacterOwner, bNeedsCorrection, ServerMinusClient);
+	if (bNeedsCorrection && ServerMinusClient.Size() >= FMONetCounters::EventCorrectionCm)
+	{
+		FMONetCounters::NoteEvent(CharacterOwner, FString::Printf(TEXT("host corrected joiner pawn %s by %.0f cm (dx %.0f dy %.0f dz %.0f) at %s, host floor %s, base %s"),
+			*GetNameSafe(CharacterOwner), ServerMinusClient.Size(), ServerMinusClient.X, ServerMinusClient.Y, ServerMinusClient.Z,
+			UpdatedComponent ? *UpdatedComponent->GetComponentLocation().ToCompactString() : TEXT("?"), *DescribeFloor(CurrentFloor), *DescribeBase(CharacterOwner)));
+	}
 	if (bNeedsCorrection && FMONetCounters::TakeDetailLine())
 	{
 		TEnumAsByte<EMovementMode> ClientMode, ClientGroundMode;
 		uint8 ClientCustomMode = 0;
 		UnpackNetworkMovementMode(ClientMovementMode, ClientMode, ClientCustomMode, ClientGroundMode);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] server: %s off by %.1f cm (dx %.1f dy %.1f dz %.1f) | server mode %d speed %.0f max %.0f gait %s | client mode %d | dt %.3f accel %.0f"),
+		UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] server: %s off by %.1f cm (dx %.1f dy %.1f dz %.1f) | server mode %d speed %.0f max %.0f gait %s | client mode %d | dt %.3f accel %.0f | at %s floor %s base %s"),
 			*GetNameSafe(CharacterOwner), ServerMinusClient.Size(), ServerMinusClient.X, ServerMinusClient.Y, ServerMinusClient.Z,
 			static_cast<int32>(MovementMode), Velocity.Size2D(), GetMaxSpeed(), bWantsToSprint ? TEXT("sprint") : (bWantsToJog ? TEXT("jog") : TEXT("walk")),
-			static_cast<int32>(ClientMode.GetValue()), DeltaTime, Accel.Size2D());
+			static_cast<int32>(ClientMode.GetValue()), DeltaTime, Accel.Size2D(),
+			UpdatedComponent ? *UpdatedComponent->GetComponentLocation().ToCompactString() : TEXT("?"), *DescribeFloor(CurrentFloor), *DescribeBase(CharacterOwner));
 	}
 	return bNeedsCorrection;
 }
@@ -302,6 +353,7 @@ void UMOCharacterMovementComponent::ClientHandleMoveResponse(const FCharacterMov
 	if (bCorrection && !bCorrectionPending && UpdatedComponent != nullptr)
 	{
 		PreCorrectionLocation = UpdatedComponent->GetComponentLocation();   // where the pawn is drawn now; the stock code moves it to the server's spot next
+		PreCorrectionFloor = DescribeFloor(CurrentFloor) + TEXT(" base ") + DescribeBase(CharacterOwner);
 		bCorrectionPending = true;
 	}
 	Super::ClientHandleMoveResponse(MoveResponse);
@@ -315,13 +367,21 @@ bool UMOCharacterMovementComponent::ClientUpdatePositionAfterServerUpdate()
 	{
 		// the server's position plus every move made since: the visible jump the correction caused (0 when client and server agreed in the end)
 		bCorrectionPending = false;
-		const float SnapCm = FVector::Dist(UpdatedComponent->GetComponentLocation(), PreCorrectionLocation);
+		const FVector Snap = UpdatedComponent->GetComponentLocation() - PreCorrectionLocation;
+		const float SnapCm = Snap.Size();
 		FMONetCounters::NoteClientCorrectionSnap(CharacterOwner, SnapCm);
+		const FString After = DescribeFloor(CurrentFloor) + TEXT(" base ") + DescribeBase(CharacterOwner);
+		if (SnapCm >= FMONetCounters::EventCorrectionCm)
+		{
+			FMONetCounters::NoteEvent(CharacterOwner, FString::Printf(TEXT("joiner rubber-banded %.0f cm (dx %.0f dy %.0f dz %.0f) at %s; joiner floor before %s, after %s"),
+				SnapCm, Snap.X, Snap.Y, Snap.Z, *UpdatedComponent->GetComponentLocation().ToCompactString(), *PreCorrectionFloor, *After));
+		}
 		if (FMONetCounters::TakeDetailLine())
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] client: %s snapped %.1f cm after a correction (mode %d speed %.0f gait %s)"),
-				*GetNameSafe(CharacterOwner), SnapCm, static_cast<int32>(MovementMode), Velocity.Size2D(),
-				bWantsToSprint ? TEXT("sprint") : (bWantsToJog ? TEXT("jog") : TEXT("walk")));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] client: %s snapped %.1f cm (dx %.1f dy %.1f dz %.1f) after a correction (mode %d speed %.0f gait %s) | at %s floor before %s, after %s"),
+				*GetNameSafe(CharacterOwner), SnapCm, Snap.X, Snap.Y, Snap.Z, static_cast<int32>(MovementMode), Velocity.Size2D(),
+				bWantsToSprint ? TEXT("sprint") : (bWantsToJog ? TEXT("jog") : TEXT("walk")),
+				*UpdatedComponent->GetComponentLocation().ToCompactString(), *PreCorrectionFloor, *After);
 		}
 	}
 	return bReplayed;

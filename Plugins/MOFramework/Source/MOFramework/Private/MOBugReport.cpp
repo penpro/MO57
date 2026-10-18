@@ -13,6 +13,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
+#include "MOGameState.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
@@ -274,7 +275,10 @@ void UMOBugReportSubsystem::RegisterBuiltInContributors()
 		{
 			Out.Emplace(TEXT("Players"), FString::FromInt(State->PlayerArray.Num()));
 		}
-		Out.Emplace(TEXT("WorldSeed"), FString::FromInt(UMOGameSettings::GetWorldSeed()));
+		// the replicated seed when there is one: on a joiner UMOGameSettings still holds its own last world's seed (Oct 18 reports said 384 / 21354)
+		const AMOGameState* MOState = Cast<AMOGameState>(World->GetGameState());
+		const bool bReplicated = MOState && MOState->GetWorldSeedInfo().bPublished;
+		Out.Emplace(TEXT("WorldSeed"), FString::FromInt(bReplicated ? MOState->GetWorldSeedInfo().Seed : UMOGameSettings::GetWorldSeed()));
 		if (const UGameInstance* GameInstance = World->GetGameInstance())
 		{
 			if (const UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())

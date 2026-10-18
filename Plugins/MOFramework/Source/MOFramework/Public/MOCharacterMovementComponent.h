@@ -146,6 +146,8 @@ private:
 
 	/** Where the pawn was drawn when the first correction since the last replay arrived (see ClientUpdatePositionAfterServerUpdate). */
 	FVector PreCorrectionLocation = FVector::ZeroVector;
+	/** What it stood on then (DescribeFloor): with the host's floor in the host's line, the two say which floor the machines disagree about. */
+	FString PreCorrectionFloor;
 	bool bCorrectionPending = false;
 
 	float Immersion = 0.0f;
