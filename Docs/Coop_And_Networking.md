@@ -240,3 +240,13 @@ Wes: "it looks like we did fix the weird laggy no running stuff, and it no longe
   corrected ~10x/s by 69 cm with no end: `[MONetCorr] server ... floor VoxelWorld/VoxelCollisionComponent z=5865.3` against the joiner's
   `floor before VoxelWorld/VoxelCollisionComponent z=5796.2`; `MO.WorldGen.Sample` there gives 5796.6 on both machines. The joiner's
   collision is right; the HOST's terrain collision around a far remote pawn is ~0.7 m high (a coarser mesh on a convex slope). BACKLOG N-162.
+- **Why (measured Oct 18 on two -game processes, CL-0081):** the voxel world has TWO collision layers, both `WorldStatic` and both
+  blocking `Pawn`: the render chunks' visibility collision, whose detail follows THIS machine's camera, and the invoker collision (fine
+  16 m chunks around every human-driven pawn, on every machine, the same on each). Under a joiner 1 km from the host, the host has a coarse
+  256 m visibility chunk AND the fine invoker chunk, and a pawn stands on the TOPMOST. Where the coarse surface is above the true ground
+  the host's floor is too high (+59.3 cm, 121 of 121 moves corrected; the joiner's own floor 1.1 cm off); where it is below, nothing shows
+  (-0.1 cm, 0 corrections). That is why the Steam data's error is one-signed: the host is always HIGHER. The host's surface error against
+  the generator grows with distance from its camera: 0.4 cm at 20 m, up to 18 cm at 300 m, ~100 cm at 1 km, ~120 cm at 2 km.
+  Fix not chosen yet: a 30 m `UVoxelLODVolumeComponent` on the joiner's pawn (host side) did not change it; a 200 m one still has to be
+  tried at a spot that reproduces. The other way is to keep player pawns off the coarse layer (its own object channel, which
+  human-driven capsules ignore and AI keeps blocking), which needs an audit of every object-type terrain trace.
