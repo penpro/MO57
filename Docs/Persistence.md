@@ -32,7 +32,17 @@
   `WorldName` is the MAP name, which every world shares; it is not a world identity.
 - **When the world is saved:** the in-game Save button and every way out (Exit to Main Menu, Exit Game, loading another world, the
   death recap's Return, the window close), all through `UMOSystemMenuUIController::SaveThisWorld` -> `SaveToCurrentSlot`;
-  host / standalone only; no confirm. There is no timed autosave (N-157).
+  host / standalone only; no confirm. There is no timed autosave yet (N-157; design below).
+- **Timed autosave (designed Oct 17, not built: N-157).**
+  * Why: a crash or a killed process loses everything since the last exit, and killing the process is the one save-scum route left.
+  * One save step for all callers: move `SaveThisWorld` out of `UMOSystemMenuUIController` into a free function (`MOWorldSave::SaveThisWorld(UWorld*,
+    Reason)`: host / standalone only, `SaveToCurrentSlot`, `EMOWorldSaveResult`). The UI exits, manual Save and the autosave all call it.
+  * Trigger: a host-only world subsystem every `MO.Save.AutosaveMinutes` real minutes (default 10). It skips while the loading overlay is up
+    or a level is travelling, and shows a small "Saving..." notice (no hidden work).
+  * Cost, measured from Oct 17 logs (`SaveWorldToSlot CALLED` -> `Save slot=`): 0.3-1.9 s on the game thread in editor `-game` instances,
+    rising with pawns (3-18) and buildings. One packaged Development save: 0.01 s (4 pawns). Measure a packaged save of a busy world
+    before building it. Over ~50 ms in a cooked build means capture on the game thread plus an async file write
+    (`UGameplayStatics::AsyncSaveGameToSlot`).
 - **A load that leaves the player without a pawn** (the last-played pawn died before the save) raises `AMOGameMode::OnPlayerNeedsNextLife`
   after the load handoff; the UI runs the live death path's `ContinueAfterDeath` (possession menu, or a respawn ~5 mi from the deceased
   record's location via `PendingRespawnOrigin`). Before Oct 17 this left a sky camera with nothing to control. Gap: a deceased record is
