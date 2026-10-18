@@ -707,17 +707,57 @@ def save_assets(paths, via_file=False):
     if _in_pie():
         return ("REFUSED -- PIE is running; the editor drops saves during play while still answering True. "
                 "End PIE (ue.py pie end), then: ue.py save " + " ".join(paths))
-    return (_mcp_call_file if via_file else mcp_call)(AT, "save_assets", {"asset_paths": list(paths)})
+    out = (_mcp_call_file if via_file else mcp_call)(AT, "save_assets", {"asset_paths": list(paths)})
+    if str(out).strip() == "False":
+        # Oct 18 2026: DT_SurvivorJobs failed with "MoveFile was unable to move ... .uasset" in the editor log (another process had the file
+        # open at that moment; two -game instances were starting) and the same save succeeded 80 s later with them still running. TRAPS §5.
+        held = game_instances_running()
+        return ("False -- the edit is in memory only. If the editor log says 'MoveFile was unable to move', another process had the file "
+                "open: retry `ue.py save " + " ".join(paths) + "`"
+                + (" (running -game instances: " + ", ".join(f"{n} pid {p}" for p, n in held) + ")" if held else ""))
+    return out
 
 
 # =============================================================================
 # Editor / build lifecycle
 # =============================================================================
 
+def _unreal_processes():
+    """(pid, command line) of every UnrealEditor.exe: the editor AND the -game instances (`ue.py inst`, nettest), which run the
+    same binary. A command line that can't be read comes back empty, and an empty one counts as the editor (the safe side)."""
+    r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq UnrealEditor.exe", "/NH"], capture_output=True, text=True)
+    if "UnrealEditor.exe" not in (r.stdout or ""):
+        return []
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "Get-CimInstance Win32_Process -Filter \"Name='UnrealEditor.exe'\" | "
+                        "ForEach-Object { [string]$_.ProcessId + [char]9 + [string]$_.CommandLine }"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    procs = []
+    for line in (r.stdout or "").splitlines():
+        pid, _, cmdline = line.partition("\t")
+        if pid.strip().isdigit():
+            procs.append((int(pid), cmdline.strip()))
+    return procs or [(0, "")]
+
+
+def _is_game_instance(cmdline):
+    return re.search(r"(?:^|\s)-game(?:\s|$)", cmdline or "", re.I) is not None
+
+
 def editor_running():
-    r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq UnrealEditor.exe", "/NH"],
-                       capture_output=True, text=True)
-    return "UnrealEditor.exe" in (r.stdout or "")
+    """The EDITOR, not a -game instance: an instance running alongside used to read as "the editor", so `editor start` refused and
+    `editor stop` sent QUIT_EDITOR to the bridge of a process that has none (Oct 18 2026)."""
+    return any(not _is_game_instance(cmd) for _, cmd in _unreal_processes())
+
+
+def game_instances_running():
+    """[(pid, instance name or '?')] of the -game processes. They load the project's module DLLs, so a build can't link while one runs."""
+    out = []
+    for pid, cmd in _unreal_processes():
+        if _is_game_instance(cmd):
+            m = re.search(r"inst_([A-Za-z0-9_-]+)", cmd)
+            out.append((pid, m.group(1) if m else "?"))
+    return out
 
 
 def editor_stop(wait=90):
@@ -1471,6 +1511,12 @@ def cmd_build(a):
     if editor_running() and not a.force:
         _die(1, "editor is RUNNING — UBT needs it closed. Use `ue.py cycle` (auto-close) "
                 "or close it and re-run. (--force skips this check.)")
+    instances = game_instances_running()
+    if instances and not a.force:
+        _die(1, "-game instances are running and hold the module DLLs: "
+                + ", ".join(f"{name} (pid {pid})" for pid, name in instances)
+                + ". Stop yours with `ue.py inst stop <name>`; another session's are its own (ask in claude-codex-coop.md). "
+                  "(--force skips this check.)")
     sys.exit(0 if build(a.target) else 1)
 
 

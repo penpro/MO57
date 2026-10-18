@@ -172,7 +172,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | BR18-27 | DONE-2026-10-18 | Claude | ">>" / "<<" acted on a hidden or stale container: the buttons now follow the visible panel (GetTransferTarget) and reopening clears the old container | `Docs/BugReports_2026-10-18.md` | |
 | BR18-28 | OPEN | Claude | Stone maul: "missing required tool" doesn't name the tool (joiner) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-29 | OPEN | Claude | Bark container: about 10 cm in the world; purpose and contents unclear | `Docs/BugReports_2026-10-18.md` | |
-| BR18-30 | OPEN | Claude | Survivor job typos in DT_SurvivorJobs | `Docs/BugReports_2026-10-18.md` | |
+| BR18-30 | DONE-2026-10-18 | Claude | Survivor job typos in DT_SurvivorJobs fixed | `Docs/BugReports_2026-10-18.md` | |
 
 ## UI
 

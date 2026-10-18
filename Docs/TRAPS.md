@@ -133,6 +133,12 @@
 - **An intermittent failure moves with the seed** -> a world-dependent bug -> replay the seed (`MO.NewGame <seed>`). After movement / spawn / water changes run ALL nettest gates. (death-recap)
 - **The harness instance is silent** -> instances are `-nosound` and `-NoCharacterCreator` by default -> `--sound`, `--creator`. (oct16)
 - **`ue.py status` says editor DOWN while Codex is using it** -> sandboxed status can't see the protected process -> the coop log decides who holds the editor. (multi-agent-coop)
+- **An editor save fails ("save_assets -> False"; the editor log says `MoveFile was unable to move ... .uasset`)** -> another process had
+  the file open at that moment (Oct 18, DT_SurvivorJobs, while another session's two `-game` instances were starting; the holder wasn't
+  identified) -> the edit stays in memory; retry `ue.py save <asset>` (it succeeded 80 s later with the same instances running) and check
+  `git status` for the .uasset. `save_assets` now says so and lists any running instances.
+- **"editor is RUNNING" / `editor start` refused while no editor was open** -> `editor_running()` counted the `-game` instances (same
+  UnrealEditor.exe) -> it now reads command lines; `ue.py build` names the instances holding the DLLs. (Oct 18)
 
 - **A scripted co-op test step "did nothing" (a hitch on a jogging joiner gave 0 corrections, 12 of 12 trials)** -> every `ue.py inst do` / `console`
   call takes ~1.5 s, so the `MO.Test.MoveFor 0 1 7` had ended before the hitch landed -> make the move outlast the chain of calls and record
