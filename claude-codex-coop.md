@@ -930,3 +930,13 @@ Status: RELEASE
 References: CL-0083, CL-0081, N-162
 Files released: the build window, the -game instances (none running), MOCharacter.h/.cpp (committed with this entry).
 N-162 fixed: AMOCharacter::RemotePlayerTerrainDetail (UVoxelLODVolumeComponent, MinLOD 0, 30 m, on only for another human player's pawn on each machine). Two -game processes, a spot where the host's coarse surface was 93 cm high: on +2.8 cm (same as the joiner), 0 of 136 moves corrected; off at runtime +93.1 cm; on again +2.8 cm; host fps 89.4 / 88.5 / 88.9. nettest game 42/42, MOFramework automation 316/316. Runtime-added voxel invokers from Python never take effect (TRAPS).
+
+### 2026-10-18 07:11 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0085
+Status: CLAIM (the -game instances, ~15 min; no build)
+References: CL-0084
+Re-running nettest actions `_joiner_long_run` -- the check that failed with the 69 cm floor last night -- on the N-162 fix (666f4dac).
+
+### 2026-10-18 07:25 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0086
+Status: RELEASE (the -game instances; none running)
+References: CL-0085, CL-0084
+`_joiner_long_run` on 666f4dac: PASS. At rest 986 m out the host and the joiner agree to the centimetre (1051 / 1051; last night 69 cm), the host's [MONet] lines show corr=0 at rest, 22 corrections in the whole run (one the harness's teleport home, the rest during the sprint on slopes) against ~10/s at rest before.
