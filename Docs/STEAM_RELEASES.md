@@ -30,6 +30,12 @@ When Wes next asks for Steam patch notes, ask which commit the last Steam patch 
 ```text
 [h2]Co-op fixes, real caves and geology, torches, safer saves[/h2]
 
+[h3]Existing worlds[/h3]
+[list]
+[*]The world generator changed (new caves and geology). Worlds saved on the previous version load with the new terrain, so buildings and dug areas may not line up with the ground. Start a new world for the best experience.
+[*]Each world now keeps a single save. Extra save slots from earlier versions show up as separate entries in the list.
+[/list]
+
 [h3]Co-op[/h3]
 [list]
 [*]Joining players can jog and sprint properly. The server was pulling them back to walking speed, which caused the heavy rubber banding.

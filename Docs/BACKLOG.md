@@ -43,7 +43,6 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first).
 | N-018 | OPEN | Claude | Determinism on a second physical PC (packaged `MO.WorldGen.Checksum`) | caves-and-lighting | |
 | N-019 | OPEN | Claude | Main-menu flyby: start point chosen against v4 land; watch the hand-off ring in motion | worldgen v5 open, Handoff | |
 | N-020 | OPEN | Claude | Lakes are static (no flow, no seasons); rivers are sea-level channels only | worldgen v4 open | |
-| N-021 | OPEN | Claude | Note for release notes: generator versions are not save-compatible (old worlds regenerate) | Handoff notes | |
 
 ## PCG and world features
 
@@ -209,6 +208,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-17 N-021: the next Steam patch notes warn that worlds from generator v8 (0573ab31) load with the v11 terrain, and that extra Save As slots show as separate entries.
 - DONE-2026-10-17 co-op smoothness tools for Steam tests: [MONet] stats logged in every co-op session, [MONetEvent] hitch / rubber-band events, Net.* bug-report rows, MO.Net.Show, `Tools/ue_netdiag.py logs` for two machines' logs, `nettest netdiag` (instrument controls); findings in Coop §7 (N-160..N-164, F25).
 - DONE-2026-10-17 SteelIngot01 looks like steel: MI_SteelIngot01 on the bar mesh (bright cool grey, smoother, softer scale), new icon; wrought iron stays rusty.
 - DONE-2026-10-17 ten items got real meshes + icons from Wes's TRELLIS.2 GLBs (levelled, scaled, decimated in Blender; StoneMaul01 grip fitted to the hand).

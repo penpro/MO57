@@ -30,6 +30,9 @@
 
 ## 2. Engine, build and C++ (UE 5.8.3)
 
+- **Engine upgrade: a new stock network channel would silently vanish** -> `Config/DefaultEngine.ini` replaces the whole
+  `[/Script/Engine.NetDriver]` ChannelDefinitions list (`!ClearArray`) to swap the Actor channel for `MONetStatsActorChannel`. On every engine
+  upgrade, re-diff it against the new `BaseEngine.ini` list. Matched UE 5.8.3's four channels exactly on Oct 17. (Oct 17 review of afb9aabc)
 - **An engine `.cpp` edit changes nothing** -> `D:\UnrealEngine\UE_5.8` is the LAUNCHER install (`Engine/Build/InstalledBuild.txt`) -> engine fixes
   are staged in `Docs/Engine_Patches.md` + `Docs/EnginePatches/`; check InstalledBuild.txt before proposing one. (engine-installed-build-patches)
 - **Build fails in ~5 s: `CS0117 ... V7` / RulesError** -> the UE_5.7 UBT -> use the UE_5.8 UBT (`Docs/TOOLING.md` § Build) or `ue.py build` / `cycle`. (build_engine_path)
