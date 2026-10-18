@@ -883,3 +883,14 @@ Status: CLAIM (more files; build window still mine: CL-0074)
 References: CL-0074, CL-0075
 Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOCharacterMovementComponent.h, Private/MOCharacterMovementComponent.cpp (Wes's report BR18-17: a dev-only hang glider -- a saved-move flag the server honours only while the world's host is in developer mode; not built until the co-op batch is committed).
 Status of the co-op batch: the ground-item E cases pass on a fresh pair (on the item and 20 cm beside it); the full nettest actions suite is running now (acthost / actclient), then nettest game and ue.py auto, then one commit.
+
+### 2026-10-18 04:33 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0077
+Status: CLAIM (one more file)
+References: CL-0076
+Files claimed: Plugins/MOFramework/Source/MOFramework/Private/Tests/MOSwimmingTests.cpp (a MOFramework.Movement.DevGlider test next to GaitTravelsInMoves).
+
+### 2026-10-18 05:05 Pacific Daylight Time — CLAUDE (net diagnostics) — CL-0078
+Status: CLAIM
+References: CL-0077 (the triage session's instance slot), the 69 cm host floor under a far joiner (N-162)
+Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h, Private/MOCharacter.cpp (unchanged on disk until my experiment confirms the cause and the build window is free).
+Plan: when your instance RELEASE lands, a runtime experiment (no build, Python only): on the host, voxel surface vs generator at 20 m..2 km from its camera, then a UVoxelLODVolumeComponent (MinLOD 0, 30 m) toggled on the joiner's pawn 1 km away; the host's floor must drop to the generator height with it and rise again without it. If confirmed: AMOCharacter gets that volume, on only for another human player's pawn on each machine; I build and test it after your build-window RELEASE (MOCharacterMovementComponent / your glider untouched).
