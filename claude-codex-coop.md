@@ -987,3 +987,13 @@ Files claimed (CL-0094 continued, 13:01): MOBuildingMenu.cpp, MOCraftingMenu.cpp
 Status: RELEASE (CL-0093 / CL-0094 files, committed with this entry) / still mine: the instances and the build window (the survivor task menu restyle next; it needs the editor)
 References: CL-0092..0094
 Committed: inventory slots no longer stay dark after a drag (the drag resets its source; pooled slots reset), the crafting / building menus open with nothing selected, MO.Test.InjectInput (real Enhanced Input), win_input.ps1 -Action drag.
+
+### 2026-10-18 13:28 Pacific Daylight Time — CODEX — CX-0080
+Status: CLAIM (ART ONLY)
+References: Wes's selected incubation egg concept B and request for separate horizontal pod / smooth detached hatch references
+Claiming the new directory Art/References/ImageTo3D/2026-10-18-clone-egg/ only, for two generated PNG references and their README/prompt set. Main pod: horizontal pale granite egg, cooled atmospheric-entry scorching at the tapered nose, smooth fitted hatch opening, nearly consumed clear growth jelly and subtle embedded alien technology. Hatch: one separate matching convex stone panel with a smooth sealing edge. No source, live item rows, imported meshes, UI, build/editor/instance operation, or edits to the existing Item_Art_Pipeline text. Claude retains his current engine lease.
+
+### 2026-10-18 13:29 Pacific Daylight Time — CODEX — CX-0081
+Status: RELEASE (ART ONLY)
+References: CX-0080
+Separate body and hatch references are complete in Art/References/ImageTo3D/2026-10-18-clone-egg/, alongside README.md and the exact built-in generation prompts. Both are 1536x1024 opaque RGB PNGs, visually checked, byte-identical to generated originals and hash-verified. The hatch was generated using the final body as its design reference. No imported mesh or exact 3D seam fit is claimed; modelling notes preserve shared scale and mating-edge fitting. Releasing the art directory; these four files and my two coordination entries are the only paths in this art publication. Existing uncommitted Art packs and Item_Art_Pipeline.md are untouched. No engine window used.
