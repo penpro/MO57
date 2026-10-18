@@ -96,8 +96,8 @@ F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F
 | N-072 | OPEN | Claude | Agriculture: seeds, crops, fields (hoe and sickle exist) | ROADMAP §3 Era 3 | |
 | N-073 | OPEN | Claude | Lime burning (quicklime) once an updraft kiln exists | ROADMAP Era 3 | |
 | N-074 | OPEN | Claude | Move the player's harvest clock from `UMOHarvestProgressWidget` onto the pawn's `UMOTimedActionComponent` | Crafting §3 | |
-| N-075 | OPEN | Claude | Art: stone maul uses the hammerstone's mesh / icon; copper / flint deposits use boulder meshes (need ore / chalk-flint looks); checker backgrounds baked into some icons (Stick01, Stone01) | progression-pass1, Overnight_Polish | |
-| N-076 | OPEN | Claude | Art coverage as a production backlog (135 / 216 items had real meshes + icons on Oct 14; 81 placeholders). (The 3D item preview Wes wanted shipped Oct 14: 44fb4416) | `Docs/Item_Art_Pipeline.md` | G21 |
+| N-075 | OPEN | Claude | Art: (stone maul DONE Oct 17, its own image-to-3D mesh + grip); copper / flint deposits use boulder meshes (need ore / chalk-flint looks); checker backgrounds baked into some icons (Stick01, Stone01) | progression-pass1, Overnight_Polish | |
+| N-076 | OPEN | Claude | Art coverage as a production backlog (135 / 216 items had real meshes + icons on Oct 14; 81 placeholders). Oct 17: +10 via image-to-3D (TRELLIS.2 GLBs, section 8): StoneMaul01, BarkContainer01, Copper/Tin/BronzeIngot01, WroughtIron01, SteelIngot01 (shares the bar: give it its own tint), CopperPrill01, Resin01, HideGlue01. (The 3D item preview Wes wanted shipped Oct 14: 44fb4416) | `Docs/Item_Art_Pipeline.md` | G21 |
 | N-077 | VERIFY | Claude | Gameplay effect of x10 fewer sticks / stones / bark (Tutorial_GatherStone wants 10 cobbles; starter flow; pawn gather jobs near the coast spawn) | Handoff Verify | G09 |
 | N-078 | OPEN | Claude | First-ten-minutes pass 2 with ORDINARY input (pass 1 used console verbs): first craft, first fire, first meal / drink, first night | `Docs/Archive/` first-ten-minutes | G09, #71 |
 | N-079 | OPEN | Claude | Fire can sit in tall grass (no wildfire) | first-hours | |
@@ -203,6 +203,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-17 ten items got real meshes + icons from Wes's TRELLIS.2 GLBs (levelled, scaled, decimated in Blender; StoneMaul01 grip fitted to the hand).
 - DONE-2026-10-17 F24 (Wes: A): one save per world -- in-game Save writes the world's own slot with a toast (no Save As, no confirm), the in-game Load hides the world you are in, the main menu lists worlds.
 - DONE-2026-10-17 N-154 + Wes's pause call: every way out of a world saves with no confirm (no save-scumming); loading a save made at a death respawns instead of a sky camera; PAUSE_POLICY's two pause-path claims corrected from the engine source.
 - DONE-2026-10-17 G26 / this consolidation: one BACKLOG, DECISIONS, TRAPS, INDEX, per-system docs, slim layer 1.

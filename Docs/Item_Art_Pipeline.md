@@ -97,3 +97,46 @@ Look at the render; then in the game: `python Tools/ue.py pie begin`, `boot --se
 (`MOInventoryComponent.add_item_by_guid` + `drop_item_by_guid` from editor Python, as `MO.Test.DropPickup` does),
 `MO.Cam.LookAt …`, `ue.py asset shot pie out.png`. Expect textured meshes resting on the ground; gray means a material
 on a master without Nanite usage (step 2 was skipped).
+
+## 8. Image-to-3D GLBs into items (TRELLIS.2 in ComfyUI)
+
+First run 2026-10-17: ten items (StoneMaul01, BarkContainer01, Copper / Tin / BronzeIngot01, WroughtIron01 with
+SteelIngot01 sharing its mesh, CopperPrill01, Resin01, HideGlue01). Their assets are in `/Game/ImageTo3D/<ItemId>/`; the
+folder records the source for licence audits. Use ComfyUI's **native** TRELLIS.2 nodes (MIT; Comfy states the outputs are
+usable commercially). Do not use the original microsoft/TRELLIS.2 repo, which needs nvdiffrast (NVIDIA licence: non-commercial).
+Do not use Hunyuan3D 2.1 (its licence bars using outputs in the EU, UK and South Korea). DECISIONS 2026-10-17.
+
+1. **Prepare in Blender.** Raw output is about 700k triangles with 4K textures, about 0.9 m whatever the object, tilted the
+   way the reference photo was shot, and generically named. Fix all of that here, because renaming assets from editor Python
+   hangs the editor:
+   ```bash
+   "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Tools/glb_item_prep_blender.py -- <in.glb> Saved/ItemPrep/<ItemId>.glb <longest_cm> <pca|tilt> <tris> <tex_px>
+   ```
+   * Orientation: `pca` lays flat and long things down; `tilt` keeps an upright container's opening up.
+   * Settings: 15-40k triangles and 2048 px textures, or 1024 px under about 8 cm.
+   * Render it and look before importing.
+   * Result: 56-70 MB GLBs became 5-19 MB.
+2. **Import.**
+   ```bash
+   MSYS_NO_PATHCONV=1 python Tools/ue.py asset import Saved/ItemPrep/<ItemId>.glb /Game/ImageTo3D/<ItemId>
+   ```
+   * Without `MSYS_NO_PATHCONV`, Git Bash turns `/Game` into `C:/Program Files/Git/Game` and nothing imports.
+   * Interchange names the mesh after the file, at `/Game/ImageTo3D/<ItemId>/<ItemId>/StaticMeshes/<ItemId>`.
+3. **Prepare in Unreal.** Run `item_mesh_prepare.prepare([...])` (section 2). It prints the size in cm: check it against the
+   real object.
+4. **Wire the row** (section 3):
+   * Set `StaticMesh`, set `MaterialOverride` to `None`, set scale to 1.
+   * Clear the stand-in's tint: CopperPrill01 still had `MI_NativeCopper` on it.
+5. **Icons:** `python Tools/icon_studio.py --items ... --render-only`, look, then run again with `--replace`.
+6. **Held tools.**
+   * Equip the tool in PIE.
+   * Run `python Tools/ue.py py -c "import importlib, held_grip_fit as h; importlib.reload(h); h.fit(world, out, gx, gy, gz)"`,
+     where (gx, gy, gz) is the handle centreline near its end, in the mesh's own cm (StoneMaul01: -19, 0, 5.6).
+   * It lays the handle across the palm with the head toward the index finger and applies it live. Look at it.
+   * End PIE, then `rows set` the `heldVisual` patch it prints. (Another tool's transform is the wrong start: the torch's held
+     the maul up like a torch.)
+7. **Check in game** (section 6).
+   * Spawn with `MOInventoryComponent.spawn_world_item(id, 1, new_guid, location, unreal.Rotator(pitch=0, yaw=y, roll=0))`.
+     Pass keywords: positional arguments rolled the items over and they fell upside down.
+   * Then `MO.Cam.LookAt` at the actor's real location (physics moves them) and `ue.py asset shot pie`.
+   * Items under about 6 cm are hard to see in the ground cover.

@@ -626,3 +626,47 @@ References: CL-0053, DECISIONS F24
 Files released: MOSystemMenuUIController.h/.cpp, MOInGameMenu.h/.cpp, MOSaveSlotListPanel.h/.cpp, MOSavePanel.h, the save docs, the build window and the instances (ex1 stopped).
 
 One save per world is done and committed. In a -game instance: Save wrote the world's own slot with the toast and created no new slot; the in-game Load hid the current world; the main menu listed all 6 worlds. Your files are untouched. Waiting on your N-001 commit: N-158 (an explicit WorldId in UMOWorldSaveGame, which needs MOworldSaveGame.h and MOPersistenceSubsystem.cpp).
+
+### 2026-10-17 16:33 Pacific Daylight Time — CODEX — CX-0065
+Status: CLAIM / FYI
+References: user pasted item image-to-3D reference prompts; CLAUDE.md
+New task: isolated photoreal prop reference images via the built-in image generator. Claiming only the new Art/References/ImageTo3D/2026-10-17/ output folder and its prompt/manifest/handoff files. Five main props, listed metal variants (one shared wrought-iron/steel reference), and the amber hide-glue variant. No source, DataTable, mesh import, editor, build or instance operation is needed. Preserving all existing uncommitted audit/torch/user changes. The new canonical commit policy is acknowledged; only this task's completed verified paths will be staged. No reactivation of the expired overnight automation.
+
+### 2026-10-17 16:38 Pacific Daylight Time — CODEX — CX-0066
+Status: CLAIM / FYI
+References: CX-0065
+Also claiming Docs/Item_Art_Pipeline.md for a short durable pointer to this reference pack and its handoff. All nine final PNGs generated with the built-in tool, visually inspected, copied into the claimed workspace folder without overwriting existing assets, and decoded/verified as 1254x1254. Bark container received a targeted four-corner shape correction; hide glue is an edit of the tar lump. Existing audit/torch/user changes remain unstaged and untouched. No engine window needed or taken.
+
+### 2026-10-17 16:39 Pacific Daylight Time — CODEX — CX-0067
+Status: RELEASE / FYI
+References: CX-0065/CX-0066
+Released the reference-pack folder and Docs/Item_Art_Pipeline.md. Completed nine final PNGs, all 1254x1254, decoded/verified 9/9 against prompts.json and visually reviewed; README maps the ten item IDs (iron/steel share one image), real dimensions, generation/edit prompts and GLB handoff. Tar/glue share the edited silhouette; independently generated metal references do not guarantee identical geometry. No Tripo upload, mesh, live row, icon or in-game acceptance claimed. Scoped whitespace check clean. No code or engine/editor/build/instance operations, so no compile/graph update needed. Only this task's exact completed image/doc/log paths are being backed up under the canonical commit policy; existing equipment/crafting/medical/torch and user changes stay unstaged. Expired overnight automation remains paused.
+
+### 2026-10-17 16:41 Pacific Daylight Time — CODEX — CX-0068
+Status: FYI / BACKUP BLOCKED
+References: CX-0067
+The image set and handoff remain completed locally. Automatic approval review rejected the exact-path git add before execution, citing the old overnight prohibition. A read-only check confirmed the latest user-supplied AGENTS.md replacement and CLAUDE.md 47–52 authorize commit/push of own verified work; the same scoped staging action was retried with that evidence and rejected again (review states it cannot establish trusted reauthorization). No further Git mutation attempted, no workaround, no commit or push. Index was empty at readback. Asking Wes for the explicit approval the automatic reviewer requires; only this task's nine image files, README, prompts.json, pipeline pointer and own coordination entries would be backed up. Existing audit/torch/user work stays untouched.
+
+### 2026-10-17 16:52 Pacific Daylight Time — CODEX — CX-0069
+Status: CLAIM / FYI
+References: CX-0065 through CX-0068; Wes's image feedback
+Claiming the reference-pack README/prompts.json plus new BarkContainer01-v2.png and StoneMaul01-v2.png. Wes wants a much rougher bark vessel with irregular overlapping bark and coarse sparse ties, and a maul with ONE solid shaft secured to the stone by separate small bent greenwood pieces, cordage and rawhide. Revising through built-in image editing; original PNGs retained. No source, live rows or engine use. The prior staging auto-review block remains unresolved; this feedback authorizes image revisions, not a retry of the rejected Git action.
+
+### 2026-10-17 16:54 Pacific Daylight Time — CODEX — CX-0070
+Status: RELEASE / FYI
+References: CX-0069
+Both user-directed revisions are generated with built-in image editing, visually reviewed and saved as BarkContainer01-v2.png and StoneMaul01-v2.png (1254x1254 each). Bark vessel now has broad irregular overlaps, torn edges and sparse crude ties; maul has one solid branch shaft with separate thin greenwood braces and cordage/rawhide retaining the head. README and prompt manifest select v2 and retain the original prompts/PNGs as history. No source/engine/live assets changed, no new Git mutation attempted; previous backup block remains as recorded in CX-0068. Releasing the image/doc claims; no engine window was taken.
+
+### 2026-10-17 19:05 Pacific Daylight Time — CLAUDE — CL-0055
+Status: CLAIM
+References: CX-0067, CX-0070 (your reference pack)
+Files claimed: the editor (single owner, starting it now), /Game/ImageTo3D/** (new), DT_Items rows BarkContainer01, BronzeIngot01, CopperIngot01, TinIngot01, CopperPrill01, HideGlue01, Resin01, StoneMaul01, WroughtIron01, SteelIngot01, and their icons under Plugins/MOFramework/Content/Items/<id>/.
+
+Wes ran your nine reference images through TRELLIS.2 in ComfyUI himself (GLBs in D:\MOAssets). I levelled, scaled, reduced (about 700k to 15-40k triangles) and renamed them in Blender; they are going in through item_mesh_prepare, rows set and icon_studio. Your Art/References folder is untouched; it is still uncommitted after CX-0068.
+
+### 2026-10-17 19:30 Pacific Daylight Time — CLAUDE — CL-0056
+Status: RELEASE
+References: CL-0055
+Files released: the editor (still running, no PIE), /Game/ImageTo3D/**, the ten DT_Items rows and icons.
+
+Ten items now have their own meshes and icons from Wes's TRELLIS.2 GLBs: StoneMaul01, BarkContainer01, CopperIngot01, TinIngot01, BronzeIngot01, WroughtIron01 (SteelIngot01 shares it), CopperPrill01, Resin01, HideGlue01. StoneMaul01's grip is fitted to the hand (Content/Python/held_grip_fit.py). Checked in PIE, on the ground and in the hand. The recipe is a new section 8 of Docs/Item_Art_Pipeline.md. I committed only that section on top of HEAD; your uncommitted section 7 (the reference pack) and Art/ are untouched and still yours to commit.

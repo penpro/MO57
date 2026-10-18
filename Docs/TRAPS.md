@@ -54,6 +54,12 @@
 
 ## 3. Editor, Python bridge and MCP
 
+- **`unreal.Rotator(0, 0, yaw)` does not set the yaw in 5.8 editor Python** -> spawned items came out rolled over and physics
+  dropped them upside down -> always pass keywords: `unreal.Rotator(pitch=0, yaw=y, roll=0)`. (Oct 17)
+- **`HitResult` has no attributes in 5.8 Python** (`.blocking_hit`, `.impact_point` raise) -> `hit.to_tuple()`: [0] blocking,
+  [5] impact point. **`Rotator` has no `rotate_vector`** -> `rot.quaternion().rotate_vector(v)`. (Oct 17)
+- **An imported asset is named after the source file's internal names, and renaming from editor Python hangs the editor** -> fix
+  names before import (`Tools/glb_item_prep_blender.py` does it for GLBs; `Docs/Item_Art_Pipeline.md` section 8). (Oct 17)
 - **A "Server" RPC called in a test runs on the client** -> editor Python (and any console command it dispatches synchronously) runs EVERY RPC
   LOCAL (`GAllowActorScriptExecutionInEditor`) -> test verbs that send RPCs defer a tick (RunOnNextTick); assert on the logs the GAME writes. (coop-pawn-lifecycle, dev_status)
 - **Editor stops answering after an asset delete / rename from Python** -> `ForceDeleteObjects` ensure -> CrashReportClientEditor -> never

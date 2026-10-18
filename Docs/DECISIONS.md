@@ -54,6 +54,11 @@
 ## Decisions, newest first
 
 ### 2026-10-17
+- ~19:00: **"i'd rather not pay $150 subscription if i can just get decently good results locally"** -> item models come from
+  image-to-3D run locally: ComfyUI's native TRELLIS.2 nodes (MIT; Comfy says the outputs are usable commercially). Not the original
+  microsoft/TRELLIS.2 repo (needs nvdiffrast: NVIDIA licence, non-commercial only). Not Hunyuan3D 2.1 (outputs barred in the EU,
+  UK and South Korea, which a worldwide Steam release can't meet). Wes ran the first ten himself; the import recipe is
+  `Docs/Item_Art_Pipeline.md` section 8.
 - ~16:30: **"F24: go with A, one save per world. The in-game Save writes to the world's own slot; drop Save As and loading other slots of
   the same world; the main menu lists worlds, not snapshots."** -> the in-game Save button saves this world to its own slot at once
   (toast "World saved"; no slot list, no Save As, no overwrite confirm). `UMOSystemMenuUIController::HandleSaveRequested` ignores any
