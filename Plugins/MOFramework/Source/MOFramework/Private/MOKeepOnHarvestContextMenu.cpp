@@ -64,11 +64,13 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 	// Collect target tags
 	TargetTags = HarvestSubsystem->CollectTargetTags(Target.ISMComponent.Get());
 
-	// Get smart inspect item
-	SmartInspectItemId = HarvestSubsystem->GetSmartInspectItemId(TargetTags, Knowledge, Skills);
+	// What this target lets you study (a tree: its sticks, bark, catkins -- UMOHarvestSubsystem::GetStudyableItemIds), the first with something to teach
+	SmartInspectItemId = HarvestSubsystem->PickItemToStudy(HarvestSubsystem->GetStudyableItemIds(Target.ISMComponent.Get()), Knowledge, Skills);
 
 	// Extract ResourceNodeId from tags and look up the resource definition
 	CachedResourceNodeId = HarvestSubsystem->ExtractResourceNodeId(TargetTags);
+	const FMOResourceNodeDefinitionRow* ResourceRow = HarvestSubsystem->GetResourceDefinitionForComponent(Target.ISMComponent.Get());
+	bTargetIsTree = ResourceRow && ResourceRow->ResourceType == EMOResourceType::Tree;
 
 	// Clear previous state
 	AvailableHarvestActions.Empty();

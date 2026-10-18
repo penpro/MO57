@@ -63,7 +63,7 @@ namespace MOInspectionActions
 					return TEXT("on the ground");
 				}
 				const UMOHarvestSubsystem* Harvest = World->GetSubsystem<UMOHarvestSubsystem>();
-				if (Harvest && Harvest->GetItemIdsFromGivesTags(Harvest->CollectTargetTags(ISM)).Contains(ItemId))
+				if (Harvest && Harvest->GetStudyableItemIds(ISM).Contains(ItemId))   // the menu's own rule: a tree lets you study its bark
 				{
 					return TEXT("its source");
 				}

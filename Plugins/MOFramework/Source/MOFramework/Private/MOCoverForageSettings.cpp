@@ -32,9 +32,9 @@ UMOCoverForageSettings::UMOCoverForageSettings()
 {
 	// Grass tussocks: the dead, dry stems at the base (tinder, bedding, cordage) and some fibre. The same grass meshes stand in for reeds at the water's edge
 	// (real reed meshes are still to come), where a clump cut at the base is a bundle of reed stems (baskets, mats, fish traps).
-	for (const TCHAR* Grass : { TEXT("vlkhcbxia"), TEXT("smdrailr") })
 	{
-		FMOCoverForage C = Cover(Grass, LOCTEXT("GatherGrass", "Gather dry grass"), { Yield(TEXT("DriedGrass01"), 1, 2), Yield(TEXT("PlantFiber01"), 1, 1, 0.5f) }, 5.0f);
+		FMOCoverForage C = Cover(TEXT("vlkhcbxia"), LOCTEXT("GatherGrass", "Gather dry grass"), { Yield(TEXT("DriedGrass01"), 1, 2), Yield(TEXT("PlantFiber01"), 1, 1, 0.5f) }, 5.0f);
+		C.MoreMeshNamesContaining = { TEXT("smdrailr") };   // the other grass: the same gathering, one menu entry
 		C.ShoreLabel = LOCTEXT("CutReeds", "Cut reeds");
 		C.ShoreYields = { Yield(TEXT("Reeds01"), 2, 4) };
 		Entries.Add(C);
@@ -96,7 +96,7 @@ int32 UMOCoverForageSettings::FindIndexForMeshName(const FString& MeshName)
 	const TArray<FMOCoverForage>& All = GetDefault<UMOCoverForageSettings>()->Entries;
 	for (int32 Index = 0; Index < All.Num(); ++Index)
 	{
-		if (!All[Index].MeshNameContains.IsEmpty() && MeshName.Contains(All[Index].MeshNameContains))
+		if (All[Index].MatchesMeshName(MeshName))
 		{
 			return Index;
 		}

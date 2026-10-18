@@ -259,21 +259,46 @@ FName UMOHarvestSubsystem::GetSmartInspectItemId(
 		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetSmartInspectItemId: No GivesX tags found"));
 		return NAME_None;
 	}
+	return PickItemToStudy(ItemIds, Knowledge, Skills);
+}
 
+FName UMOHarvestSubsystem::PickItemToStudy(const TArray<FName>& ItemIds, UMOKnowledgeComponent* Knowledge, UMOSkillsComponent* Skills) const
+{
+	if (ItemIds.Num() == 0)
+	{
+		return NAME_None;
+	}
 	// Find first item with learning potential
 	for (const FName& ItemId : ItemIds)
 	{
-		EMOLearningPotential Potential = Knowledge->GetLearningPotential(ItemId, Skills);
-		if (Potential != EMOLearningPotential::None)
+		if (IsValid(Knowledge) && Knowledge->GetLearningPotential(ItemId, Skills) != EMOLearningPotential::None)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetSmartInspectItemId: '%s' has learning potential"), *ItemId.ToString());
+			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: '%s' has learning potential"), *ItemId.ToString());
 			return ItemId;
 		}
 	}
-
 	// All items maxed out, return first one anyway (for viewing knowledge)
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetSmartInspectItemId: All items maxed, returning first: '%s'"), *ItemIds[0].ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: all maxed, returning the first: '%s'"), *ItemIds[0].ToString());
 	return ItemIds[0];
+}
+
+TArray<FName> UMOHarvestSubsystem::GetStudyableItemIds(UInstancedStaticMeshComponent* ISMComponent) const
+{
+	TArray<FName> ItemIds = GetItemIdsFromGivesTags(CollectTargetTags(ISMComponent));
+	if (const FMOResourceNodeDefinitionRow* Row = GetResourceDefinitionForComponent(ISMComponent))
+	{
+		for (const FMOResourceHarvestAction& Action : Row->HarvestActions)
+		{
+			for (const FName& ItemId : Action.YieldsItems)
+			{
+				if (!ItemId.IsNone())
+				{
+					ItemIds.AddUnique(ItemId);
+				}
+			}
+		}
+	}
+	return ItemIds;
 }
 
 void UMOHarvestSubsystem::GetHarvestRecipesForTags(

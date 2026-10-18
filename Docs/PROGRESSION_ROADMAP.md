@@ -193,6 +193,9 @@ Each discovery knowledge is taught at level 1 by inspecting the material a perso
 finished product still teaches up to 3. A new discovery = a realistic precursor here + the row's inspection grant. Table authored
 with `ue.py rows set` (d6a3af69):
 
+Trees can be studied too (Oct 18 2026): a resource node's Inspect studies what its harvest actions yield, so a tree teaches its bark and sticks
+(`UMOHarvestSubsystem::GetStudyableItemIds`), and the tutorial "Study the Forest" -> "Harvest Bark" can be done.
+
 | Inspect | Teaches (level 1) | Why |
 |---|---|---|
 | Clay01 | HandBuilding | wet clay holds the shape it is pressed into and hardens in a fire |
@@ -214,6 +217,7 @@ with `ue.py rows set` (d6a3af69):
 | SimpleBow01 | Fletching, CompositeBow | a light shaft with feathers flies straight; horn, wood and sinew glued together cast harder |
 | FireDrill01 | BowDrill | a cord wrapped round the drill spins it faster |
 | Branch01 | HandDrill | a dry stick twirled hard in a notch smokes |
+| Stick01 | BarkFiber | a green stick's bark lifts off in long strips under a thumbnail (Wes, Oct 18: you had to find loose bark before you could strip a stick) |
 | AnimalHide01 | BrainTanning | brains worked into a hide keep it soft |
 | TannedLeather01 | LeatherArmor, LeatherClothing | thick leather softens a blow; leather can be cut and sewn |
 | Log01 | CanoeMaking | a log hollowed by fire and adze floats a person |

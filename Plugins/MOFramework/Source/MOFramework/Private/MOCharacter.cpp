@@ -200,6 +200,10 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	RemotePlayerTerrainDetail->SphereRadius = 3000.f;   // the collision invoker's 30 m
 	RemotePlayerTerrainDetail->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	RemotePlayerTerrainDetail->SetCanEverAffectNavigation(false);
+	// Its scene proxy draws the sphere (ShapeColor) wherever the component is visible: in game every character wore a 30 m pink wire sphere
+	// (Oct 18 2026). The voxel world reads only bEnabled and the transform (FVoxelRenderInvokersManager), so hiding it changes nothing else.
+	RemotePlayerTerrainDetail->SetHiddenInGame(true);
+	RemotePlayerTerrainDetail->bDrawOnlyIfSelected = true;
 
 	// Held item mesh components (attached to hand sockets)
 	LeftHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftHandMesh"));

@@ -116,6 +116,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Harvest|UI")
 	FName GetSmartInspectItemId() const { return SmartInspectItemId; }
 
+	/** The target is a tree (its resource row's ResourceType): studying it counts for "Study the Forest" (the TreeInspected quest event). */
+	bool IsTreeTarget() const { return bTargetIsTree; }
+
 	/**
 	 * Get the display name of the target object.
 	 */
@@ -240,6 +243,9 @@ private:
 	 * Up, the same request E sends. Before Oct 18 2026 this menu showed "Unknown Object" with no buttons for them.
 	 */
 	FName GroundItemId = NAME_None;
+
+	/** See IsTreeTarget. */
+	bool bTargetIsTree = false;
 
 	/** Index of the destroy action in AvailableHarvestActions, or INDEX_NONE. */
 	int32 DestroyActionIndex = INDEX_NONE;

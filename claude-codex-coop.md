@@ -945,3 +945,24 @@ References: CL-0085, CL-0084
 Status: CLAIM (the -game instances; the build window if a fix needs it)
 References: CL-0086
 Wes, Oct 18 noon: "inspecting sticks broke being able to strip bark ... there's also no quest to inspect trees". Reproducing in a solo instance, then the fix.
+
+### 2026-10-18 12:28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0088
+Status: CLAIM (files; the editor is open for DT_Items: rows set Stick01)
+References: CL-0087
+Files claimed: MOHarvestSubsystem.h/.cpp, MOKeepOnHarvestContextMenu.h/.cpp, MOCraftingUIController.cpp, MOInspectionActions.cpp, Docs/PROGRESSION_ROADMAP.md (§6), DT_Items (Stick01 row).
+Cause found: trees can't be inspected (their Gives_ tags come from the row's legacy top-level YieldsItems, empty for trees whose yields are on their harvest actions), so Tutorial_InspectTree ("TreeInspected") never completes and Tutorial_GatherBark never starts; and the Strip Birch Bark recipe needs BarkFiber, which only Bark01 itself teaches.
+
+### 2026-10-18 12:41 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0089
+Status: CLAIM (one more file)
+References: CL-0084 (net diagnostics' N-162 fix), CL-0088
+Files claimed: Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp -- one line: RemotePlayerTerrainDetail is a UPrimitiveComponent whose scene proxy draws its 30 m sphere in game (bDrawOnlyIfSelected false, not hidden): every character now wears a pink-red wire sphere (seen in a solo instance on 666f4dac: domes on the horizon, arcs across the sky). SetHiddenInGame(true) + bDrawOnlyIfSelected; the voxel invoker manager reads only bEnabled and the transform.
+
+### 2026-10-18 12:47 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0090
+Status: CLAIM (more files)
+References: CL-0089
+Files claimed: MOCoverForageSettings.h/.cpp, Tests/MOCoverForageTests.cpp -- the forage menu listed "Gather dry grass" twice: the two grass mesh families are two entries with the same gathering. One entry matching both.
+
+### 2026-10-18 12:44 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0091
+Status: RELEASE (the -game instances, the build window, the editor -- closed; every file of CL-0088 / CL-0089 / CL-0090, committed with this entry)
+References: CL-0087..0090
+Committed: Stick01 teaches BarkFiber 1 (DT_Items), trees can be studied (UMOHarvestSubsystem::GetStudyableItemIds) so Study the Forest -> Harvest Bark run, the LOD volume hidden in game (MOCharacter.cpp), one "Gather dry grass". Checks: in game (stick -> recipe discovered; tree Inspect -> quest completes; no spheres; one grass entry), nettest actions _client_inspect + _client_harvest PASS, _joiner_long_run PASS on the hidden volume (0 cm at rest, corr=0), automation Cover 1/0.

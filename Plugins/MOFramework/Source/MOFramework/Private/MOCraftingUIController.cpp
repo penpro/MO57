@@ -644,8 +644,13 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuInspectClicked()
 		UIManager->StartItemInspectionAt(ItemId, FGuid(), FMOInstanceRef::Make(CurrentHarvestTarget.ISMComponent.Get(), CurrentHarvestTarget.InstanceIndex));
 	}
 
-	// Fire TreeInspected event for quest objectives
-	// This triggers when inspecting via the harvest context menu (trees, rocks, etc.)
+	// "Study the Forest" (Tutorial_InspectTree): only a TREE counts. This menu also serves bushes, rocks and ground items (a stick picked off the
+	// ground is not a tree).
+	if (!WidgetInst->IsTreeTarget())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Starting smart inspection for '%s'"), *ItemId.ToString());
+		return;
+	}
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameInstance* GI = World->GetGameInstance())

@@ -234,7 +234,9 @@ Wes: "it looks like we did fix the weird laggy no running stuff, and it no longe
     (700 cm/s) in the mountains with the joiner at 11-30 fps. That fits N-112: the voxel collision around a fast-moving pawn is still coarse;
   - 412 are a joiner standing still with the host a constant 4.7 cm higher (one report: 1,529 of 2,429 moves corrected; invisible, but constant);
   - 451 are "walking on the host, falling on the joiner" while standing at the camp. The host was looking at a `BP_BuildableFloorBase`:
-    probably a building floor with collision on the host only;
+    probably a building floor with collision on the host only. **Resolved (Wes, Oct 18 noon):** those were placed GHOSTS, not built
+    floors: unbuilt, so no collision, but they LOOKED built (the ghost material reached only MeshComponent, not the Blueprint's own
+    child meshes); with the ghost look on every mesh (`AMOBuildableActor::ApplyGhostMaterialToAllMeshes`) players stop standing on them;
   - sideways-only lines, which a bush present on one machine only would give, are about 4%.
 - Two host frames of 5-6 s, and a 1.7 km correction at 07:22:44 (the joiner's pawn teleported).
 - Since then the correction lines and events name the position and the floor on both machines (above), so the next session says which

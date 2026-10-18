@@ -162,6 +162,10 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | BR18-17 | DONE-2026-10-18 | Claude | Dev hang glider: `MO.Dev.Glider`, a joiner too (`_client_glide`: 1100 cm/s, 100 cm/s sink, 0 corrections) (7a83bda8) | `Docs/BugReports_2026-10-18.md`, `Docs/UI.md` §7 | |
 | BR18-18 | WAITING | Wes | "goffy tran jan" (joiner): the generator's v8 cliff bands read as a staircase on a 42 deg AlpineRock flank; fork F27 | `Docs/BugReports_2026-10-18.md` | |
 | BR18-19 | OPEN | Claude | "goooose" (joiner): a 16.7 m SM_HugeSandstoneCliff_04 slab (`ed_cliff`) tilted 36 deg with the slope, its loose chunks floating -- same cause as BR18-14 | `Docs/BugReports_2026-10-18.md` | |
+| BR18-20 | DONE-2026-10-18 | Claude | Strip bark unreachable without loose bark; trees could not be studied, so Study the Forest / Harvest Bark never ran: Stick01 teaches BarkFiber 1; resource nodes study their yields | `Docs/BugReports_2026-10-18.md` | |
+| BR18-21 | DONE-2026-10-18 | Wes | Camp floor corrections were unbuilt ghosts that looked built; resolved by the ghost look on every mesh | `Docs/Coop_And_Networking.md` §7 | |
+| BR18-22 | DONE-2026-10-18 | Claude | Pink wire spheres on every character (666f4dac's LOD volume visible in game): hidden in game | `Docs/BugReports_2026-10-18.md` | |
+| BR18-23 | DONE-2026-10-18 | Claude | "Gather dry grass" twice in the forage menu: one cover entry for both grasses | `Docs/BugReports_2026-10-18.md` | |
 
 ## UI
 

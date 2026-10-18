@@ -21,6 +21,8 @@ bool FMOCoverForage_Lookup::RunTest(const FString& Parameters)
 	TestTrue(TEXT("... and at the water's edge, reeds"), Gives(Grass, true, TEXT("Reeds01")));
 	TestFalse(TEXT("... not reeds away from water"), Gives(Grass, false, TEXT("Reeds01")));
 	TestTrue(TEXT("the other grass mesh too"), Gives(UMOCoverForageSettings::FindForMeshName(TEXT("SM_smdrailr_VarF")), true, TEXT("Reeds01")));
+	TestEqual(TEXT("... as the SAME entry (two entries listed \"Gather dry grass\" twice in the forage menu)"),
+		UMOCoverForageSettings::FindIndexForMeshName(TEXT("SM_smdrailr_VarF")), UMOCoverForageSettings::FindIndexForMeshName(TEXT("SM_vlkhcbxia_VarC")));
 
 	const FMOCoverForage* Fern = UMOCoverForageSettings::FindForMeshName(TEXT("SM_Fern_03"));
 	TestTrue(TEXT("bracken gives fibre"), Gives(Fern, false, TEXT("PlantFiber01")));

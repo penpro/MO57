@@ -26,6 +26,17 @@ struct MOFRAMEWORK_API FMOCoverForage
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover")
 	FString MeshNameContains;
 
+	/** Other mesh families that are the SAME cover (both grass meshes): one entry, so the forage menu offers the gathering once. Two entries
+	 *  with one label listed "Gather dry grass" twice wherever both grasses grew (Oct 18 2026). */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover")
+	TArray<FString> MoreMeshNamesContaining;
+
+	bool MatchesMeshName(const FString& MeshName) const
+	{
+		return (!MeshNameContains.IsEmpty() && MeshName.Contains(MeshNameContains))
+			|| MoreMeshNamesContaining.ContainsByPredicate([&MeshName](const FString& Fragment) { return !Fragment.IsEmpty() && MeshName.Contains(Fragment); });
+	}
+
 	/** The menu's action ("Gather dry grass"). */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover")
 	FText Label;

@@ -312,6 +312,18 @@ public:
 		UMOSkillsComponent* Skills
 	) const;
 
+	/**
+	 * What a harvestable instance lets a person study up close: the items its Gives_ tags name, and what its resource row's harvest actions
+	 * yield (a tree: its sticks, branches, bark, catkins), in the row's order. Gives_ tags come only from the row's legacy top-level
+	 * YieldsItems, empty on every row whose yields live on its harvest actions -- so a tree offered nothing to study, its Inspect button never
+	 * showed and "Study the Forest" could not be done (Wes, Oct 18 2026). One rule for the harvest menu's Inspect (PickItemToStudy) and the
+	 * server's reach check (FMOInspectionActions).
+	 */
+	TArray<FName> GetStudyableItemIds(UInstancedStaticMeshComponent* ISMComponent) const;
+
+	/** Of ItemIds, the first that still has something to teach (else the first): what the Inspect button studies. */
+	FName PickItemToStudy(const TArray<FName>& ItemIds, UMOKnowledgeComponent* Knowledge, UMOSkillsComponent* Skills) const;
+
 	// ============================================================================
 	// HARVEST RECIPE LOOKUP
 	// ============================================================================
