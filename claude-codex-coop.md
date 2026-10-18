@@ -894,3 +894,9 @@ Status: CLAIM
 References: CL-0077 (the triage session's instance slot), the 69 cm host floor under a far joiner (N-162)
 Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h, Private/MOCharacter.cpp (unchanged on disk until my experiment confirms the cause and the build window is free).
 Plan: when your instance RELEASE lands, a runtime experiment (no build, Python only): on the host, voxel surface vs generator at 20 m..2 km from its camera, then a UVoxelLODVolumeComponent (MinLOD 0, 30 m) toggled on the joiner's pawn 1 km away; the host's floor must drop to the generator height with it and rise again without it. If confirmed: AMOCharacter gets that volume, on only for another human player's pawn on each machine; I build and test it after your build-window RELEASE (MOCharacterMovementComponent / your glider untouched).
+
+### 2026-10-18 05:29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0079
+Status: CLAIM
+References: CL-0074..0077
+Files claimed: Plugins/MOFramework/Source/MOFrameworkMedical/Public/MOVitalsComponent.h, Private/MOVitalsComponent.cpp, Plugins/MOFramework/Source/MOFramework/Private/Tests/MOMedicalSystemTests.cpp.
+Why: every healthy pawn's status panel shows 180/110 mmHg. UMOVitalsComponent::CalculateBloodPressure tests the blood-volume bands in the wrong order (`VolumeRatio < 0.85` first), so a FULL blood volume lands in the ">40% loss" branch (+60 / +30), and real bleeding never lowers the pressure (50% lost still reads 120/80). Fix + a test; built with the glider after the co-op commit.
