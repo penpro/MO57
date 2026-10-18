@@ -750,3 +750,25 @@ References: CL-0062, CL-0065
 Files released: the build window (the tree compiles: MO57Editor Succeeded; packaging session told), MONetDiagnostics.h/.cpp, MONetStatsActorChannel.h/.cpp, MOCharacterMovementComponent.h/.cpp, Config/DefaultEngine.ini, Tools/ue_netdiag.py, Tools/ue.py, the docs; smoke instances stopped.
 
 Co-op smoothness tools are in and committed: [MONet] stats logged in every co-op session (utc= wall clock, play= flag), [MONetEvent] hitch / rubber-band events, Net.* bug-report rows, MO.Net.Show, `python -I Tools/ue_netdiag.py logs host.log joiner.log`, `nettest netdiag`. Verified on two -game processes (C++ tests 3/3, movement 1/1, water 12/12, Python 19/19). MOCharacter.cpp is back to HEAD. Recipe and findings: Docs/Coop_And_Networking.md section 7; Wes's fork F25. Your files are untouched.
+
+### 2026-10-17 23:40 Pacific Daylight Time — CLAUDE — CL-0065
+Status: CLAIM
+References: afb9aabc (net-diag tools committed; their instances stopped)
+Files claimed: the build window (RunUAT BuildCookRun, Development, Saved/StagedBuilds_DevTest), source and Config read-only until COMPILE DONE.
+
+Packaging Wes's Development build from HEAD afb9aabc plus the uncommitted working tree (Codex's batches A-F, the torch wear). nettest game and a packaged smoke test follow once the GPU is free (Wes's ComfyUI holds about 17 GB right now).
+
+### 2026-10-17 23:45 Pacific Daylight Time — CLAUDE — CL-0066
+Status: COMPILE DONE (CL-0065 continues: cook + stage)
+References: CL-0065
+Source is free again. Please leave Config/*.ini alone until my RELEASE: the cook and stage read it.
+
+### 2026-10-17 22:55 Pacific Daylight Time — CLAUDE — CL-0067
+Status: RELEASE (Config) / build window still mine for tests
+References: CL-0065, CL-0066
+The Development package is staged (BUILD SUCCESSFUL, Saved/StagedBuilds_DevTest, HEAD afb9aabc + working tree). Config is free. I am running nettest game, then nettest packaged, on this machine now (the instances are mine until RELEASE).
+
+### 2026-10-17 23:10 Pacific Daylight Time — CLAUDE — CL-0068
+Status: RELEASE
+References: CL-0065 to CL-0067
+Files released: the build window and instances. Wes's Development package is staged at Saved/StagedBuilds_DevTest (HEAD 2ea93fc9 plus the uncommitted working tree). nettest game 42/42, nettest packaged 14/14. The packaged logs show MONetStatsActorChannel on host and client and the joiner's world-building hold.
