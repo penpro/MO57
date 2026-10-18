@@ -302,6 +302,9 @@ void UMOUnifiedInventoryMenu::InitializeMenu(UMOInventoryComponent* PlayerInvent
 	}
 	else
 	{
+		// CommonUI pools this widget: a plain open must drop the container of the previous open, or the "Other" tab (and the transfer buttons)
+		// kept pointing at a basket the player had walked away from.
+		ClearSecondaryInventorySource();
 		// Default to equipment tab when no container
 		ShowEquipmentTab();
 	}
@@ -490,14 +493,28 @@ void UMOUnifiedInventoryMenu::ClearSelectedItem()
 // BULK OPERATIONS
 // ============================================================================
 
+UMOUnifiedInventoryMenu::ETransferTarget UMOUnifiedInventoryMenu::GetTransferTarget() const
+{
+	if (CurrentTabIndex == 0 && HasSecondaryInventory())
+	{
+		return ETransferTarget::Container;
+	}
+	return CurrentTabIndex == 2 ? ETransferTarget::Ground : ETransferTarget::None;
+}
+
 void UMOUnifiedInventoryMenu::StoreAllToSecondary()
 {
 	UMOInventoryComponent* PlayerInv = CachedPlayerInventory.Get();
 
-	// If on Nearby tab (no secondary inventory), drop items to world instead
-	if (CurrentTabIndex == 2 || !CachedSecondaryInventory.IsValid())
+	// The panel's target (GetTransferTarget): the ground on the Nearby tab, nothing on Gear / Details
+	const ETransferTarget Target = GetTransferTarget();
+	if (Target == ETransferTarget::Ground)
 	{
 		DropAllToWorld();
+		return;
+	}
+	if (Target == ETransferTarget::None)
+	{
 		return;
 	}
 
@@ -515,11 +532,16 @@ void UMOUnifiedInventoryMenu::StoreAllToSecondary()
 
 void UMOUnifiedInventoryMenu::TakeAllFromSecondary()
 {
-	// If on Nearby tab (no secondary inventory), loot nearby items instead
-	if (CurrentTabIndex == 2 || !CachedSecondaryInventory.IsValid())
+	// The panel's target (GetTransferTarget): the ground on the Nearby tab, nothing on Gear / Details
+	const ETransferTarget Target = GetTransferTarget();
+	if (Target == ETransferTarget::Ground)
 	{
 		LootAllNearbyToPlayer();
 		RefreshNearbyPanel();
+		return;
+	}
+	if (Target == ETransferTarget::None)
+	{
 		return;
 	}
 
@@ -636,7 +658,7 @@ void UMOUnifiedInventoryMenu::FillStacksLeftToRight()
 	UMOInventoryComponent* PlayerInv = CachedPlayerInventory.Get();
 	UMOInventoryComponent* SecondaryInv = CachedSecondaryInventory.Get();
 
-	if (PlayerInv && SecondaryInv)
+	if (PlayerInv && SecondaryInv && GetTransferTarget() == ETransferTarget::Container)
 	{
 		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::FillStacks, SecondaryInv, PlayerInv));   // into the player's stacks
 		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Fill player stacks from secondary requested"));
@@ -648,7 +670,7 @@ void UMOUnifiedInventoryMenu::FillStacksRightToLeft()
 	UMOInventoryComponent* PlayerInv = CachedPlayerInventory.Get();
 	UMOInventoryComponent* SecondaryInv = CachedSecondaryInventory.Get();
 
-	if (PlayerInv && SecondaryInv)
+	if (PlayerInv && SecondaryInv && GetTransferTarget() == ETransferTarget::Container)
 	{
 		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::FillStacks, PlayerInv, SecondaryInv));   // into the secondary's stacks
 		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Fill secondary stacks from player requested"));
@@ -924,25 +946,27 @@ void UMOUnifiedInventoryMenu::UpdateActionButtonStates()
 {
 	const bool bHasSecondary = HasSecondaryInventory();
 
-	// All transfer buttons always enabled - they adapt behavior based on context
+	// The transfer buttons follow what the right-hand panel shows (GetTransferTarget): all four for an open container, the two "all"
+	// buttons for the ground (drop all / pick up all), none on Gear / Details.
+	const ETransferTarget Target = GetTransferTarget();
 	if (StoreAllButton)
 	{
-		StoreAllButton->SetIsEnabled(true);
+		StoreAllButton->SetIsEnabled(Target != ETransferTarget::None);
 	}
 
 	if (TakeAllButton)
 	{
-		TakeAllButton->SetIsEnabled(true);
+		TakeAllButton->SetIsEnabled(Target != ETransferTarget::None);
 	}
 
 	if (FillLeftButton)
 	{
-		FillLeftButton->SetIsEnabled(true);
+		FillLeftButton->SetIsEnabled(Target == ETransferTarget::Container);
 	}
 
 	if (FillRightButton)
 	{
-		FillRightButton->SetIsEnabled(true);
+		FillRightButton->SetIsEnabled(Target == ETransferTarget::Container);
 	}
 
 	// Organize buttons - player always enabled, secondary only if exists

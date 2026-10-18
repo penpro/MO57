@@ -450,6 +450,13 @@ private:
 	void UpdateTabButtonStates();
 	void UpdateActionButtonStates();
 
+	/** What the transfer buttons (<, >, <<, >>) act on: what the right-hand panel SHOWS -- the open container on its tab, the ground on the
+	 *  Nearby tab, nothing on Gear / Details. They used to act on the last opened container even while the panel showed Gear (">>" emptied
+	 *  the pack into a basket off screen, or did nothing once it was out of reach), and with no container ">>" dropped everything on the
+	 *  ground (Wes, Oct 18 2026: "the >> move all buttons either don't work or only work intermittently"). */
+	enum class ETransferTarget : uint8 { None, Container, Ground };
+	ETransferTarget GetTransferTarget() const;
+
 	// ============================================================================
 	// STATE
 	// ============================================================================

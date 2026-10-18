@@ -171,6 +171,12 @@ if (MyButton)
   refresh. The main menu's Load panel is a separate instance and lists every world.
 - **Exits** save first with no dialog (`Docs/PAUSE_POLICY.md` "Leaving a world"). The only dialog is "Could Not Save -- Leave Anyway / Stay".
 - `bFilterToCurrentWorld` on the list panels is a same-MAP filter (every world on a map shares the identifier), not a same-world one.
+### Inventory menu: the transfer buttons follow the visible panel (Oct 18)
+- `UMOUnifiedInventoryMenu::GetTransferTarget()` is the one rule for "<" / ">" / "<<" / ">>": the open container on its tab (all four), the
+  ground on Nearby ("<<" picks up all, ">>" drops all), nothing on Gear / Details (all four disabled). Never act on a container the panel
+  doesn't show (BR18-27: ">>" on Gear emptied the pack into a basket off screen).
+- The menu is pooled: `InitializeMenu` with no container calls `ClearSecondaryInventorySource()`, and `UMOInventoryUIController` drops its
+  `CurrentContainerActor` whenever the menu deactivates uncovered (Escape included), not only in `CloseInventoryMenu`.
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 

@@ -308,6 +308,17 @@ void UMOInventoryUIController::OpenInventoryWithContainer(AActor* ContainerActor
 
 	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
 	RegisterCachedMenu(MenuWidget, UnifiedInventoryWidget);
+	// Any close (Escape, another menu, CloseInventoryMenu) drops the container too: only CloseInventoryMenu used to, so after an Escape the
+	// inventory key reopened with the last container still attached -- out of reach, and the target of the bulk buttons while Gear showed.
+	TWeakObjectPtr<UMOUnifiedInventoryMenu> WeakMenu(MenuWidget);
+	MenuWidget->OnDeactivated().AddWeakLambda(this, [this, WeakMenu]()
+	{
+		UMOUnifiedInventoryMenu* Menu = WeakMenu.Get();
+		if (Menu && !IsWidgetCoveredByAnotherLayerEntry(Menu))
+		{
+			CurrentContainerActor.Reset();
+		}
+	});
 	MenuWidget->OnRequestClose.RemoveAll(this);
 	MenuWidget->OnRequestClose.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose);
 

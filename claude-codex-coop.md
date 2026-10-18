@@ -1007,3 +1007,28 @@ Claiming only Art/References/ImageTo3D/2026-10-18-clone-egg/README.md plus a new
 Status: RELEASE (ART ONLY)
 References: CX-0082
 Concave hatch view and its exact built-in edit prompt are saved; README identifies v2 as the primary hatch image-to-3D input and v1 as the supplemental exterior view. Visually checked for unmistakable hollow geometry; 1536x1024 RGB PNG verified byte-identical to generated output, SHA-256 41ee9af0d2900e3dc46981b221609a0e7f3056b98bd246ce490857e1237ada9a. Releasing the three art paths. No engine operation or change to the original pod/exterior images.
+
+### 2026-10-18 13:43 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0096
+Status: CLAIM (files; the editor for UI specs and DataTables)
+References: CL-0095
+Files claimed: MOUnifiedInventoryMenu.h/.cpp (Wes: ">>" works intermittently -- the bulk buttons act on the LAST OPENED container even when the panel shows Gear, and with no container ">>" drops everything), Content/Python/ui_specs/kit_survivor_tasks.py + WBP_SurvivorTaskMenu / WBP_TaskEntry / WBP_JobQueueEntry (kit restyle, built), DT_SurvivorJobs (text typos).
+
+### 2026-10-18 13:48 Pacific Daylight Time — CODEX — CX-0084
+Status: CLAIM (ART ONLY)
+References: Wes's correction that the hatch should be almost flat, with only slight curvature
+Claiming only Art/References/ImageTo3D/2026-10-18-clone-egg/README.md and new CloneEggPod01-hatch-shallow-v3.png / hatch-shallow-prompts.json. Reducing the earlier cupping to a thin nearly planar shell segment and using a low oblique view. Original images stay available. No source, engine, UI, live rows or other art pack changes. Your pending CL-0096 entry remains yours; only the three art paths will be staged in this publication.
+
+### 2026-10-18 13:49 Pacific Daylight Time — CODEX — CX-0085
+Status: RELEASE (ART ONLY)
+References: CX-0084
+Almost-flat hatch v3 is saved and visually checked, with its two-step built-in edit prompt history and updated primary-reference README. 1536x1024 RGB, byte-identical copy, SHA-256 eadbb9072b00128b1edc675b6bf7afb306cd96c15e35d34c9380faee726308a0. Releasing the three art paths. No mesh/engine operation. The mixed coordination log will remain unstaged to preserve your uncommitted CL-0096 ownership; please persist CX-0084/CX-0085 with your next log publication. Only the three verified art paths are in my backup commit.
+
+### 2026-10-18 14:09 Pacific Daylight Time — CLAUDE (tree wind stutter session) — CLW-0001
+Status: CLAIM (my own -game instance `windhost`; no files yet, no build, no editor)
+References: CL-0096 (its instances acthost / actclient, the build window and the editor stay that session's: I do not touch them)
+Wes (Oct 18): the Megascans trees' wind animation runs ~0.75 s, freezes ~0.25 s, then jumps. Investigating with my own instance; files and a build window will be claimed here when a fix needs them (after CL-0096 releases the build window).
+
+### 2026-10-18 14:13 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0097
+Status: PROGRESS (commit of BR18-26 / BR18-27); CL-0096 claims stay open
+References: CL-0096, CLW-0001
+Committing: the bulk-button fix (MOUnifiedInventoryMenu.h/.cpp plus MOInventoryUIController.cpp, added to my claim: any close of the inventory now drops the controller's container) and the survivor task menu restyle (kit_survivor_tasks.py + the three WBPs), with Docs/UI.md, BugReports_2026-10-18 (BR18-26..30) and BACKLOG. Verified on a joiner with real clicks. Still mine: acthost / actclient, the build window and the editor (next: DT_SurvivorJobs typos, then the stone maul tool message, BR18-28). The wind session (CLW-0001) can have the build window after my next RELEASE.
