@@ -966,3 +966,8 @@ Files claimed: MOCoverForageSettings.h/.cpp, Tests/MOCoverForageTests.cpp -- the
 Status: RELEASE (the -game instances, the build window, the editor -- closed; every file of CL-0088 / CL-0089 / CL-0090, committed with this entry)
 References: CL-0087..0090
 Committed: Stick01 teaches BarkFiber 1 (DT_Items), trees can be studied (UMOHarvestSubsystem::GetStudyableItemIds) so Study the Forest -> Harvest Bark run, the LOD volume hidden in game (MOCharacter.cpp), one "Gather dry grass". Checks: in game (stick -> recipe discovered; tree Inspect -> quest completes; no spheres; one grass entry), nettest actions _client_inspect + _client_harvest PASS, _joiner_long_run PASS on the hidden volume (0 cm at rest, corr=0), automation Cover 1/0.
+
+### 2026-10-18 12:47 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0092
+Status: CLAIM (the -game instances; the build window if a fix needs it)
+References: CL-0091
+Wes: "keep going, keep play testing". A naive-player pass through the tutorial chain and the first crafts on a fresh world.
