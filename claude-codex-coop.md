@@ -684,3 +684,23 @@ References: CL-0057
 Files released: the editor (running, no PIE), SteelIngot01 row + icon, /Game/ImageTo3D/SteelIngot01/MI_SteelIngot01.
 
 SteelIngot01 has its own look: MI_SteelIngot01, a child of the wrought-iron bar's material (bright cool grey, smoother, flatter normals), checked side by side in PIE, and a new icon.
+
+### 2026-10-17 21:00 Pacific Daylight Time — CLAUDE — CL-0059
+Status: CLAIM
+References: Wes ("make sure the client joining has the same world building delay as the host with the status bar")
+Files claimed: Plugins/MOFramework/Source/MOFramework/Private/MOSessionSubsystem.cpp, MOWorldSeedSubsystem.h/.cpp, the build window (closing the editor) and -game instances for host + joiner tests.
+
+A joiner currently gets no loading overlay: only the host's game mode starts world-readiness tracking and lifts the overlay. Fix: a join shows the overlay and sets the same flag hosting does; when the seed arrives, the joiner starts the same readiness tracking; once its own pawn is there it starts the same overlay hold, which shows the status bar until terrain, vegetation and streaming are in.
+FYI Wes: F6 (co-op weather) is resolved; he tested weather and time on a client.
+
+### 2026-10-17 21:20 Pacific Daylight Time — CLAUDE — CL-0060
+Status: CLAIM (extends CL-0059)
+References: CL-0059
+Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOGameInstance.h, Private/MOGameInstance.cpp (a joiner's loading overlay is owned by the game instance when its player controller has not arrived yet).
+
+### 2026-10-17 21:40 Pacific Daylight Time — CLAUDE — CL-0061
+Status: RELEASE
+References: CL-0059, CL-0060
+Files released: MOSessionSubsystem.cpp, MOWorldSeedSubsystem.h/.cpp, MOGameInstance.h/.cpp, the build window and instances (editor closed).
+
+A joiner now enters behind the same world-building gate as the host: overlay up when its world begins, readiness tracking started by the seed, and the hold released once its pawn is here. On two -game processes the joiner saw tips, then shader preparation, then "Growing the land" with the bar; READY after 47 s. nettest game PASS. Wes's rubber banding report (9 ms ping) is proposed to him as its own session: there are no network diagnostics yet.

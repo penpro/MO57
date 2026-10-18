@@ -8,6 +8,10 @@
 #include "MOFramework.h"
 #include "MOGameState.h"
 #include "MOVoxelReadinessSubsystem.h"
+#include "MOWorldReadinessSubsystem.h"
+#include "MOGameInstance.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "MOWorldGenSettings.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "VoxelWorld.h"
@@ -66,6 +70,7 @@ void UMOWorldSeedSubsystem::Deinitialize()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(SeedTimeoutHandle);
+		World->GetTimerManager().ClearTimer(JoinOverlayTimerHandle);
 	}
 	Super::Deinitialize();
 }
@@ -535,6 +540,12 @@ void UMOWorldSeedSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	InWorld.GetTimerManager().SetTimer(SeedTimeoutHandle, this, &UMOWorldSeedSubsystem::WarnSeedNeverArrived,
 		SeedArrivalWarningSeconds, /*bLoop=*/false);
+
+	// The joiner sees what the host sees while its world is built: the loading overlay and status bar, held until ready.
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(InWorld.GetGameInstance()))
+	{
+		GameInstance->HoldLoadingOverlayForWorldEntry();
+	}
 }
 
 void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& Info)
@@ -571,15 +582,66 @@ void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& In
 		Readiness->BeginPolling();
 	}
 
+	// ...and the same world-building gate: the readiness tracking the host's game mode starts (terrain + vegetation + streaming,
+	// the loading overlay's status bar), held until this machine's world is built. The hold starts once the joiner's pawn is here.
+	if (UMOWorldReadinessSubsystem* WorldReadiness = UMOWorldReadinessSubsystem::Get(World))
+	{
+		WorldReadiness->BeginTracking();
+	}
+	JoinOverlayStartSeconds = FPlatformTime::Seconds();
+	World->GetTimerManager().SetTimer(JoinOverlayTimerHandle, this, &UMOWorldSeedSubsystem::PollJoinerOverlayRelease, 0.25f, /*bLoop=*/true);
+
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOWorldSeed] client applied world seed %d: voxel runtime %s"),
 		Info.Seed, bStarted ? TEXT("created") : TEXT("NOT created (no AVoxelWorld in this level)"));
+}
+
+void UMOWorldSeedSubsystem::PollJoinerOverlayRelease()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const APlayerController* PC = World->GetFirstPlayerController();
+	const bool bHasPawn = PC && PC->GetPawn();
+	constexpr double MaxWaitForPawnSeconds = 60.0;   // never hold a player behind the overlay forever: lift it, say why
+	const double Waited = FPlatformTime::Seconds() - JoinOverlayStartSeconds;
+	if (!bHasPawn && Waited < MaxWaitForPawnSeconds)
+	{
+		return;
+	}
+	World->GetTimerManager().ClearTimer(JoinOverlayTimerHandle);
+	if (bHasPawn)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOWorldSeed] joiner's pawn '%s' arrived after %.1f s -- holding the loading overlay until this machine's world is built"),
+			*PC->GetPawn()->GetName(), Waited);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Error,
+			TEXT("[MOWorldSeed] joiner: no pawn %.0f s after the seed -- lifting the loading overlay anyway (the world-ready hold still applies)"),
+			Waited);
+	}
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(World->GetGameInstance()))
+	{
+		GameInstance->DismissLoadingScreen();   // holds until UMOWorldReadinessSubsystem is ready, then fades
+	}
 }
 
 void UMOWorldSeedSubsystem::WarnSeedNeverArrived()
 {
 	if (!bHasActiveSeed)
 	{
+		// Nothing will ever build this world: do not leave the joiner staring at a loading overlay.
+		if (UWorld* World = GetWorld())
+		{
+			if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(World->GetGameInstance()))
+			{
+				GameInstance->DismissLoadingScreen();
+			}
+		}
 		UE_LOG(LogMOFramework, Error,
 			TEXT("[MOWorldSeed] client: no world seed from the host after %.0f s -- voxel terrain was NOT generated. "
 				"Is the host running a build that publishes AMOGameState's world seed?"),

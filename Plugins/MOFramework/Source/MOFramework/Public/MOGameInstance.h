@@ -109,6 +109,14 @@ public:
 	void ShowRespawnLoadingOverlay();
 
 	/**
+	 * A joiner's world is beginning: show the loading overlay if it is not up and arm the manual dismiss, which
+	 * UMOWorldSeedSubsystem ends once the joiner's pawn is here and which then waits for the world-readiness subsystem
+	 * exactly like the host's load. Called from the client world's begin, so every way into a host's world (the Join
+	 * menu, a direct connect, an invite) gets the host's world-building gate and status bar.
+	 */
+	void HoldLoadingOverlayForWorldEntry();
+
+	/**
 	 * Dismiss the loading overlay with a fade out.
 	 * Call this when pawn has landed safely after a gameplay transition.
 	 */

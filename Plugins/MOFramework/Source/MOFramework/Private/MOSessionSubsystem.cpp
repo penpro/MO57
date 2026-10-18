@@ -1,6 +1,8 @@
 #include "MOSessionSubsystem.h"
 #include "MOFramework.h"
 #include "MOTravelUtils.h"
+#include "MOGameInstance.h"
+#include "MOGameSettings.h"
 #include "Online/OnlineSessionNames.h"
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
@@ -371,6 +373,18 @@ void UMOSessionSubsystem::HandleJoinSessionComplete(FName SessionName, EOnJoinSe
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] JoinSession succeeded — ClientTravel to '%s'"), *ConnectString);
 	OnJoinComplete.Broadcast(true, FString());
+
+	// A joiner enters the world the way the host does: behind the loading overlay, held until THIS machine's world is built
+	// (every machine builds its own terrain from the seed). Same flag the host path sets, so the overlay survives the travel;
+	// UMOWorldSeedSubsystem starts the readiness tracking when the seed arrives and lifts the hold once the joiner's pawn is here.
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bIsLoadingIntoGameplay = true;
+	}
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->ShowLoadingOverlay();
+	}
 	PC->ClientTravel(ConnectString, TRAVEL_Absolute);
 }
 

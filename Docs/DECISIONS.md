@@ -18,7 +18,6 @@
 | F3 | Do removed things regrow? | slow regrowth on game time (litterfall weeks, saplings years) vs permanent (today) | `Docs/PCG.md` §7 | Oct 13 |
 | F4 | Performance target | choose the reference resolution / quality and the target hardware tier before tuning scalability (the 4090 floor is ~11 ms at Epic) | `Docs/Performance.md` §1 | Oct 11-13 |
 | F5 | Shore reeds | a Fab / Megascans download vs Electric Dreams plants (Taro, ferns; no reed asset there) | `Docs/Water.md` §5 | Oct 11 |
-| F6 | Co-op weather path | **keep native UDW replication** until a client gap is SEEN (two windows); then a client-side apply in `BP_WeatherBridge` (Wes's Blueprint) | `Docs/Weather_And_Time.md` §4 | Oct 8-9 |
 | F7 | Building cancel / refund | queue path (full refund + world drops) vs ghost-menu path (skill-partial); one rule for both | `Docs/Building.md` | Jul 20 |
 | F8 | Excavation stage 6 UI | the designation tool + "where do you want to dump the contents?" popup (designated sites / fill inventory / fill nearby inventory). Wes said on Oct 15 the earlier question wasn't clear: **re-ask plainly with a mock-up**. Recommended default flatten target: the zone's MEAN height | `Docs/Terraform_Excavation_Plan.md` | Jul 13 / Oct 14 |
 | F9 | Real cliff walls | own composition along a steep contour (massive cliff meshes, vines, talus) vs generator crags dressed with the meshes | `Docs/World_Features_Architecture.md` | Oct 14 |
@@ -54,6 +53,11 @@
 ## Decisions, newest first
 
 ### 2026-10-17
+- ~21:00: **"F6 is resolved, i tested weather and time updates to the client and those are great"** -> F6 closed: native UDS/UDW
+  replication plus the MO clock sync carry weather and time to clients; no client-side apply in `BP_WeatherBridge` is needed
+  (nothing weather / clock related changed after his test: no commits since Oct 15).
+- ~21:00: **"make sure the client joining has the same world building delay as the host with the status bar"** -> a joiner
+  now enters behind the same loading overlay and readiness hold as the host (`Docs/Coop_And_Networking.md` §3).
 - ~19:00: **"i'd rather not pay $150 subscription if i can just get decently good results locally"** -> item models come from
   image-to-3D run locally: ComfyUI's native TRELLIS.2 nodes (MIT; Comfy says the outputs are usable commercially). Not the original
   microsoft/TRELLIS.2 repo (needs nvdiffrast: NVIDIA licence, non-commercial only). Not Hunyuan3D 2.1 (outputs barred in the EU,
@@ -183,7 +187,7 @@
 
 ### 2026-10-08
 - **"we have a whole weather bridge for UDS and all that, so use the bridge not the native UDS stuff"** -> every MO system goes through the bridge;
-  native UDW replication stays as the transport (measured: Change Weather is server-only) -> F6.
+  native UDW replication stays as the transport (measured: Change Weather is server-only) -> F6 (closed Oct 17: works on clients).
 - New games at 08:00 with clear skies; a `~` console popup; `starter` (50 sticks, 20 stones).
 - A real two-account Steam session works (Wes verified; both characters on the terrain).
 

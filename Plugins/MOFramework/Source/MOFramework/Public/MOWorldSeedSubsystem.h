@@ -122,4 +122,13 @@ private:
 
 	/** Client only: nothing arrived from the host in time. Say so loudly; do NOT guess a seed. */
 	void WarnSeedNeverArrived();
+
+	/**
+	 * Client only: the joiner's half of the host's world-building gate. Once the seed has started this machine's readiness
+	 * tracking and the joiner's own pawn is here (the host's equivalent: its pawn landed, AMOGameMode), lift the loading
+	 * overlay through UMOGameInstance::DismissLoadingScreen, which holds it -- status bar and all -- until the world is ready.
+	 */
+	void PollJoinerOverlayRelease();
+	FTimerHandle JoinOverlayTimerHandle;
+	double JoinOverlayStartSeconds = 0.0;
 };

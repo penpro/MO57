@@ -13,7 +13,7 @@
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
-F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F6 weather client apply · F7 building refund ·
+F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F7 building refund ·
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art.

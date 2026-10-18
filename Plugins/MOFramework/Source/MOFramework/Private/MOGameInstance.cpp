@@ -146,33 +146,37 @@ void UMOGameInstance::ShowLoadingOverlay()
 		LoadingOverlayWidget = nullptr;
 	}
 
-	// Create new overlay
+	// Create new overlay. A joiner's player controller only arrives once the server replicates it, after the level has loaded,
+	// so without one the game instance owns the widget (the overlay never needs its owning player).
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	if (PC)
+	LoadingOverlayWidget = PC ? CreateWidget<UMOLoadingOverlay>(PC, LoadingOverlayClass) : CreateWidget<UMOLoadingOverlay>(this, LoadingOverlayClass);
+	if (LoadingOverlayWidget)
 	{
-		LoadingOverlayWidget = CreateWidget<UMOLoadingOverlay>(PC, LoadingOverlayClass);
-		if (LoadingOverlayWidget)
+		// Set random loading tip if available
+		if (LoadingTips.Num() > 0)
 		{
-			// Set random loading tip if available
-			if (LoadingTips.Num() > 0)
-			{
-				const int32 TipIndex = FMath::RandRange(0, LoadingTips.Num() - 1);
-				LoadingOverlayWidget->SetLoadingText(LoadingTips[TipIndex]);
-			}
+			const int32 TipIndex = FMath::RandRange(0, LoadingTips.Num() - 1);
+			LoadingOverlayWidget->SetLoadingText(LoadingTips[TipIndex]);
+		}
 
-			// Add to viewport at highest Z-order
-			LoadingOverlayWidget->AddToViewport(9999);
-			LoadingOverlayWidget->ShowOverlay();
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Error, TEXT("[MOGameInstance] CreateWidget failed to create overlay!"));
-		}
+		// Add to viewport at highest Z-order
+		LoadingOverlayWidget->AddToViewport(9999);
+		LoadingOverlayWidget->ShowOverlay();
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] ShowLoadingOverlay: No player controller available yet"));
+		UE_LOG(LogMOFramework, Error, TEXT("[MOGameInstance] CreateWidget failed to create overlay!"));
 	}
+}
+
+void UMOGameInstance::HoldLoadingOverlayForWorldEntry()
+{
+	bWaitingForManualDismiss = true;
+	if (!LoadingOverlayWidget)
+	{
+		ShowLoadingOverlay();
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Joining a world: loading overlay up until this machine's world is built"));
 }
 
 void UMOGameInstance::ShowRespawnLoadingOverlay()

@@ -10,7 +10,7 @@
 > `UMOWeatherDirectorSubsystem`, `UMOWorldSyncSubsystem`, `UMOTimeOfDayDialog` / `SMOClockDial`, `UMOQuickPickDialog`.
 > **Dev verbs:** `MO.Clock.Info`, `MO.Clock.SetTimeScale <x>`, `MO.Clock.SetTime`, `MO.Weather.SetPreset <name>`, `.Director 0|1`,
 > `.Info`, `.Next`, `.SkyTime`; console words `weather` / `time` (popups; `weather rain`, `time 2pm` skip them).
-> **Open items:** `Docs/BACKLOG.md` § Water, light, weather. **Decisions:** DECISIONS 2026-10-08 (use the bridge), F6 (client-side apply),
+> **Open items:** `Docs/BACKLOG.md` § Water, light, weather. **Decisions:** DECISIONS 2026-10-08 (use the bridge), 2026-10-17 (F6 closed: Wes saw weather and time right on a client),
 > F13 (default time scale). Temperature effects on the body: `Docs/Medical_And_Survival.md`.
 
 ## 1. The clock
@@ -47,7 +47,8 @@
   client 08:00). Check the SKY too (`MO.Weather.SkyTime` asks the bridge), not just the clock label.
 - **Weather** visibly rides UDS/UDW native replication. Wes's rule (Oct 8): "use the bridge not the native UDS stuff" -- measured:
   UDW `Change Weather` is server-only, so turning native replication off made the client stop following. **Never switch native
-  UDS/UDW replication off** without first giving the bridge a client-side apply (open fork F6, spec in §4 Recommendation 3).
+  UDS/UDW replication off** without first giving the bridge a client-side apply (spec in §4 Recommendation 3). Wes tested
+  weather and time on a client on Oct 17 ("those are great"): F6 is closed and native replication stays.
 
 ## 4. Co-op weather: bridge vs native Ultra Dynamic Weather replication (investigation, 2026-10-09, verbatim)
 

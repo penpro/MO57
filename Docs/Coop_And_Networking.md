@@ -59,6 +59,15 @@
 - A client's simulated copy of a remote pawn must never apply gravity (`AMOCharacter::OnUpdateSimulatedPosition`): with no floor under a
   proxy the client predicts a fall (the host's pawn free-fell to z = -498,790 on clients). Control: `MO.RemotePawn.SimGravity 1`.
 - PCG removals replicate (`AMOGameState::RemovedInstances`, `Docs/PCG.md` §7). Per-machine actors (lakes) don't replicate (`Docs/Water.md`).
+- **A joiner enters behind the same world-building gate as the host** (Wes, Oct 17).
+  * `UMOWorldSeedSubsystem::OnWorldBeginPlay` (client) calls `UMOGameInstance::HoldLoadingOverlayForWorldEntry`: overlay up, owned by
+    the game instance while the joiner's player controller hasn't replicated yet.
+  * The seed starts `UMOWorldReadinessSubsystem::BeginTracking`. Once the joiner's pawn is here, `DismissLoadingScreen` holds the overlay
+    with the status bar until terrain, vegetation and streaming are in, the same code path as the host's load.
+  * The Join menu also sets the flag and shows the overlay before travelling (`UMOSessionSubsystem::HandleJoinSessionComplete`).
+  * Measured on two `-game` processes: pawn 0.2 s after the seed; READY 47.2 s later; reveal about 58 s after Join. The joiner saw
+    tips, then shader preparation, then "Growing the land" with the bar.
+  * No seed within 15 s, or no pawn within 60 s, lifts the overlay with an error logged, never a stuck screen.
 
 ## 4. Spawn settle and rescue
 
