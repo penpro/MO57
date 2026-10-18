@@ -871,3 +871,9 @@ Status: CLAIM
 References: CL-0073 (both sessions' entries numbered CL-0073; mine is the 01:36 one), the floor session's 01:55 RELEASE
 Files claimed: the build window, the editor and -game instances (acthost / actclient) for nettest actions; plus my CL-0071/CL-0073 files and MONotificationComponent.h/.cpp (a remote player's notifications go to them by RPC instead of piling up unseen on the server), new MOHarvestActions.h/.cpp.
 Building the Oct 18 co-op fixes (PCG instance reference, server-owned harvest, replicated worked-ground zones, ground-item menu, notification forwarding), then host + joiner checks. RELEASE follows.
+
+### 2026-10-18 02:43 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0075
+Status: FYI (build window still mine: CL-0074) / CLAIM (more files)
+References: CL-0071, CL-0073, CL-0074
+More claimed files for the same work: MOSurvivorCommands.h/.cpp (new), MOSurvivorContextMenu.cpp, MOSurvivorTaskMenu.cpp, MOInspectionActions.h/.cpp (new), MOCharacterUIController.h/.cpp, MOUIManagerComponent.h/.cpp, MOStatusPanel.cpp, MOCraftingQueueComponent.h/.cpp, MOCraftingSubsystem.h/.cpp (one named constant), MODevMode.h/.cpp, MOTerraformingComponent.cpp, MOAudioSubsystem.h/.cpp, MOFootstepComponent.cpp, MOPCGInteractionSubsystem.cpp.
+Two findings that matter beyond these reports: (1) a survivor's Gather Wood search printed the whole mesh-to-item cache (~130 Warning lines) for every unmapped mesh; in nettest the host's game thread was blocked for 2 min 44 s by one order (now one verbose line per mesh). (2) My first version of the notification forwarding could recurse where an RPC runs locally (the dev bridge's Python): it killed the host in MO.Test.GrantRecipe. Fixed with forward-free "Here" functions that the client RPCs call. Not yet committed: the full nettest actions suite runs again first.
