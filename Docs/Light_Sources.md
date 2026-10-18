@@ -39,8 +39,8 @@ complement each other. A candle is ~1 cd (~12.6 lm). Wood and fat flames burn at
 - **Lighting:** from a burning fire. The fire's menu offers "Light the <torch> in the fire" (`FMOFireActions::LightCarried`) when the pawn
   holds an unlit light source: a timed action of the profile's `LightSeconds`, holding it in the flames.
 - **Burning down:** one durability point per `BurnSecondsPerDurability` of game time, on the server clock. A torch is 90 points × 30 s =
-  45 min, inside the measured 21-61. Meant to live on the item, so a half-burnt torch put out and relit carries on where it was. **Pending:** nothing can
-  wear an equipped item yet (Codex is adding `ReduceEquippedDurability`), so for now the burn is counted on the component and a relit torch starts full.
+  45 min, inside the measured 21-61. It lives on the item (`UMOEquipmentComponent::ReduceEquippedDurability`, Codex, Oct 17), so a half-burnt torch put out and relit carries on
+  where it was; at 0 the torch is used up.
 - **Going out:**
   - it leaves the hand (put away, dropped, swapped): nobody pockets a burning torch;
   - the flame goes under the water surface, or the pawn swims (wading with it held up is fine);
@@ -53,7 +53,13 @@ complement each other. A candle is ~1 cd (~12.6 lm). Wood and fat flames burn at
   - the visible flame is the profile's Niagara effect, kept upright in the world.
 - **Carrying fire:** a laid fire is lit from a lit torch (`FMOFireActions::LightFromCarried`): 20 s, no drill and no tinder. It catches 95 %
   of the time dry, 60 % in rain. That is why people carried fire rather than drill a new one at every camp.
-- **Co-op:** the lit item's GUID, id and hand replicate. Every machine with a renderer builds its own light and flame from them.
+- **Co-op:** the lit item's GUID, id and hand replicate. Every machine with a renderer builds its own light and flame from them. Verified on real
+  host + client processes (`nettest game --keep`):
+  - the client sees the host's torch lit, and it light-adapts the client's eye;
+  - the client lights its own torch at a campfire through the server RPC and renders the flame;
+  - the host sees it lit.
+- **Wear, verified:** a lit torch's own durability goes down 1 point per 30 s; sped up 60x it burnt out, the owner was told, and the spent torch was
+  gone from the hand.
 
 Calibration in code: `UMOLightSourceSettings` constructor (Torch01 10 cd, 1900 K; OilLamp01 0.8 cd, steady). Tests: `MOFramework.Light.*`.
 

@@ -123,7 +123,6 @@ bool UMOCarriedLightComponent::LightHeld()
 	LitItemId = Item.ItemDefinitionId;
 	LitSlot = Slot;
 	BurnAccumulator = 0.0f;
-	PendingBurnPoints = 0;
 	UE_LOG(LogMOFramework, Log, TEXT("[MOLight] %s lit %s (%s hand, durability %d)"), *GetOwner()->GetName(), *LitItemId.ToString(),
 		Slot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"), Item.CurrentDurability);
 	RefreshFlame();
@@ -141,7 +140,6 @@ void UMOCarriedLightComponent::Extinguish(const TCHAR* Why, bool bTellOwner)
 	LitItemGuid.Invalidate();
 	LitItemId = NAME_None;
 	BurnAccumulator = 0.0f;
-	PendingBurnPoints = 0;
 	RefreshFlame();
 	if (bTellOwner)
 	{
@@ -357,13 +355,17 @@ void UMOCarriedLightComponent::TickBurnAuthority(const FMOLightSourceProfile& Pr
 	{
 		return;   // a light that never burns down (no durability on its row)
 	}
-	// PENDING (CL-0034): nothing can wear an EQUIPPED item yet -- durability is only reduced through the inventory. Until
-	// UMOEquipmentComponent::ReduceEquippedDurability exists, the burn is counted here and the flame goes out when the item's durability is used up, but the
-	// item itself is not worn (a relit torch starts full). Replace with: bool bBurntOut = false; Equipment->ReduceEquippedDurability(LitSlot, Points, bBurntOut);
-	PendingBurnPoints += Points;
-	if (PendingBurnPoints >= Item.CurrentDurability)
+	// The burn wears the item itself, so a torch put out half-burnt and relit carries on from where it was; at 0 it is used up (the slot clears). Burning
+	// out clears the slot inside the call, which would read as "left the hand": the flame is put out as burnt out first.
+	const EMOEquipmentSlot Slot = LitSlot;
+	if (Points >= Item.CurrentDurability)
 	{
 		Extinguish(TEXT("burnt out"), true);
+	}
+	bool bBurntOut = false;
+	if (!Equipment->ReduceEquippedDurability(Slot, Points, bBurntOut) && IsLit())
+	{
+		BurnAccumulator += Points * FMath::Max(Profile.BurnSecondsPerDurability, 0.001f);   // refused (a hand swap in progress): owe it, try next tick
 	}
 }
 
