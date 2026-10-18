@@ -31,6 +31,7 @@ and UE_5.8.
 | `ui contract|scaffold|build|check|dump|remove|menu|click|find|shot` | Widget Blueprints from spec files (`Docs/UI_TOOLING.md`) |
 | `inst start|stop|do|list <name> [--sound] [--creator] [--res WxH] [--nosteam]` | extra `-game` processes with their own bridge + log |
 | `nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-suite|packaged-death|packaged-removal|bugreport` | real multi-process co-op / packaged gates (negative controls: `game --skew-seed / --withhold-seed / --withhold-sync`; `MO_ACTIONS_ONLY=_case,...` reruns named action cases) |
+| `nettest netdiag [--seconds N] [--phases clean,lag50,loss1,ctl_ratecap,ctl_speedhack] [--keep]` | checks the co-op SMOOTHNESS instruments on two local processes (controls that must fail); loopback cannot show internet rubber banding: real sessions are read with `python -I Tools/ue_netdiag.py logs host.log joiner.log` (`Docs/Coop_And_Networking.md` §7) |
 | `logs`, `results`, `save`, `config`, `mptest` | helpers (see `--help`). There is no top-level `shot`: in an instance run `ue.py inst do NAME run "shot showui"` (PNG in `Saved/Screenshots/WindowsEditor/`); widget shots are `ui shot` |
 
 Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one command to in-game), `Tools\agent_state.ps1` (editor + PIE
@@ -239,7 +240,8 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 
 `python -I Tools/crash_triage.py <crash-dumps dir> [--since DATE]`, `Tools/ue_crash_bundle.py`, `Tools/bugreport_receiver.py`,
 `ue.py nettest bugreport --package`; diagnostics `Tools/pawnvis_probe.py`, `Tools/rescue_probe.py [--hunt N]`, `Tools/weather_probe.py`
-(`Docs/Persistence.md` §4).
+(`Docs/Persistence.md` §4). Co-op smoothness: every report carries `Net.*` rows (the last 60 s, `Net.Events`, the server clock); two
+machines' logs: `python -I Tools/ue_netdiag.py logs host.log joiner.log` (`Docs/Coop_And_Networking.md` §7).
 
 ## 9. Unattended runs (Tools/ov.bat)
 
@@ -258,7 +260,7 @@ last Steam patch), generate the notes from `git log <that commit>..HEAD` (player
 
 The live, searchable list is the in-game developer menu (`devmenu [Group]`, tooltips = help text; dev mode in Shipping: Options > Gameplay >
 Developer or `-devmode`). Namespaces (count): MO.Test (38), MO.UI (23), MO.WorldGen (19), MO.Colony (14), MO.Audio (13), MO.Water (12),
-MO.Player (10), MO.Weather (8), MO.AI (7), MO.Mod (7), MO.PCG (7), MO.Clock (6), MO.Light (6), MO.Session (6), MO.BugReport (5),
+MO.Player (10), MO.Weather (8), MO.AI (7), MO.Mod (7), MO.PCG (7), MO.Clock (6), MO.Light (6), MO.Session (6), MO.Net (5), MO.BugReport (5),
 MO.Footstep (5), MO.Save (5), MO.Fire (4), MO.HUD (4), MO.Medical (4), MO.Harvest (3), MO.Item (3), MO.Perf (3), MO.Readiness (3),
 MO.Voxel (3), MO.WorldFeatures (3), MO.Gallery (3), MO.Cam (2), MO.Possess (2), MO.WorldSeed (2), and singles (MO.NewGame, MO.Delay,
 MO.Cover, MO.Spawn, MO.Survival, MO.Console, MO.Help ...); cvars `mo.Readiness.*` (13), `mo.PCG.*` (8), `mo.Audio.*`, `mo.Lakes.*`,

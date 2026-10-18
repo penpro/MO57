@@ -132,10 +132,21 @@ public:
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual bool ShouldRemainVertical() const override { return true; }
 	virtual APhysicsVolume* GetPhysicsVolume() const override;
+
+	// Co-op smoothness counters (MONetDiagnostics.h): the server's verdict on each of a joiner's moves, and on the joiner the corrections it got
+	// and how far its pawn visibly snapped once it replayed its moves. Each calls the stock implementation first; nothing about movement changes.
+	virtual bool ServerCheckClientError(float ClientTimeStamp, float DeltaTime, const FVector& Accel, const FVector& ClientWorldLocation, const FVector& RelativeClientLocation,
+		FMovementBaseInterfaceData* ClientMovementBaseInterfaceData, FName ClientBaseBoneName, uint8 ClientMovementMode) override;
+	virtual void ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& MoveResponse) override;
+	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 	//~ End UCharacterMovementComponent interface
 
 private:
 	void RefreshWater();
+
+	/** Where the pawn was drawn when the first correction since the last replay arrived (see ClientUpdatePositionAfterServerUpdate). */
+	FVector PreCorrectionLocation = FVector::ZeroVector;
+	bool bCorrectionPending = false;
 
 	float Immersion = 0.0f;
 	/** See GetWaterColumnDepthCm (set by RefreshWater). */

@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOWaterSubsystem.h"
 #include "MOCharacter.h"
+#include "MONetDiagnostics.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PhysicsVolume.h"
@@ -270,6 +271,60 @@ APhysicsVolume* UMOCharacterMovementComponent::GetPhysicsVolume() const
 		}
 	}
 	return Super::GetPhysicsVolume();
+}
+
+// ---- co-op smoothness counters (MONetDiagnostics.h) ----
+
+bool UMOCharacterMovementComponent::ServerCheckClientError(float ClientTimeStamp, float DeltaTime, const FVector& Accel, const FVector& ClientWorldLocation,
+	const FVector& RelativeClientLocation, FMovementBaseInterfaceData* ClientMovementBaseInterfaceData, FName ClientBaseBoneName, uint8 ClientMovementMode)
+{
+	const bool bNeedsCorrection = Super::ServerCheckClientError(ClientTimeStamp, DeltaTime, Accel, ClientWorldLocation, RelativeClientLocation,
+		ClientMovementBaseInterfaceData, ClientBaseBoneName, ClientMovementMode);
+	const FVector ServerMinusClient = UpdatedComponent ? UpdatedComponent->GetComponentLocation() - ClientWorldLocation : FVector::ZeroVector;
+	FMONetCounters::NoteServerMoveChecked(CharacterOwner, bNeedsCorrection, ServerMinusClient);
+	if (bNeedsCorrection && FMONetCounters::TakeDetailLine())
+	{
+		TEnumAsByte<EMovementMode> ClientMode, ClientGroundMode;
+		uint8 ClientCustomMode = 0;
+		UnpackNetworkMovementMode(ClientMovementMode, ClientMode, ClientCustomMode, ClientGroundMode);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] server: %s off by %.1f cm (dx %.1f dy %.1f dz %.1f) | server mode %d speed %.0f max %.0f gait %s | client mode %d | dt %.3f accel %.0f"),
+			*GetNameSafe(CharacterOwner), ServerMinusClient.Size(), ServerMinusClient.X, ServerMinusClient.Y, ServerMinusClient.Z,
+			static_cast<int32>(MovementMode), Velocity.Size2D(), GetMaxSpeed(), bWantsToSprint ? TEXT("sprint") : (bWantsToJog ? TEXT("jog") : TEXT("walk")),
+			static_cast<int32>(ClientMode.GetValue()), DeltaTime, Accel.Size2D());
+	}
+	return bNeedsCorrection;
+}
+
+void UMOCharacterMovementComponent::ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& MoveResponse)
+{
+	const bool bCorrection = MoveResponse.IsCorrection();
+	FMONetCounters::NoteClientMoveResponse(bCorrection);
+	if (bCorrection && !bCorrectionPending && UpdatedComponent != nullptr)
+	{
+		PreCorrectionLocation = UpdatedComponent->GetComponentLocation();   // where the pawn is drawn now; the stock code moves it to the server's spot next
+		bCorrectionPending = true;
+	}
+	Super::ClientHandleMoveResponse(MoveResponse);
+}
+
+bool UMOCharacterMovementComponent::ClientUpdatePositionAfterServerUpdate()
+{
+	const bool bReplayed = Super::ClientUpdatePositionAfterServerUpdate();
+	const FNetworkPredictionData_Client_Character* ClientData = HasPredictionData_Client() ? GetPredictionData_Client_Character() : nullptr;
+	if (bCorrectionPending && ClientData && !ClientData->bUpdatePosition && UpdatedComponent != nullptr)
+	{
+		// the server's position plus every move made since: the visible jump the correction caused (0 when client and server agreed in the end)
+		bCorrectionPending = false;
+		const float SnapCm = FVector::Dist(UpdatedComponent->GetComponentLocation(), PreCorrectionLocation);
+		FMONetCounters::NoteClientCorrectionSnap(CharacterOwner, SnapCm);
+		if (FMONetCounters::TakeDetailLine())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MONetCorr] client: %s snapped %.1f cm after a correction (mode %d speed %.0f gait %s)"),
+				*GetNameSafe(CharacterOwner), SnapCm, static_cast<int32>(MovementMode), Velocity.Size2D(),
+				bWantsToSprint ? TEXT("sprint") : (bWantsToJog ? TEXT("jog") : TEXT("walk")));
+		}
+	}
+	return bReplayed;
 }
 
 bool UMOCharacterMovementComponent::IsHeadUnderwater() const

@@ -16,7 +16,8 @@
 F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F7 building refund ·
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
-F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art.
+F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
+F25 co-op rubber band after a joiner hitch (Steam A/B first).
 
 ## In flight (built, uncommitted, other agent)
 
@@ -137,6 +138,11 @@ F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F
 | N-112 | OPEN | Claude | Residual: 1 of 6 joins sees 17-50 cm ground mismatch for ~10 s | Coop §3 | |
 | N-113 | OPEN | Claude | Bug report form: the Open Discord button after the code move not re-clicked; contact field with a value | OVERNIGHT_LOG | |
 | N-114 | VERIFY | Claude | No build / harvest MO.Test verbs runnable from a client (nettest actions now has `_client_build`): close if covered | OVERNIGHT_LOG | |
+| N-160 | OPEN | Claude | Remote players' pawns read velocity 0 on every other machine: `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled` on every proxy and the engine zeroes a "stuck" proxy's velocity each tick (no extrapolation between updates). Fix to try: disable sim gravity only when the proxy has no floor under it; control `MO.RemotePawn.SimGravity 1` | Coop §7 | |
+| N-161 | WAITING | Wes | Rubber band after a joiner hitch >= 250 ms (the host's forced update): Steam A/B with the toggles, then F25 | Coop §7, DECISIONS F25 | |
+| N-162 | OPEN | Claude | ~2 cm height corrections on 0.8% of a joiner's moves (14% with +100 ms lag), invisible (snap <= 2 cm): find which floor disagrees (per-machine voxel collision? floor hover band) | Coop §7 | |
+| N-163 | OPEN | Claude | Replication references per-machine PCG ISM components (84 `SupportsObject ... NOT Supported` on the host in 25 min): likely a pawn's movement base on a PCG rock; check what a proxy on such a base does | Coop §7 | |
+| N-164 | WAITING | Wes | Steam smoothness test with a remote joiner on the Development package: recipe Coop §7 (stats log by themselves; send both MO57.log) | Coop §7 | |
 
 ## UI
 
@@ -203,6 +209,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-17 co-op smoothness tools for Steam tests: [MONet] stats logged in every co-op session, [MONetEvent] hitch / rubber-band events, Net.* bug-report rows, MO.Net.Show, `Tools/ue_netdiag.py logs` for two machines' logs, `nettest netdiag` (instrument controls); findings in Coop §7 (N-160..N-164, F25).
 - DONE-2026-10-17 SteelIngot01 looks like steel: MI_SteelIngot01 on the bar mesh (bright cool grey, smoother, softer scale), new icon; wrought iron stays rusty.
 - DONE-2026-10-17 ten items got real meshes + icons from Wes's TRELLIS.2 GLBs (levelled, scaled, decimated in Blender; StoneMaul01 grip fitted to the hand).
 - DONE-2026-10-17 F24 (Wes: A): one save per world -- in-game Save writes the world's own slot with a toast (no Save As, no confirm), the in-game Load hides the world you are in, the main menu lists worlds.

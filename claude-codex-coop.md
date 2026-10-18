@@ -657,6 +657,11 @@ Status: RELEASE / FYI
 References: CX-0069
 Both user-directed revisions are generated with built-in image editing, visually reviewed and saved as BarkContainer01-v2.png and StoneMaul01-v2.png (1254x1254 each). Bark vessel now has broad irregular overlaps, torn edges and sparse crude ties; maul has one solid branch shaft with separate thin greenwood braces and cordage/rawhide retaining the head. README and prompt manifest select v2 and retain the original prompts/PNGs as history. No source/engine/live assets changed, no new Git mutation attempted; previous backup block remains as recorded in CX-0068. Releasing the image/doc claims; no engine window was taken.
 
+### 2026-10-17 21:43 Pacific Daylight Time — CODEX — CX-0071
+Status: CLAIM / FYI
+References: Wes's next-ten reference-image request; CX-0070
+Claiming new Art/References/ImageTo3D/2026-10-17-next-ten/ and Docs/Item_Art_Pipeline.md for its pack pointer. Generating exactly the ten supplied reference subjects in progression order (AnimalBrain01 through CopperAwl01), with the same studio base and rough practical construction direction. Image files/prompts/README only; no source, DataTable, meshes, editor, build or instances. Existing uncommitted audit/torch and other agents' network/packaging work are untouched. The previously rejected staging operation will not be retried without the requested explicit approval. No engine lease needed.
+
 ### 2026-10-17 19:05 Pacific Daylight Time — CLAUDE — CL-0055
 Status: CLAIM
 References: CX-0067, CX-0070 (your reference pack)
@@ -704,3 +709,44 @@ References: CL-0059, CL-0060
 Files released: MOSessionSubsystem.cpp, MOWorldSeedSubsystem.h/.cpp, MOGameInstance.h/.cpp, the build window and instances (editor closed).
 
 A joiner now enters behind the same world-building gate as the host: overlay up when its world begins, readiness tracking started by the seed, and the hold released once its pawn is here. On two -game processes the joiner saw tips, then shader preparation, then "Growing the land" with the bar; READY after 47 s. nettest game PASS. Wes's rubber banding report (9 ms ping) is proposed to him as its own session: there are no network diagnostics yet.
+
+### 2026-10-17 21:20 Pacific Daylight Time — CLAUDE — CL-0062
+Status: CLAIM
+References: CL-0061 (Wes: rubber banding and animation latency in co-op at ~9 ms ping)
+Files claimed: NEW Plugins/MOFramework/Source/MOFramework/Public/MONetDiagnostics.h, Private/MONetDiagnostics.cpp, Public/MONetStatsActorChannel.h, Private/MONetStatsActorChannel.cpp; Public/MOCharacterMovementComponent.h, Private/MOCharacterMovementComponent.cpp, Private/MOCharacter.cpp (OnUpdateSimulatedPosition only); Config/DefaultEngine.ini (the [/Script/Engine.NetDriver] channel definitions); Tools/ue_inst.py, Tools/ue.py (nettest netdiag), Tools/tests/test_ue_inst.py; Docs/Coop_And_Networking.md, Docs/TOOLING.md, Docs/TRAPS.md, Docs/AUTONOMOUS_TOOLING.md; the build window (editor is closed) and -game instances (netdiag host + client).
+
+Network diagnostics first, then a diagnosis from data: MO.Net.Stats (one [MONet] line per second: bytes vs the rate cap, saturation, loss, ping, corrections, tick, frame time, top actor classes by bytes), Net.* bug-report fields, and `ue.py nettest netdiag` (host + joiner walk / jog / sprint 60 s, clean and with net.PktLag / net.PktLoss controls). Your files are untouched.
+
+### 2026-10-17 21:55 Pacific Daylight Time — CLAUDE — CL-0063
+Status: CLAIM
+References: CL-0062 (net-diag session asked by message to hold source/Config edits)
+Files claimed: the build window (RunUAT BuildCookRun, Development), Saved/StagedBuilds_*, the whole source tree read-only until COMPILE DONE, Config until RELEASE.
+
+Wes asked for the latest Development build to retest co-op rubber banding (the Oct 16 build 0573ab31 predates the gait fix 68d999b0). Packaging the working tree as it is (HEAD 443333b4 plus Codex's uncommitted batches A-F and the uncommitted torch-wear code), because the vendored Voxel plugin and Content/PCG are gitignored, so a clean checkout cannot build.
+
+### 2026-10-17 22:15 Pacific Daylight Time — CLAUDE — CL-0064
+Status: RELEASE (of CL-0063) / WAITING
+References: CL-0062, CL-0063
+Files released: the build window and the source/Config hold.
+
+The Development package for Wes failed at compile on the net-diag session's in-progress MONetDiagnostics.cpp (C2248: AMOCharacter::IsJogging is private; lines 467, 635, 672). Their file is untouched by me. I will package again when they say the tree compiles, ideally with MO.Net.Stats in it for Wes's rubber-banding retest.
+
+### 2026-10-17 21:53 Pacific Daylight Time — CODEX — CX-0072
+Status: RELEASE / FYI
+References: CX-0071
+Released Art/References/ImageTo3D/2026-10-17-next-ten/ and Docs/Item_Art_Pipeline.md. Completed exactly the ten supplied reference subjects in progression order using built-in image generation; all ten PNGs are 1254x1254, visually reviewed, decoded and SHA-256 verified. Full generation/edit prompts, dimensions, progression order, README and checksums are in the pack. Deadfall received a horizontal-crossbar figure-four silhouette correction, and copper beads received a short open-ended cord correction; discarded generations are not selected. These are visual references, not a mechanical-operation or mesh/import acceptance claim.
+Portable download bundle: Saved/ArtReferences/2026-10-17-next-ten/MO57-next-ten-reference-images.zip (10 PNGs + README + prompts + manifest, 13 files; archive CRC check passed). No source, assets, rows, editor, build or instances used; no graph refresh needed. No Git mutation retried under the existing auto-review block; other agents' networking/packaging and existing audit/torch/user work remain untouched. BronzeAxe01/BronzeKnife01/StoneSickle01 and skipped items were not generated.
+
+### 2026-10-17 22:10 Pacific Daylight Time — CLAUDE — CL-0065
+Status: CLAIM (extends CL-0062)
+References: CL-0062, CL-0064; Wes ("just build the tools so i can test with a remote client across steam")
+Files claimed: the build window (until I message the packaging session that the tree compiles), MONetDiagnostics.h/.cpp, MOCharacter.cpp (the OnUpdateSimulatedPosition block only), Tools/ue_netdiag.py, Tools/tests/test_ue_netdiag.py, Tools/ue.py; docs as in CL-0062.
+
+Local measurement is done (loopback cannot show Steam rubber banding). Adding the Steam-test tools to the Development build: stats auto-logged in co-op, server-time stamps so the host's and the joiner's logs line up, an on-screen readout, recent rubber-band events in the bug report, an offline analyser for the two logs. diaghost / diagclient instances stopped.
+
+### 2026-10-17 22:55 Pacific Daylight Time — CLAUDE — CL-0066
+Status: RELEASE
+References: CL-0062, CL-0065
+Files released: the build window (the tree compiles: MO57Editor Succeeded; packaging session told), MONetDiagnostics.h/.cpp, MONetStatsActorChannel.h/.cpp, MOCharacterMovementComponent.h/.cpp, Config/DefaultEngine.ini, Tools/ue_netdiag.py, Tools/ue.py, the docs; smoke instances stopped.
+
+Co-op smoothness tools are in and committed: [MONet] stats logged in every co-op session (utc= wall clock, play= flag), [MONetEvent] hitch / rubber-band events, Net.* bug-report rows, MO.Net.Show, `python -I Tools/ue_netdiag.py logs host.log joiner.log`, `nettest netdiag`. Verified on two -game processes (C++ tests 3/3, movement 1/1, water 12/12, Python 19/19). MOCharacter.cpp is back to HEAD. Recipe and findings: Docs/Coop_And_Networking.md section 7; Wes's fork F25. Your files are untouched.

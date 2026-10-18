@@ -1,8 +1,8 @@
 # Co-op and networking
 
 > **Covers:** Steam / LAN sessions (host, join, host a save), how players get and keep pawns, per-machine terrain from a replicated
-> seed, spawn settle and fall-through rescue, the RPC rules every player action follows, interaction targeting, and how co-op is
-> tested. General replication patterns (FastArray, COND_OwnerOnly, authority checks, timers): `Docs/TECHNICAL_REFERENCE.md`.
+> seed, spawn settle and fall-through rescue, the RPC rules every player action follows, interaction targeting, how co-op is
+> tested, and how its SMOOTHNESS is measured (rubber banding, remote pawns: section 7). General replication patterns (FastArray, COND_OwnerOnly, authority checks, timers): `Docs/TECHNICAL_REFERENCE.md`.
 > **Current state (2026-10-17):** a real two-account Steam session works with both characters on the terrain (Wes, Oct 8); listen-host
 > co-op (Satisfactory-style, not MMO, 1-8 players, default 4); construction, crafting, item / fire / world actions and treatment go
 > through server RPCs; the host's world seed, clock and weather preset replicate through `AMOGameState`.
@@ -13,7 +13,8 @@
 > `RemovedInstances`), `UMOWorldSeedSubsystem`, `UMOWorldSyncSubsystem`, `MOSpawnClearance`, `UMOInteractorComponent`.
 > **Dev verbs:** `MO.Session.Host <name> [max]`, `.Find`, `.Join <idx>`, `.Leave`, `.Status`, `MO.Session.HostSave <slot>`,
 > `MO.Possess.List|Take`, `MO.Voxel.Seed|SurfaceZ|SurfaceGrid`, `MO.Test.RescueTrace`, `MO.Test.EmbedPawn`, `MO.RemotePawn.SimGravity`,
-> `MO.Rescue.FirstHitOnly`, `mo.Interact.Debug 1`. **Tests:** `python Tools/ue.py nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-death|packaged-removal|bugreport`
+> `MO.Rescue.FirstHitOnly`, `mo.Interact.Debug 1`; smoothness: `MO.Net.Stats [0|1]`, `MO.Net.Show 1`, `MO.Net.Trace 1`, `MO.Net.AutoStats`,
+> `MO.Net.TestRateCap`, `MO.Test.NetPath` (section 7). **Tests:** `python Tools/ue.py nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-death|packaged-removal|bugreport|netdiag`
 > (`Docs/AUTONOMOUS_TOOLING.md` "Multi-process / online-session testing"). **Open items:** `Docs/BACKLOG.md` § Co-op.
 
 ## 1. Sessions (Steam and LAN)
@@ -121,3 +122,67 @@ python Tools/ue.py inst list              # the running instances; drive one wit
 - After a fix, rerun the probe on the FIXED build and read BOTH machines (the host-pawn bug had a second cause).
 - Run ALL the nettest gates after movement / spawn / water changes (they silently rotted for 4 days after swimming landed).
 - Shipping writes no log: package Development for real-account tests (`Docs/Packaging.md`).
+- `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an
+  internet session's rubber banding (Wes, Oct 17). Its controls (a 4 KB/s rate cap must saturate, a joiner walking 1.6x faster than the
+  server allows must be corrected, +100 ms of `NetEmulation.PktLag` must show as delay) prove each measure can fail. Real tests: section 7.
+
+## 7. Smoothness: rubber banding and remote pawns (measured, Oct 17)
+
+Wes saw "very bad rubber banding and animation latency" host-to-joiner at ~9 ms ping. Nothing measured smoothness then; now every
+co-op session does (`UMONetDiagnosticsSubsystem`, `MONetDiagnostics.h`):
+
+- **One `[MONet]` line a second on every machine, without being asked** (`MO.Net.AutoStats 1`; `MO.Net.Stats 0|1` overrides): fps and the
+  worst frame, bytes in / out against the connection's rate cap (`CurrentNetSpeed`, 100 KB/s), saturation (the engine's own per-connection
+  count of replication passes cut short), loss, round trip, ping, jitter, replication passes (a listen server replicates every frame:
+  `NetServerMaxTickRate` 30 does not apply to it), the joiner's moves the host corrected and by how much (xy / z), what the joiner saw
+  of it (corrections, the visible snap after replaying its moves), how often each machine got the other player's position and the
+  longest gap, and the actor classes with the most bytes (`UMONetStatsActorChannel`, the actor channel of every net driver via
+  `[/Script/Engine.NetDriver]` in `Config/DefaultEngine.ini`). Every line has `utc=` (wall clock, ms), which lines up the host's and a
+  joiner's logs across two PCs (sync both clocks first: Windows Settings > Time > Sync now), `play=` (0 while the world still builds
+  behind the loading screen: not counted) and `st=` (the server clock; NOT for lining up: it is world time, which stops at 0.4 s a frame,
+  and drifted 3-6 s apart between a hitching host and joiner).
+- **`[MONetEvent]` lines, always:** a host correction or joiner snap of 30 cm or more, a frame of 250 ms or more while a player moves, a saturated second, a moving
+  remote pawn silent for 500 ms. `[MONetCorr]` lines (6 a second at most while stats log) detail corrections: the error, both modes, speeds.
+- **Bug reports** carry `Net.*`: the last 60 s, `Net.Events`, `Net.Clock` (UTC: match the host's and the joiner's reports by it) and the
+  last line. That is the only record a Shipping build keeps.
+- **On screen:** `MO.Net.Show 1` (development builds). **Positions:** `MO.Net.Trace 1` logs every player pawn 20 times a second.
+
+**Steam test recipe (Wes + a remote joiner):**
+1. Both sync their PC clocks (Windows Settings > Time > Sync now: the two logs are lined up by wall clock) and play the **Development** package (Shipping writes no log and has no screen messages): `Docs/Packaging.md`.
+2. Host, join, play. Nothing to type: the stats log by themselves. To watch live, either player opens the console (Tilde) and runs
+   `MO.Net.Show 1`. For the picture-delay numbers, both also run `MO.Net.Trace 1` (about 20 MB of log an hour).
+3. When it rubber-bands, a bug report from either side records the event and the last minute (with the UTC time).
+4. Afterwards each player sends `Saved/Logs/MO57.log` (rename them `host.log` / `joiner.log`) and:
+   ```bash
+   python -I Tools/ue_netdiag.py logs host.log joiner.log
+   ```
+   prints the session, every minute, every event in time order and, for each visible rubber band, what came just before it
+   (a joiner frame of 250+ ms, a host frame, a saturated channel, a stalled remote pawn, or nothing).
+5. **A/B toggles** for the causes found below (host console unless said; each is a test seam, not a fix):
+   - `set GameNetworkManager MAXCLIENTUPDATEINTERVAL 0` -- the host stops extrapolating a joiner that stops sending moves (`0.25` = stock;
+     `get GameNetworkManager MAXCLIENTUPDATEINTERVAL` reads it back).
+   - `p.NetServerMaxMoveDeltaTimeScalar 1` -- the host takes no longer a move than the joiner may send (1.75 = stock).
+   - `MO.RemotePawn.SimGravity 1` on the JOINER -- remote pawns keep their velocity (stock engine; see the second finding).
+
+**Findings on two local processes (Development editor binary, both on one PC; commit of this section):**
+- **Bandwidth is not it here:** the host sent 3.6-4.8 KB/s to the joiner of a 100 KB/s cap, never saturated in 63 s (22 replicated objects;
+  the remote pawn ~1.2 KB/s, a deer ~0.8 KB/s). The control (a 4 KB/s cap) saturated 34 of 34 s, so the measure can see it.
+- **A joiner frame hitch becomes a rubber band through the host's forced update.** When a joiner sends no move for 0.25 s
+  (`AGameNetworkManager::MAXCLIENTUPDATEINTERVAL`), the host simulates its pawn on with the last input; the joiner, back, is corrected to
+  where the host put it. A 500 ms `debug hitch` on the jogging joiner (450 cm/s): **124 cm snap in 3 of 3 trials** (stock), **42 cm** with
+  `MAXCLIENTUPDATEINTERVAL 0` (what remains is `p.NetServerMaxMoveDeltaTimeScalar` 1.75: the host takes 0.22 s of a long move, the joiner
+  0.125 s: 0.094 s x 450 = 42 cm), **0 cm** without the hitch. In the first run a 449 ms joiner frame (14 meadow-flower materials
+  recompiling, an editor-binary hitch; Shipping has its own: shader / PSO compiles on first sight, streaming) at a turn gave a 230 cm snap.
+  Decision for Wes: F25.
+- **Remote players' pawns have velocity 0 on every other machine** (N-160): `AMOCharacter::OnUpdateSimulatedPosition` sets
+  `bSimGravityDisabled` on every simulated proxy (the fall-through fix in section 3), and the engine's `SimulateMovement` reads that flag as
+  "stuck": it zeroes the proxy's velocity every tick. The proxy is never extrapolated between updates (it moves in steps of the host's
+  update rate, smoothed only by the mesh) and anything reading its velocity sees a standing pawn. Control: `MO.RemotePawn.SimGravity 1` on
+  the joiner -> the host's walking pawn reads 250 cm/s instead of 0. (One screenshot still showed the walking pose, so the animation
+  blueprint does not read only that velocity: the Steam A/B decides how much this matters.)
+- **Small height corrections:** about 2 cm (dz +1.8..2.4, just over the engine's 1.73 cm tolerance) on 0.8% of the joiner's moves, 14%
+  with +100 ms emulated lag; never visible (snap <= 2 cm) (N-162).
+- **Replication references per-machine PCG components:** 84 `FNetGUIDCache::SupportsObject ... InstancedStaticMeshComponent
+  PCGPartitionActor... NOT Supported` warnings on the host in 25 min (rocks, stones, scrub tiers): most likely a pawn standing on a PCG rock
+  (its movement base) (N-163).
+- Pawns are relevant within 150 m (`NetCullDistanceSquared` 225,000,000): further apart, players do not see each other.

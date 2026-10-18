@@ -131,6 +131,13 @@
 - **The harness instance is silent** -> instances are `-nosound` and `-NoCharacterCreator` by default -> `--sound`, `--creator`. (oct16)
 - **`ue.py status` says editor DOWN while Codex is using it** -> sandboxed status can't see the protected process -> the coop log decides who holds the editor. (multi-agent-coop)
 
+- **A scripted co-op test step "did nothing" (a hitch on a jogging joiner gave 0 corrections, 12 of 12 trials)** -> every `ue.py inst do` / `console`
+  call takes ~1.5 s, so the `MO.Test.MoveFor 0 1 7` had ended before the hitch landed -> make the move outlast the chain of calls and record
+  the state the step needs right before it (the pawn's speed); a trial whose precondition is not met does not count. (Oct 17)
+- **Smoothness measured on two local processes says little about Steam** -> loopback has no internet latency, loss or jitter, and both
+  processes share one CPU / GPU (frame times and the round trip are frame-bound: ~35 ms rtt on loopback) -> `nettest netdiag` validates the
+  instruments; real numbers come from a Steam session's two logs (`Tools/ue_netdiag.py logs`, `Docs/Coop_And_Networking.md` §7). (Wes, Oct 17)
+
 ## 6. Co-op and RPC
 
 - Full list: `Docs/Coop_And_Networking.md` §6. The ones that bite: editor-Python RPCs run local (§3 above); **PIE can't test sessions** (use
@@ -140,6 +147,19 @@
   hit** (trees hid the terrain: use object-type traces); **a client predicts gravity for a simulated proxy with no floor** (never apply it);
   **vacuous checks** ("client z == server z" with no client terrain) need a negative control (`--skew-seed`); a UI request on the server's copy of
   a joiner's controller opens nowhere (`ForwardUIContractRequest`); dropped items need ECC_PhysicsBody in object queries.
+- **A remote player's pawn reads velocity 0 on every other machine** -> `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled`
+  on every proxy, and the engine's `SimulateMovement` treats that flag as "stuck" and zeroes the velocity every tick (no extrapolation;
+  anything reading velocity sees a standing pawn) -> control `MO.RemotePawn.SimGravity 1`; open N-160. (Oct 17)
+- **A joiner hitch of 250 ms or more while moving = a rubber band** -> the host extrapolates a joiner that sends no moves
+  (`AGameNetworkManager::MAXCLIENTUPDATEINTERVAL` 0.25) and corrects it when it comes back: 500 ms hitch at 450 cm/s -> 124 cm, 3/3 ->
+  `set GameNetworkManager MAXCLIENTUPDATEINTERVAL 0` on the host leaves 42 cm (`p.NetServerMaxMoveDeltaTimeScalar` 1.75); fork F25. (Oct 17)
+- **Lining up two machines' logs by the replicated server clock is off by seconds** -> `AGameStateBase::GetServerWorldTimeSeconds` is WORLD
+  time, which stops at 0.4 s a frame (`AWorldSettings::MaxUndilatedFrameTime`): a hitching host lost 3.3 s of it against the real clock and the
+  joiner's copy sat 3-6 s apart -> line logs up by wall clock (`utc=` in every `[MONet*]` line, clocks synced). (Oct 17)
+- **A protected engine setting cannot be set from Python** (`GameNetworkManager.MAXCLIENTUPDATEINTERVAL`: "protected and cannot be read") ->
+  the `set <Class> <Property> <value>` / `get <Class> <Property>` console commands write / read the class default live (development builds).
+- **Co-op shows no actors at all** -> the actor channel class in `[/Script/Engine.NetDriver]` ChannelDefinitions (`Config/DefaultEngine.ini`,
+  `MONetStatsActorChannel`) failed to load -> every `[MONet] net driver ...` log line names the actor channel class; check it first.
 
 ## 7. Packaging, cook and Shipping
 
