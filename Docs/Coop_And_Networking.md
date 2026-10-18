@@ -128,8 +128,14 @@ python Tools/ue.py inst list              # the running instances; drive one wit
 
 ## 7. Smoothness: rubber banding and remote pawns (measured, Oct 17)
 
-Wes saw "very bad rubber banding and animation latency" host-to-joiner at ~9 ms ping. Nothing measured smoothness then; now every
-co-op session does (`UMONetDiagnosticsSubsystem`, `MONetDiagnostics.h`):
+Wes (chat, Oct 17): "it might be performance related of the client, but we saw really really bad rubber banding and animation latancy
+and such in the host to client play" / "ping itself only showed like 9ms, but it was acting like the connection was dogshit". That was the
+Oct 16 Steam playtest on **Shipping `0573ab31`** ("it was the last time i submitted a ton of bug reports"), built BEFORE `68d999b0` moved
+the joiner's gait into the network-predicted moves: there every jog / sprint was a local speed change the server corrected back, a
+rubber band by itself. Its mechanism, measured: the netdiag speed-hack control (a joiner moving faster than the server allows) had 26% of
+its moves corrected; real walk / jog / sprint on the current build, 0.8% (all ~2 cm height corrections, invisible). Smoothness over Steam
+on a current build is not confirmed yet (N-164). Nothing measured smoothness then; now every co-op session does
+(`UMONetDiagnosticsSubsystem`, `MONetDiagnostics.h`):
 
 - **One `[MONet]` line a second on every machine, without being asked** (`MO.Net.AutoStats 1`; `MO.Net.Stats 0|1` overrides): fps and the
   worst frame, bytes in / out against the connection's rate cap (`CurrentNetSpeed`, 100 KB/s), saturation (the engine's own per-connection
