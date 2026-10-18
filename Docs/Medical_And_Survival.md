@@ -32,6 +32,12 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 ```
 
 Components tick independently: Vitals 0.5 s, Anatomy 1.0 s, Metabolism 1.0 s, MentalState 0.5 s (timer-based, authority-only).
+
+**Blood pressure** = 120 / 80 + exertion + stress/pain + the blood-loss shift (`UMOVitalsComponent::BloodLossSystolicShift`, the
+haemorrhage classes, continuous): under 15 % lost the body compensates; 15-30 % the systolic holds (-15 at most, the pulse pressure
+narrows); 30-40 % it falls to ~75 mmHg; past 40 % it collapses (45 mmHg at half the blood lost; `IsCritical` below 60). The diastolic
+moves half as much. Until Oct 18 2026 the bands were tested in the wrong order: every healthy pawn read 180 / 110 and a bleed never
+lowered the pressure (test `MOFramework.Medical.Vitals.BloodPressure.BloodLossBands`).
 Cross-module inputs arrive through Core contracts (`Docs/TECHNICAL_REFERENCE.md` § Module structure): feels-like temperature and
 local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing warmth (`IMOInsulationSource`), skills -> adrenaline
 (`IMOSkillLevelSource`).

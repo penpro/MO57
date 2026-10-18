@@ -1863,6 +1863,162 @@ def _client_e_beside_ground_item(rep, host, client):
     _client_e_on_ground_item(rep, host, client, aim_offset_cm=20.0, pick=1)
 
 
+def _client_drink(rep, host, client):
+    """CLIENT drinks from open water with E. Wes's Oct 18 report (BR18-3, "client can't drink from water sources"): the joiner's E went to a PCG
+    instance in front of the water first, whose reference the host could not resolve. The joiner works out the nearest bank (MO.Water.GoToShore),
+    the HOST moves the joiner's pawn there (the server owns it), the joiner turns to the water (MO.Water.LookAtWater) and presses E. Proof on the
+    HOST: "[MOWater] <the joiner's pawn> drank" when the draught ends (DraughtSeconds, 20 s). Control: the client sees the water in reach."""
+    if not _worlds_built(rep, host, client):
+        return
+    who = _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_D_HOME = p.get_actor_location(); "
+                       "out('PAWNNAME=' + p.get_name())")
+    pawn = (re.search(r"PAWNNAME=(\S+)", who) or [None, "?"])[1]
+    shore = None
+    for kind, metres in (("fresh", 500), ("sea", 2500)):
+        shore = _motest(client, f"MO.Water.GoToShore {kind} {metres}",
+                        r"\[MOQUERY\] WATER GoToShore:? ?(?:(\w+): water at [^\r\n]*standing at \((-?\d+), (-?\d+), (-?\d+)\)|[^\r\n]*no \w+ water)", timeout=40)
+        if shore and shore.group(1):
+            break
+    found = bool(shore and shore.group(1))
+    if rep.step("CONTROL: open water with a bank near the joiner (fresh within 500 m, else sea within 2.5 km)", found,
+                shore.group(0)[:220] if shore else "no GoToShore line"):
+        x, y, z = shore.group(2), shore.group(3), shore.group(4)
+        _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({x}, {y}, {float(z) + 120.0}), False, True); out('D_STAND')")
+        look = None
+        for _ in range(10):   # the bank's terrain and collision come up on both machines first
+            time.sleep(2)
+            look = _motest(client, "MO.Water.LookAtWater", r"\[MOQUERY\] WATER LookAtWater: ([^\r\n]*)")
+            if look and look.group(1).startswith("water"):
+                break
+        here = _motest(client, "MO.Water.Here", r"\[MOQUERY\] WATER Here ([^\r\n]*)")
+        if rep.step("client: on the bank, looking at the water within reach", bool(look and look.group(1).startswith("water") and here and "(in reach)" in here.group(1)),
+                    (look.group(0) if look else "no LookAtWater line") + " | " + (here.group(1)[:160] if here else "no Here line")):
+            time.sleep(1.5)   # the new view reaches the server with the next moves
+            hoff = log_size(host)
+            console(client, "MO.Test.PressKey E")
+            drank = wait_log(host, rf"\[MOWater\] {re.escape(pawn)} drank [^\r\n]*", since=hoff, timeout=45)
+            hlog = read_log_from(host, hoff)
+            refused = re.search(r"\[MOWater\] [^\r\n]*drink refused[^\r\n]*", hlog)
+            unresolved = re.search(r"Unable to resolve default guid from client[^\r\n]*", hlog)
+            rep.step("client E at the water: the host's copy of the joiner drinks", bool(drank),
+                     (drank.group(0) if drank else "no drink on the host") + (" | " + refused.group(0) if refused else ""))
+            rep.step("... and the host resolved every reference the client sent (no 'Unable to resolve')", unresolved is None,
+                     unresolved.group(0)[:200] if unresolved else "none")
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_D_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('D_HOME')")
+    time.sleep(2)
+
+
+def _client_glide(rep, host, client):
+    """The dev glider (Wes, Oct 18 2026, BR18-17: MO.Dev.Glider) flown by the JOINER. The wish rides in the saved moves (FLAG_Custom_2) and the server
+    judges the developer gate, so the host's copy must fly the joiner's flight. The host lifts the joiner 80 m above the generator's ground there; the
+    joiner turns the glider on and holds W. Proof on the HOST: the joiner's pawn flies at about trim speed (MO.Dev.GlideSpeed 1100) and sinks about the
+    sink rate (MO.Dev.GlideSink 100), and the host corrects the joiner at most a couple of times. Control: the same drop without the glider falls."""
+    if not _worlds_built(rep, host, client):
+        return
+    vel = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); v = p.get_velocity(); l = p.get_actor_location(); "
+           "out('GV vx=%.0f vy=%.0f vz=%.0f z=%.0f' % (v.x, v.y, v.z, l.z))")
+    home = _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); builtins.MO_GL_HOME = l; "
+                        "out('GL_AT x=%.0f y=%.0f' % (l.x, l.y))")
+    at = re.search(r"GL_AT x=(-?\d+) y=(-?\d+)", home)
+    if not at:
+        rep.step("host: the joiner's pawn is there", False, home[-200:])
+        return
+    x, y = float(at.group(1)), float(at.group(2))
+    off = log_size(host)
+    console(host, f"MO.WorldGen.Sample {x:.0f} {y:.0f}")
+    g = wait_log(host, r"WORLDGEN Sample x=\S+ y=\S+ seed=\S+ z=(-?[\d.]+)", since=off, timeout=5)
+    gz = float(g.group(1)) if g else 0.0
+    lift = f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({x:.0f}, {y:.0f}, {gz + 8000.0:.0f}), False, True); out('GL_UP')"
+
+    def flight(glide):
+        console(client, f"MO.Dev.Glider {1 if glide else 0}")
+        _probe(host, lift)
+        time.sleep(0.5)
+        hoff = log_size(host)
+        console(client, "MO.Footstep.Walk 8")
+        time.sleep(4.0)
+        a = re.search(r"GV vx=(-?\d+) vy=(-?\d+) vz=(-?\d+) z=(-?\d+)", _probe(host, vel))
+        time.sleep(2.5)
+        b = re.search(r"GV vx=(-?\d+) vy=(-?\d+) vz=(-?\d+) z=(-?\d+)", _probe(host, vel))
+        corr = sum(int(c) for c in re.findall(r"\[MONet\] role=host [^\r\n]*? corr=(\d+)", read_log_from(host, hoff)))
+        return a, b, corr
+
+    on = _motest(client, "MO.Dev.Glider 1", r"\[MODev\] glider ([^\r\n]*)")
+    if not rep.step("client: MO.Dev.Glider turns the glider on (the host is in developer mode)", bool(on and on.group(1).startswith("ON")),
+                    on.group(0) if on else "no [MODev] glider line"):
+        return
+    a, b, corr = flight(True)
+    if rep.step("host: samples of the joiner's flight", bool(a and b), f"{a.group(0) if a else None} / {b.group(0) if b else None}"):
+        speed_held = math.hypot(float(a.group(1)), float(a.group(2)))   # W held (MO.Footstep.Walk 8)
+        speed = math.hypot(float(b.group(1)), float(b.group(2)))        # ~2.5 s later, after the walk let go
+        sink = -float(b.group(3))
+        rep.step("host: the joiner's pawn flies at about trim speed (700-1400 cm/s), W held and hands off",
+                 700.0 <= speed_held <= 1400.0 and 700.0 <= speed <= 1400.0, f"{speed_held:.0f} then {speed:.0f} cm/s, sink {sink:.0f} cm/s")
+        rep.step("... sinking about the glider's sink rate (40-250 cm/s), not falling", 40.0 <= sink <= 250.0, f"vz {-sink:.0f} cm/s, z {a.group(4)} -> {b.group(4)} (ground {gz:.0f})")
+        rep.step("... and the host hardly corrected the joiner (<= 3 corrections in the flight)", corr <= 3, f"{corr} correction(s)")
+    # Control: the same drop with the glider off falls.
+    ca, cb, _c = flight(False)
+    if cb:
+        rep.step("CONTROL: the same drop without the glider falls (descent > 600 cm/s)", -float(cb.group(3)) > 600.0 or float(cb.group(4)) < gz + 3000.0, cb.group(0))
+    console(client, "MO.Dev.Glider 0")
+    time.sleep(6)
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_GL_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('GL_HOME')")
+    time.sleep(2)
+
+
+def _client_footstep_surface(rep, host, client):
+    """The JOINER's own footsteps follow the ground (Wes's Oct 18 report BR18-8: "client footsteps never change in their audio but i hear their
+    different audio"). The host finds two spots of different biomes near the joiner (MO.WorldGen.Sample), stands the joiner's pawn on each, and the
+    joiner says what its ground sounds like (MO.Footstep.Probe on the JOINER's machine: set + reason). Expected: a biome reason on the joiner (not
+    "no world seed: fallback") and a different set on the two grounds. Control: the host's own probe at its pawn names a biome too."""
+    if not _worlds_built(rep, host, client):
+        return
+    probe_re = r"\[MOQUERY\] FOOTSTEP Probe pos=[^\r\n]*? set=(\S+) \(([^)]*)\)"
+    hp = _motest(host, "MO.Footstep.Probe", probe_re)
+    rep.step("CONTROL: the host's own ground has a footstep set from the generator", bool(hp and hp.group(2).startswith(("biome", "structure", "underground", "actor"))),
+             hp.group(0)[:200] if hp else "no probe line on the host")
+    at = re.search(r"GL_AT x=(-?\d+) y=(-?\d+)", _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); "
+                                                              "builtins.MO_F_HOME = l; out('GL_AT x=%.0f y=%.0f' % (l.x, l.y))"))
+    if not at:
+        rep.step("host: the joiner's pawn is there", False, "no position")
+        return
+    jx, jy = float(at.group(1)), float(at.group(2))
+    spots, seen = [], set()
+    for r in (0.0, 30000.0, 60000.0, 120000.0, 200000.0, 300000.0):
+        for k in range(8 if r else 1):
+            x, y = jx + r * math.cos(k * math.pi / 4.0), jy + r * math.sin(k * math.pi / 4.0)
+            off = log_size(host)
+            console(host, f"MO.WorldGen.Sample {x:.0f} {y:.0f}")
+            m = wait_log(host, r"WORLDGEN Sample x=\S+ y=\S+ seed=\S+ z=(-?[\d.]+) [^\r\n]*biome=(\w+)", since=off, timeout=5)
+            if m and float(m.group(1)) > 300.0 and m.group(2) not in seen:   # dry land, a biome not seen yet
+                seen.add(m.group(2))
+                spots.append((x, y, float(m.group(1)), m.group(2)))
+            if len(spots) >= 2:
+                break
+        if len(spots) >= 2:
+            break
+    if not rep.step("CONTROL: two dry spots of different biomes near the joiner (generator)", len(spots) >= 2, str([(round(a), round(b), c) for a, b, _z, c in spots])):
+        return
+    heard = []
+    for x, y, z, biome in spots[:2]:
+        _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({x:.0f}, {y:.0f}, {z + 200.0:.0f}), False, True); out('F_STAND')")
+        m = None
+        for _ in range(8):   # the ground there comes up on the joiner and the pawn lands
+            time.sleep(3)
+            m = _motest(client, "MO.Footstep.Probe", probe_re)
+            if m and "grounded=1" in m.group(0):
+                break
+        heard.append((biome, m.group(1) if m else None, m.group(2) if m else "no probe line"))
+    rep.step("client: its own ground's footstep set comes from the generator's biome on both spots (not the fallback)",
+             all(w.startswith("biome") for _b, _s, w in heard), str(heard))
+    rep.step("client: the two biomes sound different on the joiner's own machine", len({s_ for _b, s_, _w in heard}) == 2, str(heard))
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_F_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('F_HOME')")
+    time.sleep(3)
+
+
 def _trust_instance_far(rep, host, client):
     """The instance RPC names a place (mesh + location), so a modified client could name any place: the server must hold it to interact reach. A
     joiner asking for a ground item 15+ m away is refused and gets nothing. Control: the host has that item there (the request was not refused for
@@ -2905,7 +3061,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

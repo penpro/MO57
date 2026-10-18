@@ -353,6 +353,11 @@ swaps exist (`SetAccessibility`) but are not wired to the Options panel.
 - `devmenu [Group]` (or Run with nothing typed) enumerates registered `MO.*` commands via IConsoleManager by namespace, help text as
   tooltip; help containing `<` = needs args -> console prefilled. `weather` / `time` open quick-pick modals (`UMOQuickPickDialog`).
 - `starter` / `MO.Player.Starter` (authority only): 50 sticks, 20 stones (Wes, Oct 8).
+- `MO.Dev.Glider [0|1]` (Wes, Oct 18, BR18-17): a dev hang glider for looking at the world from the air. While on, a FALLING pawn flies
+  at trim (`MO.Dev.GlideSpeed` 1100 cm/s forward, `MO.Dev.GlideSink` 100 cm/s down), W along the view, A / D steer; jump off a slope or a
+  cliff to launch. Movement input in the saved moves (FLAG_Custom_2), honoured only while the world's HOST is in developer mode
+  (`UMOCharacterMovementComponent::IsGliding`), so a joiner flies it too; host and joiner should share the two numbers (a joiner
+  predicting with others is corrected). Never the simulation: no glider exists in the game.
 
 ## 8. Debugging UI
 

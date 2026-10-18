@@ -95,6 +95,44 @@ bool FMOMovement_GaitTravelsInMoves::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMovement_DevGlider,
+	"MOFramework.Movement.DevGlider",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOMovement_DevGlider::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 18 2026 (BR18-17): a dev-only hang glider. The flight is a pure function of the fall (tested here); the wish rides in the moves.
+	const float G = -980.0f, Trim = 1100.0f, Sink = 100.0f, Dt = 1.0f / 60.0f;
+	auto Fly = [&](FVector V, const FVector& Heading, float Seconds)
+	{
+		for (float T = 0.0f; T < Seconds; T += Dt)
+		{
+			V = UMOCharacterMovementComponent::GlideVelocity(V, Heading, G, Dt, Trim, Sink);
+		}
+		return V;
+	};
+	const FVector Launch = Fly(FVector::ZeroVector, FVector(1, 0, 0), 6.0f);   // stepped off a ledge, W held
+	TestTrue(FString::Printf(TEXT("from a standing launch it settles at trim along the heading (%.0f, %.0f)"), Launch.X, Launch.Y), FMath::Abs(Launch.X - Trim) < 30.0f && FMath::Abs(Launch.Y) < 1.0f);
+	TestTrue(FString::Printf(TEXT("and descends at the sink rate (%.0f)"), Launch.Z), FMath::Abs(Launch.Z + Sink) < 5.0f);
+	const FVector Dive = Fly(FVector(0, 0, -3000), FVector(1, 0, 0), 3.0f);   // deployed in a 30 m/s fall
+	TestTrue(FString::Printf(TEXT("the wing brakes a fast fall back to the sink rate (%.0f)"), Dive.Z), FMath::Abs(Dive.Z + Sink) < 10.0f);
+	const FVector Turn = Fly(FVector(Trim, 0, -Sink), FVector(0, 1, 0), 5.0f);   // A / D: the heading swings to +Y
+	TestTrue(FString::Printf(TEXT("the heading steers it (%.0f, %.0f)"), Turn.X, Turn.Y), Turn.Y > 0.9f * Trim && FMath::Abs(Turn.X) < 0.1f * Trim);
+	const FVector Coast = Fly(FVector(0, 600, -Sink), FVector::ZeroVector, 5.0f);   // no input: keeps its heading
+	TestTrue(FString::Printf(TEXT("with no input it keeps its heading (%.0f, %.0f)"), Coast.X, Coast.Y), FMath::Abs(Coast.X) < 1.0f && FMath::Abs(Coast.Y - Trim) < 30.0f);
+	const FVector Up = UMOCharacterMovementComponent::GlideVelocity(FVector(Trim, 0, 400), FVector(1, 0, 0), G, Dt, Trim, Sink);
+	TestTrue(TEXT("rising (a jump), gravity acts as usual"), FMath::IsNearlyEqual(Up.Z, 400.0 + G * Dt, 0.5));
+
+	UMOCharacterMovementComponent* Move = NewObject<UMOCharacterMovementComponent>(GetTransientPackage());
+	Move->UpdateFromCompressedFlags(FSavedMove_Character::FLAG_Custom_2);
+	TestTrue(TEXT("server: FLAG_Custom_2 -> wants to glide"), Move->WantsToGlide());
+	Move->UpdateFromCompressedFlags(FSavedMove_Character::FLAG_Custom_0);
+	TestTrue(TEXT("server: no glider flag -> does not (and the gait flag still reads)"), !Move->WantsToGlide() && Move->WantsToJog());
+	Move->SetWantsToGlide(true);
+	TestFalse(TEXT("not falling: no glide even when wanted"), Move->IsGliding());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_OpenWaterSurface,
 	"MOFramework.Water.OpenWaterSurface",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

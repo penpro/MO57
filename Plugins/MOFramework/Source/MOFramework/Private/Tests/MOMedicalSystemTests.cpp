@@ -512,7 +512,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_ApplyBloodLoss_DecreasesVolume,
 
 bool FMOVitals_ApplyBloodLoss_DecreasesVolume::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	// ApplyBloodLoss is authority-gated: a component with no owner ignored it, and this test passed without testing anything (Oct 18 2026:
+	// "Blood volume: 5000 -> 5000 mL"). It needs an owning actor with authority, like the integration test.
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();
 	TestNotNull(TEXT("Vitals component created"), Vitals);
 
 	const float InitialVolume = Vitals->Vitals.BloodVolume;
@@ -520,9 +522,9 @@ bool FMOVitals_ApplyBloodLoss_DecreasesVolume::RunTest(const FString& Parameters
 
 	Vitals->ApplyBloodLoss(500.0f);
 
-	// If authority passes, volume should decrease
 	const float CurrentVolume = Vitals->Vitals.BloodVolume;
 	AddInfo(FString::Printf(TEXT("Blood volume: %.0f -> %.0f mL"), InitialVolume, CurrentVolume));
+	TestEqual(TEXT("500 mL of bleeding takes 500 mL"), CurrentVolume, InitialVolume - 500.0f);
 
 	return true;
 }
@@ -533,12 +535,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_ApplyBloodLoss_ClampsAtZero,
 
 bool FMOVitals_ApplyBloodLoss_ClampsAtZero::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();   // the call is authority-gated: without an owner it did nothing and the test still passed
 
 	// Try to lose more blood than exists
 	Vitals->ApplyBloodLoss(10000.0f);
 
-	TestTrue(TEXT("Blood volume cannot go negative"), Vitals->Vitals.BloodVolume >= 0.0f);
+	TestEqual(TEXT("Blood volume stops at zero"), Vitals->Vitals.BloodVolume, 0.0f);
 
 	return true;
 }
@@ -549,7 +551,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_ApplyBloodTransfusion_IncreasesVolume
 
 bool FMOVitals_ApplyBloodTransfusion_IncreasesVolume::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();   // the call is authority-gated: without an owner it did nothing and the test still passed
 
 	// Reduce blood first
 	Vitals->Vitals.BloodVolume = 3000.0f;
@@ -559,6 +561,7 @@ bool FMOVitals_ApplyBloodTransfusion_IncreasesVolume::RunTest(const FString& Par
 
 	const float AfterTransfusion = Vitals->Vitals.BloodVolume;
 	AddInfo(FString::Printf(TEXT("Blood volume: %.0f -> %.0f mL"), LowVolume, AfterTransfusion));
+	TestEqual(TEXT("a 500 mL transfusion adds 500 mL"), AfterTransfusion, LowVolume + 500.0f);
 
 	return true;
 }
@@ -624,10 +627,11 @@ bool FMOVitals_SetExertionLevel_AffectsHeartRate::RunTest(const FString& Paramet
 
 	const float RestingHR = Vitals->Vitals.HeartRate;
 
-	// Set high exertion
+	// Set high exertion (the heart rate follows on the next vitals tick, which is private; the level itself is what this call sets)
 	Vitals->SetExertionLevel(80.0f);
 
 	AddInfo(FString::Printf(TEXT("HR at rest: %.0f, exertion level set to 80"), RestingHR));
+	TestEqual(TEXT("the exertion level is stored"), Vitals->Exertion.CurrentExertion, 80.0f);
 
 	return true;
 }
@@ -649,6 +653,31 @@ bool FMOVitals_BloodPressure_InitialValues::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Diastolic in normal range"), Vitals->Vitals.DiastolicBP >= 60.0f && Vitals->Vitals.DiastolicBP <= 90.0f);
 	TestTrue(TEXT("Systolic > Diastolic"), Vitals->Vitals.SystolicBP > Vitals->Vitals.DiastolicBP);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_BloodPressure_BloodLossBands,
+	"MOFramework.Medical.Vitals.BloodPressure.BloodLossBands",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOVitals_BloodPressure_BloodLossBands::RunTest(const FString& Parameters)
+{
+	// Oct 18 2026: every healthy pawn's status panel read 180/110. The bands were tested in the wrong order, so a FULL blood volume took the
+	// worst class's shift (+60) and a real bleed never lowered the pressure. By the haemorrhage classes (the shift is on a 120 systolic):
+	auto Shift = [](float Ratio) { return UMOVitalsComponent::BloodLossSystolicShift(Ratio); };
+	TestEqual(TEXT("full blood volume: no shift (120/80 at rest)"), Shift(1.0f), 0.0f);
+	TestEqual(TEXT("10% lost: compensated, no shift"), Shift(0.90f), 0.0f);
+	TestTrue(FString::Printf(TEXT("20%% lost: the systolic still holds (%.1f, -8..0)"), Shift(0.80f)), Shift(0.80f) <= 0.0f && Shift(0.80f) >= -8.0f);
+	TestTrue(FString::Printf(TEXT("35%% lost: it falls (%.1f, systolic 85-100)"), Shift(0.65f)), 120.0f + Shift(0.65f) >= 85.0f && 120.0f + Shift(0.65f) <= 100.0f);
+	TestTrue(FString::Printf(TEXT("half lost: below the 60 mmHg of severe hypotension (%.1f)"), Shift(0.50f)), 120.0f + Shift(0.50f) < 60.0f);
+	bool bMonotone = true, bContinuous = true;
+	for (float R = 1.0f; R > 0.3f; R -= 0.005f)
+	{
+		bMonotone &= Shift(R - 0.005f) <= Shift(R);
+		bContinuous &= FMath::Abs(Shift(R - 0.005f) - Shift(R)) < 3.0f;   // no step at a class boundary
+	}
+	TestTrue(TEXT("more blood lost never raises the pressure"), bMonotone);
+	TestTrue(TEXT("the pressure falls smoothly across the class boundaries"), bContinuous);
 	return true;
 }
 
@@ -677,7 +706,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_ApplyGlucose_IncreasesLevel,
 
 bool FMOVitals_ApplyGlucose_IncreasesLevel::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();   // the call is authority-gated: without an owner it did nothing and the test still passed
 
 	Vitals->Vitals.BloodGlucose = 80.0f;
 	const float Initial = Vitals->Vitals.BloodGlucose;
@@ -685,6 +714,7 @@ bool FMOVitals_ApplyGlucose_IncreasesLevel::RunTest(const FString& Parameters)
 	Vitals->ApplyGlucose(20.0f);
 
 	AddInfo(FString::Printf(TEXT("Glucose: %.0f -> %.0f mg/dL"), Initial, Vitals->Vitals.BloodGlucose));
+	TestEqual(TEXT("glucose rises by the amount"), Vitals->Vitals.BloodGlucose, Initial + 20.0f);
 
 	return true;
 }
@@ -695,7 +725,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_ConsumeGlucose_DecreasesLevel,
 
 bool FMOVitals_ConsumeGlucose_DecreasesLevel::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();   // the call is authority-gated: without an owner it did nothing and the test still passed
 
 	Vitals->Vitals.BloodGlucose = 100.0f;
 	const float Initial = Vitals->Vitals.BloodGlucose;
@@ -703,6 +733,7 @@ bool FMOVitals_ConsumeGlucose_DecreasesLevel::RunTest(const FString& Parameters)
 	Vitals->ConsumeGlucose(15.0f);
 
 	AddInfo(FString::Printf(TEXT("Glucose: %.0f -> %.0f mg/dL"), Initial, Vitals->Vitals.BloodGlucose));
+	TestTrue(TEXT("consuming glucose lowers it"), Vitals->Vitals.BloodGlucose < Initial);
 
 	return true;
 }

@@ -1362,12 +1362,8 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		{
 			Mode->SetVisibility(bMenuOpen ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 		}
-		// The tool / focus hint (the terraform mode's "Flatten", "Drink: fresh water") showed through every menu panel (Wes, Oct 18 2026). Its fades
-		// use render opacity and the HUD modes its colour alpha, so visibility is free for this.
-		if (UMOToolHintWidget* Hint = ToolHintWidget.Get())
-		{
-			Hint->SetVisibility(bMenuOpen ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-		}
+		// The tool / focus hint (the terraform mode's "Flatten", "Drink: fresh water") showed through every menu panel (Wes, Oct 18 2026).
+		RefreshToolHintVisibility();
 	}
 
 	// The tutorial text (hint banner + quest tracker) yields to menus through the same chokepoint as the reticle: every open/close path already calls this.
@@ -2239,10 +2235,33 @@ void UMOUIManagerComponent::StopFocusHintTimer()
 	}
 }
 
+bool UMOUIManagerComponent::IsWorldPopupOpen() const
+{
+	const UMOCraftingUIController* Crafting = GetCraftingController();
+	return Crafting && Crafting->IsAnyWorldPopupOpen();
+}
+
+void UMOUIManagerComponent::RefreshToolHintVisibility()
+{
+	UMOToolHintWidget* Hint = ToolHintWidget.Get();
+	if (!Hint || !bHideHUDPlatesWhenMenuOpen)
+	{
+		return;
+	}
+	// Its fades use render opacity and the HUD modes its colour alpha, so visibility is free for this.
+	const ESlateVisibility Wanted = (IsAnyMenuOpen() || IsWorldPopupOpen()) ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible;
+	if (Hint->GetVisibility() != Wanted)
+	{
+		Hint->SetVisibility(Wanted);
+	}
+}
+
 void UMOUIManagerComponent::UpdateFocusHint()
 {
-	// Don't update if any menu is open
-	if (IsAnyMenuOpen())
+	RefreshToolHintVisibility();   // a world popup opens and closes without a menu event: this timer is what sees it
+
+	// Don't update if any menu or world popup is open
+	if (IsAnyMenuOpen() || IsWorldPopupOpen())
 	{
 		if (!CurrentFocusHintText.IsEmpty())
 		{

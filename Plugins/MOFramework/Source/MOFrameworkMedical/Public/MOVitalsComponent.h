@@ -524,6 +524,15 @@ public:
 	 */
 	static void ApplyWaterToExposure(float Immersion01, float AirFeelsLikeC, float& InOutAmbientC, float& InOutInsulation);
 
+	/**
+	 * How far blood loss lowers the systolic pressure (mmHg, <= 0) at a blood volume of VolumeRatio (1 = full), by the haemorrhage classes:
+	 * under 15% lost the body compensates (0); 15-30% it still holds the systolic (down to -15, the pulse pressure narrows); 30-40% it falls
+	 * (to -45, ~75 mmHg); past 40% it collapses (-75 at half the blood lost). Continuous, so a bleed lowers it smoothly. The diastolic moves
+	 * half as much. Pure, for the automation tests. (Until Oct 18 2026 the bands were tested in the wrong order: a FULL volume read as the
+	 * worst class, +60, so every healthy pawn showed 180/110 and a bleed never lowered the pressure.)
+	 */
+	static float BloodLossSystolicShift(float VolumeRatio);
+
 	/** Oxygen reserve last reported by the respiration component (1 = full). */
 	UFUNCTION(BlueprintPure, Category="MO|Vitals")
 	float GetAirwayOxygenReserve() const { return AirwayOxygenReserve; }

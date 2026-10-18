@@ -142,7 +142,9 @@ python Tools/ue.py inst list              # the running instances; drive one wit
   PCG made nothing at all (BACKLOG N-031).
   Instances are compared across machines by mesh + place (`MO.Test.GroundItems`, `MO.Test.InstanceAt`, `MO.Test.ResourceNodes`,
   `MO.Test.Sweepable`; MOCoopInstanceCheats.cpp). The Oct 18 cases: `_client_e_on_ground_item`, `_client_e_beside_ground_item` (the crosshair 20 cm beside it), `_trust_instance_far`, `_client_harvest`,
-  `_client_inspect`, `_host_foliage_reaches_client` (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
+  `_client_inspect`, `_host_foliage_reaches_client`, `_client_drink` (E at a river bank: the host logs the draught), `_client_glide` (the dev
+  glider flown by the joiner, measured on the host), `_client_footstep_surface` (the joiner's own ground sound in two biomes)
+  (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
 - `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an
   internet session's rubber banding (Wes, Oct 17). Its controls (a 4 KB/s rate cap must saturate, a joiner walking 1.6x faster than the
   server allows must be corrected, +100 ms of `NetEmulation.PktLag` must show as delay) prove each measure can fail. Real tests: section 7.

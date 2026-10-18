@@ -194,6 +194,10 @@ public:
 
 	bool IsWorldActionMenuOpen() const;
 
+	/** Any of this controller's world popups (station, ground item / harvest, world action): they are added to the viewport, not pushed on a
+	 *  menu layer, so UMOUIManagerComponent::IsAnyMenuOpen does not count them. */
+	bool IsAnyWorldPopupOpen() const { return IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() || IsWorldActionMenuOpen(); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

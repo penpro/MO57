@@ -1022,6 +1022,13 @@ private:
 	/** Update focus hint based on what player is looking at. Called on timer. */
 	void UpdateFocusHint();
 
+	/** A world popup is open (the ground-item / station / world-action menus: viewport widgets, not menu layers -- IsAnyMenuOpen misses them). */
+	bool IsWorldPopupOpen() const;
+
+	/** The one rule for the tool / focus hint: hidden while a menu or a world popup is open (it drew behind the ground-item menu, Oct 18 2026).
+	 *  Called by UpdateReticleVisibility (menus open / close) and by UpdateFocusHint (popups open and close without a menu event). */
+	void RefreshToolHintVisibility();
+
 	/** Start the focus hint timer. */
 	void StartFocusHintTimer();
 

@@ -3,6 +3,7 @@
 #include "MOWaterSubsystem.h"
 #include "MOCharacter.h"
 #include "MONetDiagnostics.h"
+#include "MODevMode.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PhysicsVolume.h"
@@ -10,6 +11,40 @@
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
 #include "CollisionQueryParams.h"
+#include "HAL/IConsoleManager.h"
+#include "Kismet/GameplayStatics.h"
+
+// ---- dev glider tuning (see UMOCharacterMovementComponent::GlideVelocity) ----
+// A hang glider at trim flies about 10-12 m/s and sinks about 1 m/s (a glide of ~11:1). Set the same values on host and joiner: a joiner predicting
+// with other numbers is corrected to the host's.
+static TAutoConsoleVariable<float> CVarGlideSpeed(TEXT("MO.Dev.GlideSpeed"), 1100.0f,
+	TEXT("Dev glider (MO.Dev.Glider): the forward speed it settles to, cm/s (default 1100 = 40 km/h, a hang glider at trim)."), ECVF_Default);
+static TAutoConsoleVariable<float> CVarGlideSink(TEXT("MO.Dev.GlideSink"), 100.0f,
+	TEXT("Dev glider (MO.Dev.Glider): the steady descent, cm/s (default 100 = 1 m/s)."), ECVF_Default);
+
+static FAutoConsoleCommandWithWorldAndArgs GDevGliderCommand(
+	TEXT("MO.Dev.Glider"),
+	TEXT("Dev: a hang glider for looking at the world from the air (BR18-17). While on, a falling pawn glides: W flies along the view, A / D steer; "
+		 "jump off a slope or a cliff to launch. Usage: MO.Dev.Glider [0|1] (no argument toggles). Only while the world's host is in developer mode."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, 0);
+		UMOCharacterMovementComponent* Move = Pawn ? Cast<UMOCharacterMovementComponent>(Pawn->GetMovementComponent()) : nullptr;
+		if (!Move)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MODev] glider: no MO pawn to fly"));
+			return;
+		}
+		if (!FMODevMode::IsHostInDevMode(World))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MODev] glider: refused -- the world's host is not in developer mode"));
+			return;
+		}
+		const bool bOn = Args.Num() > 0 ? Args[0].ToBool() : !Move->WantsToGlide();
+		Move->SetWantsToGlide(bOn);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MODev] glider %s (speed %.0f cm/s, sink %.0f cm/s)"), bOn ? TEXT("ON: jump off something high") : TEXT("off"),
+			CVarGlideSpeed.GetValueOnGameThread(), CVarGlideSink.GetValueOnGameThread());
+	}));
 
 // ---- gait in the saved moves (see SetWantedGait) ----
 
@@ -20,14 +55,16 @@ public:
 
 	uint8 bSavedWantsToJog : 1;
 	uint8 bSavedWantsToSprint : 1;
+	uint8 bSavedWantsToGlide : 1;
 
-	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0) {}
+	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0), bSavedWantsToGlide(0) {}
 
 	virtual void Clear() override
 	{
 		Super::Clear();
 		bSavedWantsToJog = 0;
 		bSavedWantsToSprint = 0;
+		bSavedWantsToGlide = 0;
 	}
 
 	virtual uint8 GetCompressedFlags() const override
@@ -41,15 +78,19 @@ public:
 		{
 			Result |= FLAG_Custom_1;
 		}
+		if (bSavedWantsToGlide)
+		{
+			Result |= FLAG_Custom_2;
+		}
 		return Result;
 	}
 
 	virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override
 	{
 		const FSavedMove_MO* Other = static_cast<const FSavedMove_MO*>(NewMove.Get());
-		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint)
+		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint || bSavedWantsToGlide != Other->bSavedWantsToGlide)
 		{
-			return false;   // a gait change is a move boundary: the server must see where it happened
+			return false;   // a gait (or glider) change is a move boundary: the server must see where it happened
 		}
 		return Super::CanCombineWith(NewMove, InCharacter, MaxDelta);
 	}
@@ -61,6 +102,7 @@ public:
 		{
 			bSavedWantsToJog = Move->bWantsToJog;
 			bSavedWantsToSprint = Move->bWantsToSprint;
+			bSavedWantsToGlide = Move->bWantsToGlide;
 		}
 	}
 
@@ -71,6 +113,7 @@ public:
 		{
 			Move->bWantsToJog = bSavedWantsToJog;   // a replayed move runs at the gait it was made with
 			Move->bWantsToSprint = bSavedWantsToSprint;
+			Move->bWantsToGlide = bSavedWantsToGlide;
 		}
 	}
 };
@@ -110,6 +153,7 @@ void UMOCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 	const bool bChanged = bJog != (bool)bWantsToJog || bSprint != (bool)bWantsToSprint;
 	bWantsToJog = bJog;
 	bWantsToSprint = bSprint;
+	bWantsToGlide = (Flags & FSavedMove_Character::FLAG_Custom_2) != 0;   // the developer gate is IsGliding's, judged here by the server's own mode
 	if (bChanged && MOOwner && !MOOwner->IsLocallyControlled())
 	{
 		MOOwner->ApplyGaitFromMovement(bJog, bSprint);   // the server's copy of the character learns the gait (exertion, metabolism, what other players see)
@@ -133,6 +177,7 @@ UMOCharacterMovementComponent::UMOCharacterMovementComponent()
 {
 	bWantsToJog = 0;
 	bWantsToSprint = 0;
+	bWantsToGlide = 0;
 	// Stock swimming defaults are for a game character; these are a person's (a steady crawl is about 1 m/s; fast front crawl 1.5-2 m/s).
 	MaxSwimSpeed = 110.0f;
 	BrakingDecelerationSwimming = 300.0f;
@@ -242,6 +287,12 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 float UMOCharacterMovementComponent::GetMaxSpeed() const
 {
 	float Base = Super::GetMaxSpeed();
+	if (MovementMode == MOVE_Falling && IsGliding())
+	{
+		// PhysFalling's CalcVelocity brakes any air speed above the max (the walk speed) back down to it, every step: measured on two processes
+		// (Oct 18 2026), the glider settled at 251 cm/s instead of its 1100 trim. A glider's top speed in the air is its trim.
+		return FMath::Max(Base, CVarGlideSpeed.GetValueOnGameThread());
+	}
 	if (MovementMode == MOVE_Swimming)
 	{
 		return Base * FMath::Max(SwimSpeedScale, 0.05f);
@@ -258,6 +309,43 @@ float UMOCharacterMovementComponent::GetMaxSpeed() const
 		}
 	}
 	return Base;
+}
+
+FVector UMOCharacterMovementComponent::GlideVelocity(const FVector& Velocity, const FVector& Heading, float GravityZ, float DeltaSeconds, float TrimSpeedCm, float SinkCm)
+{
+	FVector Horizontal(Velocity.X, Velocity.Y, 0.0);
+	const FVector Direction = Heading.IsNearlyZero() ? Horizontal.GetSafeNormal() : Heading.GetSafeNormal2D();
+	Horizontal = FMath::VInterpTo(Horizontal, Direction * TrimSpeedCm, DeltaSeconds, 1.5f);   // settles in about 2 s
+	double Z = Velocity.Z + GravityZ * DeltaSeconds;
+	if (Z < -SinkCm)
+	{
+		Z = FMath::FInterpTo(FMath::Min(Velocity.Z, -(double)SinkCm), -(double)SinkCm, (double)DeltaSeconds, 3.0);   // the wing's lift brakes a faster fall
+	}
+	return FVector(Horizontal.X, Horizontal.Y, Z);
+}
+
+bool UMOCharacterMovementComponent::IsGliding() const
+{
+	return bWantsToGlide && IsFalling() && FMODevMode::IsHostInDevMode(this);
+}
+
+void UMOCharacterMovementComponent::ApplyVelocityBraking(float DeltaTime, float Friction, float BrakingDeceleration)
+{
+	if (IsGliding())
+	{
+		return;   // measured Oct 18 2026: with the input released the glider slowed from its 1100 trim to 441 cm/s in 3 s
+	}
+	Super::ApplyVelocityBraking(DeltaTime, Friction, BrakingDeceleration);
+}
+
+FVector UMOCharacterMovementComponent::NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const
+{
+	if (!IsGliding())
+	{
+		return Super::NewFallVelocity(InitialVelocity, Gravity, DeltaTime);
+	}
+	// Acceleration is the move's input here (PhysFalling restores it after CalcVelocity): W along the view, A / D across it.
+	return GlideVelocity(InitialVelocity, Acceleration, Gravity.Z, DeltaTime, CVarGlideSpeed.GetValueOnGameThread(), CVarGlideSink.GetValueOnGameThread());
 }
 
 APhysicsVolume* UMOCharacterMovementComponent::GetPhysicsVolume() const

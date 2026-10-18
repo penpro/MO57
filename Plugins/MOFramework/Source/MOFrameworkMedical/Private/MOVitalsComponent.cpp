@@ -727,6 +727,24 @@ void UMOVitalsComponent::CalculateHeartRate()
 	CheckAndBroadcastChange(FName("HeartRate"), OldHR, Vitals.HeartRate, 5.0f);
 }
 
+float UMOVitalsComponent::BloodLossSystolicShift(float VolumeRatio)
+{
+	const float R = FMath::Clamp(VolumeRatio, 0.0f, 1.0f);
+	if (R >= 0.85f)   // < 15% lost: compensated
+	{
+		return 0.0f;
+	}
+	if (R >= 0.70f)   // 15-30%: the systolic still holds (the pulse pressure narrows)
+	{
+		return -(0.85f - R) * 100.0f;                 // 0 .. -15
+	}
+	if (R >= 0.60f)   // 30-40%: it falls
+	{
+		return -15.0f - (0.70f - R) * 300.0f;         // -15 .. -45 (~75 mmHg)
+	}
+	return -45.0f - (0.60f - R) * 300.0f;             // > 40%: collapse (-75 at half lost; the clamp holds 40 mmHg)
+}
+
 void UMOVitalsComponent::CalculateBloodPressure()
 {
 	float OldSystolic = Vitals.SystolicBP;
@@ -736,27 +754,9 @@ void UMOVitalsComponent::CalculateBloodPressure()
 	float BaseSystolic = 120.0f;
 	float BaseDiastolic = 80.0f;
 
-	// Blood volume effect (most critical)
-	float VolumeRatio = Vitals.BloodVolume / Vitals.MaxBloodVolume;
-	float VolumeMod = 0.0f;
-
-	if (VolumeRatio < 0.85f)  // <15% loss
-	{
-		VolumeMod = 0.0f;  // Compensated
-	}
-	else if (VolumeRatio < 0.70f)  // 15-30% loss
-	{
-		// Pulse pressure narrows (systolic drops more than diastolic)
-		VolumeMod = -(0.85f - VolumeRatio) * 100.0f;  // Systolic drops
-	}
-	else if (VolumeRatio < 0.60f)  // 30-40% loss
-	{
-		VolumeMod = -40.0f - (0.70f - VolumeRatio) * 200.0f;  // Significant drop
-	}
-	else  // >40% loss
-	{
-		VolumeMod = -60.0f - (0.60f - VolumeRatio) * 300.0f;  // Severe drop
-	}
+	// Blood volume effect (most critical): the haemorrhage classes, see BloodLossSystolicShift.
+	const float VolumeRatio = Vitals.MaxBloodVolume > 0.0f ? Vitals.BloodVolume / Vitals.MaxBloodVolume : 1.0f;
+	const float VolumeMod = BloodLossSystolicShift(VolumeRatio);
 
 	// Exertion increases BP (systolic more than diastolic)
 	float ExertionSystolicMod = (Exertion.CurrentExertion / 100.0f) * 40.0f;

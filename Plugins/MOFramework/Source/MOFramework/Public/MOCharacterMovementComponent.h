@@ -57,6 +57,24 @@ public:
 	bool WantsToJog() const { return bWantsToJog; }
 	bool WantsToSprint() const { return bWantsToSprint; }
 
+	// ---- dev glider (Wes, Oct 18 2026: "hang glider mode for devs", BR18-17) ----
+	//
+	// A developer's way to look at the world from the air, never the simulation (Principle 11): while the world's HOST is in developer mode
+	// (FMODevMode::IsHostInDevMode), a FALLING pawn that wants to glide flies like a hang glider at trim (MO.Dev.GlideSpeed forward, MO.Dev.GlideSink
+	// down), steered by the movement input. It is movement input like the gait: it rides in the saved moves (FLAG_Custom_2) and the server judges the
+	// developer gate itself, so it simulates a joiner's flight the way the joiner predicts it. Toggle: MO.Dev.Glider.
+
+	/** Pure: a glider's next falling velocity. The horizontal speed eases to TrimSpeedCm along Heading (zero = keep the current heading); gravity
+	 *  acts until the descent reaches SinkCm, and a faster fall (a dive, the launch) eases back to it -- the wing's lift. */
+	static FVector GlideVelocity(const FVector& Velocity, const FVector& Heading, float GravityZ, float DeltaSeconds, float TrimSpeedCm, float SinkCm);
+
+	/** Set where the input happens (the owning client, or the host for its own pawn); the server takes it from the moves. */
+	void SetWantsToGlide(bool bGlide) { bWantsToGlide = bGlide; }
+	bool WantsToGlide() const { return bWantsToGlide; }
+
+	/** Flying the glider right now: wants to, falling, and the world's host is in developer mode. */
+	bool IsGliding() const;
+
 	// ---- water state (valid after the first movement update) ----
 
 	/** Fraction of the capsule under water right now (0 on dry land or when no water is known here). */
@@ -132,6 +150,10 @@ public:
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual bool ShouldRemainVertical() const override { return true; }
 	virtual APhysicsVolume* GetPhysicsVolume() const override;
+	/** The dev glider (see GlideVelocity); otherwise the stock fall. */
+	virtual FVector NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const override;
+	/** No air braking while gliding: hands off, a glider keeps its airspeed (the stock fall brakes a pawn with no input). */
+	virtual void ApplyVelocityBraking(float DeltaTime, float Friction, float BrakingDeceleration) override;
 
 	// Co-op smoothness counters (MONetDiagnostics.h): the server's verdict on each of a joiner's moves, and on the joiner the corrections it got
 	// and how far its pawn visibly snapped once it replayed its moves. Each calls the stock implementation first; nothing about movement changes.
@@ -164,6 +186,8 @@ private:
 	friend class FSavedMove_MO;
 	uint8 bWantsToJog : 1;
 	uint8 bWantsToSprint : 1;
+	/** The dev glider (see SetWantsToGlide); in the saved moves as FLAG_Custom_2. */
+	uint8 bWantsToGlide : 1;
 	float GaitJogSpeed = 550.0f;
 	float GaitSprintSpeed = 700.0f;
 };
