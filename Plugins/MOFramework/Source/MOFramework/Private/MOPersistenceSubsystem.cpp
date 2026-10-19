@@ -131,6 +131,7 @@ static bool AssignGuidToIdentityComponent(UMOIdentityComponent* IdentityComponen
 void UMOPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
+    RestartSessionClock();   // a world entered without ResetForNewWorld / a load still counts from here, never from 0
 
     PostWorldInitHandle = FWorldDelegates::OnPostWorldInitialization.AddUObject(
         this,
@@ -243,7 +244,7 @@ void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
 {
     LoadedWorldSave = nullptr;
     SessionDestroyedGuids.Empty();
-    SessionPlayTimeSeconds = 0.0f;
+    RestartSessionClock();
     bNextSaveIsAutosave = false;
     // Clear the load-suppression latch too: it's normally cleared by a 0.25s world-lifetime
     // timer, but if the world was torn down inside that window (quit-to-menu right after a
@@ -351,7 +352,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     {
         BasePlayTime = LoadedWorldSave->TotalPlayTimeSeconds;
     }
-    SaveObject->TotalPlayTimeSeconds = BasePlayTime + SessionPlayTimeSeconds;
+    SaveObject->TotalPlayTimeSeconds = BasePlayTime + GetSessionPlayTime();
 
     // World name
     SaveObject->WorldName = GetCurrentWorldIdentifier();
@@ -419,9 +420,9 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
         // previously skipped the merge entirely and lost despawned pawns.
         LoadedWorldSave = SaveObject;
         // Session time was just folded into SaveObject->TotalPlayTimeSeconds
-        // (BasePlayTime + SessionPlayTimeSeconds, above). Reset it — mirroring
+        // (BasePlayTime + GetSessionPlayTime(), above). Restart it — mirroring
         // the load-time reset — or the next save double-counts this session.
-        SessionPlayTimeSeconds = 0.0f;
+        RestartSessionClock();
     }
 
     UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d buildings=%d netmode=%d"),
@@ -597,7 +598,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
 
     // Reset session play time - we're starting a new play session
     // The loaded save's TotalPlayTimeSeconds will be used as base for next save
-    SessionPlayTimeSeconds = 0.0f;
+    RestartSessionClock();
 
     SessionDestroyedGuids.Reset();
     for (const FGuid& Guid : LoadedTyped->DestroyedGuids)

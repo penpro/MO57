@@ -246,9 +246,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     void AddSessionPlayTime(float DeltaSeconds) { SessionPlayTimeSeconds += DeltaSeconds; }
 
-    /** Get current session play time. */
+    /** Get current session play time: what was added plus the session clock since the world began (or the last save). */
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
-    float GetSessionPlayTime() const { return SessionPlayTimeSeconds; }
+    float GetSessionPlayTime() const { return SessionPlayTimeSeconds + static_cast<float>(FPlatformTime::Seconds() - SessionClockStartSeconds); }
 
     /**
      * Reset all GameInstance-scoped session state for a NEW world. Without
@@ -451,4 +451,8 @@ private:
     // Metadata tracking
     bool bNextSaveIsAutosave = false;
     float SessionPlayTimeSeconds = 0.0f;
+    /** When this session's play clock last started (a new world, a load, a save): the save folds the time since into the world's total play time.
+     *  Nothing ever called AddSessionPlayTime, so until Oct 19 every save recorded 0 and the Load panel read "0m" for every world. */
+    double SessionClockStartSeconds = 0.0;
+    void RestartSessionClock() { SessionPlayTimeSeconds = 0.0f; SessionClockStartSeconds = FPlatformTime::Seconds(); }
 };

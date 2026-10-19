@@ -25,6 +25,9 @@
 | Forest footsteps (by ear) | Walk in a temperate or locust woodland | leaf-litter steps, not sand | BR18-8 |
 | A survivor's failed job | Order a survivor to gather where there is nothing | a notice says why; its task menu says "Idle. Couldn't ..." | N-090 |
 | A body after a reload | Kill a survivor with items, save, load the world | the body lies where it fell (ragdoll), its menu's Inventory has the items | N-155 (Oct 19) |
+| Meadow flowers in color | A new game, any meadow with flowers (the main menu backdrop has some) | colored flowers, not flat grey (their material lacked "Used with Nanite" since Oct 14) | Oct 19 batch 5 |
+| Ghost look on stones and sticks | Place a campfire or a stick wall ghost | the pale-white ghost look, not flat grey checker | Oct 19 batch 5 |
+| Save thumbnails | Save in daylight, open Load | the thumbnail shows the world (harness saves from background windows are near-black; unsure if yours are) | Oct 19 |
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
@@ -32,7 +35,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F30 how caves become common (built entrances) · F31 what a building's skill line does (shown, never enforced).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F30 how caves become common (built entrances) · F31 what a building's skill line does (shown, never enforced) · F32 which Fab buys still make sense (pelts, a rigged bow later).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -83,6 +86,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-050 | OPEN | Claude | Floating objects / boats via Oceanology buoyancy (supersedes MOBuoyancyComponent) | `Docs/Water.md` | P-3 |
 | N-051 | OPEN | Claude | Swimming as a complete loop: load-dependent buoyancy (no inventory mass API), fall damage into water, Space surfacing feel, swimming creatures, clothing distorts on horizontal poses, swim blends | Water §3 | P-1, G17 |
 | N-052 | OPEN | Claude | Softer mud lake bed (texture set) | worldgen To-do | |
+| N-173 | OPEN | Claude | At a rocky sea shore the pawn wades (splash sounds, immersion ~0.1) while Drink finds "no water under the crosshair": `FMOWorldGen::ClassifyWaterBody` decides sea from the generator's base height at voxel resolution, the wading from the pawn's feet vs the sea plane; they disagree by centimetres at the waterline (Oct 19 playtest, seed 670711536 at 243366, 704738). Low priority: sea water is harmful to drink | `Docs/Water.md` §1 | |
 | N-053 | DEFERRED | Claude | Hair buns under water + creator DOF: engine patch #1 needs a source engine. Wes, Oct 18: "i originally thought one of the fixes for the processing was breaking the lakes but that was a separate issue we will revisit" | `Docs/Engine_Patches.md` | F11 |
 | N-054 | DONE-2026-10-18 | Claude | A joiner lights its own torch at a fire: `MO.Fire.Do LightCarried` from the joiner, 6 s on the server, lit on the joiner (6 cd, eye adapts) and rendered on the host (6.45 cd light on the joiner's pawn) | Light_Sources | |
 | N-055 | OPEN | Claude | Torch-raising arm pose (animation) | Light_Sources | |
@@ -145,7 +149,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
 | N-168 | OPEN | Claude | Bronze and iron spears (BronzeSpear01 / IronSpear01, their spearheads): items, recipes and DT_Weapons profiles exist, no meshes / icons yet (wooden, fire-hardened and flint spears have both) | `Docs/Item_Art_Pipeline.md` | Wes Oct 18 |
 | N-169 | IN PROGRESS | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths name the killer since Oct 18 (`FMODeathRecord::KillerName`, on the recap) | AI_And_Colony §1 | Oct 18 |
-| N-100 | OPEN | Claude | Re-evaluate the Fab purchase list against the ComfyUI image-to-3D pipeline (Wes, Oct 18: "reevaluate these since i've moved a lot of stuff to the comfyui 3d modeling pipeline"): what still needs a bought asset (rigged / animated, large sets) vs what TRELLIS.2 can make | pipeline V3, `Docs/Item_Art_Pipeline.md` §8 | |
+| N-100 | WAITING | Wes | Fab buys re-evaluated against the ComfyUI image-to-3D pipeline (Oct 19): TRELLIS.2 covers the static props (hafted tools, leather, bones, herbs, eggs, fish, the uncovered rows); still worth buying: Animal Pelts Vol. 1 (fur edges), one rigged bow pack when bows animate, optionally Primitive props. Fork F32 | DECISIONS F32, `Docs/Item_Art_Pipeline.md` §8 | |
 
 ## Co-op
 
@@ -206,7 +210,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-124 | OPEN | Claude | UI nits: 12 px list rows + 0.5-scaled entry button, white native amount SpinBox, unstyled "Characters" possession screen, `FuelTimeText` / "Current:" placeholders; spacing / focus / controller polish | archived AAA backlog | P-11, P-13 |
 | N-125 | OPEN | Claude | Moodle icons are generated placeholders (a hand-drawn set replaces the textures, same names) | archived AAA backlog | P-12 |
 | N-126 | OPEN | Codex | UI consolidation Stage 4 (skills / knowledge + quest collections); deferred: survivor-queue adapter, live building queue surface | `Docs/agent/ui/MIGRATION_PLAN.md` | G23 |
-| N-127 | OPEN | Claude | In-game Load panel hides Host: no screenshot proof | OVERNIGHT_LOG | |
+| N-127 | DONE-2026-10-19 | Claude | In-game Load panel: every slot but the one being played, each with Rename / Delete, no Host (seen on screen, 1280x720 playtest) | UI §3, Persistence §3 | |
 | N-128 | OPEN | Claude | MOUITestSubsystem tautological tests (false confidence) | code_health | M17 |
 
 ## Audio
@@ -260,6 +264,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-19 batch 5 (playtest, N-078): drinking from the edge (the crosshair's water 3-4 m out fell back to none: "Get closer" a step from a pond); building ghosts on Nanite meshes drew the engine's grey (force the non-Nanite fallback while ghosted); the PN meadow flowers drew grey in game since Oct 14 (MA_Flowers lacked "Used with Nanite"); play time was never counted (every save "0m"); 214 routine [MOHarvest] warnings per ten minutes removed; N-127 checked.
 - DONE-2026-10-19 batch 4 (first-ten-minutes playtest, N-078): the B key's opening of the build menu ticks "Open the build menu" (only placement did); an item objective may name an item TAG -- "Collect Fallen Branches" counts Stick01 and Stick02 (only Stick01 did, the ground has both), "Harvest Bark" every bark (DT_Items Tags, DT_Quests targets; test Quest.ItemObjectiveCountsItsKind; host + joiner verified); the forage popup closes when the player walks 3 m away (it rode along mid-screen); Back closes an open context menu before it opens the system menu; N-160 remote pawns keep their velocity; a load whose player stands on bare ground logs NO VEGETATION with the spawner's runs; `ue.py inst start` keeps game.prev.log.
 - DONE-2026-10-19 BR18-5 verified: a joiner's inspection runs on the server (`_client_inspect`: the joiner's pawn ON THE HOST studied Bark01, 3 grants; the joiner's UI got the result).
 - DONE-2026-10-18 hunting (Wes, Oct 18: deer should hear what comes up behind them, run far when hurt; wolves lose interest; spears): one punch no longer kills a deer (BP_MOMetaHuman_Female's fist BaseDamage 500 -> the class default 5), deaths name their killer (the attacker reaches the anatomy), creatures hear (NoTeam vs NoTeam was Friendly to the hearing sense), footfalls follow the real speed, a wounded deer flees 45 s, a wolf gives up 200 m from its den or after 20 s without gaining, a held spear fights with its own profile (N-099) and ArmorPenetration no longer cuts unarmored damage (`Docs/AI_And_Colony.md` §1).

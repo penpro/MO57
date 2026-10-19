@@ -202,6 +202,10 @@ struct FMOBuildableSavedMaterials
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInterface>> Materials;
+
+	/** The component's own "force disable Nanite" while it wears the ghost: the translucent ghost material forces it on (Nanite draws only opaque /
+	 *  masked materials and puts the engine's default grey material on anything else), the original comes back with the materials. */
+	bool bForceDisableNanite = false;
 };
 
 UCLASS()

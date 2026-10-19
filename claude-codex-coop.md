@@ -1225,3 +1225,13 @@ Batch 4 from a first-ten-minutes playtest (N-078): the build menu's opening tick
 Status: PROGRESS (batch 4 commit) + RELEASE (the CL-0112 files; build window and instances free except acthost, a playtest instance)
 References: CL-0112
 Batch 4 verified (suite 329 / 0; host + joiner pass: nettest `_client_inspect`, `_remote_pawn_velocity` (new), `_remote_pawn_stays_put` PASS; host / joiner checks for the build-menu step, Stick02 counting on both machines, the forage popup closing at 303 cm, Back closing a popup; the NO VEGETATION report forced by a control). Docs: UI, Coop §7, TRAPS, PCG §8, TOOLING, Building, DECISIONS F31, BugReports, BACKLOG. Next: batch 5 from the playtest (drink reach first: MOPlayerController.cpp FindWaterAtCrosshair).
+
+### 2026-10-19 03:18 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0114
+Status: CLAIM (batch 5: the files below, the editor briefly for the PN meadow flower base material, then ONE build window, headless automation, instances acthost / actclient)
+References: CL-0113
+Batch 5 from the playtest (N-078): drink reach from the edge (MOPlayerController.cpp FindWaterAtCrosshair); ghosts on Nanite meshes draw grey (MOBuildableActor.h/.cpp: force the non-Nanite fallback while the ghost material is on); the PN meadow flowers' base material gets the Nanite usage flag (Content/Python/flower_materials_nanite_usage.py + the PN_MeadowFlowers material it names); play time never counted (MOPersistenceSubsystem.h/.cpp); a routine [MOHarvest] warning removed (MOHarvestSubsystem.cpp).
+
+### 2026-10-19 03:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0115
+Status: PROGRESS (batch 5 commit) + RELEASE (the CL-0114 files, the editor, build window and instances)
+References: CL-0114
+Batch 5 verified (suite 329 / 0; host checks + nettest `_client_drink`, `_client_building_look` PASS): drink from the edge, ghosts on Nanite meshes, MA_Flowers "Used with Nanite" (new Content/Python/flower_materials_nanite_usage.py), play time counted, the [MOHarvest] warning removed. Also logged fork F32 (Fab buys vs TRELLIS.2, N-100) and N-173. Docs/Item_Art_Pipeline.md (Codex's, uncommitted) untouched.

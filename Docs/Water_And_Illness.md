@@ -53,6 +53,12 @@ counter (0.5 points / ml, as items already did) and the metabolism's body water.
 `ml - ml x salinity / 21` (two litres of urine per litre of sea water at 35 g/L) -- negative -- so thirst gets WORSE, body water
 falls, and sodium jumps (~920 % of a day's need per litre). The illness roll is made at the drink, hidden.
 
+**Reach** (`AMOPlayerController::FindWaterAtCrosshair`, the one query behind the "Pond water" prompt and E): the crosshair finds the water,
+the drink happens within `UMOWaterSourceSettings::ReachCm` (250) of the pawn. The shoulder camera meets the water 3-4 m out even when the
+pawn stands at the edge, so since Oct 19 a crosshair point out of reach falls back to the nearest water toward it within reach (before, the
+prompt showed and E said "Get closer to the water to drink." a step from a pond). The server re-checks reach + 1 m
+(`FMOWaterActions::ReachableWaterAt`). Verified: 1 m from a river bank, Drink runs (20 s, 250 ml).
+
 **Illness course** (the condition system, data in DT_Conditions): an incubation with no symptoms, then a self-limiting
 illness whose severity rises to a peak and falls. While ill: fluid loss (diarrhoea) through the same intake path with a
 negative volume, fatigue, and a moodle ("Stomach bug"). Times are compressed like the survival needs (Wes's 30-minutes-to-

@@ -1387,7 +1387,35 @@ bool AMOPlayerController::FindWaterAtCrosshair(FVector& OutPoint, EMOWaterBodyKi
 	{
 		return false;
 	}
-	bOutWithinReach = FVector::Dist(ControllablePawn->GetActorLocation(), OutPoint) <= GetDefault<UMOWaterSourceSettings>()->ReachCm;
+	const float ReachCm = GetDefault<UMOWaterSourceSettings>()->ReachCm;
+	const FVector From = ControllablePawn->GetActorLocation();
+	bOutWithinReach = FVector::Dist(From, OutPoint) <= ReachCm;
+	if (!bOutWithinReach)
+	{
+		// The crosshair meets the water a few metres out (the shoulder camera sits behind the pawn and looks over it), so a player standing at the edge was told
+		// to get closer (Oct 19 playtest: "Pond water" under the crosshair, the pawn a step from the pond, E -> "Get closer to the water to drink."). A person at
+		// the edge reaches the water at their feet: take the water nearest the pawn on the way out toward where the crosshair meets it.
+		const FVector2D Toward = FVector2D(OutPoint - From).GetSafeNormal();
+		constexpr float StepCm = 20.0f;
+		for (float T = 0.0f; T <= ReachCm; T += StepCm)
+		{
+			const double X = From.X + Toward.X * T;
+			const double Y = From.Y + Toward.Y * T;
+			const EMOWaterBodyKind Kind = Water->ClassifyWaterAt(X, Y);
+			float Surface = 0.0f;
+			if (Kind != EMOWaterBodyKind::None && Water->GetSurfaceZ(X, Y, Surface))
+			{
+				const FVector Near(X, Y, Surface);
+				if (FVector::Dist(From, Near) <= ReachCm)
+				{
+					OutPoint = Near;
+					OutKind = Kind;
+					bOutWithinReach = true;
+				}
+				break;
+			}
+		}
+	}
 	return true;
 }
 

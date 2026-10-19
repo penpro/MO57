@@ -104,6 +104,12 @@ saved graphs keep their meaning.
 
 ## 6. Performance rules (what keeps it fast)
 
+- **A Nanite mesh needs a material flagged "Used with Nanite"** or a -game / cooked build draws it with the engine's default grey material
+  ("Material ... missing usage flag Nanite! Default Material will be used in game"; the editor flags it on the fly, so it looks fine there).
+  `enable_palette_nanite.py` (Oct 14) turned the PN meadow flowers' meshes Nanite without their base material `MA_Flowers` (97 flower
+  materials): fixed Oct 19 by `Content/Python/flower_materials_nanite_usage.py` (25 warnings per run before, 0 after). Turning a mesh Nanite
+  = check its materials' usage flag in the same change.
+
 - **PCG runtime scheduler = largest grid first** (UE 5.8 `PCGRuntimeGenScheduler.cpp`: `Priority += GridSize`): a big far tier
   delays every near cell. `UMOWorldReadinessSubsystem` holds grids >= `mo.Readiness.HoldGridsFrom` (512) during a cycle (radius
   -1e9: a radius of 0 still generates the viewer's own cell because the scheduler compares SQUARED distances) and restores at Ready.

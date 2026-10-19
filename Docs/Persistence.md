@@ -84,6 +84,10 @@
   (`Docs/Weather_And_Time.md` §1).
 - Load flow: pawns are held (`SetLoadHold`) while the terrain regenerates, then re-grounded (`Docs/Coop_And_Networking.md` §4).
 - Save thumbnails: `FScreenshotRequest` + `OnScreenshotCaptured` (not `ReadPixels`; `Docs/UI.md` §4).
+- **Play time** (Oct 19): `UMOPersistenceSubsystem` runs a session clock (`RestartSessionClock` at a new world, a load and each save;
+  `GetSessionPlayTime` = the clock since) and a save adds it to the world's `TotalPlayTimeSeconds`. Nothing ever called
+  `AddSessionPlayTime`, so until then every save read "0m" in the Load panel. Verified: a save 2.5 min into a new world reads "2m".
+- The in-game Load panel lists every slot but the one being played, with Rename / Delete and no Host (N-127, checked on screen Oct 19).
 - New Game must not inherit the prior save's session state (a June critical, fixed); deposited build materials are in the payload.
 
 ## 4. Crash and bug reports (reference)

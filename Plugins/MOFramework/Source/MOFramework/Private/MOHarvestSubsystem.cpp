@@ -103,7 +103,8 @@ const FMOResourceNodeDefinitionRow* UMOHarvestSubsystem::GetResourceDefinitionFo
 
 	if (ResourceNodeId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] GetResourceDefinitionForComponent: No ResourceNode_ tag found on component"));
+		// Not a resource node (grass, a flower, a rock with no harvest): a normal answer -- every caller asks "is this a resource?" and handles null.
+		// Until Oct 19 this logged a Warning each time (214 in a ten-minute playtest: the inspect and resource-node queries over ground cover).
 		return nullptr;
 	}
 

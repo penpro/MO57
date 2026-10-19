@@ -175,6 +175,12 @@
 - **`bSimGravityDisabled` on a simulated proxy zeroes its velocity** -> the engine's `SimulateMovement` treats that flag as "stuck" (no
   extrapolation; anything reading velocity sees a standing pawn). Set it only when the proxy has no floor on this machine
   (`AMOCharacter::OnUpdateSimulatedPosition`, N-160 fixed Oct 19); probe `MO.Test.RemotePawns`. (Oct 17 / 19)
+- **`MO.Player.Face <x> <y> <z>` lands off target the first time** -> the shoulder camera swings around the pawn after the turn, so the eye
+  the aim was computed from moves; repeat it 2-3 times (1 s apart) before a right-click / E that must hit a small target (a ghost, a stone).
+  (Oct 19)
+- **A translucent material on a Nanite mesh draws the engine's default grey** ("Invalid material ... used on Nanite static mesh") -> force
+  the non-Nanite fallback while it is on (`SetForceDisableNanite`, as the building ghost does); a Nanite mesh whose material lacks "Used with
+  Nanite" draws grey in -game / cooked builds only (the editor fixes it on the fly). (Oct 19)
 - **A context popup in a BACKGROUND -game window closes itself in 0.15 s** -> `UMOGroundContextMenu` auto-closes when the real cursor is
   off it, and a window that isn't in front never gets the cursor warp: bring it to the front with the cursor on the popup
   (`win_input.ps1 -Action move`) before testing anything that needs the popup open; `MOUI_LOG` lines are compiled out of these builds, so

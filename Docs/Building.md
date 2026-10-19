@@ -50,6 +50,12 @@
 `PlannedGlow` until Complete (Wes, Oct 16: pale-white ghosts stay). Unbuilt floors used to look finished, so "fell through the floor"
 reports were unbuilt plans.
 
+The ghost material is translucent and Nanite draws only opaque / masked materials: on a Nanite mesh (the campfire's stones, the stick
+pieces) the engine drew its default grey material instead ("Invalid material ... used on Nanite static mesh"). Since Oct 19
+`ApplyGhostMaterialToAllMeshes` forces the non-Nanite fallback on each static mesh while it wears the ghost and
+`RestoreOriginalMaterials` gives Nanite back (the component's own setting is saved with its materials). Verified: placing a campfire and
+a stick wall logs no Nanite warning (the build before logged one for each).
+
 ## 4. Using a finished station
 
 E on a finished station opens its station menu: the server checks the client's claimed target with

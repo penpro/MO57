@@ -656,6 +656,7 @@ bool AMOBuildableActor::ApplyGhostMaterialToAllMeshes()
 		{
 			continue;
 		}
+		UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh);
 		if (!SavedMaterials.Contains(Mesh))
 		{
 			FMOBuildableSavedMaterials& Saved = SavedMaterials.Add(Mesh);
@@ -663,6 +664,13 @@ bool AMOBuildableActor::ApplyGhostMaterialToAllMeshes()
 			{
 				Saved.Materials.Add(Mesh->GetMaterial(i));
 			}
+			Saved.bForceDisableNanite = StaticMesh && StaticMesh->IsForceDisableNanite();
+		}
+		// The ghost material is translucent; Nanite draws only opaque / masked materials and gives anything else the engine's default grey material
+		// ("Invalid material ... used on Nanite static mesh", Oct 19 playtest: the campfire stones' preview and ghost). The non-Nanite fallback draws it.
+		if (StaticMesh && !StaticMesh->IsForceDisableNanite())
+		{
+			StaticMesh->SetForceDisableNanite(true);
 		}
 		for (int32 i = 0; i < Mesh->GetNumMaterials(); ++i)
 		{
@@ -716,6 +724,10 @@ void AMOBuildableActor::RestoreOriginalMaterials()
 		for (int32 i = 0; i < Num; ++i)
 		{
 			Mesh->SetMaterial(i, Pair.Value.Materials[i]);   // a null original clears the override: the mesh asset's own material again
+		}
+		if (UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
+		{
+			StaticMesh->SetForceDisableNanite(Pair.Value.bForceDisableNanite);   // built: Nanite again (the ghost had forced the fallback)
 		}
 	}
 	SavedMaterials.Reset();
