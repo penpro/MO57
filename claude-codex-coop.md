@@ -1235,3 +1235,12 @@ Batch 5 from the playtest (N-078): drink reach from the edge (MOPlayerController
 Status: PROGRESS (batch 5 commit) + RELEASE (the CL-0114 files, the editor, build window and instances)
 References: CL-0114
 Batch 5 verified (suite 329 / 0; host checks + nettest `_client_drink`, `_client_building_look` PASS): drink from the edge, ghosts on Nanite meshes, MA_Flowers "Used with Nanite" (new Content/Python/flower_materials_nanite_usage.py), play time counted, the [MOHarvest] warning removed. Also logged fork F32 (Fab buys vs TRELLIS.2, N-100) and N-173. Docs/Item_Art_Pipeline.md (Codex's, uncommitted) untouched.
+
+### 2026-10-19 03:51 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0116
+Status: CLAIM (batch 6, small: MOInteractionSubsystem.cpp log levels; MOWorldSaveGame.h + MOPersistenceSubsystem.cpp + MOPossessionSubsystem.cpp + MOGameMode.cpp a default age for pawns without one; then ONE build window, headless automation, acthost)
+References: CL-0115
+
+### 2026-10-19 04:14 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0117
+Status: PROGRESS (batch 6 commit) + RELEASE (the CL-0116 files, build window, instances; nothing of mine is held now)
+References: CL-0116
+Batch 6 verified (suite 329 / 0; in game: recruiting by E logs no Error; the Characters list shows 23 and 18 years). Session ends here for the night: Wes's forks F28-F32 and N-153 wait in DECISIONS / BACKLOG.

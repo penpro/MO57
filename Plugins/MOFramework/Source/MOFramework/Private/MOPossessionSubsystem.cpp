@@ -165,6 +165,7 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 			? FString::Printf(TEXT("Survivor_%s"), *Guid.ToString().Right(4))
 			: Identity->DisplayName.ToString();
 		WorldPawnRecord.Gender = Identity->Gender;
+		WorldPawnRecord.AgeInDays = FMOPersistedPawnRecord::DefaultAgeInDays(Guid);
 		WorldPawnRecord.StatusText = TEXT("Recruited");
 		WorldPawnRecord.LastPlayedTime = FDateTime::Now();
 		Records.Add(WorldPawnRecord);

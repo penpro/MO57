@@ -206,14 +206,15 @@ bool UMOInteractionSubsystem::FindServerInteractTarget(AController* InteractorCo
 		return false;
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] FindServerInteractTarget: Found valid target '%s'"), *HitActor->GetName());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteract] FindServerInteractTarget: Found valid target '%s'"), *HitActor->GetName());
 	OutTargetActor = HitActor;
 	return true;
 }
 
 bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorController, AActor* TargetActor)
 {
-	UE_LOG(LogMOFramework, Error, TEXT("[MOInteract] *** ServerExecuteInteract ENTRY *** target='%s'"), *GetNameSafe(TargetActor));
+	// Routine (every E press): Log, not Error -- until Oct 19 this January debug line put an Error in every log and bug report for each interaction.
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteract] ServerExecuteInteract target='%s'"), *GetNameSafe(TargetActor));
 
 	UWorld* World = GetWorld();
 	if (!World)

@@ -137,6 +137,13 @@ struct FMOPersistedPawnRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     int32 AgeInDays = 0;
 
+    /** The age a pawn has when nothing set one (18-40 years), fixed by its GUID so every list and save agrees. Only pawns the game mode
+     *  spawned got an age before Oct 19: the player's own, recruits and wild survivors read "0 years" in the possession list. */
+    static int32 DefaultAgeInDays(const FGuid& Guid)
+    {
+        return 18 * 365 + static_cast<int32>(GetTypeHash(Guid) % static_cast<uint32>(22 * 365));
+    }
+
     // Status
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     bool bIsDeceased = false;

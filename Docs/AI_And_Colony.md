@@ -121,6 +121,9 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   -> skill decay / schools -> relationships -> seasons -> dynasty courtship / marriage / REAL children -> winter shelter; F1 fire
   units 1-4: fire is warmth (`IMOLocalHeatSource`), dries clothes (~11x), cold villagers seek lit hearths, the hearth pass issues
   RefuelStation jobs (firewood demand joined food demand). Station AddFuel is transactional (returns the accepted count).
+- **A pawn's age** (Oct 19): `FMOPersistedPawnRecord::DefaultAgeInDays(Guid)` (18-40 years, fixed by the GUID) wherever a record is made without
+  one -- the save capture, the possession list's live-world rows, the game mode's spawn registration. Before, only game-mode spawns got an age;
+  the player's own pawn, recruits and wild survivors read "0 years" in the Characters list. Gender stays "Unknown" until F15.
 - **Recruitment** (Oct 10): `CanRecruitByStanding` judges trust built by shared game time (2 % per hour within 12 m) only for a colony
   of >= `RecruitGateMinRoster` (3); the first survivors just join. `BeginInteractionDetailed` returns an `EMORecruitmentOutcome` with
   the numbers, and `AMOPlayerController::ClientShowNotification` tells the player why. No quest appears because no survivor has

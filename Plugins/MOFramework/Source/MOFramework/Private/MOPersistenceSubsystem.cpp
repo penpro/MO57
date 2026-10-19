@@ -1234,6 +1234,10 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         {
             PawnRecord.Gender = IdentityComponent->Gender;
         }
+        if (PawnRecord.AgeInDays <= 0)
+        {
+            PawnRecord.AgeInDays = FMOPersistedPawnRecord::DefaultAgeInDays(PawnGuid);
+        }
 
         // Appearance (the character creator's colours, Oct 15 2026): the record's Appearance field existed but nothing ever filled it.
         if (const AMOMetaHumanCharacter* MetaHuman = Cast<AMOMetaHumanCharacter>(Pawn))

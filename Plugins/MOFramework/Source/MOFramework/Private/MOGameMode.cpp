@@ -1531,7 +1531,7 @@ void AMOGameMode::RegisterPawnWithPersistence(APawn* NewPawn)
 		Record.PawnClassPath = FSoftClassPath(NewPawn->GetClass());
 		Record.CharacterName = Identity->DisplayName.ToString();
 		Record.Gender = TEXT("Unknown");
-		Record.AgeInDays = FMath::RandRange(18 * 365, 40 * 365);
+		Record.AgeInDays = FMOPersistedPawnRecord::DefaultAgeInDays(Record.PawnGuid);
 		Record.bIsDeceased = false;
 		Record.HealthPercent = 1.0f;
 		Record.StatusText = TEXT("Healthy");
