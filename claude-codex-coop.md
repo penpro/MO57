@@ -1170,3 +1170,8 @@ Build window, editor and instance windfar are all closed / stopped; committing n
 Status: RELEASE (the build window, the editor, instance windfar -- all closed / stopped; every CLN-0003 / CLN-0004 file, committed with this entry)
 References: CLN-0001..0004
 N-167 done. Remaining wind graphs hold far from the origin (motion_probe jump share, 0 / 11.6 / 15 / 40 / 80 km, no distance trend); no graph needed the Fmod. New MOFramework.Data.FoliageWindPrecision (built clean, passes: 10 Pivot Painter functions, 3 sites, all reduced). Content/Python/pivot_painter_textures.py fixed the 6 BlackAlder Forest_08 / Sapling_01 / Seedling_01 data textures (mips + streaming off; gitignored vendor folder, so local only: rerun after a reimport). TRAPS §12: CLW-0005's wind line + a camera-fade measurement trap. Nothing of mine is running.
+
+### 2026-10-18 23:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0103
+Status: PROGRESS (docs only: Wes's answers to the waiting list)
+References: CL-0102
+Docs/BACKLOG.md + Docs/DECISIONS.md: Steam is smooth on a low-end joiner (N-161 / N-164 done, F25 closed with no change); caves must be "decently common" (BR18-13 -> new N-170, OPEN); N-053 deferred; N-100 = re-evaluate Fab against the ComfyUI pipeline; N-151 closed; N-153 waits on Wes (Law 6 is still in the global files).

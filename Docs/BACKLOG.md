@@ -17,7 +17,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -68,7 +68,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-050 | OPEN | Claude | Floating objects / boats via Oceanology buoyancy (supersedes MOBuoyancyComponent) | `Docs/Water.md` | P-3 |
 | N-051 | OPEN | Claude | Swimming as a complete loop: load-dependent buoyancy (no inventory mass API), fall damage into water, Space surfacing feel, swimming creatures, clothing distorts on horizontal poses, swim blends | Water §3 | P-1, G17 |
 | N-052 | OPEN | Claude | Softer mud lake bed (texture set) | worldgen To-do | |
-| N-053 | BLOCKED | Wes | Hair buns under water + creator DOF: engine patch #1 needs a source engine; Wes waits for an Epic fix | `Docs/Engine_Patches.md` | F11 |
+| N-053 | DEFERRED | Claude | Hair buns under water + creator DOF: engine patch #1 needs a source engine. Wes, Oct 18: "i originally thought one of the fixes for the processing was breaking the lakes but that was a separate issue we will revisit" | `Docs/Engine_Patches.md` | F11 |
 | N-054 | OPEN | Claude | Co-op: a client lighting its own torch at a fire (retest after a9a4de5d; reconcile with Light_Sources "verified") | Night report | |
 | N-055 | OPEN | Claude | Torch-raising arm pose (animation) | Light_Sources | |
 | N-056 | OPEN | Claude | Not modelled: smoke in dead-end galleries; rain on torches; torch from torch + survivors carrying torches; lamp fuel refill; snuff key; torch as fire for other uses | Light_Sources | |
@@ -128,7 +128,7 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
 | N-168 | OPEN | Claude | Bronze and iron spears (BronzeSpear01 / IronSpear01, their spearheads): items, recipes and DT_Weapons profiles exist, no meshes / icons yet (wooden, fire-hardened and flint spears have both) | `Docs/Item_Art_Pipeline.md` | Wes Oct 18 |
 | N-169 | OPEN | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths still name no killer (`OnPawnDied` has no instigator; the anatomy's `GetLastDamageInstigator` has it) | AI_And_Colony §1 | Oct 18 |
-| N-100 | WAITING | Wes | V3 real art via Fab (needs Wes's purchases; debug meshes hold) | pipeline V3 | |
+| N-100 | OPEN | Claude | Re-evaluate the Fab purchase list against the ComfyUI image-to-3D pipeline (Wes, Oct 18: "reevaluate these since i've moved a lot of stuff to the comfyui 3d modeling pipeline"): what still needs a bought asset (rigged / animated, large sets) vs what TRELLIS.2 can make | pipeline V3, `Docs/Item_Art_Pipeline.md` §8 | |
 
 ## Co-op
 
@@ -140,10 +140,10 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-113 | OPEN | Claude | Bug report form: the Open Discord button after the code move not re-clicked; contact field with a value | OVERNIGHT_LOG | |
 | N-114 | VERIFY | Claude | No build / harvest MO.Test verbs runnable from a client (nettest actions now has `_client_build`): close if covered | OVERNIGHT_LOG | |
 | N-160 | OPEN | Claude | Remote players' pawns read velocity 0 on every other machine: `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled` on every proxy and the engine zeroes a "stuck" proxy's velocity each tick (no extrapolation between updates). Fix to try: disable sim gravity only when the proxy has no floor under it; control `MO.RemotePawn.SimGravity 1` | Coop §7 | |
-| N-161 | WAITING | Wes | Rubber band after a joiner hitch >= 250 ms (the host's forced update): Steam A/B with the toggles, then F25 | Coop §7, DECISIONS F25 | |
+| N-161 | DONE-2026-10-18 | Wes | Rubber band after a joiner hitch: Wes, Oct 18 after the Steam test, "steam seems to be smooth even on low end computer". F25 closed with no change (stock); reopen on a report | Coop §7, DECISIONS 2026-10-18 | |
 | N-162 | DONE-2026-10-18 | Claude | ~2 cm height corrections on 0.8% of a joiner's moves (14% with +100 ms lag), invisible (snap <= 2 cm): find which floor disagrees (per-machine voxel collision? floor hover band). **Measured Oct 18 (nettest actions, `_joiner_long_run`):** the joiner standing still 1 km from the host was corrected ~10x/s by 69 cm for good: the HOST's floor there was voxel collision at z 5865.3, the joiner's own at 5796.2, the generator's ground 5796.6 on both -- the host's terrain collision around a far remote pawn is too high (coarser than the joiner's; the pawn's own invoker is 30 m, LOD unknown). Next: which collision component the host's floor is (invoker chunk or a far render chunk's collision) and its LOD | Coop §7 **Cause and fix (Oct 18):** two voxel collision layers, the pawn on the topmost; the host's render-chunk collision 1 km from its camera was up to ~1 m high. `AMOCharacter::RemotePlayerTerrainDetail` (MinLOD 0, 30 m on every other player's pawn): +93.1 -> +2.8 cm, 0 of 136 moves corrected (Coop section 7). |
 | N-163 | DONE-2026-10-18 | Claude | Replication references per-machine PCG ISM components: the floor session measured PCG meshes Static (an unresolvable base costs a warning, not a position; 3b2c6da9), and client-to-server instance requests no longer carry PCG pointers (`FMOInstanceRef`, BR18-2) | Coop §5, §7 | |
-| N-164 | WAITING | Wes | Steam smoothness test with a remote joiner on the Development package: recipe Coop §7 (stats log by themselves; send both MO57.log) | Coop §7 | |
+| N-164 | DONE-2026-10-18 | Wes | Steam smoothness test with a remote joiner: "yes steam seems to be smooth even on low end computer" (Wes, Oct 18) | Coop §7 | |
 | N-165 | DONE-2026-10-18 | Claude | Every healthy pawn read 180 / 110 mmHg (seen on the status panel, Oct 18): `CalculateBloodPressure` tested the blood-loss bands in the wrong order, a full volume took the worst class's shift and a bleed never lowered the pressure. `BloodLossSystolicShift` (continuous haemorrhage classes) + test BloodLossBands; five vitals tests that called authority-gated functions on an unowned component (and so tested nothing) now have an owner and assert; the status panel reads 120 / 80 (7a83bda8) | Medical_And_Survival §1 | |
 | BR18-1 | DONE-2026-10-18 | Claude | A joiner's harvest said "Inventory Full!": it ran in the joiner's UI on its own copy. Now server-owned and timed on the pawn (`FMOHarvestActions`, `ServerBeginHarvest`); `_client_harvest` (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-2 | DONE-2026-10-18 | Claude | Ground items: E did nothing for a joiner (PCG pointers unresolvable on the host) and right-click showed "Unknown Object" with no buttons. `FMOInstanceRef`; the menu names the item with Pick Up / Inspect; `_client_e_on_ground_item`, `_trust_instance_far` (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
@@ -157,7 +157,8 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | BR18-10 | DONE-2026-10-18 | Claude | Tool / focus hint showed through menus and world popups: one visibility rule (menu or world popup), checked on screen (7a83bda8) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-11 | DONE-2026-10-18 | Claude | Terraform 1 s in developer mode: `MO.Dev.TerraformSeconds` (default 1) while the world's HOST is in developer mode (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-12 | DONE-2026-10-18 | Claude | Lakes calmer: `mo.Lakes.WaveScale` 0.4 of the preset's wave heights; checked (lake amplitude 20 vs the sea's 50; calm in a screenshot) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
-| BR18-13 | WAITING | Wes | "All the caves are gone": since v11 caves are limestone-only and rare; the POI list finds them now (BR18-15). Whether they should be commoner is Wes's call | `Docs/BugReports_2026-10-18.md` | |
+| BR18-13 | DONE-2026-10-18 | Wes | "All the caves are gone": answered, Wes, Oct 18: "yes caves need to be decently common since they're ALSO hard to spot" -> N-170 | `Docs/BugReports_2026-10-18.md` | |
+| N-170 | OPEN | Claude | Caves decently common (BR18-13, Wes Oct 18): since v11 they are limestone-only and rare, and a cave mouth is hard to spot. Raise the density and measure it (the cave-mouth density test, `MO.WorldGen.FindCaveEntrance`), keep the v10 water-table / shore rules, and consider mouths that read from a distance | `Docs/Caves_And_Geology.md` | BR18-13 |
 | BR18-14 | OPEN | Claude | Cliffs not seated, see-through back side: the aligned `ed_cliff` slab species (SM_HugeSandstoneCliff_07) tilted with a steep slope (N-030 family, F9) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-15 | DONE-2026-10-18 | Claude | Caves in the POI list: "Cave entrance" (`FMOWorldGen::FindNearestCaveMouth`); checked in game (a mouth 6.4 km away, found in 1.8 s) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-16 | OPEN | Claude | UDW dynamic landscape weather effects: feed UDW's wetness / snow / puddles into M_QuixelBase's MO_Finish (scoped in the tracker) | `Docs/BugReports_2026-10-18.md` | |
@@ -233,12 +234,12 @@ re-checked defects were already fixed): **re-verify against current code before 
 | ID | Status | Owner | Item | Detail |
 |---|---|---|---|---|
 | N-150 | OPEN | Claude | Record the last Steam patch (date / time / commit) in `Docs/STEAM_RELEASES.md` whenever Wes asks for Steam patch notes (N9) | `Docs/TOOLING.md` § Steam patch notes |
-| N-151 | OPEN | Wes | CS399: weekly progress is updated every Sunday (last entry Week 2, Oct 5); check-in Nov 18 | `Docs/CS399/CS399_WEEKLY_PROGRESS.md` |
+| N-151 | CLOSED-2026-10-18 | Wes | CS399 weekly progress: Wes, Oct 18: "disregard this" | `Docs/CS399/CS399_WEEKLY_PROGRESS.md` |
 | N-156 | DONE-2026-10-18 | Codex | Corrected MOPlayerController SetPause comment and policy reference: controller-routed paths refuse, direct AGameModeBase::SetPause bypasses and must never be called. No runtime pause change | `7f73356b`; `Docs/PAUSE_POLICY.md` § Enforcement |
 | N-158 | OPEN | Claude | Store an explicit WorldId (FGuid) in UMOWorldSaveGame, made at new game and carried by every save, so identity no longer rides on the slot name (F24). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | DECISIONS 2026-10-17 F24 |
 | N-159 | OPEN | Claude | Optional cleanup: remove the unreachable `WBP_SavePanel` child from `WBP_MOInGameMenu` (`python Tools/ue.py ui remove`); `UMOInGameMenu::ShowSavePanel` / `UMOSavePanel::CreateNewSave` then have no caller | `Docs/UI.md` § 3 |
 | N-152 | OPEN | Claude | Codex's July audit docs in `Docs/agent/` say "Status: In progress" and were never closed: ask Codex to close or archive them | `Docs/agent/` |
-| N-153 | OPEN | Wes | Global CLAUDE.md and `D:\ClaudeMaster\CLAUDE_BIBLE.md` were corrected for the engine type and the principles' new home on 2026-10-17; Law 6 still says "commit only when asked" globally (MO57 overrides it per N1) | DECISIONS N1, N4 |
+| N-153 | WAITING | Wes | Law 6 ("commit only when asked"). Wes, Oct 18: "we got rid of this"; checked 2026-10-18: the global `C:/Users/penum/.claude/CLAUDE.md` (Law 6, line 11) and `D:/ClaudeMaster/CLAUDE_BIBLE.md` (lines 30 and 183) still say it. MO57's CLAUDE.md overrides it here (N1) | DECISIONS N1, N4 |
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
