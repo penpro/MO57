@@ -17,7 +17,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long studying an item takes · F27 cliff bands that read as a staircase.
+F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -60,7 +60,6 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-039 | VERIFY | Claude | Far canopy appearance survives cooking (M_FarCanopy ISM usage flag) | Codex handoff | G04 |
 | N-040 | OPEN | Claude | Per-instance grounding of compositions exists only as a census (auto-apply OFF: it broke compositions) | wes-calls-oct16 | |
 | N-041 | OPEN | Claude | Unifying world-features design (caves / rivers / landmarks / ore / player builds) mostly unbuilt | World_Features_Architecture | |
-| N-167 | OPEN | Claude | Foliage wind follow-ups to N-166: (1) measure the other graphs that add time to a world-space term the same way (`Tools/motion_probe.py`, 10+ km from the origin vs near it): `MF_WindGust` (MSPresets + LATEST), Epic's `SimpleGrassWind` in the hornbeam master `MS_Foliage_Material_LATEST/M_Foliage` (ElectricForest hornbeams were not measured), Fab `QMF_WindAnimation`; (2) an automation test that every Pivot Painter wind graph carries the `MO_WindPrecision` Fmod (needs a build window); (3) three Pivot Painter data textures have mips + streaming where the rest have none (`T_BlackAlder_Forest_08_*`, `Sapling_01_*`, `Seedling_01_*`: 8x2 px) | `Docs/PCG.md` §9 | |
 
 ## Water, light, weather
 
@@ -245,6 +244,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 - DONE-2026-10-18 hunting (Wes, Oct 18: deer should hear what comes up behind them, run far when hurt; wolves lose interest; spears): one punch no longer kills a deer (BP_MOMetaHuman_Female's fist BaseDamage 500 -> the class default 5), deaths name their killer (the attacker reaches the anatomy), creatures hear (NoTeam vs NoTeam was Friendly to the hearing sense), footfalls follow the real speed, a wounded deer flees 45 s, a wolf gives up 200 m from its den or after 20 s without gaining, a held spear fights with its own profile (N-099) and ArmorPenetration no longer cuts unarmored damage (`Docs/AI_And_Colony.md` §1).
 
+- DONE-2026-10-18 N-167 (follow-ups to N-166): the other wind graphs that add time to a world-space term (Epic SimpleGrassWind in the hornbeam master, MF_WindGust MSPresets / LATEST, Fab QMF_WindAnimation / QMF_WindGust) scale the world term down first and hold: no distance trend in `motion_probe`'s new jump share, in the world (hornbeams 10.9 km vs 0.2 km, black locust 11.6 vs 1 km) and with the same meshes against the sky at 0 / 11.6 / 15 / 40 / 80 km (wild grass 0-2 % everywhere); no graph needed the Fmod. `MOFramework.Data.FoliageWindPrecision` fails if a Pivot Painter wind graph adds time to the pivot without the `MO_WindPrecision` Fmod (10 functions, 3 sites, all reduced). The 6 BlackAlder Forest_08 / Sapling_01 / Seedling_01 Pivot Painter textures no longer have mips or streaming (`Content/Python/pivot_painter_textures.py`; gitignored vendor folder: rerun after a reimport) (`Docs/PCG.md` §9).
 - DONE-2026-10-18 N-166 (Wes, Oct 18: the Megascans trees' wind "moves smoothly ... then freeze[s] ... then glitch[es]"): the Pivot Painter wind added time to a WORLD-space pivot term in float, so 5-15 km from the origin each branch level moved one texel at a time; `Content/Python/foliage_wind_precision.py` reduces the offset mod 1200 first (MF_AdvancedWind_Level, PN_WindAnimation). Step share 34-47 % -> 0-1 %, TSR jumps 4-7 per 15 s -> 0 (`Docs/PCG.md` §9).
 - DONE-2026-10-18 N-162: a joiner far from the host was corrected on every move (host's coarse render-chunk collision up to ~1 m high); every machine now refines the terrain around every other player (`RemotePlayerTerrainDetail`): +93.1 -> +2.8 cm, 0 of 136 corrected.
 - DONE-2026-10-17 N-021: the next Steam patch notes warn that worlds from generator v8 (0573ab31) load with the v11 terrain, and that extra Save As slots show as separate entries.
