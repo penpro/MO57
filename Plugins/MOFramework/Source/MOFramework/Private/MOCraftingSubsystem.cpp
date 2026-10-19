@@ -310,15 +310,18 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	float TimeMultiplier = 1.0f;
 	float QualityMultiplier = 1.0f;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] CanCraftRecipe '%s': RequiredTools.Num()=%d"),
-		*RecipeId.ToString(), Recipe->RequiredTools.Num());
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace every recipe check
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] CanCraftRecipe '%s': RequiredTools.Num()=%d"),
+	// 	*RecipeId.ToString(), Recipe->RequiredTools.Num());
 
-	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace every recipe check (with the tool name below)
+	// const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
 	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
 	{
-		FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(ToolReq.ToolType));
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting]   Checking tool: Type='%s', MinQuality=%.1f, bIsRequired=%s"),
-			*ToolTypeName, ToolReq.MinQuality, ToolReq.bIsRequired ? TEXT("yes") : TEXT("no"));
+		// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace every recipe check
+		// FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(ToolReq.ToolType));
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting]   Checking tool: Type='%s', MinQuality=%.1f, bIsRequired=%s"),
+		// 	*ToolTypeName, ToolReq.MinQuality, ToolReq.bIsRequired ? TEXT("yes") : TEXT("no"));
 
 		FGuid ToolGuid;
 		float ToolQuality;
@@ -498,8 +501,9 @@ bool UMOCraftingSubsystem::HasRequiredKnowledge(
 		{
 			if (SkillsComponent->HasSkillLevel(KnowledgeId, 1))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via SkillsComponent (level >= 1)"),
-					*KnowledgeId.ToString());
+				// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace every recipe check
+				// UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via SkillsComponent (level >= 1)"),
+				// 	*KnowledgeId.ToString());
 				bHasKnowledge = true;
 			}
 		}
@@ -509,8 +513,9 @@ bool UMOCraftingSubsystem::HasRequiredKnowledge(
 		{
 			if (DiscoveryComponent->IsRecipeDiscovered(KnowledgeId))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via RecipeDiscoveryComponent"),
-					*KnowledgeId.ToString());
+				// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace every recipe check
+				// UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via RecipeDiscoveryComponent"),
+				// 	*KnowledgeId.ToString());
 				bHasKnowledge = true;
 			}
 		}
@@ -663,11 +668,13 @@ bool UMOCraftingSubsystem::FindBestTool(
 	OutItemGuid.Invalidate();
 	OutEffectiveness = 0.0f;
 
-	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
-	FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(ToolType));
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail (the tool name every FindBestTool line below prints)
+	// const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+	// FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(ToolType));
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Looking for ToolType='%s', MinEffectiveness=%.2f"),
-		*ToolTypeName, MinEffectiveness);
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Looking for ToolType='%s', MinEffectiveness=%.2f"),
+	// 	*ToolTypeName, MinEffectiveness);
 
 	if (!IsValid(Inventory) || ToolType == EMOToolType::None)
 	{
@@ -681,41 +688,46 @@ bool UMOCraftingSubsystem::FindBestTool(
 		FMOItemDefinitionRow ItemDef;
 		if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Item '%s' not in database"), Source, *ItemDefinitionId.ToString());
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Item '%s' not in database"), Source, *ItemDefinitionId.ToString());
 			return false;
 		}
 
 		// Check if this item has the required tool capability
 		float ItemEffectiveness = ItemDef.GetToolEffectiveness(ToolType);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Checking '%s' - bIsTool=%s, HasCapability=%s, Effectiveness=%.2f, Durability=%d"),
-			Source,
-			*ItemDefinitionId.ToString(),
-			ItemDef.bIsTool ? TEXT("yes") : TEXT("no"),
-			ItemEffectiveness > 0.0f ? TEXT("yes") : TEXT("no"),
-			ItemEffectiveness,
-			CurrentDurability);
+		// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Checking '%s' - bIsTool=%s, HasCapability=%s, Effectiveness=%.2f, Durability=%d"),
+		// 	Source,
+		// 	*ItemDefinitionId.ToString(),
+		// 	ItemDef.bIsTool ? TEXT("yes") : TEXT("no"),
+		// 	ItemEffectiveness > 0.0f ? TEXT("yes") : TEXT("no"),
+		// 	ItemEffectiveness,
+		// 	CurrentDurability);
 
 		// Check if this item can function as the required tool type
 		if (!ItemDef.bIsTool || ItemEffectiveness <= 0.0f)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - no capability for '%s'"),
-				Source, *ItemDefinitionId.ToString(), *ToolTypeName);
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - no capability for '%s'"),
+			// 	Source, *ItemDefinitionId.ToString(), *ToolTypeName);
 			return false;
 		}
 
 		// Check effectiveness threshold
 		if (ItemEffectiveness < MinEffectiveness)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness too low (%.2f < %.2f)"),
-				Source, *ItemDefinitionId.ToString(), ItemEffectiveness, MinEffectiveness);
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness too low (%.2f < %.2f)"),
+			// 	Source, *ItemDefinitionId.ToString(), ItemEffectiveness, MinEffectiveness);
 			return false;
 		}
 
 		// Check if tool has durability remaining (if applicable)
 		if (CurrentDurability == 0)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - broken (durability=0)"), Source, *ItemDefinitionId.ToString());
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - broken (durability=0)"), Source, *ItemDefinitionId.ToString());
 			return false; // Tool is broken
 		}
 
@@ -724,12 +736,14 @@ bool UMOCraftingSubsystem::FindBestTool(
 		{
 			OutItemGuid = ItemGuid;
 			OutEffectiveness = ItemEffectiveness;
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - MATCHED! Effectiveness=%.2f"),
-				Source, *ItemDefinitionId.ToString(), ItemEffectiveness);
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - MATCHED! Effectiveness=%.2f"),
+			// 	Source, *ItemDefinitionId.ToString(), ItemEffectiveness);
 			return true;
 		}
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness not better than current (%.2f vs %.2f)"),
-			Source, *ItemDefinitionId.ToString(), ItemEffectiveness, OutEffectiveness);
+		// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness not better than current (%.2f vs %.2f)"),
+		// 	Source, *ItemDefinitionId.ToString(), ItemEffectiveness, OutEffectiveness);
 		return false;
 	};
 
@@ -740,7 +754,8 @@ bool UMOCraftingSubsystem::FindBestTool(
 		UMOEquipmentComponent* EquipComp = Owner->FindComponentByClass<UMOEquipmentComponent>();
 		if (IsValid(EquipComp))
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Found equipment component on '%s'"), *Owner->GetName());
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Found equipment component on '%s'"), *Owner->GetName());
 
 			// Check left hand
 			FMOEquippedItem LeftHand = EquipComp->GetEquippedItem(EMOEquipmentSlot::LeftHand);
@@ -750,7 +765,8 @@ bool UMOCraftingSubsystem::FindBestTool(
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: LeftHand empty"));
+				// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: LeftHand empty"));
 			}
 
 			// Check right hand
@@ -761,12 +777,14 @@ bool UMOCraftingSubsystem::FindBestTool(
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: RightHand empty"));
+				// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: RightHand empty"));
 			}
 		}
 		else
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: No equipment component on '%s'"), *Owner->GetName());
+			// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: No equipment component on '%s'"), *Owner->GetName());
 		}
 	}
 	else
@@ -778,15 +796,17 @@ bool UMOCraftingSubsystem::FindBestTool(
 	TArray<FMOInventoryEntry> Entries;
 	Inventory->GetInventoryEntries(Entries);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Checking %d inventory entries"), Entries.Num());
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Checking %d inventory entries"), Entries.Num());
 
 	for (const FMOInventoryEntry& Entry : Entries)
 	{
 		CheckToolItem(Entry.ItemDefinitionId, Entry.ItemGuid, Entry.CurrentDurability, TEXT("Inventory"));
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Result - Found=%s, BestEffectiveness=%.2f"),
-		OutItemGuid.IsValid() ? TEXT("yes") : TEXT("no"), OutEffectiveness);
+	// DEBUG (MOCrafting, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Result - Found=%s, BestEffectiveness=%.2f"),
+	// 	OutItemGuid.IsValid() ? TEXT("yes") : TEXT("no"), OutEffectiveness);
 
 	return OutItemGuid.IsValid();
 }

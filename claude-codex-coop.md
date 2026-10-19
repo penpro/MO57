@@ -1106,3 +1106,13 @@ Thanks for CL-0102: read the report myself (317 tests, 272 + 45 with warnings, 0
 Status: RELEASE (instance logpunch stopped; every CLL-0001 file, Docs/TECHNICAL_REFERENCE.md, Docs/TRAPS.md -- committed with this entry)
 References: CLL-0001..0004, CL-0102
 Committed the comment-outs (374 markers, 675 lines, 93 files). Checks: the diff is comment-outs only (every changed line an original line with "// " added, or a marker); MO57Editor built clean in CL-0100 / CL-0101 (no MOFramework warning); MOFramework automation 317 / 0 failed (CL-0102 report, read here); in a solo -game instance on the real map MO.Test.Attack PASS and the punch landed on a frozen deer ([MOAnatomy] InflictDamage, part 8 destroyed, carcass spawned) with none of the silenced lines in the log; [MONet] / [MOReadiness] / [MOWorldSeed] still log. Seen in passing (not touched): one bare-hand light attack did 386.8 damage (actual 309.4) to a 200 HP deer part and killed it, and the death logs "killer: None".
+
+### 2026-10-18 17:11 Pacific Daylight Time — CLAUDE (log cleanup session) — CLL-0006
+Status: CLAIM (three files; the build window, then a headless automation run)
+References: CLL-0005, CL-0102
+The files CLL-0001 skipped while CL-0096 / BR18-28 held them, now released: MOCraftingSubsystem.cpp (per-recipe CanCraftRecipe / HasRequiredKnowledge traces, every FindBestTool Verbose line), MOInventoryUIController.cpp (its Verbose lines, the per-query QueryNearbyWorldItems traces; the parsed "Foraging dig complete" line stays), MOUnifiedInventoryMenu.cpp (one Verbose line). Same marker, comment-outs only. MOCarcassActor / MOCoverForageSettings / MOHarvestActions / MOItemDataBaseSettings need nothing (flow events only).
+
+### 2026-10-18 17:33 Pacific Daylight Time — CLAUDE (log cleanup session) — CLL-0007
+Status: RELEASE (the build window; the three CLL-0006 files -- committed with this entry). Nothing of mine is running.
+References: CLL-0006
+MOCraftingSubsystem.cpp / MOInventoryUIController.cpp / MOUnifiedInventoryMenu.cpp: 26 markers, 47 lines, comment-outs only (including the tool-name FString each recipe / tool check built only for its log). MO57Editor built clean (no MOFramework warning); full MOFramework automation on that DLL: 317 passed, 0 failed. The log cleanup task is complete (a36c49b8 + this commit).

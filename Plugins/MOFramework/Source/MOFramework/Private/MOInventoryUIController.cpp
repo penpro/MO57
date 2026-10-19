@@ -82,7 +82,8 @@ bool UMOInventoryUIController::IsInventoryMenuOpen() const
 
 void UMOInventoryUIController::ToggleInventoryMenu()
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] ToggleInventoryMenu START (frame %llu)"), GFrameCounter);
+	// DEBUG (MOInventoryUI, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] ToggleInventoryMenu START (frame %llu)"), GFrameCounter);
 
 	if (!IsLocalOwningPlayerController())
 	{
@@ -114,8 +115,9 @@ void UMOInventoryUIController::ToggleInventoryMenu()
 	}
 
 	const bool bIsOpen = IsInventoryMenuOpen();
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] IsInventoryMenuOpen() = %s"),
-		bIsOpen ? TEXT("TRUE") : TEXT("FALSE"));
+	// DEBUG (MOInventoryUI, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] IsInventoryMenuOpen() = %s"),
+	// 	bIsOpen ? TEXT("TRUE") : TEXT("FALSE"));
 
 	if (bIsOpen)
 	{
@@ -198,7 +200,8 @@ void UMOInventoryUIController::OpenInventoryMenu()
 
 void UMOInventoryUIController::CloseInventoryMenu()
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] CloseInventoryMenu START (frame %llu)"), GFrameCounter);
+	// DEBUG (MOInventoryUI, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] CloseInventoryMenu START (frame %llu)"), GFrameCounter);
 
 	// Get references before clearing cache
 	UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
@@ -434,8 +437,9 @@ TArray<AMOWorldItem*> UMOInventoryUIController::QueryNearbyWorldItems() const
 	const FVector Origin = Pawn->GetActorLocation();
 	const float RadiusSquared = NearbyItemsQueryRadius * NearbyItemsQueryRadius;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] QueryNearbyWorldItems starting from origin %s, radius=%.0f"),
-		*Origin.ToString(), NearbyItemsQueryRadius);
+	// DEBUG (MOInventoryUI, disabled Oct 18): re-enable to trace every nearby-items query
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] QueryNearbyWorldItems starting from origin %s, radius=%.0f"),
+	// 	*Origin.ToString(), NearbyItemsQueryRadius);
 
 	int32 TotalItemsInWorld = 0;
 	int32 ItemsInRange = 0;
@@ -470,8 +474,9 @@ TArray<AMOWorldItem*> UMOInventoryUIController::QueryNearbyWorldItems() const
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] QueryNearbyWorldItems: TotalInWorld=%d, InRange=%d, Pickupable=%d"),
-		TotalItemsInWorld, ItemsInRange, ItemsPickupable);
+	// DEBUG (MOInventoryUI, disabled Oct 18): re-enable to trace every nearby-items query
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] QueryNearbyWorldItems: TotalInWorld=%d, InRange=%d, Pickupable=%d"),
+	// 	TotalItemsInWorld, ItemsInRange, ItemsPickupable);
 
 	return Result;
 }

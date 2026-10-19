@@ -838,7 +838,8 @@ void UMOUnifiedInventoryMenu::HandleNearbyItemsChanged()
 {
 	// Refresh the nearby panel when items are dropped to world or picked up
 	// Use a short delay to allow the physics system to register newly spawned actors
-	UE_LOG(LogMOFramework, Verbose, TEXT("[UnifiedInventoryMenu] HandleNearbyItemsChanged - scheduling delayed refresh"));
+	// DEBUG (UnifiedInventoryMenu, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[UnifiedInventoryMenu] HandleNearbyItemsChanged - scheduling delayed refresh"));
 
 	if (UWorld* World = GetWorld())
 	{
