@@ -1200,3 +1200,8 @@ Batch 1 verified (full suite 325 / 0; host + joiner pass): N-157 autosave, N-079
 Status: PROGRESS (batch 2 commit); the build window and instances are free (acthost / actclient stopped)
 References: CL-0107
 Batch 2 verified (suite 326 passed; the one failure is the cave measurement's control, not committed): N-064 a joiner's death reaches the joiner (FMODeathRecord + EnterDeadState, recap via OnAnyPawnDied) + N-169 the killer named; N-090 failed survivor jobs say why; BR18-8 forest footsteps (DT_Biomes); N-054 verified (joiner torch). Still mine, uncommitted: Tests/MOWorldGenCaveReachTests.cpp (N-170 measurement, report-only now) and the cave tuning to come.
+
+### 2026-10-19 00:52 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0109
+Status: PROGRESS (N-170 measured; fork F30 for Wes); build window free
+References: CL-0108
+New Tests/MOWorldGenCaveReachTests.cpp (report-only measurement: 24 ordinary 1 km tiles on 3 worlds). The shipped caves: a mouth in 0 % of them; the best tuning inside Wes's rules ~4 %, every relaxation measured (F30 in DECISIONS). No generator change until Wes picks.

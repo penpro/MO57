@@ -31,7 +31,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F30 how caves become common (built entrances).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -173,7 +173,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR18-11 | DONE-2026-10-18 | Claude | Terraform 1 s in developer mode: `MO.Dev.TerraformSeconds` (default 1) while the world's HOST is in developer mode (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-12 | DONE-2026-10-18 | Claude | Lakes calmer: `mo.Lakes.WaveScale` 0.4 of the preset's wave heights; checked (lake amplitude 20 vs the sea's 50; calm in a screenshot) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-13 | DONE-2026-10-18 | Wes | "All the caves are gone": answered, Wes, Oct 18: "yes caves need to be decently common since they're ALSO hard to spot" -> N-170 | `Docs/BugReports_2026-10-18.md` | |
-| N-170 | OPEN | Claude | Caves decently common (BR18-13, Wes Oct 18): since v11 they are limestone-only and rare, and a cave mouth is hard to spot. Raise the density and measure it (the cave-mouth density test, `MO.WorldGen.FindCaveEntrance`), keep the v10 water-table / shore rules, and consider mouths that read from a distance | `Docs/Caves_And_Geology.md` | BR18-13 |
+| N-170 | WAITING | Wes | Caves decently common (BR18-13): measured Oct 19, the shipped caves put a walk-in mouth in 0 % of ordinary 1 km tiles of cave country (`MOFramework.WorldGen.CaveReach`); no tuning inside Wes's rules (16 deg mouths, limestone) gets past ~12 %. Fork F30 (recommended: built doline entrances) | DECISIONS F30, `Docs/Caves_And_Geology.md` | BR18-13 |
 | BR18-14 | OPEN | Claude | Cliffs not seated, see-through back side: the aligned `ed_cliff` slab species (SM_HugeSandstoneCliff_07) tilted with a steep slope (N-030 family, F9) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-15 | DONE-2026-10-18 | Claude | Caves in the POI list: "Cave entrance" (`FMOWorldGen::FindNearestCaveMouth`); checked in game (a mouth 6.4 km away, found in 1.8 s) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-16 | OPEN | Claude | UDW dynamic landscape weather effects: feed UDW's wetness / snow / puddles into M_QuixelBase's MO_Finish (scoped in the tracker) | `Docs/BugReports_2026-10-18.md` | |

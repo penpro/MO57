@@ -25,6 +25,7 @@
 | Water gate | no cave air below sea level + `CaveWaterClearanceCm` 5 m (fade 6 m; `CaveMinZCm` starts there); no cave within `CaveShoreKeepOutCm` 250 m of LOW ground (base height under the 18 m river/basin ceiling); 120-180 m from upland lake shores | v10, Oct 17 |
 | Karst only | `bCavesOnlyInLimestone` (in the params hash): non-limestone nodes of the 16 m water-gate lattice close, so a contact tapers over a few metres | v11, Oct 17 |
 | Density | ~4 mouths per km2 of hill country (16-32 deg band), ~11 per km2 of karst hillside; none on flat lowland or in the ranges. A coastal spawn can be ~9 km from the nearest mouth (world 31415926) | measured Oct 17 |
+| Reach | Ordinary ground: a walk-in mouth in 0 % of 24 random 1 km tiles of cave country (3 worlds); most tiles have no ground at >= 16 deg. `MOFramework.WorldGen.CaveReach` reports it per world and per tile (slope, limestone, passages) and for candidate tunings. Making caves common is fork F30 (N-170) | measured Oct 19 |
 
 Why the 16-32 deg band: lower bands give more mouths (14-24: 8.5/km2, 12-20: 13, 10-16: 18.5) but a 3 m tube on a gentle slope cuts
 an open trench, which Wes ruled out ("no holes in flat ground").
