@@ -58,6 +58,7 @@
 #include "MOWeatherIntegrationSubsystem.generated.h"
 
 class IMOWeatherProviderInterface;
+class UMaterialParameterCollection;
 
 // ============================================================================
 // DELEGATES
@@ -527,6 +528,32 @@ public:
 	 */
 	FSoftObjectPath GetCurrentWeatherPresetPath() const;
 
+	/**
+	 * BP_WeatherBridge fills FMOWeatherState with Ultra Dynamic Weather's own numbers, which run 0-10 (Rain 7 = the "Rain" preset); the struct and every
+	 * reader (heat index, the pawn's wetting, the ground) mean 0-1. GetCurrentWeatherState scales them by this, once, at the boundary (Oct 19 2026).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|Config", meta=(ClampMin="0.0"))
+	float ProviderIntensityScale = 0.1f;
+
+	// ============================================================================
+	// GROUND WEATHER (BR18-16): the open ground's wetness and snow cover
+	// ============================================================================
+
+	/** The ground's wetness / snow cover now (the host's, replicated through AMOGameState on a client). */
+	const FMOGroundWeatherState& GetGroundWeather() const { return GroundWeather; }
+
+	/** Set it outright (save load, dev verb MO.Weather.Ground). Host only: a client's next update takes the host's again. */
+	void SetGroundWeather(const FMOGroundWeatherState& NewState);
+
+	/** How fast the ground answers the weather (real rates, game time). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|Ground")
+	FMOGroundWeatherRates GroundRates;
+
+	/** Where the terrain material reads the ground state (scalars GroundWetness, GroundSnow). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|Ground")
+	TSoftObjectPtr<UMaterialParameterCollection> GroundWeatherCollection =
+		TSoftObjectPtr<UMaterialParameterCollection>(FSoftObjectPath(TEXT("/MOFramework/WorldSystems/MPC_MOGroundWeather.MPC_MOGroundWeather")));
+
 	// ============================================================================
 	// DELEGATES
 	// ============================================================================
@@ -640,4 +667,21 @@ private:
 
 	/** Check for weather changes and fire delegates. */
 	void CheckForWeatherChanges();
+
+	/** The ground's state: advanced here on the host, taken from AMOGameState on a client. */
+	FMOGroundWeatherState GroundWeather;
+
+	/** The game time GroundWeather was last advanced to (0 ticks = not yet: the next update starts from now). */
+	FDateTime LastGroundAdvance;
+
+	/** What the material collection was last given (it is written only on a change). */
+	FMOGroundWeatherState GroundWrittenToMaterial;
+	bool bGroundWrittenToMaterial = false;
+	bool bGroundCollectionMissing = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialParameterCollection> LoadedGroundCollection;
+
+	/** Host: advance the ground by the game time since the last update with the weather now, publish it; client: take the host's. Then the material. */
+	void UpdateGroundWeather();
 };

@@ -22,6 +22,8 @@
 #include "VoxelParameter.h"
 #include "VoxelParameterOverridesOwner.h"
 #include "VoxelPinValue.h"
+#include "VoxelFloatMetadata.h"
+#include "VoxelMetadataOverrides.h"
 #include "Graphs/VoxelHeightGraphStamp.h"
 #include "Graphs/VoxelVolumeGraphStamp.h"
 #include "Graphs/VoxelVolumeGraph.h"
@@ -178,6 +180,22 @@ int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, F
 						const int32 MaxLOD = FMOWorldGen::CaveMaxLOD(*FMOWorldGenParamsProvider::Get());
 						VGStamp->LODRange = FInt32Interval(0, MaxLOD);
 						UE_LOG(LogMOFramework, Log, TEXT("[MOWorldSeed] Cave stamp '%s': LOD range 0..%d (no cave is resolved past LOD %d)"), *Actor->GetName(), MaxLOD, MaxLOD);
+
+						// What the cave stamp carves has rock overhead: no rain, puddles or snow there (BR18-16). The override rides the stamp's blend alpha, so the
+						// open ground keeps the metadata's default 0 and a mouth fades between; the terrain material reads it.
+						if (UVoxelFloatMetadata* Shelter = Cast<UVoxelFloatMetadata>(GetDefault<UMOWorldGenSettings>()->CaveWeatherShelterMetadata.TryLoad()))
+						{
+							FVoxelMetadataOverride* Existing = VGStamp->MetadataOverrides.Overrides.FindByPredicate([Shelter](const FVoxelMetadataOverride& O) { return O.Metadata == Shelter; });
+							FVoxelMetadataOverride& Override = Existing ? *Existing : VGStamp->MetadataOverrides.Overrides.AddDefaulted_GetRef();
+							Override.Metadata = Shelter;
+							Override.Value = FVoxelPinValue::Make(1.0f);
+							UE_LOG(LogMOFramework, Log, TEXT("[MOWorldSeed] Cave stamp '%s': weather shelter %s = 1"), *Actor->GetName(), *Shelter->GetName());
+						}
+						else
+						{
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldSeed] Cave stamp '%s': no weather shelter metadata (%s): caves will get rain and snow"),
+								*Actor->GetName(), *GetDefault<UMOWorldGenSettings>()->CaveWeatherShelterMetadata.ToString());
+						}
 					}
 				}
 

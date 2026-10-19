@@ -20,6 +20,7 @@ void AMOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AMOGameState, RemovedInstances);
 	DOREPLIFETIME(AMOGameState, TerrainZones);
 	DOREPLIFETIME(AMOGameState, bHostDeveloperMode);
+	DOREPLIFETIME(AMOGameState, GroundWeather);
 }
 
 void AMOGameState::BeginPlay()
@@ -94,6 +95,20 @@ void AMOGameState::SetWorldWeatherInfo(const FMOWorldWeatherInfo& NewInfo)
 	check(HasAuthority());
 	WorldWeather = NewInfo;
 	ForceNetUpdate(); // a weather change is rare and worth sending now
+}
+
+void AMOGameState::SetGroundWeather(const FMOGroundWeatherState& NewState)
+{
+	check(HasAuthority());
+	// Wetness and snow move slowly; a step this small is invisible on the ground and keeps the property quiet between changes (a reset to 0 always goes).
+	const bool bStep = FMath::Abs(NewState.Wetness - GroundWeather.Wetness) >= GroundWeatherReplicationStep
+		|| FMath::Abs(NewState.SnowCover - GroundWeather.SnowCover) >= GroundWeatherReplicationStep
+		|| (NewState.Wetness == 0.0f && GroundWeather.Wetness != 0.0f) || (NewState.SnowCover == 0.0f && GroundWeather.SnowCover != 0.0f)
+		|| (NewState.Wetness == 1.0f && GroundWeather.Wetness != 1.0f) || (NewState.SnowCover == 1.0f && GroundWeather.SnowCover != 1.0f);
+	if (bStep)
+	{
+		GroundWeather = NewState;
+	}
 }
 
 void AMOGameState::OnRep_WorldClock()

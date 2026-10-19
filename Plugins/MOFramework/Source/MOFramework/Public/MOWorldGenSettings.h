@@ -55,6 +55,14 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Water", meta=(AllowedClasses="/Script/VoxelCore.VoxelSurfaceTypeInterface"))
 	FSoftObjectPath UplandLakeBedSurfaceType = FSoftObjectPath(TEXT("/Game/VoxelExamples/NaniteMaterials/Materials/DarkPebbles/VST_MI_DarkPebbles.VST_MI_DarkPebbles"));
 
+	/**
+	 * Voxel float metadata the cave stamp (VVG_MOCaves) writes 1 into on every surface it carves: rock overhead, so Ultra Dynamic Weather's wetness, puddles and snow
+	 * must not reach it (BR18-16). The stamp's own blend alpha carries it, so the open ground keeps the default 0 and a cave mouth fades between. The terrain
+	 * material reads it (Get Voxel Metadata in M_QuixelBase, Content/Python/upgrade_terrain_material.py). Empty = caves get the weather.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Caves", meta=(AllowedClasses="/Script/Voxel.VoxelFloatMetadata"))
+	FSoftObjectPath CaveWeatherShelterMetadata = FSoftObjectPath(TEXT("/Game/Penumbra/Maps/VFM_MOWeatherShelter.VFM_MOWeatherShelter"));
+
 	/** Build a fresh snapshot from the current settings + DT_Biomes (game thread). Does not publish. */
 	static FMOWorldGenParamsRef BuildParams();
 

@@ -230,6 +230,10 @@
 - **Far mountains show a checkerboard / a 12 km tear** -> chunk HOLES from a world-spanning volume stamp -> every volume stamp gets tight bounds AND a LOD range (cave stamp `LODRange {0, CaveMaxLOD}`). (volume-stamp-holes)
 - **Caves don't match the ground** -> only the height stamp was seeded -> seed both (`ApplySeedToStamps`). **Meshing artefacts in caves** -> a hard gate in the field -> continuous penalties; test max |gradient|. (caves-and-lighting)
 - **"INVALID STAMP"** -> a stray VoxelStampActor with no stamp in the level. (caves-and-lighting)
+- **A voxel metadata the material samples reads 0 everywhere** -> no stamp writes it, or the asset has no Guid (one made with
+  `create_asset` and no factory hit an ensure in `FVoxelMetadataSingleton::RegisterFromAssetData`) -> give it one
+  (`unreal.GuidLibrary.new_guid`) and save. A stamp-level metadata override is a constant blended by the stamp's alpha; a per-position
+  value needs the graph's Output metadata pin, and voxel graphs cannot be edited from Python (the node classes are private). (Oct 19)
 - **Skinny-tower mountains / walls at patch borders** -> every wavelength in `FMOWorldGenTuning` is in CENTIMETRES -> check units first. (terrain-v6)
 - **A coarse LOD is slow** -> a per-cell search cheap at LOD 0 runs per sample at coarse LODs -> LOD-cull every generator feature by its sample step. (pcg-load)
 - **A new default breaks the v1 golden anchor** -> `RunProbe(false)` must restore it. Any geometry change bumps `CurrentGeneratorVersion` + re-pins. (worldgen doc)
@@ -292,6 +296,11 @@
 - **Rows of snow patches / a far checker on slopes** -> one axis-aligned noise read repeating; detail normal maps at range -> rotated reads,
   fade detail normals with distance; run the shadows-off control before blaming shadows. ddx / ddy return 0 in the Nanite custom node. (terrain-material-far-tiling)
 - **Beach sand over the whole coastal plain** -> a fixed 40 m height band -> band = 8 % of the edge's height above sea. (terrain-material-far-tiling)
+- **A weather number 10x too big** -> `BP_WeatherBridge` hands Ultra Dynamic Weather's 0-10 values -> read the state only through
+  `UMOWeatherIntegrationSubsystem::GetCurrentWeatherState` (scales by `ProviderIntensityScale`). **UDW's material wetness / snow ignore a
+  changed duration at runtime** (cached at BeginPlay) -> the ground's state is MO's (`FMOGroundWeather`, `Docs/Weather_And_Time.md` §2a).
+  **UDW BP variables read through Python (`Rain`, `Material Wetness`) stay at their defaults while the sky rains** -> read the parameter
+  collection (`unreal.MaterialLibrary.get_scalar_parameter_value`) or `MO.Weather.Info`. (Oct 19)
 - **Clouds blocky in a 4K shot** -> `r.VolumetricRenderTarget 0`; the sky only moves FORWARD in game time; `MO.Weather.Director 0` + `SetPreset Clear_Skies` for stable shots. (steam-store-art)
 - **"STREAMING POOL OVER BUDGET"** -> Epic texture pool 1000 MB -> 4000 (Cine 6000) + LimitPoolSizeToVRAM. (overnight-polish)
 - **Trees freeze, then snap, every 0.4-1.6 s, only far from the origin** -> a wind graph adds time to a WORLD-space term (a Pivot Painter

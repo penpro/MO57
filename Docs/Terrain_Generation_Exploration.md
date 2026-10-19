@@ -21,7 +21,9 @@
 > closed, then rerun; never delete expressions from editor Python). It holds anti-tiling (two reads on rotated grids at unrelated scales; no
 > single axis-aligned read at mid scales), far detail-normal flattening (`FarNormalFlatten` 0.85; Cliff / IcelandicQuarryRock 0.15), distance
 > tint, the `RoughnessMin` floor, snow by altitude + aspect (north = +X; the UDS noon sun shines along +X; snow line +-600 m x lean toward the
-> sun). ddx / ddy return 0 in the Nanite pass's custom node: pass steepness in as an input. Verify with fixed `MO.Cam.LookAt` cameras on one
+> sun), and the weather on the ground (Oct 19, BR18-16: MO_Weather reads `MPC_MOGroundWeather`'s wetness / snow cover and the cave stamp's
+> `VFM_MOWeatherShelter` metadata -- wet ground, puddles, a snow cover, none in caves; `Docs/Weather_And_Time.md` §2a). ddx / ddy return 0 in
+> the Nanite pass's custom node: pass steepness in as an input. Verify with fixed `MO.Cam.LookAt` cameras on one
 > slope at 3 km / 1 km / 300 m, packaged.
 > **Reading this file:** the sections below are a dated build log, newest first (Oct 11 night at the top, then back to the Oct 9 exploration
 > and its rationale). The header above is the current state; where a dated section disagrees with it, the header wins.

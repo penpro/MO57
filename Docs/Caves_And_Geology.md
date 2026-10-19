@@ -37,6 +37,9 @@ an open trench, which Wes ruled out ("no holes in flat ground").
   transform) carves a signed distance (cm, negative = air) out of the height terrain. Graph: `Get Position 3D (double, World)` +
   the `Seed` parameter -> `MO Terrain Caves` -> `Output Volume.Distance`; `MO Terrain Caves Bounds` -> `.Bounds`; surface default
   `VST_Cliff`.
+- **Weather shelter (Oct 19, BR18-16):** the cave stamp also carries a metadata override, `VFM_MOWeatherShelter` = 1, so what it carves
+  gets no rain, puddles or snow in the terrain material (open ground keeps the default 0; a mouth fades with the stamp's alpha). A built
+  entrance's doline bowl is carved by the same stamp and stays bare too (N-174). `Docs/Weather_And_Time.md` §2a.
 - `UMOWorldSeedSubsystem::ApplySeedToStamps` seeds BOTH graph stamps (height and volume). Seeding only the height stamp carves caves
   that do not line up with the ground.
 - **The cave stamp's `LODRange` is `{0, FMOWorldGen::CaveMaxLOD}`** (4 at 50 cm voxels). A volume stamp's bounds make the plugin mesh

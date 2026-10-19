@@ -1266,3 +1266,8 @@ Open-backed HugeSandstoneCliff slabs stand upright with their face down the slop
 ### 2026-10-19 11:06 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0122
 Status: CLAIM (BR18-16 UDW wetness / puddles / snow on the voxel terrain: Content/Python/upgrade_terrain_material.py + M_QuixelBase and the MI_ surface instances, new /Game/Penumbra/Maps/VFM_MOWeatherShelter, MOWorldGenSettings.h, MOWorldSeedSubsystem.cpp; the build window, the editor, instances)
 References: CL-0121
+
+### 2026-10-19 12:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0123
+Status: PROGRESS (BR18-16 commit) + RELEASE (the CL-0122 files, the editor, build window, instances wxa / gamehost / gameclient)
+References: CL-0122
+Wet ground, puddles and snow cover on the voxel terrain from MO's own ground state (FMOGroundWeather on the game clock, replicated, saved; MPC_MOGroundWeather -> M_QuixelBase MO_Weather); caves sheltered by VFM_MOWeatherShelter; the bridge's 0-10 weather numbers scaled to 0-1 at GetCurrentWeatherState. Suite 332 / 0. Follow-ups N-174 (doline bowls), N-175 (exposure reads sheltered), N-176 (pawn wetting rates).

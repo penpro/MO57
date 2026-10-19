@@ -17,6 +17,7 @@
  * - EMOTemperatureUnit: Celsius vs Fahrenheit
  * - FMOExposureShelter: Multi-axis shelter test result (overhead/wind/enclosure)
  * - FMOWeatherSaveData: Persistence structure
+ * - FMOGroundWeatherState / FMOGroundWeatherRates / FMOGroundWeather: the open ground's wetness and snow cover (BR18-16)
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -37,6 +38,10 @@
  *   Synchronous" on apply. WeatherPresetObject stays as a transient runtime
  *   cache for efficiency but disk roundtrips go through WeatherPresetPath.
  *   Verified working via MO.Weather.* console commands + save/load test.
+ *
+ * [2026-10] UDW NUMBERS RUN 0-10: BP_WeatherBridge fills FMOWeatherState with Ultra Dynamic Weather's own Rain / Cloud Coverage / ... (Rain 7 = the "Rain"
+ *   preset), not 0-1. UMOWeatherIntegrationSubsystem::GetCurrentWeatherState scales them (ProviderIntensityScale 0.1): read the state through it, never
+ *   the provider directly. (Before Oct 19 2026 every reader got 0-10: the heat index read cloud 7.5 as 750 % humidity, a pawn soaked 7x too fast.)
  *
  * =============================================================================
  * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherIntegrationSubsystem.h
@@ -324,6 +329,93 @@ struct MOFRAMEWORKCORE_API FMOExposureShelter
 };
 
 /**
+ * What the weather has done to the open ground (BR18-16, Oct 19 2026): how wet its surface is and how much fallen snow covers it, both 0..1. The host
+ * advances it on GAME time (FMOGroundWeather::Advance, UMOWeatherIntegrationSubsystem), AMOGameState replicates it, saves keep it, and the terrain material
+ * reads it through MPC_MOGroundWeather (wet darker ground, puddles, a snow cover; caves are kept out by the shelter metadata).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORKCORE_API FMOGroundWeatherState
+{
+	GENERATED_BODY()
+
+	/** 0 = dry, 1 = the surface soaked (puddles stand on the flat ground). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground")
+	float Wetness = 0.0f;
+
+	/** 0 = bare, 1 = the ground hidden under fallen snow. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground")
+	float SnowCover = 0.0f;
+
+	bool operator==(const FMOGroundWeatherState& Other) const { return Wetness == Other.Wetness && SnowCover == Other.SnowCover; }
+	bool operator!=(const FMOGroundWeatherState& Other) const { return !(*this == Other); }
+};
+
+/**
+ * How fast the ground answers the weather, in GAME time, from the real phenomenon (Principle 11: no demo rates -- Ultra Dynamic Weather's own material state
+ * soaked the ground in 20 s and dried it in 90 s). The intensities they are quoted for are ReferenceIntensity; heavier rain / snow is proportionally faster.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORKCORE_API FMOGroundWeatherRates
+{
+	GENERATED_BODY()
+
+	/** Minutes of steady rain to soak the ground's surface: soil darkens within minutes and stands in puddles after about ten. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.1"))
+	float SoakMinutes = 10.0f;
+
+	/** Hours the sun takes to dry soaked ground's surface after the rain (clear sky, by day). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.1"))
+	float DryHoursInSun = 2.0f;
+
+	/** Drying rate under a full overcast or at night, as a share of the sun's (about 7 h instead of 2). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float NoSunDryFactor = 0.3f;
+
+	/** Drying rate of frozen ground (only sublimation), as a share. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float FrozenDryFactor = 0.25f;
+
+	/** Minutes of steady snowfall to cover the ground (a few cm hide soil and grass). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.1"))
+	float SnowCoverMinutes = 45.0f;
+
+	/** Hours a full snow cover takes to melt at +5 C; the rate scales with the degrees above freezing (degree-hours), doubles under rain, and is nil at or
+	 *  below freezing. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.1"))
+	float MeltHoursAt5C = 6.0f;
+
+	/** Snow falling at or above this air temperature (C) melts as it lands: it wets the ground instead of covering it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground")
+	float SnowSticksBelowC = 1.0f;
+
+	/** A melting cover's water reaches the ground like a rain of this intensity (at the +5 C melt rate): a few cm of snow melting over hours is about a
+	 *  light rain's water, so a thaw keeps the ground soaked. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MeltWaterAsRain = 0.3f;
+
+	/** The intensity (0-1) the minutes above are for: Ultra Dynamic Weather's "Rain" / "Snow" presets (7 of 10). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Ground", meta=(ClampMin="0.05", ClampMax="1.0"))
+	float ReferenceIntensity = 0.7f;
+};
+
+/** The weather over one step, as the ground meets it. */
+struct FMOGroundWeatherInputs
+{
+	float Rain01 = 0.0f;
+	float Snow01 = 0.0f;
+	float Cloud01 = 0.0f;
+	float TemperatureC = 10.0f;
+	bool bSunUp = true;
+};
+
+/** The ground's answer to the weather (pure; host side). */
+struct MOFRAMEWORKCORE_API FMOGroundWeather
+{
+	/** Advance State by GameSeconds of the weather In (any length: a 4 h offline catch-up is integrated in one-minute steps with the weather held). */
+	static void Advance(FMOGroundWeatherState& State, const FMOGroundWeatherInputs& In, double GameSeconds, const FMOGroundWeatherRates& Rates = FMOGroundWeatherRates());
+};
+
+/**
  * Save data for weather and time of day state.
  */
 USTRUCT(BlueprintType)
@@ -375,4 +467,12 @@ struct MOFRAMEWORKCORE_API FMOWeatherSaveData
 	/** Whether this save data is valid/populated. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
 	bool bIsValid = false;
+
+	/** The ground's wetness / snow cover when saved (BR18-16). Filled by UMOWeatherIntegrationSubsystem, not the bridge. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	FMOGroundWeatherState Ground;
+
+	/** False in saves from before the ground state existed (they load with dry, bare ground). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	bool bHasGround = false;
 };

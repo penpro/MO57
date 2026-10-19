@@ -81,7 +81,8 @@
   "we don't care about any old saves or preserving them"** -- no migration; the warning is informational.
 - Removed PCG instances: the `WorldRemovals` domain (`Docs/PCG.md` §7). Terrain edits: `TerrainModification` + `VoxelSculpt`.
 - **Offline catch-up:** the clock advances by the real offline gap capped at 4 h; crafting uses the same cap; vitals do not fast-forward
-  (`Docs/Weather_And_Time.md` §1).
+  (`Docs/Weather_And_Time.md` §1). The ground's wetness / snow cover is saved with the weather (`FMOWeatherSaveData.Ground`) and advanced
+  from the saved game time, so the catch-up dries or wets it too (`Docs/Weather_And_Time.md` §2a, Oct 19).
 - Load flow: pawns are held (`SetLoadHold`) while the terrain regenerates, then re-grounded (`Docs/Coop_And_Networking.md` §4).
 - Save thumbnails: `FScreenshotRequest` + `OnScreenshotCaptured` (not `ReadPixels`; `Docs/UI.md` §4).
 - **Play time** (Oct 19): `UMOPersistenceSubsystem` runs a session clock (`RestartSessionClock` at a new world, a load and each save;

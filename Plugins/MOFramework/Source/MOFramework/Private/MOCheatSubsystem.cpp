@@ -5235,6 +5235,42 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				State.RainIntensity, State.SnowIntensity,
 				State.WindIntensity, State.ThunderIntensity,
 				TempC);
+			const FMOGroundWeatherState& Ground = Sys->GetGroundWeather();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] ground: wet=%.3f snow=%.3f"), Ground.Wetness, Ground.SnowCover);
+			if (const APawn* Pawn = World->GetFirstPlayerController() ? World->GetFirstPlayerController()->GetPawn() : nullptr)
+			{
+				const FMOWeatherExposure Exposure = Sys->GetWeatherExposureAtLocation(Pawn->GetActorLocation());
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] at the pawn: exposure rain=%.2f snow=%.2f wind=%.2f sheltered=%d feels=%.1fC"),
+					Exposure.Rain, Exposure.Snow, Exposure.Wind, Exposure.bIsSheltered ? 1 : 0,
+					Sys->GetFeelsLikeTemperature(Pawn->GetActorLocation(), EMOTemperatureUnit::Celsius));
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.Ground"),
+		TEXT("Print the open ground's wetness / snow cover (0-1), or set them on the host: MO.Weather.Ground <wet> [snow]. They then follow the weather again (BR18-16)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOWeatherIntegrationSubsystem* Sys = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] No subsystem")); return; }
+			if (Args.Num() >= 1)
+			{
+				if (World->GetNetMode() == NM_Client)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] the ground is the host's: set it there"));
+					return;
+				}
+				FMOGroundWeatherState NewState = Sys->GetGroundWeather();
+				NewState.Wetness = FCString::Atof(*Args[0]);
+				if (Args.Num() >= 2)
+				{
+					NewState.SnowCover = FCString::Atof(*Args[1]);
+				}
+				Sys->SetGroundWeather(NewState);
+			}
+			const FMOGroundWeatherState& Ground = Sys->GetGroundWeather();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] ground: wet=%.3f snow=%.3f"), Ground.Wetness, Ground.SnowCover);
 		}),
 		ECVF_Default));
 

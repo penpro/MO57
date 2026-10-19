@@ -9,7 +9,7 @@
 > `UMOWeatherIntegrationSubsystem` (+ `IMOWeatherProviderInterface`, `BP_WeatherBridge` in `Plugins/MOFramework/Content/WorldSystems`),
 > `UMOWeatherDirectorSubsystem`, `UMOWorldSyncSubsystem`, `UMOTimeOfDayDialog` / `SMOClockDial`, `UMOQuickPickDialog`.
 > **Dev verbs:** `MO.Clock.Info`, `MO.Clock.SetTimeScale <x>`, `MO.Clock.SetTime`, `MO.Weather.SetPreset <name>`, `.Director 0|1`,
-> `.Info`, `.Next`, `.SkyTime`; console words `weather` / `time` (popups; `weather rain`, `time 2pm` skip them).
+> `.Info`, `.Next`, `.SkyTime`, `.Ground [wet] [snow]`; console words `weather` / `time` (popups; `weather rain`, `time 2pm` skip them).
 > **Open items:** `Docs/BACKLOG.md` § Water, light, weather. **Decisions:** DECISIONS 2026-10-08 (use the bridge), 2026-10-17 (F6 closed: Wes saw weather and time right on a client),
 > F13 (default time scale). Temperature effects on the body: `Docs/Medical_And_Survival.md`.
 
@@ -39,6 +39,39 @@
   a weather set by anyone else (adopts it, holds it 6 game hours). `MO.Weather.Director 0|1` (cvar), `.Info`, `.Next`.
 - Snow on peaks and aspect snow are a material rule (`Docs/Terrain_Generation_Exploration.md`, M_QuixelBase); weather per biome
   (rain / snow line at altitude) is open.
+- **UDW's numbers run 0-10** (Oct 19 2026): `BP_WeatherBridge` fills `FMOWeatherState` with Ultra Dynamic Weather's own Rain / Cloud
+  Coverage / Fog / Wind / Thunder (Rain 7 = the "Rain" preset) through a plain Make node, while the struct and every reader mean 0-1.
+  `UMOWeatherIntegrationSubsystem::GetCurrentWeatherState` scales them once (`ProviderIntensityScale` 0.1, clamped). Before, the heat
+  index read cloud 7.5 as 750 % humidity and a pawn in rain soaked 7x faster than `WetnessGainPerSecond` says. `MO.Weather.Info` now
+  prints Rain=0.70 under "Rain". UDW's exposure test (`MakeWeatherExposureFromUDW`) is 0-1 by UDW's docs and was left alone.
+
+## 2a. Ground weather: wet ground, puddles, snow cover (BR18-16, Oct 19 2026)
+
+- **What:** the open ground's `Wetness` and `SnowCover` (0-1, `FMOGroundWeatherState`), and the terrain material showing them: soaked
+  ground darker (`WetDarken` per surface) and glossier than the dry floor (`WetRoughness`), puddles on near-flat ground once soaked
+  (`PuddleAmount`: sand 0, gravel 0.35, soil 1), a snow cover that comes in patchy then whole on faces up to ~45 deg, merged with the
+  altitude snow (`Content/Python/upgrade_terrain_material.py` MO_Weather / MO_WetRoughness).
+- **The model is MO's, on the game clock** (`FMOGroundWeather::Advance`, MOFrameworkCore; rates in `FMOGroundWeatherRates`): a steady
+  rain (0.7) soaks the surface in 10 min; the sun dries it in 2 h (overcast / night at 0.3 of that, frozen ground 0.25); snowfall (0.7)
+  below +1 C covers the ground in 45 min, above it melts on landing and wets; a cover melts in 6 h at +5 C (degree-hours, doubled
+  under rain, none at or below freezing) and its water keeps the ground soaked like a light rain. Test
+  `MOFramework.Weather.GroundAnswersTheWeather`. **Why not UDW's own material state:** it soaked the ground in 20 s and dried it in 90 s
+  (demo rates), ignored runtime changes of its durations (they are cached at BeginPlay; there is no callable refresh), runs on real
+  seconds rather than the game clock, saves nothing, and each client simulates its own.
+- **Flow:** the host's `UMOWeatherIntegrationSubsystem::UpdateGroundWeather` (every `WeatherCheckInterval`, 1 s) advances it by the
+  GAME time since the last update with the weather now (a `time` skip or the offline catch-up dries / wets the ground over the skipped
+  hours; gaps over 48 h are capped as calendar jumps) -> `AMOGameState::GroundWeather` (replicated in steps of 0.004) -> every machine
+  writes `MPC_MOGroundWeather` (GroundWetness, GroundSnow) -> the terrain material. Saved in `FMOWeatherSaveData.Ground`
+  (`bHasGround`; older saves load dry), restored from the saved game time.
+- **Caves stay dry:** the cave stamp writes 1 into the voxel float metadata `VFM_MOWeatherShelter` (stamp metadata override,
+  `UMOWorldSeedSubsystem::ApplySeedToStamps`, path `UMOWorldGenSettings::CaveWeatherShelterMetadata`), blended by the stamp's own
+  alpha (open ground 0, a fade at a mouth); the material's `Get Voxel Metadata` masks the weather by it. **Known limit:** a built
+  entrance's doline bowl is carved by the same stamp, so it stays bare in snow and dry in rain (BACKLOG N-174).
+- **Dev:** `MO.Weather.Ground [wet] [snow]` prints or (host) sets it; `MO.Weather.Info` prints it with the exposure at the pawn.
+- **Verified Oct 19** (Meadow `MO.BiomeTest`, seed 670711536): under "Rain" the host's ground rose 0.068 -> 0.122 in 32 s (1/600 per s);
+  same view and light at 0 / 1 / snow 1: dry, dark with sky-reflecting puddles, white; a host + joiner (`nettest game --keep`): the
+  host's `MO.Weather.Ground 0.85` read 0.850 on the client, and snow set on the host turned the client's ground white (ground mean
+  43 -> 81-118); save `MOTestGround` at 0.6 / 0.3 -> load restored 0.603 / 0.300.
 
 ## 3. Co-op sync
 

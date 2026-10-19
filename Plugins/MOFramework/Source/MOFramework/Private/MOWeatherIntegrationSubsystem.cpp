@@ -10,6 +10,9 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "EngineUtils.h"
+#include "MOGameState.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialParameterCollection.h"
 
 void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -308,6 +311,7 @@ void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)
 	{
 		TimeSinceLastCheck = 0.0f;
 		CheckForWeatherChanges();
+		UpdateGroundWeather();
 	}
 }
 
@@ -514,8 +518,16 @@ FMOWeatherState UMOWeatherIntegrationSubsystem::GetCurrentWeatherState() const
 		return FMOWeatherState();
 	}
 
-	return IMOWeatherProviderInterface::Execute_GetCurrentWeatherState(
-		WeatherProvider.GetObject());
+	// The bridge hands Ultra Dynamic Weather's 0-10 numbers; FMOWeatherState means 0-1 (ProviderIntensityScale).
+	FMOWeatherState State = IMOWeatherProviderInterface::Execute_GetCurrentWeatherState(WeatherProvider.GetObject());
+	const auto Scale = [this](float V) { return FMath::Clamp(V * ProviderIntensityScale, 0.0f, 1.0f); };
+	State.CloudCoverage = Scale(State.CloudCoverage);
+	State.Fog = Scale(State.Fog);
+	State.RainIntensity = Scale(State.RainIntensity);
+	State.SnowIntensity = Scale(State.SnowIntensity);
+	State.WindIntensity = Scale(State.WindIntensity);
+	State.ThunderIntensity = Scale(State.ThunderIntensity);
+	return State;
 }
 
 FText UMOWeatherIntegrationSubsystem::GetWeatherDisplayName() const
@@ -754,6 +766,91 @@ void UMOWeatherIntegrationSubsystem::CheckForWeatherChanges()
 }
 
 // ============================================================================
+// GROUND WEATHER (BR18-16)
+// ============================================================================
+
+void UMOWeatherIntegrationSubsystem::SetGroundWeather(const FMOGroundWeatherState& NewState)
+{
+	GroundWeather.Wetness = FMath::Clamp(NewState.Wetness, 0.0f, 1.0f);
+	GroundWeather.SnowCover = FMath::Clamp(NewState.SnowCover, 0.0f, 1.0f);
+	UWorld* World = GetWorld();
+	if (AMOGameState* GameState = World ? World->GetGameState<AMOGameState>() : nullptr)
+	{
+		if (GameState->HasAuthority())
+		{
+			GameState->SetGroundWeather(GroundWeather);
+		}
+	}
+}
+
+void UMOWeatherIntegrationSubsystem::UpdateGroundWeather()
+{
+	UWorld* World = GetWorld();
+	if (!World || !World->IsGameWorld())
+	{
+		return;
+	}
+	AMOGameState* GameState = World->GetGameState<AMOGameState>();
+	if (World->GetNetMode() == NM_Client)
+	{
+		// The host's ground (a client's own weather would drift: its sky follows the host's preset, not its history).
+		if (GameState)
+		{
+			GroundWeather = GameState->GetGroundWeather();
+		}
+	}
+	else
+	{
+		const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+		if (Clock && HasWeatherProvider())
+		{
+			const FDateTime Now = Clock->GetGameDateTime();
+			if (LastGroundAdvance.GetTicks() > 0 && Now > LastGroundAdvance)
+			{
+				// Game time, not frame time: a time skip or the offline catch-up dries / wets the ground over the skipped hours (the weather now held).
+				const FMOWeatherState Weather = GetCurrentWeatherState();
+				FMOGroundWeatherInputs In;
+				In.Rain01 = Weather.RainIntensity;
+				In.Snow01 = Weather.SnowIntensity;
+				In.Cloud01 = Weather.CloudCoverage;
+				In.TemperatureC = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
+				In.bSunUp = IsDaytime();
+				// Two game days at most: a longer gap is a calendar jump (a mismatched saved sky date), not weather the ground lived through.
+				const double Seconds = FMath::Min((Now - LastGroundAdvance).GetTotalSeconds(), 48.0 * 3600.0);
+				FMOGroundWeather::Advance(GroundWeather, In, Seconds, GroundRates);
+			}
+			LastGroundAdvance = Now;
+		}
+		if (GameState)
+		{
+			GameState->SetGroundWeather(GroundWeather);
+		}
+	}
+
+	// Every machine draws its own terrain: the collection is local.
+	if (!bGroundWrittenToMaterial || GroundWeather != GroundWrittenToMaterial)
+	{
+		if (!LoadedGroundCollection && !bGroundCollectionMissing)
+		{
+			LoadedGroundCollection = GroundWeatherCollection.LoadSynchronous();
+			bGroundCollectionMissing = LoadedGroundCollection == nullptr;
+			if (bGroundCollectionMissing)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] no ground weather collection at %s: the terrain shows no rain or snow"),
+					*GroundWeatherCollection.ToString());
+			}
+		}
+		if (LoadedGroundCollection)
+		{
+			UKismetMaterialLibrary::SetScalarParameterValue(World, LoadedGroundCollection, TEXT("GroundWetness"), GroundWeather.Wetness);
+			UKismetMaterialLibrary::SetScalarParameterValue(World, LoadedGroundCollection, TEXT("GroundSnow"), GroundWeather.SnowCover);
+		}
+		GroundWrittenToMaterial = GroundWeather;
+		bGroundWrittenToMaterial = true;
+	}
+}
+
+// ============================================================================
 // PERSISTENCE
 // ============================================================================
 
@@ -771,6 +868,8 @@ FMOWeatherSaveData UMOWeatherIntegrationSubsystem::BuildWeatherSaveData() const
 	// Delegate to provider for full save data capture
 	SaveData = IMOWeatherProviderInterface::Execute_BuildWeatherSaveData(WeatherProvider.GetObject());
 	SaveData.bIsValid = true;
+	SaveData.Ground = GroundWeather;   // ours, not the bridge's (BR18-16)
+	SaveData.bHasGround = true;
 
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOWeatherIntegration] BuildWeatherSaveData OUT: bIsValid=%s DateTime=%s Cloud=%.3f Fog=%.3f PresetPath=%s PresetObject=%s"),
@@ -800,6 +899,12 @@ bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveDa
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: bIsValid=false — rejecting"));
 		return false;
 	}
+
+	// The ground as saved (older saves: dry and bare), advanced from the saved game time: the clock's offline catch-up then dries / wets it like any other time.
+	SetGroundWeather(SaveData.bHasGround ? SaveData.Ground : FMOGroundWeatherState());
+	LastGroundAdvance = SaveData.DateTime.GetTicks() > 0 ? SaveData.DateTime : FDateTime(0);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] ground restored: wet %.3f snow %.3f (from %s)"),
+		GroundWeather.Wetness, GroundWeather.SnowCover, SaveData.bHasGround ? TEXT("the save") : TEXT("an older save: dry"));
 
 	if (!HasWeatherProvider())
 	{

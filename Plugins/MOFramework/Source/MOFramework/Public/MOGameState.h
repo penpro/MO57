@@ -19,6 +19,7 @@
 #include "MOWorldSyncTypes.h"
 #include "MOWorldRemovalTypes.h"
 #include "MOTerrainModificationTypes.h"
+#include "MOWeatherTypes.h"
 #include "MOGameState.generated.h"
 
 UCLASS()
@@ -64,6 +65,12 @@ public:
 	void SetWorldClockInfo(const FMOWorldClockInfo& NewInfo);
 	void SetWorldWeatherInfo(const FMOWorldWeatherInfo& NewInfo);
 
+	/** The open ground's wetness / snow cover as the host advances it (BR18-16; UMOWeatherIntegrationSubsystem). Authority sets it; it changes slowly
+	 *  (minutes to hours), so only steps of GroundWeatherReplicationStep are sent. */
+	const FMOGroundWeatherState& GetGroundWeather() const { return GroundWeather; }
+	void SetGroundWeather(const FMOGroundWeatherState& NewState);
+	static constexpr float GroundWeatherReplicationStep = 0.004f;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
@@ -93,6 +100,9 @@ private:
 
 	UPROPERTY(Replicated)
 	bool bHostDeveloperMode = false;
+
+	UPROPERTY(Replicated)
+	FMOGroundWeatherState GroundWeather;
 
 	FTimerHandle DevModeRefreshHandle;
 

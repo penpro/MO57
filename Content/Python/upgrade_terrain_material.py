@@ -16,6 +16,11 @@ What the graph gets (all parameters are overridable per material instance; defau
   4. MO_NormalMod: patchy relief strength, snow flattening, and (Oct 13 evening) the FAR detail-normal fade: past ~250 m the few-metre detail normal maps light every
      tile alike and a far slope reads as a checker; they fade toward the mesh normal by FarNormalFlatten (0.85; cliff / quarry rock 0.15, because a coarse LOD's flat-shaded
      rock triangles show self-shadow stripes without them).
+  5. MO_Weather (BR18-16, Oct 19 2026): the ground's weather state, MPC_MOGroundWeather's GroundWetness / GroundSnow (UMOWeatherIntegrationSubsystem advances them on the
+     game clock at real rates -- a rain soaks the ground in ~10 min, the sun dries it in ~2 h, snow covers it in ~45 min and melts above freezing -- and replicates
+     them; Ultra Dynamic Weather's own material state soaked it in 20 s and dried it in 90 s) -> wet ground (darker by WetDarken, glossier toward WetRoughness after the RoughnessMin floor: MO_WetRoughness), puddles on near-flat ground once it
+     is soaked (PuddleAmount; sand drains), weather snow (patchy, then whole; on faces up to ~45 deg) merged with the altitude snow. Masked by the voxel metadata
+     VFM_MOWeatherShelter, which the cave stamp writes (rock overhead: no rain or snow in a cave; UMOWorldSeedSubsystem sets the override).
 NO AXIS-ALIGNED SINGLE READS of the noise at mid scales: one read repeats exactly at its period (a 180 m read printed rows of identical snow patches on every mountain).
 Each mid-scale term is two reads on rotated grids at unrelated scales; the snow line wanders on the 1.1 km / 4.7 km reads.
 Idempotent: on a graph that already has the MO_ nodes only their shader code is updated (see main()); on the pristine graph it builds them.
@@ -32,6 +37,13 @@ MASTER = BASE + "/M_QuixelBase"
 NOISE_DIR = BASE + "/Macro"
 NOISE_PNG = "D:/UEProjects/MO57/Saved/GeneratedTextures/macro/T_MOMacroNoise.png"
 NOISE_ASSET = NOISE_DIR + "/T_MOMacroNoise"
+# the ground's weather state (UMOWeatherIntegrationSubsystem::GroundWeatherCollection writes these two scalars on every machine)
+GROUND_DIR = "/MOFramework/WorldSystems"
+GROUND_MPC = GROUND_DIR + "/MPC_MOGroundWeather"
+GROUND_PARAMS = ("GroundWetness", "GroundSnow")
+# the cave stamp writes 1 here (UMOWorldGenSettings::CaveWeatherShelterMetadata)
+SHELTER_DIR = "/Game/Penumbra/Maps"
+SHELTER = SHELTER_DIR + "/VFM_MOWeatherShelter"
 
 
 def log(msg):
@@ -59,6 +71,46 @@ def import_noise():
     EAL.save_loaded_asset(tex)
     log("imported " + NOISE_ASSET)
     return tex
+
+
+def ensure_ground_collection():
+    if EAL.does_asset_exist(GROUND_MPC):
+        return unreal.load_asset(GROUND_MPC)
+    mpc = TOOLS.create_asset("MPC_MOGroundWeather", GROUND_DIR, unreal.MaterialParameterCollection, unreal.MaterialParameterCollectionFactoryNew())
+    params = []
+    for name in GROUND_PARAMS:
+        sp = unreal.CollectionScalarParameter()
+        sp.set_editor_property("parameter_name", name)
+        sp.set_editor_property("default_value", 0.0)   # dry, bare: what a world without the subsystem shows
+        params.append(sp)
+    mpc.set_editor_property("scalar_parameters", params)
+    EAL.save_loaded_asset(mpc)
+    log("created " + GROUND_MPC)
+    return mpc
+
+
+def collection_param(mat, mpc, name, x, y):
+    n = MEL.create_material_expression(mat, unreal.MaterialExpressionCollectionParameter, x, y)
+    n.set_editor_property("collection", mpc)
+    n.set_editor_property("parameter_name", name)
+    n.set_editor_property("desc", "MO_" + name)
+    return n
+
+
+def ensure_shelter_metadata():
+    md = unreal.load_asset(SHELTER) if EAL.does_asset_exist(SHELTER) else None
+    if md is None:
+        md = TOOLS.create_asset("VFM_MOWeatherShelter", SHELTER_DIR, unreal.VoxelFloatMetadata, None)
+        md.set_editor_property("default_value", 0.0)                                          # the open ground: under the sky
+        md.set_editor_property("gpu_packing", unreal.VoxelFloatMetadataPacking.ONE_BYTE)      # 0..1 is all it holds
+        log("created " + SHELTER)
+    # A metadata is known to the voxel runtime by its Guid (asset registry tag). Created without the plugin's factory it has none (an ensure in
+    # FVoxelMetadataSingleton::RegisterFromAssetData, Oct 19 2026): give it one.
+    if not unreal.GuidLibrary.is_valid_guid(md.get_editor_property("guid")):
+        md.set_editor_property("guid", unreal.GuidLibrary.new_guid())
+        log("gave %s a Guid" % SHELTER)
+    EAL.save_loaded_asset(md)
+    return md
 
 
 WARP_CODE = """
@@ -94,6 +146,11 @@ c *= 1.0 + float3(0.05, 0.0, -0.05) * v * MacroAmount * 2.0;
 float far = smoothstep(FarStart, max(FarEnd, FarStart + 1.0), d) * FarAmount;
 c = lerp(c, FarColor * (1.0 + v * 0.55), far);
 
+// WEATHER (Ultra Dynamic Weather, BR18-16; Weather = MO_Weather's wet, puddle, snow): water in the pores darkens the ground -- less light scatters back
+// out of it (soil and sand most, rock least: WetDarken per surface); standing water darker still, the bottom seen through it
+c *= lerp(1.0, WetDarken, Weather.x);
+c *= lerp(1.0, 0.72, Weather.y);
+
 // snow: altitude line broken up by noise, flat-ish faces only, steeper faces hold snow higher up
 // the snow line wanders on the LARGE scales (a mountain's snow is not polka dots); the 180 m term only frays its edge
 float n = ((m4 - 0.5) * 0.45 + (m3 - 0.5) * 0.35 + (m2 - 0.5) * 0.30) * 2.0;
@@ -115,9 +172,42 @@ float soft = smoothstep(30000.0, 250000.0, d);
 float slopeMask = smoothstep(slopeMin - 0.10 - 0.22 * soft, slopeMin + 0.06 + 0.12 * soft, up + n * 0.04);
 // far voxel LODs are coarse: their per-triangle normals checker the snow into blocks, so the slope term fades out and the far snow cap follows altitude alone
 slopeMask = lerp(slopeMask, 1.0, smoothstep(150000.0, 600000.0, d));
-float snow = snowH * slopeMask * SnowAmount;
+float snow = max(snowH * slopeMask * SnowAmount, Weather.z);   // the snow line's snow, or the snow that fell (MO_Weather)
 c = lerp(c, SnowColor * (0.93 + 0.07 * (v * 0.5 + 0.5)), snow);
 return float4(c, snow);
+"""
+
+WEATHER_CODE = """
+// The weather on the ground at this pixel (BR18-16, Oct 19 2026). Wet / SnowCov = the open ground's wetness and snow cover (MPC_MOGroundWeather: the host
+// advances them on the game clock at real rates and replicates them). Shelter = the voxel metadata the cave stamp writes (rock overhead: 1 in a cave,
+// 0 under the sky, a fade at the mouth). Returns (wet, puddle, snow, 0).
+float d = max(D, 1.0);
+float open = saturate(1.0 - Shelter) * Amount;
+float up = saturate(VN.z);
+// where the hollows are: two reads on grids rotated against each other at unrelated scales (one axis-aligned read repeats on a grid)
+float2 r1 = float2(0.80 * P.x - 0.60 * P.y, 0.60 * P.x + 0.80 * P.y);
+float2 r2 = float2(0.28 * P.x + 0.96 * P.y, -0.96 * P.x + 0.28 * P.y);
+float fa = NoiseTex.SampleLevel(NoiseTexSampler, r1 / 1370.0 + float2(0.41, 0.17), max(0.0, log2(d / 1370.0))).b;
+float fb = NoiseTex.SampleLevel(NoiseTexSampler, r2 / 530.0 + float2(0.07, 0.66), max(0.0, log2(d / 530.0))).g;
+float field = saturate(0.5 + (fa - 0.5) * 0.8 + (fb - 0.5) * 0.45);
+// WET: the rain reaches every open face; a steep face sheds its water and reads a little drier
+float wet = saturate(Wet) * open * lerp(0.7, 1.0, up);
+// PUDDLES: standing water once the ground is soaked (wetness past half), on near-flat ground, in the hollows first; a surface that drains holds none (PuddleAmount)
+float soak = smoothstep(0.5, 1.0, saturate(Wet)) * open * PuddleAmount;
+float t = lerp(1.05, 0.68, soak);
+float puddle = smoothstep(t, t + 0.035, field) * smoothstep(0.965, 0.992, up);
+// SNOW that fell: patchy at first (the high field), whole at full coverage; it lies on faces up to ~45 deg and slides off steeper ones
+float cov = saturate(SnowCov) * open;
+float snow = smoothstep(1.0 - cov * 1.35, 1.18 - cov * 1.35, field) * smoothstep(0.62, 0.80, up);
+return float4(wet, puddle * (1.0 - snow), snow, 0.0);
+"""
+
+WETROUGH_CODE = """
+// Wet ground is glossier than the dry floor (R arrives after RoughnessMin, which Wes set to 2.0 = fully rough on every surface, Oct 14): water fills the
+// micro-relief. A puddle is a near mirror; snow (Snow = all of it, the snow line's and the weather's) keeps its own roughness.
+float r = saturate(R);
+r = lerp(r, WetRoughness, Weather.x * (1.0 - Snow));
+return lerp(r, 0.06, Weather.y);
 """
 
 NORMAL_CODE = """
@@ -137,7 +227,8 @@ float3 nn = normalize(float3(N.xy * k, N.z));
 // by FarFlatten per surface (FarNormalFlatten): soil / grass / heath fully, cliff rock barely -- a coarse LOD's rock faces are flat-shaded triangles whose self-shadow
 // stripes the detail normals hide. (Screen derivatives of the position are zero in this Nanite pass, so the steepness cannot be measured here.)
 float farFlat = smoothstep(25000.0, 220000.0, d) * FarFlatten;
-return normalize(lerp(nn, float3(0.0, 0.0, 1.0), max(Snow, farFlat)));
+// snow and standing water (Puddle, MO_Weather) are flat surfaces over the relief
+return normalize(lerp(nn, float3(0.0, 0.0, 1.0), max(max(Snow, Puddle), farFlat)));
 """
 
 
@@ -191,14 +282,18 @@ def main():
         if isinstance(e, unreal.MaterialExpressionCustom):
             custom_by_desc[str(e.get_editor_property("description"))] = e
     if "MO_Finish" in custom_by_desc:
+        if "MO_Weather" not in custom_by_desc:
+            # FINISH_CODE reads the Weather input: writing it into a graph without MO_Weather would break the shader
+            log("!! this graph predates MO_Weather (BR18-16): `git checkout f78553e3 -- <M_QuixelBase.uasset>` with the editor closed, then rerun; nothing changed")
+            return
         custom_by_desc["MO_Finish"].set_editor_property("code", FINISH_CODE)
         custom_by_desc["MO_WarpOffset"].set_editor_property("code", WARP_CODE)
         custom_by_desc["MO_NormalMod"].set_editor_property("code", NORMAL_CODE)
+        custom_by_desc["MO_Weather"].set_editor_property("code", WEATHER_CODE)
+        custom_by_desc["MO_WetRoughness"].set_editor_property("code", WETROUGH_CODE)
         MEL.recompile_material(m)
         EAL.save_loaded_asset(m)
         log("updated the shader code of the existing MO_ nodes in place")
-        if not any(str(e.get_editor_property("desc")) == "MO_RoughnessFloor" for e in MEL.get_material_expressions(m)):
-            log("!! this graph predates MO_RoughnessFloor (RoughnessMin does nothing): `git checkout f78553e3 -- <M_QuixelBase.uasset>` with the editor closed, then rerun")
         apply_surface_overrides()
         return
 
@@ -228,6 +323,10 @@ def main():
     p["FarColor"] = vector(m, "FarColor", (0.030, 0.045, 0.026), X0, Y0 + 1000)
     p["SnowColor"] = vector(m, "SnowColor", (0.78, 0.82, 0.88), X0, Y0 + 1100)
     p["RoughnessMin"] = scalar(m, "RoughnessMin", 0.65, X0, Y0 + 1200)
+    p["WetDarken"] = scalar(m, "WetDarken", 0.55, X0, Y0 + 1350, group="MO Weather")
+    p["PuddleAmount"] = scalar(m, "PuddleAmount", 1.0, X0, Y0 + 1450, group="MO Weather")
+    p["WetRoughness"] = scalar(m, "WetRoughness", 0.40, X0, Y0 + 1550, group="MO Weather")
+    p["WeatherAmount"] = scalar(m, "WeatherAmount", 1.0, X0, Y0 + 1650, group="MO Weather")
     tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureObjectParameter, X0, Y0 - 150)
     tex.set_editor_property("parameter_name", "MacroNoise")
     tex.set_editor_property("texture", noise)
@@ -255,14 +354,36 @@ def main():
     for lc in layer_calls:
         connect(add, "", lc, "WorldPosition")
 
-    # 5. the finish: Break(blend) -> MO_Finish -> Make
+    # 5. the weather (BR18-16): the ground's state + the cave stamp's shelter metadata -> MO_Weather (wet, puddle, snow)
+    ground = ensure_ground_collection()
+    ground_wet = collection_param(m, ground, "GroundWetness", X0 + 500, Y0 + 1400)
+    ground_snow = collection_param(m, ground, "GroundSnow", X0 + 500, Y0 + 1550)
+    shelter = MEL.create_material_expression(m, unreal.MaterialExpressionGetVoxelMetadata, X0 + 500, Y0 + 1700)
+    shelter.set_editor_property("metadata", ensure_shelter_metadata())
+    shelter.set_editor_property("desc", "MO_WeatherShelter")
+    weather = custom(m, "MO_Weather", WEATHER_CODE, ["Wet", "SnowCov", "Shelter", "P", "D", "VN", "NoiseTex", "PuddleAmount", "Amount"],
+                     unreal.CustomMaterialOutputType.CMOT_FLOAT4, X0 + 1100, Y0 + 1400)
+    connect(ground_wet, "", weather, "Wet")
+    connect(ground_snow, "", weather, "SnowCov")
+    connect(shelter, "", weather, "Shelter")
+    connect(wp, "", weather, "P")
+    connect(depth, "", weather, "D")
+    connect(vn, "", weather, "VN")
+    connect(tex, "", weather, "NoiseTex")
+    connect(p["PuddleAmount"], "", weather, "PuddleAmount")
+    connect(p["WeatherAmount"], "", weather, "Amount")
+
+    # 6. the finish: Break(blend) -> MO_Finish -> Make
     brk = MEL.create_material_expression(m, unreal.MaterialExpressionBreakMaterialAttributes, X0 + 1500, Y0 + 0)
     brk.set_editor_property("desc", "MO_Break")
     in_names = [str(n) for n in MEL.get_material_expression_input_names(brk)]
     connect(blend, "", brk, in_names[0])
     fin = custom(m, "MO_Finish", FINISH_CODE,
-                 ["Color", "P", "D", "VN", "NoiseTex", "MacroAmount", "FarAmount", "FarStart", "FarEnd", "FarColor", "SnowLine", "SnowBand", "SnowNoise", "SnowAmount", "SnowColor"],
+                 ["Color", "P", "D", "VN", "NoiseTex", "MacroAmount", "FarAmount", "FarStart", "FarEnd", "FarColor", "SnowLine", "SnowBand", "SnowNoise", "SnowAmount", "SnowColor",
+                  "Weather", "WetDarken"],
                  unreal.CustomMaterialOutputType.CMOT_FLOAT4, X0 + 1900, Y0 + 0)
+    connect(weather, "", fin, "Weather")
+    connect(p["WetDarken"], "", fin, "WetDarken")
     connect(brk, "BaseColor", fin, "Color")
     connect(wp, "", fin, "P")
     connect(depth, "", fin, "D")
@@ -298,7 +419,19 @@ def main():
     connect(rough, "", rough_floor, "A")
     connect(p["RoughnessMin"], "", rough_floor, "B")
 
-    nrm = custom(m, "MO_NormalMod", NORMAL_CODE, ["N", "P", "D", "NoiseTex", "Var", "Snow", "FarFlatten"], unreal.CustomMaterialOutputType.CMOT_FLOAT3, X0 + 2600, Y0 + 400)
+    # wet ground glossier than the floor, puddles near mirrors (after the floor: RoughnessMin 2.0 would erase it)
+    wet_rough = custom(m, "MO_WetRoughness", WETROUGH_CODE, ["R", "Weather", "Snow", "WetRoughness"], unreal.CustomMaterialOutputType.CMOT_FLOAT1, X0 + 2900, Y0 + 250)
+    connect(rough_floor, "", wet_rough, "R")
+    connect(weather, "", wet_rough, "Weather")
+    connect(snow, "", wet_rough, "Snow")
+    connect(p["WetRoughness"], "", wet_rough, "WetRoughness")
+
+    puddle = MEL.create_material_expression(m, unreal.MaterialExpressionComponentMask, X0 + 2300, Y0 + 550)
+    puddle.set_editor_property("r", False); puddle.set_editor_property("g", True); puddle.set_editor_property("b", False); puddle.set_editor_property("a", False)
+    puddle.set_editor_property("desc", "MO_WeatherPuddle")
+    connect(weather, "", puddle, "")
+
+    nrm = custom(m, "MO_NormalMod", NORMAL_CODE, ["N", "P", "D", "NoiseTex", "Var", "Snow", "FarFlatten", "Puddle"], unreal.CustomMaterialOutputType.CMOT_FLOAT3, X0 + 2600, Y0 + 400)
     connect(brk, "Normal", nrm, "N")
     connect(wp, "", nrm, "P")
     connect(depth, "", nrm, "D")
@@ -306,13 +439,14 @@ def main():
     connect(p["NormalVariation"], "", nrm, "Var")
     connect(snow, "", nrm, "Snow")
     connect(p["FarNormalFlatten"], "", nrm, "FarFlatten")
+    connect(puddle, "", nrm, "Puddle")
 
     # pass every attribute through; replace BaseColor / Roughness / Normal
     # (MF_BaseLayer sets exactly BaseColor / Roughness / Normal / Displacement and MF_BlendLayers blends those; everything else is the default, which an unconnected Make pin also is.
     #  ShadingModel is deliberately NOT passed: the voxel generator handles the surface's shading model itself.)
     connect(brk, "Displacement", mk, "Displacement")
     connect(rgb, "", mk, "BaseColor")
-    connect(rough_floor, "", mk, "Roughness")
+    connect(wet_rough, "", mk, "Roughness")
     connect(nrm, "", mk, "Normal")
     MEL.connect_material_property(mk, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
 
@@ -324,22 +458,24 @@ def main():
 
 # What covers the ground seen from far away (linear colours), per surface material instance: FarTintAmount, FarColor, + optional per-surface knobs.
 # Forest floors become canopy (dark, slightly different greens), grass stays lush, rock / sand / gravel barely shift.
+# Weather (BR18-16): wet = WetDarken (the colour a soaked surface keeps: soil / litter 0.55, grass 0.62, rock 0.72, sand 0.50 -- wet sand darkens most), puddle = PuddleAmount
+# (how readily standing water forms on its flat ground: sand drains, gravel and pebbles mostly do, grass and rock hold some, soil and litter the most). Defaults 0.55 / 1.0.
 # Far tint (Oct 13 evening): the open-ground and rock surfaces now fade toward their mean colour from 400-500 m (was 1.5-2 km, 0.30-0.55): their few-metre texture tiles
 # repeat hundreds of times across a far slope and read as a checker; the far colour keeps the (non-periodic) macro variation, so the distance does not go flat.
 SURFACES = {
     "MuddyLeaves":          dict(far=0.95, color=(0.020, 0.034, 0.016), start=90000.0,  end=500000.0),
     "ForestLitter":         dict(far=0.95, color=(0.022, 0.036, 0.018), start=90000.0,  end=500000.0),
     "JungleFloor":          dict(far=0.95, color=(0.014, 0.032, 0.013), start=90000.0,  end=450000.0),
-    "MossyGrass":           dict(far=0.70, color=(0.060, 0.085, 0.030), start=40000.0,  end=300000.0),
-    "DriedGrassOnDampSoil": dict(far=0.65, color=(0.110, 0.090, 0.050), start=40000.0,  end=300000.0),
-    "AlpineHeath":          dict(far=0.65, color=(0.070, 0.074, 0.040), start=40000.0,  end=300000.0),
-    "NordicMoss":           dict(far=0.65, color=(0.052, 0.066, 0.036), start=40000.0,  end=300000.0),
-    "MossyRockyGround":     dict(far=0.65, color=(0.058, 0.062, 0.048), start=40000.0,  end=300000.0),
-    "IcelandicQuarryRock":  dict(far=0.55, color=(0.040, 0.040, 0.045), start=50000.0,  end=350000.0, far_normal=0.15),
-    "Cliff":                dict(far=0.55, color=(0.075, 0.068, 0.060), start=50000.0,  end=350000.0, far_normal=0.15),
-    "Gravel":               dict(far=0.55, color=(0.090, 0.090, 0.090), start=50000.0,  end=350000.0),
-    "DarkPebbles":          dict(far=0.55, color=(0.060, 0.060, 0.062), start=50000.0,  end=350000.0),
-    "Sand":                 dict(far=0.25, color=(0.300, 0.240, 0.150), start=200000.0, end=700000.0, macro=0.50, normal_var=0.45, warp=70.0, warp_scale=1500.0),
+    "MossyGrass":           dict(far=0.70, color=(0.060, 0.085, 0.030), start=40000.0,  end=300000.0, wet=0.62, puddle=0.6),
+    "DriedGrassOnDampSoil": dict(far=0.65, color=(0.110, 0.090, 0.050), start=40000.0,  end=300000.0, wet=0.62, puddle=0.6),
+    "AlpineHeath":          dict(far=0.65, color=(0.070, 0.074, 0.040), start=40000.0,  end=300000.0, wet=0.62, puddle=0.6),
+    "NordicMoss":           dict(far=0.65, color=(0.052, 0.066, 0.036), start=40000.0,  end=300000.0, wet=0.62, puddle=0.6),
+    "MossyRockyGround":     dict(far=0.65, color=(0.058, 0.062, 0.048), start=40000.0,  end=300000.0, wet=0.60, puddle=0.7),
+    "IcelandicQuarryRock":  dict(far=0.55, color=(0.040, 0.040, 0.045), start=50000.0,  end=350000.0, far_normal=0.15, wet=0.72, puddle=0.5),
+    "Cliff":                dict(far=0.55, color=(0.075, 0.068, 0.060), start=50000.0,  end=350000.0, far_normal=0.15, wet=0.72, puddle=0.5),
+    "Gravel":               dict(far=0.55, color=(0.090, 0.090, 0.090), start=50000.0,  end=350000.0, wet=0.60, puddle=0.35),
+    "DarkPebbles":          dict(far=0.55, color=(0.060, 0.060, 0.062), start=50000.0,  end=350000.0, wet=0.60, puddle=0.35),
+    "Sand":                 dict(far=0.25, color=(0.300, 0.240, 0.150), start=200000.0, end=700000.0, macro=0.50, normal_var=0.45, warp=70.0, warp_scale=1500.0, wet=0.50, puddle=0.0),
 }
 
 
@@ -365,6 +501,8 @@ def apply_surface_overrides():
             MEL.set_material_instance_scalar_parameter_value(mi, "MacroAmount", v["macro"])
         MEL.set_material_instance_scalar_parameter_value(mi, "FarNormalFlatten", v.get("far_normal", 0.85))
         MEL.set_material_instance_scalar_parameter_value(mi, "RoughnessMin", ROUGHNESS_MIN.get(name, ROUGHNESS_MIN_ALL))
+        MEL.set_material_instance_scalar_parameter_value(mi, "WetDarken", v.get("wet", 0.55))
+        MEL.set_material_instance_scalar_parameter_value(mi, "PuddleAmount", v.get("puddle", 1.0))
         if "normal_var" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "NormalVariation", v["normal_var"])
         if "warp" in v:
