@@ -15,7 +15,8 @@ namespace
 	{
 		SaltCavernA = 0x7201u, SaltCavernB = 0x7202u,
 		SaltSinkhole = 0x7401u, SaltSinkholeWall = 0x7402u,
-		SaltGallery = 0x7501u, SaltGalleryPath = 0x7502u, SaltGalleryLevel = 0x7503u, SaltGalleryMask = 0x7504u, SaltGalleryRadius = 0x7505u
+		SaltGallery = 0x7501u, SaltGalleryPath = 0x7502u, SaltGalleryLevel = 0x7503u, SaltGalleryMask = 0x7504u, SaltGalleryRadius = 0x7505u,
+		SaltEntrance = 0x7601u
 	};
 
 	/** Floor on a gallery meander's gradient (per lattice cell) in its distance estimate: |value| / |gradient| blows up at the noise's saddles. */
@@ -342,6 +343,192 @@ namespace
 		}
 		return Best;
 	}
+
+	// --- Built cave entrances (F30, N-170; CaveEntranceChance 0 = off) ---------------------------------------------------------------------------------------------
+	// A gallery opens only where it runs into a hillside steeper than CaveEntranceSlopeMinDeg, and ordinary ground is too gentle for that: a walk-in mouth in 0 % of
+	// 1 km tiles of cave country (MOFramework.WorldGen.CaveReach, Oct 19 2026). A built entrance is a shallow collapse hollow (a doline, walkable sides) with a
+	// sloping passage down out of its side into a small chamber: a slope you walk down, never a shaft to fall into, and a hollow you can see from a way off.
+
+	/** The passage's radius (cm): a little wider than a gallery's mean, so the mouth reads from the hollow. */
+	constexpr float EntrancePassageRadiusCm = 170.0f;
+	/** The passage's fall per unit of run: ~27 deg, a walkable grade. */
+	constexpr float EntranceGrade = 0.5f;
+	/** The hollow is evaluated while the sample spacing is at most this fraction of its smallest radius (a terrain-scale feature: it stays through LOD 4). */
+	constexpr float EntranceHollowStepFraction = 0.9f;
+	constexpr float EntranceHollowMinRadiusCm = 1100.0f;
+
+	struct FEntranceBasics
+	{
+		double CenterX = 0.0, CenterY = 0.0;   // the hollow's centre (cm)
+		float HollowRadius = 0.0f;             // across the top (cm)
+		float HollowDepth = 0.0f;              // at its middle (cm)
+		float DirX = 1.0f, DirY = 0.0f;        // the passage's heading in plan (unit, one of 16 exact directions)
+		float Run = 0.0f;                      // the passage's length in plan (cm)
+		float ChamberRadius = 0.0f;            // (cm)
+	};
+
+	/** The cell's entrance without touching the ground (pure hashing). The 18 % jitter margin keeps the whole entrance inside its cell: the run is shortened
+	 *  until its reach fits (a smaller CaveEntranceCellCm gets shorter passages, never one cut off at a cell border). */
+	bool EntranceBasics(const FMOWorldGenTuning& T, int64 CellX, int64 CellY, int32 Seed, FEntranceBasics& Out)
+	{
+		if (T.CaveEntranceChance <= 0.0f)
+		{
+			return false;
+		}
+		const uint32 S = (uint32)FMOWorldGen::HashSeed(Seed, SaltEntrance);
+		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.CaveEntranceChance)
+		{
+			return false;
+		}
+		const uint32 H1 = HashLattice2(CellX, CellY, S + 1u);
+		const uint32 H2 = HashLattice2(CellX, CellY, S + 2u);
+		const uint32 H3 = HashLattice2(CellX, CellY, S + 3u);
+		Out.CenterX = ((double)CellX + (double)(0.18f + 0.64f * Unit16(H1))) * (double)T.CaveEntranceCellCm;
+		Out.CenterY = ((double)CellY + (double)(0.18f + 0.64f * Unit16(H1 >> 16))) * (double)T.CaveEntranceCellCm;
+		Out.HollowRadius = EntranceHollowMinRadiusCm + 400.0f * Unit16(H2);
+		Out.HollowDepth = 350.0f + 150.0f * Unit16(H2 >> 16);
+		const uint32 Dir = H3 & 15u;
+		Out.DirX = (float)ShoreRing[Dir][0];
+		Out.DirY = (float)ShoreRing[Dir][1];
+		Out.ChamberRadius = 450.0f + 200.0f * Unit16(H3 >> 20);
+		const float Margin = 0.18f * T.CaveEntranceCellCm;
+		const float Fixed = Out.HollowRadius * 0.35f + Out.ChamberRadius + FMOWorldGen::CaveFarCm + 300.0f;
+		Out.Run = FMath::Min(2200.0f + 1000.0f * Unit16(H3 >> 4), Margin - Fixed);
+		return Out.Run >= 800.0f;
+	}
+
+	/** Horizontal distance from the hollow's centre beyond which the entrance's field is >= CaveFarCm (skipping it there is exact). <= the jitter margin. */
+	FORCEINLINE float EntranceReach(const FEntranceBasics& B)
+	{
+		return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGen::CaveFarCm + 300.0f;
+	}
+
+	/**
+	 * Settle the entrance on its ground: the passage heads UPHILL (the nearest of 16 exact directions to the slope's rise; the hashed one on level ground), as a
+	 * cave runs into its hill -- headed downhill it came back up to the surface past the hollow (MOFramework.WorldGen.CaveEntranceBuilt). Then the gates: above
+	 * the coast's ground and below the high ground, ground at most 20 deg (steeper slopes have hillside mouths of their own), dry + karst at both ends (WaterGate
+	 * holds the water keep-out AND the limestone rule), and at least 3 m of rock over the chamber.
+	 */
+	bool SettleEntrance(const FMOWorldGenParams& P, FEntranceBasics& B, float GroundCm, int32 Seed)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		if (GroundCm < T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f || (T.CaveMaxGroundCm > 0.0f && GroundCm > T.CaveMaxGroundCm - T.CaveHighFadeCm))
+		{
+			return false;
+		}
+		const FVector2D Rise = GroundGradient(P, B.CenterX, B.CenterY, GroundCm, Seed);
+		const double Slope = Rise.Size();
+		if (Slope > 0.364)   // tan(20 deg)
+		{
+			return false;
+		}
+		if (Slope > 0.02)
+		{
+			int32 BestK = 0;
+			double BestDot = -2.0;
+			for (int32 K = 0; K < 16; ++K)
+			{
+				const double Dot = ShoreRing[K][0] * Rise.X + ShoreRing[K][1] * Rise.Y;
+				if (Dot > BestDot) { BestDot = Dot; BestK = K; }
+			}
+			B.DirX = (float)ShoreRing[BestK][0];
+			B.DirY = (float)ShoreRing[BestK][1];
+		}
+		const float Lead = B.HollowRadius * 0.35f;
+		const float EndZ = GroundCm - B.HollowDepth - B.Run * EntranceGrade;
+		const double EndX = B.CenterX + B.DirX * (Lead + B.Run), EndY = B.CenterY + B.DirY * (Lead + B.Run);
+		const float EndGround = FMOWorldGen::SampleHeightCm(P, EndX, EndY, Seed, T.VoxelSizeCm);
+		const float ChamberTop = EndZ + EntrancePassageRadiusCm * 0.8f + 1.3f * B.ChamberRadius / 1.5f;
+		return EndGround - ChamberTop >= 300.0f
+			&& WaterGate(P, B.CenterX, B.CenterY, EndZ, Seed) <= 0.0f
+			&& WaterGate(P, EndX, EndY, EndZ, Seed) <= 0.0f;
+	}
+
+	/** Ground at the hollow's centre and whether the entrance is allowed there, memoised per thread like the sinkhole's ground (pure functions of params, seed
+	 *  and cell: the cache only saves work). A chunk asks for the same cell thousands of times, and the slope check alone costs four height samples. */
+	bool EntranceGround(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FEntranceBasics& B, float& OutGround)
+	{
+		struct FEntry
+		{
+			int64 CellX = 0, CellY = 0;
+			uint32 Seed = 0, ParamsHash = 0;
+			float Ground = 0.0f;
+			float DirX = 1.0f, DirY = 0.0f;
+			bool bAllowed = false;
+			bool bValid = false;
+		};
+		thread_local FEntry Cache[16];
+		const uint32 Slot = (uint32)(((uint64)CellX * 83492791ull) ^ ((uint64)CellY * 2971215073ull)) & 15u;
+		FEntry& E = Cache[Slot];
+		if (!(E.bValid && E.CellX == CellX && E.CellY == CellY && E.Seed == (uint32)Seed && E.ParamsHash == P.GetHash()))
+		{
+			E.CellX = CellX;
+			E.CellY = CellY;
+			E.Seed = (uint32)Seed;
+			E.ParamsHash = P.GetHash();
+			E.Ground = FMOWorldGen::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
+			E.bAllowed = SettleEntrance(P, B, E.Ground, Seed);
+			E.DirX = B.DirX;
+			E.DirY = B.DirY;
+			E.bValid = true;
+		}
+		B.DirX = E.DirX;
+		B.DirY = E.DirY;
+		OutGround = E.Ground;
+		return E.bAllowed;
+	}
+
+	/** The entrance's distance (cm, negative inside) for the sample's cell. The passage and chamber need sample spacing fine enough to resolve a tube. */
+	float EntranceDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
+		const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.CaveEntranceCellCm);
+		FEntranceBasics B;
+		if (!EntranceBasics(T, CellX, CellY, Seed, B))
+		{
+			return FMOWorldGen::CaveFarCm;
+		}
+		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
+		const float H2 = Dx * Dx + Dy * Dy;
+		const float Reach = EntranceReach(B);
+		if (H2 > Reach * Reach)
+		{
+			return FMOWorldGen::CaveFarCm;
+		}
+		float Ground = 0.0f;
+		if (!EntranceGround(P, CellX, CellY, Seed, B, Ground))
+		{
+			return FMOWorldGen::CaveFarCm;
+		}
+		const float Z0 = (float)Z;
+
+		// The hollow: a spherical cap HollowDepth deep and HollowRadius across, so its rim meets the ground at ~35 deg (walkable) and its floor is gentle.
+		const float Rs = (B.HollowRadius * B.HollowRadius + B.HollowDepth * B.HollowDepth) / (2.0f * B.HollowDepth);
+		const float DzS = Z0 - (Ground - B.HollowDepth + Rs);
+		float D = FMath::Sqrt(H2 + DzS * DzS) - Rs;
+
+		if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction)
+		{
+			// The passage: from the hollow's floor, out through its side, down at EntranceGrade; flattened like a gallery (TunnelVerticalSquash).
+			const float Lead = B.HollowRadius * 0.35f;
+			const float Ax = B.DirX * Lead, Ay = B.DirY * Lead, Az = Ground - B.HollowDepth + EntrancePassageRadiusCm * 0.8f;
+			const float Vx = B.DirX * B.Run, Vy = B.DirY * B.Run, Vz = -B.Run * EntranceGrade;
+			const float Sq = T.TunnelVerticalSquash;
+			const float Px = Dx - Ax, Py = Dy - Ay, Pz = (Z0 - Az) * Sq;
+			const float VzS = Vz * Sq;
+			const float T01 = FMath::Clamp((Px * Vx + Py * Vy + Pz * VzS) / (Vx * Vx + Vy * Vy + VzS * VzS), 0.0f, 1.0f);
+			const float Qx = Px - T01 * Vx, Qy = Py - T01 * Vy, Qz = Pz - T01 * VzS;
+			const float Dp = FMath::Sqrt(Qx * Qx + Qy * Qy + Qz * Qz) - EntrancePassageRadiusCm;
+
+			// The chamber at its end: a flattened sphere sitting on the passage's floor.
+			const float Cx = Ax + Vx - Dx, Cy = Ay + Vy - Dy;
+			const float Cz = (Z0 - (Az + Vz + 0.3f * B.ChamberRadius)) * 1.5f;
+			const float Dc = FMath::Sqrt(Cx * Cx + Cy * Cy + Cz * Cz) - B.ChamberRadius;
+			D = SmoothMin(D, SmoothMin(Dp, Dc, 200.0f), 250.0f);
+		}
+		return D;
+	}
 }
 
 float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm)
@@ -371,6 +558,12 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 	if (StepCm <= T.SinkholeRadiusCm * SinkholeStepFraction && HighGround < 1.0f)
 	{
 		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * FMath::Max(HighGround, Wet));
+	}
+
+	// Built entrances (F30): a hollow with a passage down into a chamber. Gated like the sinkholes (and dry + karst at both ends, uphill, covered: SettleEntrance).
+	if (T.CaveEntranceChance > 0.0f && StepCm <= EntranceHollowMinRadiusCm * EntranceHollowStepFraction && HighGround < 1.0f)
+	{
+		D = FMath::Min(D, EntranceDistance(Params, X, Y, Z, Seed, StepCm) + CaveFarCm * FMath::Max(HighGround, Wet));
 	}
 
 	// Everything else stays off low ground (coasts / basins) and out of the water. Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when
@@ -456,12 +649,33 @@ bool FMOWorldGen::FindSinkholeAt(const FMOWorldGenParams& Params, double X, doub
 
 float FMOWorldGen::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
+	// Every opening's keep-out: a sinkhole's rim zone and a built entrance's hollow (vegetation, world features and spawns read this one query).
+	const float Entrance = DistanceToCaveEntranceHollow(Params, X, Y, Seed);
 	FMOSinkhole S;
 	if (!FindSinkholeAt(Params, X, Y, Seed, S))
 	{
-		return NoSinkholeDistanceCm;
+		return Entrance;
 	}
 	// The flared rim (1.8x) with its +25% wall wobble reaches ~2.3x the mean radius; plant nothing inside that.
 	const float Dist = (float)FVector2D::Distance(FVector2D(X, Y), S.Center);
-	return Dist - S.RadiusCm * 2.3f;
+	return FMath::Min(Dist - S.RadiusCm * 2.3f, Entrance);
+}
+
+float FMOWorldGen::DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f)
+	{
+		return NoSinkholeDistanceCm;
+	}
+	const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
+	const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.CaveEntranceCellCm);
+	FEntranceBasics B;
+	float Ground = 0.0f;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground))
+	{
+		return NoSinkholeDistanceCm;
+	}
+	// The hollow's rim plus a margin (the passage is open only inside the hollow; beyond it the rock is whole).
+	return (float)FVector2D::Distance(FVector2D(X, Y), FVector2D(B.CenterX, B.CenterY)) - B.HollowRadius * 1.2f;
 }

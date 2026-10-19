@@ -579,6 +579,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	/** Mean shaft depth (cm); the chamber at the bottom is ~2.4x the shaft radius. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="500"))
 	float SinkholeDepthCm = 3800.0f;
+	/**
+	 * BUILT ENTRANCES (fork F30, N-170; off until Wes picks): a hillside is the only place a gallery opens, and ordinary ground is too gentle for that -- a walk-in
+	 * mouth in 0 % of 1 km tiles of cave country (MOFramework.WorldGen.CaveReach, Oct 19 2026). A built entrance is a shallow collapse hollow (a doline) with a
+	 * sloping passage leading down out of its side into a small chamber: a slope you walk down, never a shaft to fall into, and a hollow you can see. One candidate
+	 * per cell of this edge (cm), on karst (bCavesOnlyInLimestone), dry and below the high ground like every cave feature.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="20000"))
+	float CaveEntranceCellCm = 50000.0f;
+	/** Chance (0..1) that a cell holds a built entrance. 0 = the feature is off (and out of the params hash: worlds made without it keep their identity). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
+	float CaveEntranceChance = 0.0f;
 
 	// --- Water: rivers and lakes are carved into low ground and sit AT SEA LEVEL; the water plane of the world (WaterBodyCustom at SeaLevelCm) fills them ----------
 	// Everything below SeaLevelCm is water, so a channel or basin is just terrain dipping under sea level: no per-lake water actor, no flow simulation.
@@ -1000,6 +1011,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * reaches across its own cell border, so one cell is enough.
 	 */
 	static float DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** Horizontal distance (cm) from (X,Y) to the hollow of the built cave entrance in its cell (negative = inside the hollow, where nothing may stand or
+	 *  grow), NoSinkholeDistanceCm if the cell has none or the feature is off (CaveEntranceChance 0). DistanceToSinkholeRimZone includes it. */
+	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 
 	/** DistanceToSinkholeRimZone where there is no sinkhole: farther than any footprint. It used to be CaveFarCm (30 m) -- a world feature with a footprint
 	 *  over 30 m was rejected in every cell WITHOUT a sinkhole (found Oct 16 2026 when v9 turned sinkholes off and every cliff assembly vanished). */

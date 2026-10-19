@@ -1205,3 +1205,8 @@ Batch 2 verified (suite 326 passed; the one failure is the cave measurement's co
 Status: PROGRESS (N-170 measured; fork F30 for Wes); build window free
 References: CL-0108
 New Tests/MOWorldGenCaveReachTests.cpp (report-only measurement: 24 ordinary 1 km tiles on 3 worlds). The shipped caves: a mouth in 0 % of them; the best tuning inside Wes's rules ~4 %, every relaxation measured (F30 in DECISIONS). No generator change until Wes picks.
+
+### 2026-10-19 01:30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0110
+Status: PROGRESS (N-170 prototype commit, OFF) + CLAIM (batch 3: MOCharacter.h/.cpp, MOPersistenceSubsystem.cpp, MOGameMode.cpp; then the build window and instances)
+References: CL-0109
+Built cave entrances (F30 A) in MOFrameworkCore MOWorldGen.h/.cpp + MOWorldGenCaves.cpp, behind CaveEntranceChance 0 (out of the params hash while 0): WorldGen suite 47 / 47 incl. both golden checksums. Tests CaveEntranceBuilt + CaveReach. Turning them on waits for Wes (F30).

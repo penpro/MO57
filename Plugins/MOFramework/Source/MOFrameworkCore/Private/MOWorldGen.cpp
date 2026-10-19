@@ -212,6 +212,11 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	{
 		H = FnvAddFloat(H, V);
 	}
+	// Built cave entrances (F30): only while they are on, so every world made without them keeps its identity (and its pinned checksums).
+	if (T.CaveEntranceChance > 0.0f)
+	{
+		H = FnvAddFloat(FnvAddFloat(H, T.CaveEntranceCellCm), T.CaveEntranceChance);
+	}
 	for (const FVector2D& K : T.ContinentSplineM) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FVector2D& K : T.ErosionReliefSpline) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FMOWorldGenBiome& B : Biomes)
