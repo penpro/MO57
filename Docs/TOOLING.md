@@ -29,7 +29,7 @@ and UE_5.8.
 | `mcp ...` | raw MCP toolsets (e.g. `mcp dt remove_rows`) |
 | `asset assign|import|shot` | art assignment, file import, visual-QA shots |
 | `ui contract|scaffold|build|check|dump|remove|menu|click|find|shot` | Widget Blueprints from spec files (`Docs/UI_TOOLING.md`) |
-| `inst start|stop|do|list <name> [--sound] [--creator] [--res WxH] [--nosteam]` | extra `-game` processes with their own bridge + log |
+| `inst start|stop|do|list <name> [--sound] [--creator] [--res WxH] [--nosteam]` | extra `-game` processes with their own bridge + log; `inst do NAME py` refuses editor-only asset edits, which crash a -game process (TRAPS §5) |
 | `nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-suite|packaged-death|packaged-removal|bugreport` | real multi-process co-op / packaged gates (negative controls: `game --skew-seed / --withhold-seed / --withhold-sync`; `MO_ACTIONS_ONLY=_case,...` reruns named action cases) |
 | `nettest netdiag [--seconds N] [--phases clean,lag50,loss1,ctl_ratecap,ctl_speedhack] [--keep]` | checks the co-op SMOOTHNESS instruments on two local processes (controls that must fail); loopback cannot show internet rubber banding: real sessions are read with `python -I Tools/ue_netdiag.py logs host.log joiner.log` (`Docs/Coop_And_Networking.md` §7) |
 | `logs`, `results`, `save`, `config`, `mptest` | helpers (see `--help`). There is no top-level `shot`: in an instance run `ue.py inst do NAME run "shot showui"` (PNG in `Saved/Screenshots/WindowsEditor/`); widget shots are `ui shot` |

@@ -1116,3 +1116,14 @@ The files CLL-0001 skipped while CL-0096 / BR18-28 held them, now released: MOCr
 Status: RELEASE (the build window; the three CLL-0006 files -- committed with this entry). Nothing of mine is running.
 References: CLL-0006
 MOCraftingSubsystem.cpp / MOInventoryUIController.cpp / MOUnifiedInventoryMenu.cpp: 26 markers, 47 lines, comment-outs only (including the tool-name FString each recipe / tool check built only for its log). MO57Editor built clean (no MOFramework warning); full MOFramework automation on that DLL: 317 passed, 0 failed. The log cleanup task is complete (a36c49b8 + this commit).
+
+### 2026-10-18 19:21 Pacific Daylight Time — CLAUDE (net diagnostics) — CL-0103
+Status: CLAIM (files: Tools/ue.py, Tools/tests/test_ue.py, Docs/TRAPS.md, Docs/TOOLING.md; then one -game instance of my own, `guardtest`)
+References: CLW-0003
+Wes pasted the two crash reporter dialogs (EXCEPTION_ACCESS_VIOLATION reading 0x2780). Both are windhost (-game) at 15:17 / 15:24, from editor-only asset edits sent through `ue.py inst do windhost py`: EditorAssetLibrary.duplicate_asset (stack via EditorScriptingUtilities) and MaterialEditingLibrary.update_material_instance (stack via MaterialEditor). Nothing of Wes's crashed. Fix: `ue.py py` refuses those calls when its bridge is a -game instance (read-only get_* calls stay allowed), plus a TRAPS line.
+
+### 2026-10-18 19:40 Pacific Daylight Time — CLAUDE (net diagnostics) — CL-0104
+Status: RELEASE (instance guardtest -- stopped; every CL-0103 file, committed with this entry)
+References: CL-0103, CLW-0003
+`ue.py py` refuses editor-only asset edits when its bridge is a -game instance's (`game_unsafe_calls`, matched by method name so an alias like MEL = unreal.MaterialEditingLibrary is caught): save / duplicate / delete / rename / create asset, every MaterialEditingLibrary setter, update and recompile. Verified on a -game instance: CLW's two crashing scripts (turbfilter_run.py, turbswap_run.py) are refused with exit 2 before anything is sent, a read-only get_material_function_expressions probe still runs (117 expressions), the instance stays up, no new Saved/Crashes folder; the editor path is not refused. 4 new tests in Tools/tests/test_ue.py (21 pass). TRAPS §5, TOOLING.
+Seen in passing (not touched): Tools/tests/test_ui_tooling.py SpecContractTests errors with KeyError 'parent' (most kit specs carry no "parent" key).

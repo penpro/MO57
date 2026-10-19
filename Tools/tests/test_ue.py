@@ -216,5 +216,47 @@ class BulkRowsTests(unittest.TestCase):
         self.assertTrue(any("MISMATCH" in line for line in report), report)
 
 
+class GameInstancePythonGuardTests(unittest.TestCase):
+    """Oct 18: windhost (-game) crashed twice on editor-only asset edits sent with `inst do windhost py`."""
+
+    # The two scripts that crashed it, cut down to the calls.
+    DUPLICATE = ("tex = unreal.load_asset(DST) if unreal.EditorAssetLibrary.does_asset_exist(DST) "
+                 "else unreal.EditorAssetLibrary.duplicate_asset(SRC, DST)")
+    RECACHE = ("MEL = unreal.MaterialEditingLibrary\n"
+               "pass  # set_editor_property runs PostEditChange (UpdateResource)\n"
+               "for mi in mis:\n    MEL.update_material_instance(mi)\n")
+
+    def setUp(self):
+        self.ue = load_ue()
+
+    def test_the_crashing_calls_are_found(self):
+        self.assertEqual(self.ue.game_unsafe_calls(self.DUPLICATE), ["duplicate_asset"])
+        self.assertEqual(self.ue.game_unsafe_calls(self.RECACHE), ["update_material_instance"])
+
+    def test_read_only_calls_and_comments_pass(self):
+        code = ("exprs = unreal.MaterialEditingLibrary.get_material_function_expressions(f)\n"
+                "t = unreal.load_asset(SRC)  # then MEL.update_material_instance(mi) in the editor\n"
+                "t.set_editor_property('filter', unreal.TextureFilter.TF_BILINEAR)\n")
+        self.assertEqual(self.ue.game_unsafe_calls(code), [])
+
+    def _cmd_py(self, bridge_dir, code):
+        ue = load_ue({"MO57_BRIDGE_DIR": bridge_dir})
+        args = mock.Mock(file=None, code=code, timeout=5, grep=None, logwait=0)
+        with mock.patch.object(ue, "bridge_run", return_value=(True, [], "")) as run, \
+                mock.patch("builtins.print"), self.assertRaises(SystemExit) as done:
+            ue.cmd_py(args)
+        return done.exception.code, run.called
+
+    def test_instance_refuses_before_sending(self):
+        with tempfile.TemporaryDirectory() as td:
+            code, sent = self._cmd_py(os.path.join(td, "inst_windhost"), self.RECACHE)
+        self.assertEqual((code, sent), (2, False))
+
+    def test_editor_bridge_still_runs_asset_edits(self):
+        with tempfile.TemporaryDirectory() as td:
+            code, sent = self._cmd_py(os.path.join(td, "claude"), self.RECACHE)
+        self.assertEqual((code, sent), (0, True))
+
+
 if __name__ == "__main__":
     unittest.main()

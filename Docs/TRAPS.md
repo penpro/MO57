@@ -116,6 +116,11 @@
   into gameplay from the menu: `ke * LoadGame <slot>` (`AMOMainMenuPlayerController::LoadGame`, the menu's own path). (Oct 17)
 - **A `-game` instance near the spawn has no vegetation** -> the editor was open when it started -> `ue.py editor stop` before any visual / PCG / harvest instance test. (ue-multiprocess)
 - **`-game` of the editor binary crashes** -> no GEditor: `EditorLevelLibrary`, Voxel `WITH_EDITOR` code -> console verbs (`MO.Spawn.Try`); the Voxel GEditor guard covers the real map for `nettest game|hostsave|soak`. (ue-multiprocess, dev_status)
+- **A `-game` instance dies on an asset edit sent with `inst do NAME py`** (access violation reading 0x2780: `EditorAssetLibrary.duplicate_asset`,
+  `MaterialEditingLibrary.update_material_instance`; windhost twice, Oct 18, and the crash reporter pops up on Wes's screen) -> edit assets in
+  the editor, then restart the instance; in -game read assets (`load_asset`, `get_material_function_expressions`) or change runtime objects.
+  `ue.py py` now refuses those calls (save / duplicate / delete / rename / create asset, every MaterialEditingLibrary setter, update and
+  recompile) when its bridge is an instance's. (Oct 18)
 - **Instance screenshots lie** -> the window defaults to 640x360 (minimum DPI scale) -> `r.setres 1920x1080w` first; HighResShot shows no UMG (use `ui shot`). (first-ten-minutes, ue-ui-toolset)
 - **"PASS" from `MO.Test.ClickWidget` / a simulated click** -> SimulateClick ignores hit-testing; for non-MO widgets it logs SENT -> read the state it should change; do one real click (`MO.Test.HitTest`). (first-ten-minutes, ue-ui-toolset)
 - **Wait for the world in an instance** -> the SECOND `[MOReadiness] READY` line after Start (the first is the menu world). (first-ten-minutes)

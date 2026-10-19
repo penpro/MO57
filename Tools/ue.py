@@ -231,6 +231,30 @@ def _wrap_py(code):
     return "py:" + code
 
 
+# Editor-only asset edits kill a -game process (access violation reading 0x2780; Oct 18, windhost twice:
+# EditorAssetLibrary.duplicate_asset and MaterialEditingLibrary.update_material_instance). Matched by method name, so an
+# alias (MEL = unreal.MaterialEditingLibrary) is caught too; read-only calls (get_material_function_expressions, load_asset,
+# does_asset_exist) work in -game and stay allowed.
+_GAME_UNSAFE_PY = re.compile(
+    r"\.(duplicate_(?:loaded_)?assets?|duplicate_directory|save_(?:loaded_)?assets?|save_directory|save_(?:dirty_)?packages\w*"
+    r"|delete_(?:loaded_)?assets?|delete_directory|rename_(?:loaded_)?assets?|rename_directory|consolidate_assets"
+    r"|create_asset\w*|import_asset_tasks|update_material_\w+|recompile_material|set_material_instance_\w+"
+    r"|connect_material_\w+|create_material_expression\w*|delete_material_expression\w*|delete_all_material_expressions\w*"
+    r"|layout_material_\w+)\s*\(")
+
+
+def _instance_target():
+    """Name of the -game instance this bridge belongs to (ue_inst.env_for points MO57_BRIDGE_DIR at inst_<name>), else None."""
+    base = os.path.basename(TMP.rstrip("\\/"))
+    return base[5:] if base.startswith("inst_") else None
+
+
+def game_unsafe_calls(code):
+    """Editor-only asset-edit calls in python `code` (sorted, unique; comments ignored)."""
+    text = "\n".join(re.sub(r"(^|\s)#.*$", "", l) for l in code.splitlines())
+    return sorted({m.group(1) for m in _GAME_UNSAFE_PY.finditer(text)})
+
+
 # =============================================================================
 # MCP layer — session-cached curl JSON-RPC
 # =============================================================================
@@ -896,6 +920,12 @@ def cmd_py(a):
         code = open(a.file, "r", encoding="utf-8-sig").read()
     else:
         code = a.code
+    inst = _instance_target()
+    bad = game_unsafe_calls(code) if inst else []
+    if bad:
+        _die(2, f"refused: editor-only asset edits ({', '.join(bad)}) crash the -game instance '{inst}'. Edit assets in the editor "
+                "(ue.py py, no inst do), then restart the instance; -game probes read assets or change runtime objects only "
+                "(Docs/TRAPS.md).")
     ok, lines, delta = bridge_run([_wrap_py(code)], timeout=a.timeout,
                                   log_grep=a.grep, log_wait=a.logwait if a.grep else 0.5)
     if not ok:
