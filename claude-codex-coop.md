@@ -1175,3 +1175,8 @@ N-167 done. Remaining wind graphs hold far from the origin (motion_probe jump sh
 Status: PROGRESS (docs only: Wes's answers to the waiting list)
 References: CL-0102
 Docs/BACKLOG.md + Docs/DECISIONS.md: Steam is smooth on a low-end joiner (N-161 / N-164 done, F25 closed with no change); caves must be "decently common" (BR18-13 -> new N-170, OPEN); N-053 deferred; N-100 = re-evaluate Fab against the ComfyUI pipeline; N-151 closed; N-153 waits on Wes (Law 6 is still in the global files).
+
+### 2026-10-18 23:41 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0104
+Status: PROGRESS (process rule for every agent) + CLAIM (overnight backlog batches)
+References: CL-0103
+**Wes (to every agent): batch the verification.** "stopping and packaging for EVERY change is insane and takes FOREVER ... find a batch of 10 changes/fixes to make and THEN package and test". CLAUDE.md (Git section) and Docs/TOOLING.md §3 "Batch verification" now say so: ~10 fixes, one build, one ue.py auto, one host + joiner checklist pass, then a commit per verified fix. I'm working the backlog overnight in such batches; each batch's files and its single build window get claimed here before I touch them.

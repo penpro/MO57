@@ -46,6 +46,10 @@ Production-ready software: fix systems, not symptoms. These override convenience
 
 - **Commit and push after every completed, verified unit without asking** (Wes, 2026-10-17: "commit always, more backups and
   documentation is better, don't ask anymore just be diligent about documentation"). Update the docs the change touches in the same commit.
+- **Batch the verification** (Wes, 2026-10-18: "stopping and packaging for EVERY change is insane and takes FOREVER ... find a batch of 10
+  changes/fixes to make and THEN package and test"): write about 10 fixes, then ONE build, ONE `ue.py auto`, ONE host + joiner pass with a
+  checklist covering every fix (package only when the batch needs packaged behaviour), then commit each verified fix on its own. A fix that
+  fails moves to the next batch; never rebuild for one fix. `Docs/TOOLING.md` § Batch verification.
 - Codex works in the same tree: stage your exact paths, **never `git add -A`**, never stage or edit another agent's uncommitted files,
   never stage `.claude/settings.local.json` or `Content/Developers/penum/MegaMaterialCache.uasset`.
 - `git add` fails silently here (case-insensitive paths; one bad pathspec stages nothing): check the staged column of `git status --short`
