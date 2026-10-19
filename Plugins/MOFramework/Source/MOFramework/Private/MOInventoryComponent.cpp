@@ -1186,8 +1186,9 @@ namespace
 
 AActor* UMOInventoryComponent::DropItemFromSlot(int32 SlotIndex, const FVector& DropLocation, const FRotator& DropRotation)
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemFromSlot: Slot=%d, Location=%s"),
-		SlotIndex, *DropLocation.ToString());
+	// DEBUG (MOInventory, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemFromSlot: Slot=%d, Location=%s"),
+	// 	SlotIndex, *DropLocation.ToString());
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
@@ -1216,7 +1217,8 @@ AActor* UMOInventoryComponent::DropItemFromSlot(int32 SlotIndex, const FVector& 
 
 AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation)
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemByGuid: Location=%s"), *DropLocation.ToString());
+	// DEBUG (MOInventory, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemByGuid: Location=%s"), *DropLocation.ToString());
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())

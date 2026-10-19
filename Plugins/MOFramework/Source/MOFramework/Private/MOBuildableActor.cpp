@@ -697,9 +697,10 @@ void AMOBuildableActor::ApplyStructuralCollisionProfile(FName ProfileName)
 		++PropagatedCount;
 	}
 
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[MOBuildableActor] %s: applied structural profile '%s' to MeshComponent + %d descendant(s)"),
-		*GetName(), *ProfileName.ToString(), PropagatedCount);
+	// DEBUG (MOBuildableActor, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[MOBuildableActor] %s: applied structural profile '%s' to MeshComponent + %d descendant(s)"),
+	// 	*GetName(), *ProfileName.ToString(), PropagatedCount);
 }
 
 void AMOBuildableActor::RestoreOriginalMaterials()

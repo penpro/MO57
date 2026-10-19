@@ -69,7 +69,8 @@ UMOInventoryComponent* UMOItemComponent::FindInventoryComponentForController(ACo
 
 bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorController)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory called"));
+	// DEBUG (MOItem, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory called"));
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor))

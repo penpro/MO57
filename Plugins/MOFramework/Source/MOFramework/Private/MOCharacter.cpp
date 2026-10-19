@@ -792,25 +792,29 @@ void AMOCharacter::RequestPrimaryAction_Implementation()
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryAction - No combat component or attack failed"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryAction - No combat component or attack failed"));
 }
 
 void AMOCharacter::RequestPrimaryActionRelease_Implementation()
 {
 	// Override in subclasses
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryActionRelease - Override in subclass"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryActionRelease - Override in subclass"));
 }
 
 void AMOCharacter::RequestSecondaryAction_Implementation()
 {
 	// Override in subclasses for block/aim/alt-use
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestSecondaryAction - Override in subclass"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestSecondaryAction - Override in subclass"));
 }
 
 void AMOCharacter::RequestSecondaryActionRelease_Implementation()
 {
 	// Override in subclasses
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestSecondaryActionRelease - Override in subclass"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestSecondaryActionRelease - Override in subclass"));
 }
 
 void AMOCharacter::RequestTerraformToggle_Implementation()
@@ -900,7 +904,8 @@ void AMOCharacter::ApplyGameSettings()
 	if (FollowCamera)
 	{
 		FollowCamera->SetFieldOfView(Settings->FieldOfView);
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Applied FOV: %.1f"), Settings->FieldOfView);
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Applied FOV: %.1f"), Settings->FieldOfView);
 	}
 
 	// Store sensitivity for use in look input
@@ -938,10 +943,11 @@ void AMOCharacter::ToggleCameraShoulder()
 	CameraTransitionAlpha = 0.0f;
 	bIsCameraTransitioning = true;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Camera shoulder transitioning from %.1f to %s (Y=%.1f)"),
-		CameraStartY,
-		CameraTargetY > 0 ? TEXT("right") : TEXT("left"),
-		CameraTargetY);
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Camera shoulder transitioning from %.1f to %s (Y=%.1f)"),
+	// 	CameraStartY,
+	// 	CameraTargetY > 0 ? TEXT("right") : TEXT("left"),
+	// 	CameraTargetY);
 }
 
 // ============================================================================
@@ -979,29 +985,30 @@ void AMOCharacter::SetMovementMode(EMOMovementMode NewMode)
 	bIsSprinting = (NewMode == EMOMovementMode::Sprinting);
 	UpdateMovementSpeed();
 
-	// Get actual speed for logging
-	float ActualSpeed = 0.0f;
-	if (GetCharacterMovement())
-	{
-		ActualSpeed = GetCharacterMovement()->GetMaxSpeed();   // the gait's speed (MaxWalkSpeed is the walk only)
-	}
-
-	const FString ModeName = NewMode == EMOMovementMode::Walking ? TEXT("Walking") :
-							 NewMode == EMOMovementMode::Jogging ? TEXT("Jogging") : TEXT("Sprinting");
-
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Movement mode -> %s (Speed: %.0f)"),
-		*GetName(), *ModeName, ActualSpeed);
-
-	// On-screen debug message
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		const FColor ModeColor = NewMode == EMOMovementMode::Walking ? FColor::White :
-								 NewMode == EMOMovementMode::Jogging ? FColor::Yellow : FColor::Orange;
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, ModeColor,
-			FString::Printf(TEXT("%s: %.0f"), *ModeName, ActualSpeed));
-	}
-#endif
+	// DEBUG (movement, disabled Oct 18): re-enable to trace gait changes (the log line and the "Jogging: 450" on-screen message)
+	// // Get actual speed for logging
+	// float ActualSpeed = 0.0f;
+	// if (GetCharacterMovement())
+	// {
+	// 	ActualSpeed = GetCharacterMovement()->GetMaxSpeed();   // the gait's speed (MaxWalkSpeed is the walk only)
+	// }
+	//
+	// const FString ModeName = NewMode == EMOMovementMode::Walking ? TEXT("Walking") :
+	// 						 NewMode == EMOMovementMode::Jogging ? TEXT("Jogging") : TEXT("Sprinting");
+	//
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Movement mode -> %s (Speed: %.0f)"),
+	// 	*GetName(), *ModeName, ActualSpeed);
+	//
+	// // On-screen debug message
+	// #if !UE_BUILD_SHIPPING
+	// if (GEngine)
+	// {
+	// 	const FColor ModeColor = NewMode == EMOMovementMode::Walking ? FColor::White :
+	// 							 NewMode == EMOMovementMode::Jogging ? FColor::Yellow : FColor::Orange;
+	// 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, ModeColor,
+	// 		FString::Printf(TEXT("%s: %.0f"), *ModeName, ActualSpeed));
+	// }
+	// #endif
 }
 
 void AMOCharacter::ToggleJog()
@@ -1014,13 +1021,15 @@ void AMOCharacter::ToggleJog()
 	// If currently sprinting, don't toggle jog
 	if (bIsSprinting)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot toggle jog while sprinting"), *GetName());
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot toggle jog while sprinting"), *GetName());
 		return;
 	}
 
 	bJogToggled = !bJogToggled;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Jog toggled %s"), *GetName(), bJogToggled ? TEXT("ON") : TEXT("OFF"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Jog toggled %s"), *GetName(), bJogToggled ? TEXT("ON") : TEXT("OFF"));
 
 	if (bJogToggled)
 	{
@@ -1036,11 +1045,13 @@ void AMOCharacter::StartSprint()
 {
 	if (!CanSprint_Implementation())
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot sprint (CanSprint returned false)"), *GetName());
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot sprint (CanSprint returned false)"), *GetName());
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint START (hold detected)"), *GetName());
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint START (hold detected)"), *GetName());
 	bIsSprinting = true;
 	SetMovementMode(EMOMovementMode::Sprinting);
 }
@@ -1052,8 +1063,9 @@ void AMOCharacter::StopSprint()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint STOP (returning to %s)"),
-		*GetName(), bJogToggled ? TEXT("Jogging") : TEXT("Walking"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint STOP (returning to %s)"),
+	// 	*GetName(), bJogToggled ? TEXT("Jogging") : TEXT("Walking"));
 
 	bIsSprinting = false;
 
@@ -1105,7 +1117,8 @@ void AMOCharacter::ApplyGaitFromMovement(bool bJog, bool bSprint)
 	CurrentMovementMode = NewMode;
 	bIsSprinting = bSprint;
 	bJogToggled = bJog;
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: gait from the moves -> %s"), *GetName(), bSprint ? TEXT("Sprinting") : (bJog ? TEXT("Jogging") : TEXT("Walking")));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: gait from the moves -> %s"), *GetName(), bSprint ? TEXT("Sprinting") : (bJog ? TEXT("Jogging") : TEXT("Walking")));
 }
 
 float AMOCharacter::GetCurrentMET() const
@@ -2119,7 +2132,8 @@ bool AMOCharacter::DoTerraform()
 
 	if (!bTerraformingMode)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] DoTerraform: Not in terraform mode"));
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] DoTerraform: Not in terraform mode"));
 		return false;
 	}
 
@@ -2341,10 +2355,11 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 
 	TargetMesh->SetVisibility(true);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
-		*GetName(),
-		*EquippedItem.ItemDefinitionId.ToString(),
-		EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
+	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
+	// 	*GetName(),
+	// 	*EquippedItem.ItemDefinitionId.ToString(),
+	// 	EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 }
 
 void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
@@ -2365,9 +2380,10 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 		TargetMesh->SetVisibility(false);
 		TargetMesh->SetStaticMesh(nullptr);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cleared %s hand mesh"),
-			*GetName(),
-			EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cleared %s hand mesh"),
+		// 	*GetName(),
+		// 	EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 	}
 }
 
@@ -2626,8 +2642,9 @@ void AMOCharacter::NotifyControllerChanged()
 	{
 		const bool bHumanDriven = Controller && Controller->IsPlayerController();
 		VoxelCollisionInvoker->bEnabled = bHumanDriven;
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: voxel collision invoker %s (controller %s)"),
-			*GetName(), bHumanDriven ? TEXT("ON") : TEXT("off"), Controller ? *Controller->GetName() : TEXT("none"));
+		// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: voxel collision invoker %s (controller %s)"),
+		// 	*GetName(), bHumanDriven ? TEXT("ON") : TEXT("off"), Controller ? *Controller->GetName() : TEXT("none"));
 	}
 	UpdateRemotePlayerTerrainDetail();
 }

@@ -382,7 +382,8 @@ void AMOGameMode::HandleVoxelReadyForNewGame()
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] OnVoxelReady received — spawning initial pawn"));
 
 	// Debug: Verify stamp seeds after voxel world is ready
-	DebugLogVoxelStampSeeds();
+	// DEBUG (MOGameMode, disabled Oct 18): re-enable to trace the voxel stamp seeds (a full actor scan + dump at every start)
+	// DebugLogVoxelStampSeeds();
 
 	SpawnInitialPawn();
 }
@@ -533,9 +534,10 @@ void AMOGameMode::RegroundAllPawns()
 				}
 				else
 				{
-					UE_LOG(LogMOFramework, Verbose,
-						TEXT("[MOGameMode] Preserved saved position for %s — Z drift only %.1fcm"),
-						*Character->GetName(), ZMismatch);
+					// DEBUG (MOGameMode, disabled Oct 18): re-enable to trace verbose detail
+					// UE_LOG(LogMOFramework, Verbose,
+					// 	TEXT("[MOGameMode] Preserved saved position for %s — Z drift only %.1fcm"),
+					// 	*Character->GetName(), ZMismatch);
 				}
 			}
 		}
@@ -1890,8 +1892,9 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		float InnerRadius = Ring * RingWidth;
 		float OuterRadius = (Ring + 1) * RingWidth;
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Searching ring %d: %.0f - %.0f cm from center"),
-			Ring, InnerRadius, OuterRadius);
+		// DEBUG (MOGameMode, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Searching ring %d: %.0f - %.0f cm from center"),
+		// 	Ring, InnerRadius, OuterRadius);
 
 		for (int32 Sample = 0; Sample < SamplesPerRing; ++Sample)
 		{

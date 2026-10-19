@@ -332,7 +332,8 @@ void UMOBuildingUIController::ShowBuildWidget(AMOBuildableActor* Target)
 	}
 
 	WidgetInst->SetPopupPosition(ScreenPosition);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Final menu position: (%.0f, %.0f)"), ScreenPosition.X, ScreenPosition.Y);
+	// DEBUG (MOBuildUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Final menu position: (%.0f, %.0f)"), ScreenPosition.X, ScreenPosition.Y);
 
 	// NOTE: Do NOT call SetInputMode() - CommonUI manages input modes
 	// via GetDesiredInputConfig() on the context menu widget.

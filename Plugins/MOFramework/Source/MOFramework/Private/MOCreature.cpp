@@ -46,7 +46,8 @@ void AMOCreature::BeginPlay()
 		RecruitComp->bIsRecruitable = false;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s BeginPlay"), *GetName());
+	// DEBUG (MOCreature, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s BeginPlay"), *GetName());
 
 	// Validate controller (Error only if missing). AI controllers exist ONLY on the authority: on a client (co-op joiner) every
 	// replicated creature legitimately has none, and this used to log an Error per creature on every client.
@@ -198,8 +199,9 @@ void AMOCreature::ApplyCreatureDefinition()
 		UE_LOG(LogMOFramework, Error, TEXT("[MOCreature] %s: GetCreatureController() returned NULL!"), *GetName());
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s: Applied definition '%s'"),
-		*GetName(), *Definition->DisplayName.ToString());
+	// DEBUG (MOCreature, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s: Applied definition '%s'"),
+	// 	*GetName(), *Definition->DisplayName.ToString());
 }
 
 void AMOCreature::HandleInstantDeath(EMOBodyPartType CausePart)
@@ -269,7 +271,8 @@ void AMOCreature::PlayHitReaction()
 		if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
 		{
 			AnimInstance->Montage_Play(HitReactionMontage);
-			UE_LOG(LogMOFramework, Log, TEXT("AMOCreature: %s playing hit reaction"), *GetName());
+			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+			// UE_LOG(LogMOFramework, Log, TEXT("AMOCreature: %s playing hit reaction"), *GetName());
 		}
 	}
 }
@@ -390,7 +393,8 @@ void AMOCreature::EnableRagdoll()
 		MeshComp->AddImpulse(ImpulseDir * RagdollImpulseStrength, NAME_None, true);
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s ragdoll enabled"), *GetName());
+	// DEBUG (MOCreature, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s ragdoll enabled"), *GetName());
 }
 
 void AMOCreature::SpawnCarcassDelayed()

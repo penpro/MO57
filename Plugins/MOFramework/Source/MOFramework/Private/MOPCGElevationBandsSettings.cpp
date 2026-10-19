@@ -253,7 +253,8 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 
 	if (bNeedsMask)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGElevationBands] %s: maskActive=%d filterBiomes=%d (%d allowed) dropped %d point(s) in water, %d in caves, %d outside the allowed biomes"), *Context->GetTargetActor(nullptr)->GetName(), WaterMask.IsActive() ? 1 : 0, bFilterBiomes ? 1 : 0, AllowedBiomes.Num(), DroppedInWater, DroppedInCave, DroppedByBiome);
+		// DEBUG (MOPCGElevationBands, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGElevationBands] %s: maskActive=%d filterBiomes=%d (%d allowed) dropped %d point(s) in water, %d in caves, %d outside the allowed biomes"), *Context->GetTargetActor(nullptr)->GetName(), WaterMask.IsActive() ? 1 : 0, bFilterBiomes ? 1 : 0, AllowedBiomes.Num(), DroppedInWater, DroppedInCave, DroppedByBiome);
 	}
 	return true;
 }

@@ -110,12 +110,13 @@ void UMOGameUIManagerSubsystem::HandleFocusChanging(const FFocusEvent& FocusEven
 	// Dump widget identity at the decision point so we can see exactly
 	// what's getting closed and what its policy was. Verbose — this fires on
 	// every click that lands on the viewport (audit H55/L14 log hygiene).
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[OutsideClick] decision for TopWidget '%s' (class=%s parent=%s)  bClosesOnOutsideClick=%s"),
-		*TopWidget->GetName(),
-		*TopWidget->GetClass()->GetName(),
-		TopWidget->GetClass()->GetSuperClass() ? *TopWidget->GetClass()->GetSuperClass()->GetName() : TEXT("(none)"),
-		TopWidget->bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"));
+	// DEBUG (OutsideClick, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[OutsideClick] decision for TopWidget '%s' (class=%s parent=%s)  bClosesOnOutsideClick=%s"),
+	// 	*TopWidget->GetName(),
+	// 	*TopWidget->GetClass()->GetName(),
+	// 	TopWidget->GetClass()->GetSuperClass() ? *TopWidget->GetClass()->GetSuperClass()->GetName() : TEXT("(none)"),
+	// 	TopWidget->bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"));
 
 	if (!TopWidget->bClosesOnOutsideClick)
 	{
@@ -414,7 +415,8 @@ UCommonActivatableWidget* UMOGameUIManagerSubsystem::PushModalWidget(const UObje
 			UCommonActivatableWidget* Pushed = Layout->PushWidgetToLayer(MOUILayerTags::Layer_Modal, WidgetClass);
 			if (Pushed)
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: layer-stack path → %s"), *Pushed->GetName());
+				// DEBUG (MOGameUIManagerSubsystem, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: layer-stack path → %s"), *Pushed->GetName());
 				return Pushed;
 			}
 			// Layout exists but push failed (e.g. Modal layer not registered).
@@ -457,7 +459,8 @@ UCommonActivatableWidget* UMOGameUIManagerSubsystem::PushModalWidget(const UObje
 
 	Modal->ActivateWidget();
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: viewport-fallback path → %s"), *Modal->GetName());
+	// DEBUG (MOGameUIManagerSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: viewport-fallback path → %s"), *Modal->GetName());
 	return Modal;
 }
 

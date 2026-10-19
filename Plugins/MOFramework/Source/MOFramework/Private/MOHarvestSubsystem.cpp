@@ -135,31 +135,33 @@ void UMOHarvestSubsystem::BuildHarvestRecipeCache()
 		if (Recipe && Recipe->bIsHarvestRecipe)
 		{
 			HarvestRecipeCache.Add(Recipe);
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest] Cached harvest recipe '%s' (tag: '%s', destroys: %s, tools: %d, knowledge: %d, discovery: %s/%s@%d)"),
-				*Recipe->RecipeId.ToString(),
-				*Recipe->RequiredTargetTag.ToString(),
-				Recipe->bDestroysTarget ? TEXT("yes") : TEXT("no"),
-				Recipe->RequiredTools.Num(),
-				Recipe->RequiredKnowledge.Num(),
-				Recipe->bRequiresDiscovery ? TEXT("yes") : TEXT("no"),
-				*Recipe->DiscoveryKnowledgeId.ToString(),
-				Recipe->DiscoveryKnowledgeLevel);
+			// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest] Cached harvest recipe '%s' (tag: '%s', destroys: %s, tools: %d, knowledge: %d, discovery: %s/%s@%d)"),
+			// 	*Recipe->RecipeId.ToString(),
+			// 	*Recipe->RequiredTargetTag.ToString(),
+			// 	Recipe->bDestroysTarget ? TEXT("yes") : TEXT("no"),
+			// 	Recipe->RequiredTools.Num(),
+			// 	Recipe->RequiredKnowledge.Num(),
+			// 	Recipe->bRequiresDiscovery ? TEXT("yes") : TEXT("no"),
+			// 	*Recipe->DiscoveryKnowledgeId.ToString(),
+			// 	Recipe->DiscoveryKnowledgeLevel);
 
-			// Log tool requirements
-			const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
-			for (const FMOToolRequirement& Tool : Recipe->RequiredTools)
-			{
-				FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Tool.ToolType));
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   Tool: '%s', Required=%s"),
-					*ToolTypeName,
-					Tool.bIsRequired ? TEXT("yes") : TEXT("no"));
-			}
-
-			// Log knowledge requirements
-			for (const FName& Knowledge : Recipe->RequiredKnowledge)
-			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   RequiredKnowledge: '%s'"), *Knowledge.ToString());
-			}
+			// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace verbose detail (each cached recipe's tools and knowledge)
+			// // Log tool requirements
+			// const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+			// for (const FMOToolRequirement& Tool : Recipe->RequiredTools)
+			// {
+			// 	FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Tool.ToolType));
+			// 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   Tool: '%s', Required=%s"),
+			// 		*ToolTypeName,
+			// 		Tool.bIsRequired ? TEXT("yes") : TEXT("no"));
+			// }
+			//
+			// // Log knowledge requirements
+			// for (const FName& Knowledge : Recipe->RequiredKnowledge)
+			// {
+			// 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   RequiredKnowledge: '%s'"), *Knowledge.ToString());
+			// }
 		}
 	}
 }
@@ -256,7 +258,8 @@ FName UMOHarvestSubsystem::GetSmartInspectItemId(
 
 	if (ItemIds.Num() == 0)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetSmartInspectItemId: No GivesX tags found"));
+		// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetSmartInspectItemId: No GivesX tags found"));
 		return NAME_None;
 	}
 	return PickItemToStudy(ItemIds, Knowledge, Skills);
@@ -273,12 +276,14 @@ FName UMOHarvestSubsystem::PickItemToStudy(const TArray<FName>& ItemIds, UMOKnow
 	{
 		if (IsValid(Knowledge) && Knowledge->GetLearningPotential(ItemId, Skills) != EMOLearningPotential::None)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: '%s' has learning potential"), *ItemId.ToString());
+			// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: '%s' has learning potential"), *ItemId.ToString());
 			return ItemId;
 		}
 	}
 	// All items maxed out, return first one anyway (for viewing knowledge)
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: all maxed, returning the first: '%s'"), *ItemIds[0].ToString());
+	// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] PickItemToStudy: all maxed, returning the first: '%s'"), *ItemIds[0].ToString());
 	return ItemIds[0];
 }
 
@@ -317,8 +322,9 @@ void UMOHarvestSubsystem::GetHarvestRecipesForTags(
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetHarvestRecipesForTags: Checking %d cached recipes against %d target tags"),
-		HarvestRecipeCache.Num(), TargetTags.Num());
+	// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] GetHarvestRecipesForTags: Checking %d cached recipes against %d target tags"),
+	// 	HarvestRecipeCache.Num(), TargetTags.Num());
 
 	for (const FMORecipeDefinitionRow* Recipe : HarvestRecipeCache)
 	{
@@ -337,10 +343,11 @@ void UMOHarvestSubsystem::GetHarvestRecipesForTags(
 		if (!Recipe->RequiredTargetTag.IsNone())
 		{
 			bool bHasTag = TargetTags.Contains(Recipe->RequiredTargetTag);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' requires tag '%s': %s"),
-				*Recipe->RecipeId.ToString(),
-				*Recipe->RequiredTargetTag.ToString(),
-				bHasTag ? TEXT("FOUND") : TEXT("not found"));
+			// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' requires tag '%s': %s"),
+			// 	*Recipe->RecipeId.ToString(),
+			// 	*Recipe->RequiredTargetTag.ToString(),
+			// 	bHasTag ? TEXT("FOUND") : TEXT("not found"));
 			if (!bHasTag)
 			{
 				continue;
@@ -350,11 +357,12 @@ void UMOHarvestSubsystem::GetHarvestRecipesForTags(
 		// Use centralized availability check (discovery/knowledge/skill)
 		FMORecipeAvailability Availability = CraftingSubsystem->IsRecipeAvailable(Recipe, Knowledge, Skills);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' availability: Available=%s, Discovered=%s, Reason='%s'"),
-			*Recipe->RecipeId.ToString(),
-			Availability.bIsAvailable ? TEXT("yes") : TEXT("no"),
-			Availability.bIsDiscovered ? TEXT("yes") : TEXT("no"),
-			*Availability.UnavailableReason.ToString());
+		// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' availability: Available=%s, Discovered=%s, Reason='%s'"),
+		// 	*Recipe->RecipeId.ToString(),
+		// 	Availability.bIsAvailable ? TEXT("yes") : TEXT("no"),
+		// 	Availability.bIsDiscovered ? TEXT("yes") : TEXT("no"),
+		// 	*Availability.UnavailableReason.ToString());
 
 		if (!Availability.bIsAvailable)
 		{
@@ -367,15 +375,17 @@ void UMOHarvestSubsystem::GetHarvestRecipesForTags(
 
 		if (!bHasTools)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' missing required tools: %d"),
-				*Recipe->RecipeId.ToString(), MissingTools.Num());
+			// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Recipe '%s' missing required tools: %d"),
+			// 	*Recipe->RecipeId.ToString(), MissingTools.Num());
 			continue;
 		}
 
 		OutRecipeIds.Add(Recipe->RecipeId);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Found %d valid harvest recipes for target"), OutRecipeIds.Num());
+	// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Found %d valid harvest recipes for target"), OutRecipeIds.Num());
 }
 
 FName UMOHarvestSubsystem::GetDestroyRecipeForTags(
@@ -449,8 +459,9 @@ FName UMOHarvestSubsystem::FindDestroyRecipeForTags(const TArray<FName>& TargetT
 		}
 
 		// Found a matching destroy recipe (don't check tool requirements)
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] FindDestroyRecipeForTags: Found '%s' for tag '%s'"),
-			*Recipe->RecipeId.ToString(), *Recipe->RequiredTargetTag.ToString());
+		// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] FindDestroyRecipeForTags: Found '%s' for tag '%s'"),
+		// 	*Recipe->RecipeId.ToString(), *Recipe->RequiredTargetTag.ToString());
 		return Recipe->RecipeId;
 	}
 
@@ -461,7 +472,8 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 {
 	if (RecipeId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] CanExecuteDestroyRecipe: No recipe ID"));
+		// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] CanExecuteDestroyRecipe: No recipe ID"));
 		return false;
 	}
 
@@ -489,15 +501,16 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 	TArray<EMOToolType> MissingTools;
 	bool bHasTools = CraftingSubsystem->HasRequiredTools(Recipe, Inventory, &MissingTools);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] CanExecuteDestroyRecipe '%s': RequiredTools=%d, HasTools=%s, MissingTools=%d"),
-		*RecipeId.ToString(), Recipe->RequiredTools.Num(), bHasTools ? TEXT("yes") : TEXT("no"), MissingTools.Num());
-
-	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
-	for (const EMOToolType& MissingTool : MissingTools)
-	{
-		FString ToolName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(MissingTool));
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Missing tool: %s"), *ToolName);
-	}
+	// DEBUG (MOHarvest, disabled Oct 18): re-enable to trace every recipe / tag lookup
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] CanExecuteDestroyRecipe '%s': RequiredTools=%d, HasTools=%s, MissingTools=%d"),
+	// 	*RecipeId.ToString(), Recipe->RequiredTools.Num(), bHasTools ? TEXT("yes") : TEXT("no"), MissingTools.Num());
+	//
+	// const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+	// for (const EMOToolType& MissingTool : MissingTools)
+	// {
+	// 	FString ToolName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(MissingTool));
+	// 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Missing tool: %s"), *ToolName);
+	// }
 
 	return bHasTools;
 }

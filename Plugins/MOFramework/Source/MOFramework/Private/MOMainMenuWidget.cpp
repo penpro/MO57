@@ -41,7 +41,8 @@ void UMOMainMenuWidget::NativeConstruct()
 	if (FocusWindowSwitcher)
 	{
 		const int32 NumWidgets = FocusWindowSwitcher->GetNumWidgets();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] FocusWindowSwitcher has %d children"), NumWidgets);
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] FocusWindowSwitcher has %d children"), NumWidgets);
 
 		for (int32 i = 0; i < NumWidgets; ++i)
 		{
@@ -57,7 +58,8 @@ void UMOMainMenuWidget::NativeConstruct()
 				if (UMONewGamePanel* FoundNewGamePanel = Cast<UMONewGamePanel>(Widget))
 				{
 					NewGamePanel = FoundNewGamePanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found NewGamePanel by type at index %d"), i);
+					// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+					// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found NewGamePanel by type at index %d"), i);
 				}
 			}
 			if (!LoadPanel)
@@ -65,7 +67,8 @@ void UMOMainMenuWidget::NativeConstruct()
 				if (UMOLoadPanel* FoundLoadPanel = Cast<UMOLoadPanel>(Widget))
 				{
 					LoadPanel = FoundLoadPanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found LoadPanel by type at index %d"), i);
+					// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+					// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found LoadPanel by type at index %d"), i);
 				}
 			}
 			if (!OptionsPanel)
@@ -73,7 +76,8 @@ void UMOMainMenuWidget::NativeConstruct()
 				if (UMOOptionsPanel* FoundOptionsPanel = Cast<UMOOptionsPanel>(Widget))
 				{
 					OptionsPanel = FoundOptionsPanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found OptionsPanel by type at index %d"), i);
+					// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+					// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found OptionsPanel by type at index %d"), i);
 				}
 			}
 			if (!HostGamePanel)
@@ -81,7 +85,8 @@ void UMOMainMenuWidget::NativeConstruct()
 				if (UMOHostGamePanel* FoundHostGamePanel = Cast<UMOHostGamePanel>(Widget))
 				{
 					HostGamePanel = FoundHostGamePanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found HostGamePanel by type at index %d"), i);
+					// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+					// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found HostGamePanel by type at index %d"), i);
 				}
 			}
 			if (!JoinGamePanel)
@@ -89,7 +94,8 @@ void UMOMainMenuWidget::NativeConstruct()
 				if (UMOJoinGamePanel* FoundJoinGamePanel = Cast<UMOJoinGamePanel>(Widget))
 				{
 					JoinGamePanel = FoundJoinGamePanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found JoinGamePanel by type at index %d"), i);
+					// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+					// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found JoinGamePanel by type at index %d"), i);
 				}
 			}
 		}
@@ -217,7 +223,8 @@ bool UMOMainMenuWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 
 void UMOMainMenuWidget::ShowNewGamePanel()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowNewGamePanel called"));
+	// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowNewGamePanel called"));
 	SwitchToPanel(ResolvePanelIndex(NewGamePanel, PanelIndex_NewGame));
 
 	// Generate a fresh random seed when opening
@@ -234,7 +241,8 @@ void UMOMainMenuWidget::ShowOptionsPanel()
 
 void UMOMainMenuWidget::ShowLoadPanel()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowLoadPanel called"));
+	// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowLoadPanel called"));
 	SwitchToPanel(ResolvePanelIndex(LoadPanel, PanelIndex_Load));
 
 	// Refresh load list when opening
@@ -246,7 +254,8 @@ void UMOMainMenuWidget::ShowLoadPanel()
 
 void UMOMainMenuWidget::ShowHostGamePanel()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowHostGamePanel called"));
+	// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowHostGamePanel called"));
 
 	const int32 PanelIndex = FindPanelIndex(HostGamePanel);
 	if (PanelIndex == INDEX_NONE)
@@ -262,7 +271,8 @@ void UMOMainMenuWidget::ShowHostGamePanel()
 
 void UMOMainMenuWidget::ShowJoinGamePanel()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowJoinGamePanel called"));
+	// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowJoinGamePanel called"));
 
 	const int32 PanelIndex = FindPanelIndex(JoinGamePanel);
 	if (PanelIndex == INDEX_NONE)
@@ -350,14 +360,16 @@ void UMOMainMenuWidget::RefreshLoadPanelList()
 
 void UMOMainMenuWidget::BindButtonEvents()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] BindButtonEvents called"));
+	// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] BindButtonEvents called"));
 
 	// New Game button
 	if (NewGameButton)
 	{
 		NewGameButton->OnClicked().RemoveAll(this);
 		NewGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleNewGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NewGameButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NewGameButton bound"));
 	}
 	else
 	{
@@ -369,7 +381,8 @@ void UMOMainMenuWidget::BindButtonEvents()
 	{
 		LoadGameButton->OnClicked().RemoveAll(this);
 		LoadGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleLoadGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] LoadGameButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] LoadGameButton bound"));
 	}
 	else
 	{
@@ -381,7 +394,8 @@ void UMOMainMenuWidget::BindButtonEvents()
 	{
 		OptionsButton->OnClicked().RemoveAll(this);
 		OptionsButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleOptionsClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsButton bound"));
 	}
 	else
 	{
@@ -393,7 +407,8 @@ void UMOMainMenuWidget::BindButtonEvents()
 	{
 		ExitGameButton->OnClicked().RemoveAll(this);
 		ExitGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleExitGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ExitGameButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ExitGameButton bound"));
 	}
 	else
 	{
@@ -405,13 +420,15 @@ void UMOMainMenuWidget::BindButtonEvents()
 	{
 		HostGameButton->OnClicked().RemoveAll(this);
 		HostGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleHostGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGameButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGameButton bound"));
 	}
 	if (JoinGameButton)
 	{
 		JoinGameButton->OnClicked().RemoveAll(this);
 		JoinGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleJoinGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGameButton bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGameButton bound"));
 	}
 
 	// Bind panel delegates
@@ -421,7 +438,8 @@ void UMOMainMenuWidget::BindButtonEvents()
 		NewGamePanel->OnStartGameRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleNewGamePanelStartRequested);
 		NewGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		NewGamePanel->OnStartGameRequested.AddDynamic(this, &UMOMainMenuWidget::HandleNewGamePanelStartRequested);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NewGamePanel bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NewGamePanel bound"));
 	}
 
 	if (LoadPanel)
@@ -439,14 +457,16 @@ void UMOMainMenuWidget::BindButtonEvents()
 		LoadPanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleLoadPanelHostRequested);
 		// The main menu is the one place a session can be started, so this is the one place the Host action is offered.
 		LoadPanel->SetHostActionEnabled(true);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] LoadPanel bound (filter disabled for main menu)"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] LoadPanel bound (filter disabled for main menu)"));
 	}
 
 	if (OptionsPanel)
 	{
 		OptionsPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		OptionsPanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsPanel bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsPanel bound"));
 	}
 
 	if (HostGamePanel)
@@ -455,14 +475,16 @@ void UMOMainMenuWidget::BindButtonEvents()
 		HostGamePanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleHostPanelHostRequested);
 		HostGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		HostGamePanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleHostPanelHostRequested);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGamePanel bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGamePanel bound"));
 	}
 
 	if (JoinGamePanel)
 	{
 		JoinGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		JoinGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGamePanel bound"));
+		// DEBUG (MOMainMenuWidget, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGamePanel bound"));
 	}
 }
 

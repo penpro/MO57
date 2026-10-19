@@ -146,8 +146,9 @@ bool FMOPCGHISMTaggerElement::ExecuteInternal(FPCGContext* Context) const
 
 		if (ItemId.IsNone())
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGHISMTagger] No item mapping for mesh '%s'"),
-				*Mesh->GetPathName());
+			// DEBUG (MOPCGHISMTagger, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGHISMTagger] No item mapping for mesh '%s'"),
+			// 	*Mesh->GetPathName());
 			continue;
 		}
 
@@ -210,8 +211,9 @@ TMap<FSoftObjectPath, FName> FMOPCGHISMTaggerElement::BuildMeshToItemMap(const U
 		FSoftObjectPath MeshPath = Item->WorldVisual.StaticMesh.ToSoftObjectPath();
 		Result.Add(MeshPath, Item->ItemId);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGHISMTagger] Mapped mesh '%s' -> item '%s'"),
-			*MeshPath.GetAssetPathString(), *Item->ItemId.ToString());
+		// DEBUG (MOPCGHISMTagger, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGHISMTagger] Mapped mesh '%s' -> item '%s'"),
+		// 	*MeshPath.GetAssetPathString(), *Item->ItemId.ToString());
 	}
 
 	return Result;

@@ -922,8 +922,9 @@ bool UMOBuildProgressComponent::TryConsumeMaterial(const FMOBuildPart& Part)
 			Progress.ConsumedPerPart[Progress.CurrentPartIndex]++;
 		}
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildProgressComponent] Performed action: %s"),
-			*Part.ActionId.ToString());
+		// DEBUG (MOBuildProgressComponent, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildProgressComponent] Performed action: %s"),
+		// 	*Part.ActionId.ToString());
 		return true;
 	}
 

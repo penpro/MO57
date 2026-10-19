@@ -65,7 +65,8 @@ void UMOPossessionMenu::EnsureButtonBindings()
 	{
 		CreateCharacterButton->OnClicked().RemoveAll(this);
 		CreateCharacterButton->OnClicked().AddUObject(this, &UMOPossessionMenu::HandleCreateCharacterClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPossessionMenu] CreateCharacterButton binding ensured"));
+		// DEBUG (MOPossessionMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOPossessionMenu] CreateCharacterButton binding ensured"));
 	}
 	else
 	{

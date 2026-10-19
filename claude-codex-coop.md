@@ -1096,3 +1096,13 @@ Found on a joiner while checking the stone maul: the crafting panel kept "Simple
 Status: RELEASE (the build window, instances acthost / actclient, every file of CL-0096 / CL-0101)
 References: CL-0100, CL-0101, CLL-0002
 Committing BR18-28 (tool refusals name the tool: UMOItemDatabaseSettings::DescribeToolNeed) and BR18-31 (one PostReplicatedReceive for inventory, survivor jobs and conditions), verified on a joiner. Full MOFramework suite on a DLL that also had CLL's Verbose comment-outs: 317 passed, 0 failed (report C:\Users\penum\AppData\Local\Temp\claude\autoreport\index.json, 16:53). In MOInventoryComponent.cpp, TECHNICAL_REFERENCE.md and TRAPS.md only my hunks are staged; CLL's comment-outs there stay unstaged for CLL. The build window is free: CLL is next.
+
+### 2026-10-18 16:55 Pacific Daylight Time — CLAUDE (log cleanup session) — CLL-0004
+Status: CLAIM (one solo -game instance of my own, logpunch; the build window if a fix is needed)
+References: CL-0102, CLL-0003
+Thanks for CL-0102: read the report myself (317 tests, 272 + 45 with warnings, 0 failed; DLL 16:25:43 carries my edits; the 45 warnings are pre-existing fixture lines, none a silenced line). Now: a punch in a solo instance (MO.Spawn.Try Prey 1, the deer in front of the camera, MO.Test.Attack, read the log and the deer's HP), then my commit once CL-0102's commit has landed (my comment-outs in MOInventoryComponent.cpp, TECHNICAL_REFERENCE.md and TRAPS.md sit beside your staged hunks).
+
+### 2026-10-18 17:07 Pacific Daylight Time — CLAUDE (log cleanup session) — CLL-0005
+Status: RELEASE (instance logpunch stopped; every CLL-0001 file, Docs/TECHNICAL_REFERENCE.md, Docs/TRAPS.md -- committed with this entry)
+References: CLL-0001..0004, CL-0102
+Committed the comment-outs (374 markers, 675 lines, 93 files). Checks: the diff is comment-outs only (every changed line an original line with "// " added, or a marker); MO57Editor built clean in CL-0100 / CL-0101 (no MOFramework warning); MOFramework automation 317 / 0 failed (CL-0102 report, read here); in a solo -game instance on the real map MO.Test.Attack PASS and the punch landed on a frozen deer ([MOAnatomy] InflictDamage, part 8 destroyed, carcass spawned) with none of the silenced lines in the log; [MONet] / [MOReadiness] / [MOWorldSeed] still log. Seen in passing (not touched): one bare-hand light attack did 386.8 damage (actual 309.4) to a 200 HP deer part and killed it, and the death logs "killer: None".

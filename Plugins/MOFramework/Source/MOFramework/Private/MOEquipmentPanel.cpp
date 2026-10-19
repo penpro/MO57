@@ -459,13 +459,15 @@ void UMOEquipmentPanel::HandleBackSlotDropReceived(int32 TargetSlotIndex, int32 
 
 void UMOEquipmentPanel::HandleLeftHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleLeftHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
+	// DEBUG (MOEquipmentPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleLeftHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
 	HandleSlotDropReceivedInternal(EMOEquipmentSlot::LeftHand, SourceSlotIndex, SourceInventory);
 }
 
 void UMOEquipmentPanel::HandleRightHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleRightHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
+	// DEBUG (MOEquipmentPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleRightHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
 	HandleSlotDropReceivedInternal(EMOEquipmentSlot::RightHand, SourceSlotIndex, SourceInventory);
 }
 

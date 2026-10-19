@@ -183,7 +183,8 @@ void UMOPrimaryGameLayout::PopWidgetFromLayer(FGameplayTag LayerTag)
 		MOUI_LOG(this, "Layer", "POP     layer=%s widget=%s",
 			*LayerTag.ToString(), *ActivatableWidget->GetName());
 		ActivatableWidget->DeactivateWidget();
-		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Popped widget from layer %s"), *LayerTag.ToString());
+		// DEBUG (MOPrimaryGameLayout, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Popped widget from layer %s"), *LayerTag.ToString());
 	}
 }
 
@@ -207,8 +208,9 @@ bool UMOPrimaryGameLayout::RemoveWidgetFromLayer(UCommonActivatableWidget* Widge
 			// Check if widget is no longer in viewport (removal succeeded)
 			if (!Widget->IsInViewport())
 			{
-				UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from layer %s"),
-					*Widget->GetName(), *Pair.Key.ToString());
+				// DEBUG (MOPrimaryGameLayout, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from layer %s"),
+				// 	*Widget->GetName(), *Pair.Key.ToString());
 				return true;
 			}
 		}
@@ -224,8 +226,9 @@ bool UMOPrimaryGameLayout::RemoveWidgetFromLayer(UCommonActivatableWidget* Widge
 			Widget->DeactivateWidget();
 		}
 		Widget->RemoveFromParent();
-		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from viewport (not in stack, deactivated)"),
-			*Widget->GetName());
+		// DEBUG (MOPrimaryGameLayout, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from viewport (not in stack, deactivated)"),
+		// 	*Widget->GetName());
 		return true;
 	}
 
@@ -241,7 +244,8 @@ void UMOPrimaryGameLayout::ClearLayer(FGameplayTag LayerTag)
 	}
 
 	Stack->ClearWidgets();
-	UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Cleared layer %s"), *LayerTag.ToString());
+	// DEBUG (MOPrimaryGameLayout, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Cleared layer %s"), *LayerTag.ToString());
 }
 
 bool UMOPrimaryGameLayout::IsLayerActive(FGameplayTag LayerTag) const

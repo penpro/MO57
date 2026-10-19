@@ -57,6 +57,12 @@ registers; it does not edit the consumer.
 - Always call `RemoveAll(this)` or `RemoveDynamic` before binding delegates in `NativeConstruct()` to prevent duplicate bindings
 - UI widgets use CommonUI (`UCommonActivatableWidget`, `UCommonButtonBase`)
 - Use Warning log level for important flow events, Log for routine events
+- *(Oct 18 2026, Wes: "comment out any other log text we're not currently using")* Debug output nobody reads in normal play is commented
+  out, not deleted, under a `// DEBUG (<system>, disabled Oct 18): re-enable to trace ...` marker (`grep -rn "disabled Oct 18"` lists
+  them): the punch debug (swing trace, aim assist, DrawDebug line / spheres), every Verbose line (nothing raises `LogMOFramework` to
+  Verbose), per-frame / per-query lines, setup / DIAG prints. Uncomment the marked block to bring one back. `UE_LOG` is already compiled
+  out of Shipping (NO_LOGGING; `MOFramework.h`), so a log line costs time in editor / Development builds, plus any string built only for
+  it in every build. A line a harness parses (`Tools/*.py`, `Content/Python`, `Tests/`) is never one of these.
 - **Input action handling always in C++** - All input action handlers go in `AMOPlayerController::SetupInputComponent()`, never in Blueprint. This keeps input logic centralized and debuggable.
 - **UHT Delegate Files**: Any header declaring `DECLARE_DYNAMIC_MULTICAST_DELEGATE` at file scope MUST have at least one `USTRUCT`/`UCLASS`/`UENUM` to force UHT processing. Without this, delegates won't be found by other headers.
 - **Template Methods Need Full Includes**: If a header uses a type in a template method, include the full header, not just a forward declaration. Templates instantiate at compile time and need complete type information.

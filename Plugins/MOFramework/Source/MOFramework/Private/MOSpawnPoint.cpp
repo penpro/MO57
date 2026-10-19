@@ -85,8 +85,9 @@ FVector AMOSpawnPoint::GetRandomSpawnLocation() const
 void AMOSpawnPoint::MarkUsed()
 {
 	LastUsedTime = FDateTime::Now();
-	UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnPoint] %s marked used, cooldown: %.1fs"),
-		*GetName(), PointCooldownSeconds);
+	// DEBUG (SpawnPoint, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnPoint] %s marked used, cooldown: %.1fs"),
+	// 	*GetName(), PointCooldownSeconds);
 }
 
 float AMOSpawnPoint::GetRemainingCooldown() const

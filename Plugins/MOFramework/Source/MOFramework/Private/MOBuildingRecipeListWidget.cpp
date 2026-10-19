@@ -37,7 +37,8 @@ void UMOBuildingRecipeListWidget::InitializeList(
 
 void UMOBuildingRecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] PopulateRecipes called with %d recipes"), RecipeIds.Num());
+	// DEBUG (MOBuildingRecipeListWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] PopulateRecipes called with %d recipes"), RecipeIds.Num());
 
 	if (!RecipeEntryWidgetClass)
 	{

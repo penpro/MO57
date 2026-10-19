@@ -77,8 +77,9 @@ void UMOSurvivorJobEntryWidget::InitializeFromJobEntry(const FMOSurvivorJobEntry
 			: ESlateVisibility::Collapsed);
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorJobEntry] Initialized for job %s: %s (State: %d)"),
-		*JobId.ToString(), *JobDef.DisplayName.ToString(), static_cast<int32>(JobEntry.State));
+	// DEBUG (MOSurvivorJobEntry, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorJobEntry] Initialized for job %s: %s (State: %d)"),
+	// 	*JobId.ToString(), *JobDef.DisplayName.ToString(), static_cast<int32>(JobEntry.State));
 }
 
 void UMOSurvivorJobEntryWidget::UpdateProgress(float Progress)

@@ -420,7 +420,8 @@ void UMOSystemMenuUIController::LoadSlotNow(const FString& SlotName)
 
 void UMOSystemMenuUIController::TogglePossessionMenu()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] TogglePossessionMenu called"));
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] TogglePossessionMenu called"));
 
 	// Frame-based debounce: one toggle per frame even if the key reaches this controller twice (added when menus ran in ECommonInputMode::All
 	// and both the game action and the menu fired; menus use Menu mode since the May-June rework -- kept as a cheap guard)
@@ -464,7 +465,8 @@ void UMOSystemMenuUIController::TogglePossessionMenu()
 
 void UMOSystemMenuUIController::OpenPossessionMenu()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu called"));
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu called"));
 
 	if (!IsLocalOwningPlayerController())
 	{
@@ -485,7 +487,8 @@ void UMOSystemMenuUIController::OpenPossessionMenu()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu - All checks passed, creating menu"));
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu - All checks passed, creating menu"));
 
 	// Close any existing menu first
 	CloseCachedMenu(PossessionMenuWidget);
@@ -754,8 +757,9 @@ void UMOSystemMenuUIController::HandleConfirmationCancelled()
 
 void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector2D ScreenPosition)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] ShowSurvivorContextMenu called for %s at position (%f, %f)"),
-		Survivor ? *Survivor->GetName() : TEXT("nullptr"), ScreenPosition.X, ScreenPosition.Y);
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] ShowSurvivorContextMenu called for %s at position (%f, %f)"),
+	// 	Survivor ? *Survivor->GetName() : TEXT("nullptr"), ScreenPosition.X, ScreenPosition.Y);
 
 	if (!IsLocalOwningPlayerController())
 	{
@@ -782,7 +786,8 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Using SurvivorContextMenuClass: %s"), *SurvivorContextMenuClass->GetName());
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Using SurvivorContextMenuClass: %s"), *SurvivorContextMenuClass->GetName());
 
 	// Store current target
 	CurrentSurvivorTarget = Survivor;
@@ -791,7 +796,8 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
 	if (!IsValid(MenuWidget))
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Creating new survivor context menu widget"));
+		// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Creating new survivor context menu widget"));
 		MenuWidget = CreateWidget<UMOSurvivorContextMenu>(PlayerController, SurvivorContextMenuClass);
 		SurvivorContextMenuWidget = MenuWidget;
 
@@ -800,11 +806,13 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create survivor context menu widget. Check if the Blueprint widget exists and inherits from UMOSurvivorContextMenu."));
 			return;
 		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Successfully created survivor context menu widget"));
+		// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Successfully created survivor context menu widget"));
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reusing existing survivor context menu widget"));
+		// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reusing existing survivor context menu widget"));
 	}
 
 	// Bind delegates
@@ -824,9 +832,10 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 	// THEN initialize for this survivor (which calls SetPopupPosition)
 	MenuWidget->InitializeForSurvivor(Survivor, ScreenPosition);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Widget added to viewport (ZOrder: %d, IsInViewport: %s)"),
-		SurvivorContextMenuZOrder,
-		MenuWidget->IsInViewport() ? TEXT("true") : TEXT("false"));
+	// DEBUG (MOSysUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Widget added to viewport (ZOrder: %d, IsInViewport: %s)"),
+	// 	SurvivorContextMenuZOrder,
+	// 	MenuWidget->IsInViewport() ? TEXT("true") : TEXT("false"));
 
 	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();

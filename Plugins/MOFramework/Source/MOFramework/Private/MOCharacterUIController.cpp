@@ -246,7 +246,8 @@ void UMOCharacterUIController::CreateStatusPanel()
 {
 	// Status panel is now created on-demand via SetPlayerStatusVisible
 	// This function is kept for backwards compatibility but does nothing
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] CreateStatusPanel called - status panel is now created on-demand."));
+	// DEBUG (MOCharUI, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] CreateStatusPanel called - status panel is now created on-demand."));
 }
 
 void UMOCharacterUIController::TogglePlayerStatus()

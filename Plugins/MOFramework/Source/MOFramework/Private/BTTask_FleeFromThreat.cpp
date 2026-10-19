@@ -47,15 +47,17 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 		return EBTNodeResult::Failed;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s fleeing from %s"),
-		*OwnerPawn->GetName(), *ThreatActor->GetName());
+	// DEBUG (BTTask_Flee, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s fleeing from %s"),
+	// 	*OwnerPawn->GetName(), *ThreatActor->GetName());
 
 	// Find flee location
 	FVector FleeLocation;
 	if (!FindFleeLocation(OwnerPawn, ThreatActor, FleeLocation))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s: Could not find flee location"),
-			*OwnerPawn->GetName());
+		// DEBUG (BTTask_Flee, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s: Could not find flee location"),
+		// 	*OwnerPawn->GetName());
 		return EBTNodeResult::Failed;
 	}
 
@@ -110,7 +112,8 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 			if (AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn))
 			{
 				FleeSpeed = Creature->GetRunSpeed();
-				UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] Using creature RunSpeed: %.1f"), FleeSpeed);
+				// DEBUG (BTTask_Flee, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] Using creature RunSpeed: %.1f"), FleeSpeed);
 			}
 
 			Movement->MaxWalkSpeed = FleeSpeed;
@@ -278,7 +281,8 @@ bool UBTTask_FleeFromThreat::HandleStuckRecovery(APawn* Pawn, AActor* Threat, FB
 			Memory->LastPosition = CurrentPosition;
 			Memory->RecoveryAttempts++;
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] Recovery attempt %d complete"), Memory->RecoveryAttempts);
+			// DEBUG (BTTask_Flee, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] Recovery attempt %d complete"), Memory->RecoveryAttempts);
 			return false;
 		}
 

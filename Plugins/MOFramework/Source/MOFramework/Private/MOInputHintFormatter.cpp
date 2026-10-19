@@ -91,8 +91,9 @@ FKey FMOInputHintFormatter::ResolveActionKey(const AMOPlayerController* MOPC,
 	UInputAction* Action = ReadObjectProperty<UInputAction>(MOPC, ActionPropertyName);
 	if (!Action)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInputHintFormatter] No InputAction property named '%s'"),
-			*ActionPropertyName.ToString());
+		// DEBUG (MOInputHintFormatter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInputHintFormatter] No InputAction property named '%s'"),
+		// 	*ActionPropertyName.ToString());
 		return FKey();
 	}
 

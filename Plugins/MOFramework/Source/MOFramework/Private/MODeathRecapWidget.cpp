@@ -14,7 +14,8 @@ void UMODeathRecapWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MODeathRecap] NativeConstruct '%s'"), *GetName());
+	// DEBUG (MODeathRecap, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MODeathRecap] NativeConstruct '%s'"), *GetName());
 
 	// Re-bind buttons defensively — same pattern other widgets use to defeat
 	// duplicate bindings from BP re-construct paths.

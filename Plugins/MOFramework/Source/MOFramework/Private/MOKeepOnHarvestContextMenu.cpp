@@ -38,9 +38,10 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 	UMOInventoryComponent* Inventory
 )
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] InitializeForTarget called. ButtonClass=%s, ButtonContainer=%s"),
-		ButtonClass ? *ButtonClass->GetName() : TEXT("NULL"),
-		ButtonContainer ? TEXT("bound") : TEXT("NULL"));
+	// DEBUG (MOKeepOnHarvestContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] InitializeForTarget called. ButtonClass=%s, ButtonContainer=%s"),
+	// 	ButtonClass ? *ButtonClass->GetName() : TEXT("NULL"),
+	// 	ButtonContainer ? TEXT("bound") : TEXT("NULL"));
 
 	if (!Target.IsValid() || !Target.bIsInstancedMeshTarget)
 	{
@@ -94,12 +95,13 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 		SmartInspectItemId = GroundItemId;
 	}
 
-	// Debug: Log all collected tags
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Collected %d tags from target (ground item '%s'):"), TargetTags.Num(), *GroundItemId.ToString());
-	for (const FName& Tag : TargetTags)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu]   Tag: '%s'"), *Tag.ToString());
-	}
+	// DEBUG (MOKeepOnHarvestContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// // Debug: Log all collected tags
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Collected %d tags from target (ground item '%s'):"), TargetTags.Num(), *GroundItemId.ToString());
+	// for (const FName& Tag : TargetTags)
+	// {
+	// 	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu]   Tag: '%s'"), *Tag.ToString());
+	// }
 
 	if (!CachedResourceNodeId.IsNone())
 	{
@@ -258,10 +260,11 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] PopulateButtons: CanInspect=%s, HarvestActions=%d, DestroyActionIndex=%d"),
-		CanInspect() ? TEXT("yes") : TEXT("no"),
-		AvailableHarvestActions.Num(),
-		DestroyActionIndex);
+	// DEBUG (MOKeepOnHarvestContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] PopulateButtons: CanInspect=%s, HarvestActions=%d, DestroyActionIndex=%d"),
+	// 	CanInspect() ? TEXT("yes") : TEXT("no"),
+	// 	AvailableHarvestActions.Num(),
+	// 	DestroyActionIndex);
 
 	// 0. A ground item: Pick Up, the same request E sends (by mesh + location, so it works for a joining player too)
 	if (!GroundItemId.IsNone())
@@ -310,11 +313,12 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		const bool bHasTool = UMOHarvestSubsystem::HasToolForAction(Action, CachedInventory.Get());
 		const bool bCanPerform = bHasKnowledge && bHasTool;
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Adding harvest button: %s (ActionId: %s, Knowledge=%s/%s, Tool=%s)"),
-			*Action.DisplayName.ToString(), *Action.ActionId.ToString(),
-			bHasKnowledge ? TEXT("ok") : TEXT("MISSING"),
-			Action.RequiresKnowledge() ? *Action.RequiredKnowledgeId.ToString() : TEXT("none"),
-			bHasTool ? TEXT("ok") : TEXT("missing"));
+		// DEBUG (MOKeepOnHarvestContextMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Adding harvest button: %s (ActionId: %s, Knowledge=%s/%s, Tool=%s)"),
+		// 	*Action.DisplayName.ToString(), *Action.ActionId.ToString(),
+		// 	bHasKnowledge ? TEXT("ok") : TEXT("MISSING"),
+		// 	Action.RequiresKnowledge() ? *Action.RequiredKnowledgeId.ToString() : TEXT("none"),
+		// 	bHasTool ? TEXT("ok") : TEXT("missing"));
 
 		UMOCommonButton* ActionBtn = CreateButton(Action.DisplayName);
 		if (ActionBtn)
@@ -361,7 +365,8 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 	// Note: "Search for Insects" removed - future feature
 
 	OnHarvestButtonsUpdated(CreatedButtons.Num());
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Created %d buttons"), CreatedButtons.Num());
+	// DEBUG (MOKeepOnHarvestContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Created %d buttons"), CreatedButtons.Num());
 }
 
 void UMOKeepOnHarvestContextMenu::ClearButtons()

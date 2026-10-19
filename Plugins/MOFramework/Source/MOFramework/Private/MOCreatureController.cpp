@@ -293,13 +293,15 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 			if (NewDistance >= CurrentDistance * 0.5f)
 			{
 				// New target isn't significantly closer - keep current target
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Ignoring %s (dist %.1f), keeping current target %s (dist %.1f)"),
-					*Actor->GetName(), NewDistance, *CurrentThreatActor->GetName(), CurrentDistance);
+				// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Ignoring %s (dist %.1f), keeping current target %s (dist %.1f)"),
+				// 	*Actor->GetName(), NewDistance, *CurrentThreatActor->GetName(), CurrentDistance);
 				return;
 			}
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Switching from %s to closer threat %s"),
-				*CurrentThreatActor->GetName(), *Actor->GetName());
+			// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Switching from %s to closer threat %s"),
+			// 	*CurrentThreatActor->GetName(), *Actor->GetName());
 		}
 
 		// New threat detected or switching to closer threat
@@ -310,8 +312,9 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		// Clear any pending "forget" timer since we can see the threat again
 		GetWorld()->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] THREAT DETECTED: %s at distance %.1f"),
-			*Actor->GetName(), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()));
+		// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] THREAT DETECTED: %s at distance %.1f"),
+		// 	*Actor->GetName(), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()));
 
 		// Update blackboard immediately
 		UpdateBlackboardThreatInfo();
@@ -324,8 +327,9 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 			// Update last known location
 			LastKnownThreatLocation = Actor->GetActorLocation();
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Lost sight of %s, remembering for %.1fs"),
-				*Actor->GetName(), ThreatMemoryDuration);
+			// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Lost sight of %s, remembering for %.1fs"),
+			// 	*Actor->GetName(), ThreatMemoryDuration);
 
 			// Start timer to forget the threat after ThreatMemoryDuration
 			// But keep CurrentThreatActor valid until then!
@@ -336,8 +340,9 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 					// Only clear if this is still the remembered threat
 					if (RememberedThreatActor.Get() == Actor)
 					{
-						UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Threat forgotten: %s"),
-							Actor ? *Actor->GetName() : TEXT("Unknown"));
+						// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+						// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Threat forgotten: %s"),
+						// 	Actor ? *Actor->GetName() : TEXT("Unknown"));
 						CurrentThreatActor.Reset();
 						RememberedThreatActor.Reset();
 						UpdateBlackboardThreatInfo();
@@ -540,11 +545,13 @@ void AMOCreatureController::SetActivityState(EMOCreatureActivityState NewState)
 		return;
 	}
 
-	EMOCreatureActivityState OldState = CurrentActivityState;
+	// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail (with the log below)
+	// EMOCreatureActivityState OldState = CurrentActivityState;
 	CurrentActivityState = NewState;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Activity state: %d -> %d"),
-		static_cast<int32>(OldState), static_cast<int32>(NewState));
+	// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Activity state: %d -> %d"),
+	// 	static_cast<int32>(OldState), static_cast<int32>(NewState));
 
 	// Update blackboard with new state
 	if (BlackboardComponent)

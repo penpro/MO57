@@ -341,15 +341,17 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		ISM->AddInstances(MeshData.Transforms, false, true);
 		InstancesAdded += MeshData.Transforms.Num();
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Added %d instances of '%s' (mesh: %s, tags: %d)"),
-			MeshData.Transforms.Num(), *MeshData.ResourceNodeId.ToString(),
-			*MeshData.Mesh->GetName(), ComponentTags.Num());
+		// DEBUG (MOResourceSpawner, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Added %d instances of '%s' (mesh: %s, tags: %d)"),
+		// 	MeshData.Transforms.Num(), *MeshData.ResourceNodeId.ToString(),
+		// 	*MeshData.Mesh->GetName(), ComponentTags.Num());
 
 		ComponentsCreated++;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Spawned %d instances across %d components (%d points processed)"),
-		InstancesAdded, ComponentsCreated, TotalPointsProcessed);
+	// DEBUG (MOResourceSpawner, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Spawned %d instances across %d components (%d points processed)"),
+	// 	InstancesAdded, ComponentsCreated, TotalPointsProcessed);
 
 	return true;
 }
@@ -402,8 +404,9 @@ TMap<FName, FMOPCGResourceSpawnerElement::FResourceSpawnData> FMOPCGResourceSpaw
 		// Get all auto-generated tags from the DataTable definition
 		ResourceData.AllTags = Definition->GetAllTags();
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Loaded resource '%s' with %d tags, %d mesh variations"),
-			*RowName.ToString(), ResourceData.AllTags.Num(), Definition->MeshVariations.Num());
+		// DEBUG (MOResourceSpawner, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Loaded resource '%s' with %d tags, %d mesh variations"),
+		// 	*RowName.ToString(), ResourceData.AllTags.Num(), Definition->MeshVariations.Num());
 	}
 
 	return Result;

@@ -121,7 +121,8 @@ namespace
 		Index.Tiles.Add(Key, Tile);
 		if (Tile->Sites.Num() > 0)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOFeatureTerrain] tile (%d, %d): %d composition(s) shape the ground"), Key.X, Key.Y, Tile->Sites.Num());
+			// DEBUG (MOFeatureTerrain, disabled Oct 18): re-enable to trace every feature tile
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOFeatureTerrain] tile (%d, %d): %d composition(s) shape the ground"), Key.X, Key.Y, Tile->Sites.Num());
 		}
 		return Tile;
 	}

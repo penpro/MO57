@@ -148,7 +148,8 @@ void UBTTask_CreatureWander::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 				Memory->StuckTime = 0.f;
 				Memory->NextHeadingAdjustTime = FMath::RandRange(MinHeadingAdjustInterval, MaxHeadingAdjustInterval);
 
-				UE_LOG(LogMOFramework, Verbose, TEXT("[BTWander] %s stuck, reversing heading"), *OwnerPawn->GetName());
+				// DEBUG (BTWander, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[BTWander] %s stuck, reversing heading"), *OwnerPawn->GetName());
 			}
 		}
 		else

@@ -174,7 +174,8 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	FString Reason;
 	if (!CanAttack(AttackType, Reason))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Cannot attack: %s"), *Reason);
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Cannot attack: %s"), *Reason);
 		return false;
 	}
 
@@ -188,7 +189,8 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	// Consume stamina
 	if (!ConsumeStamina(Profile->StaminaCost))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Not enough stamina for attack"));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Not enough stamina for attack"));
 		return false;
 	}
 
@@ -215,9 +217,10 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	// Play attack animation montage
 	PlayAttackAnimation();
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started %s attack, wind-up: %.2fs"),
-		AttackType == EMOAttackType::Light ? TEXT("light") : TEXT("heavy"),
-		Profile->WindUpTime);
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started %s attack, wind-up: %.2fs"),
+	// 	AttackType == EMOAttackType::Light ? TEXT("light") : TEXT("heavy"),
+	// 	Profile->WindUpTime);
 
 	return true;
 }
@@ -304,7 +307,8 @@ bool UMOCombatComponent::StartBlock()
 	SetCombatState(EMOCombatState::Blocking);
 	TimeSinceLastAction = 0.0f;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started blocking"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started blocking"));
 	return true;
 }
 
@@ -322,7 +326,8 @@ void UMOCombatComponent::StopBlock()
 	}
 
 	SetCombatState(bInCombat ? EMOCombatState::Ready : EMOCombatState::Idle);
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Stopped blocking"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Stopped blocking"));
 }
 
 bool UMOCombatComponent::AttemptParry()
@@ -365,7 +370,8 @@ bool UMOCombatComponent::AttemptParry()
 	SetCombatState(EMOCombatState::Parrying);
 	TimeSinceLastAction = 0.0f;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attempting parry, window: %.2fs"), ParryWindow);
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attempting parry, window: %.2fs"), ParryWindow);
 	return true;
 }
 
@@ -403,7 +409,8 @@ bool UMOCombatComponent::StartDodge(const FVector& Direction)
 	SetCombatState(EMOCombatState::Dodging);
 	TimeSinceLastAction = 0.0f;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started dodge"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started dodge"));
 	return true;
 }
 
@@ -497,7 +504,8 @@ EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCom
 	// Check if in dodge i-frames
 	if (bInDodgeIFrames)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack dodged (i-frames)"));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack dodged (i-frames)"));
 		return EMOAttackResult::Dodged;
 	}
 
@@ -505,7 +513,8 @@ EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCom
 	if (CombatState == EMOCombatState::Parrying)
 	{
 		OnParrySuccess.Broadcast(Attacker);
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack parried!"));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack parried!"));
 		return EMOAttackResult::Parried;
 	}
 
@@ -527,7 +536,8 @@ EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCom
 			UMOCombatMedicalHelpers::ApplyCombatDamage(ReducedHit, CachedAnatomyComp, CachedVitalsComp, CachedMentalComp);
 		}
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack blocked (%.0f%% effectiveness)"), BlockEff * 100.0f);
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack blocked (%.0f%% effectiveness)"), BlockEff * 100.0f);
 		return EMOAttackResult::Blocked;
 	}
 
@@ -574,7 +584,8 @@ EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCom
 	}
 
 	OnDamageReceived.Broadcast(Attacker, HitInfo);
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit, damage: %.1f"), HitInfo.GetFinalDamage());
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit, damage: %.1f"), HitInfo.GetFinalDamage());
 
 	return EMOAttackResult::Hit;
 }
@@ -653,7 +664,8 @@ bool UMOCombatComponent::DrawWeapon()
 	MainHandWeapon.bIsDrawn = true;
 	OffHandWeapon.bIsDrawn = (OffHandWeapon.WeaponProfileId != NAME_None);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Weapon drawn"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Weapon drawn"));
 	return true;
 }
 
@@ -662,7 +674,8 @@ void UMOCombatComponent::SheatheWeapon()
 	MainHandWeapon.bIsDrawn = false;
 	OffHandWeapon.bIsDrawn = false;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Weapon sheathed"));
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Weapon sheathed"));
 }
 
 bool UMOCombatComponent::GetCurrentWeaponProfile(FMOWeaponDamageProfileRow& OutProfile) const
@@ -992,8 +1005,9 @@ void UMOCombatComponent::ExecuteAttack()
 		TraceDirection = ResolveSwingDirection(SwingOrigin, SwingAim, Profile->Range);
 		TraceStart = SwingOrigin + TraceDirection * 30.f; // Start slightly in front
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Swing trace: Start=%s Dir=%s (camera aim %s) Range=%.0f"),
-			*TraceStart.ToString(), *TraceDirection.ToString(), *SwingAim.ToString(), Profile->Range);
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Swing trace: Start=%s Dir=%s (camera aim %s) Range=%.0f"),
+		// 	*TraceStart.ToString(), *TraceDirection.ToString(), *SwingAim.ToString(), Profile->Range);
 	}
 	else
 	{
@@ -1004,13 +1018,14 @@ void UMOCombatComponent::ExecuteAttack()
 
 	const FVector TraceEnd = TraceStart + TraceDirection * Profile->Range;
 
-	// Debug visualization (temporary - for debugging)
-#if ENABLE_DRAW_DEBUG
-	const float DebugDuration = 2.0f;
-	DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Yellow, false, DebugDuration, 0, 2.0f);
-	DrawDebugSphere(GetWorld(), TraceStart, 30.0f, 8, FColor::Green, false, DebugDuration);
-	DrawDebugSphere(GetWorld(), TraceEnd, 30.0f, 8, FColor::Red, false, DebugDuration);
-#endif
+	// DEBUG (punch, disabled Oct 18): re-enable to trace swings (the yellow trace line, green start / red end spheres; the blue impact spheres below)
+	// // Debug visualization (temporary - for debugging)
+	// #if ENABLE_DRAW_DEBUG
+	// const float DebugDuration = 2.0f;
+	// DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Yellow, false, DebugDuration, 0, 2.0f);
+	// DrawDebugSphere(GetWorld(), TraceStart, 30.0f, 8, FColor::Green, false, DebugDuration);
+	// DrawDebugSphere(GetWorld(), TraceEnd, 30.0f, 8, FColor::Red, false, DebugDuration);
+	// #endif
 
 	TArray<FHitResult> HitResults;
 	FCollisionQueryParams QueryParams;
@@ -1031,20 +1046,23 @@ void UMOCombatComponent::ExecuteAttack()
 
 	if (bHit)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
 
 		// Process each hit - draw blue sphere at impact points
 		for (const FHitResult& Hit : HitResults)
 		{
-#if ENABLE_DRAW_DEBUG
-			DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 20.0f, 8, FColor::Blue, false, DebugDuration);
-#endif
+			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+			// #if ENABLE_DRAW_DEBUG
+			// DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 20.0f, 8, FColor::Blue, false, DebugDuration);
+			// #endif
 			ProcessHit(Hit, *Profile, TraceDirection);
 		}
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed - no targets in range"));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed - no targets in range"));
 	}
 }
 
@@ -1107,8 +1125,9 @@ FVector UMOCombatComponent::ResolveSwingDirection(const FVector& Origin, const F
 	}
 	if (Best)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Aim assist: %s, %.0f deg off the camera's aim"), *Best->GetName(),
-			FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(BestDot, -1.0f, 1.0f))));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Aim assist: %s, %.0f deg off the camera's aim"), *Best->GetName(),
+		// 	FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(BestDot, -1.0f, 1.0f))));
 	}
 	return BestDirection;
 }
@@ -1250,8 +1269,9 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 
 	if (AngleToTarget > Profile.ArcAngle * 0.5f)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Hit outside attack arc (%.1f° > %.1f°)"),
-			AngleToTarget, Profile.ArcAngle * 0.5f);
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Hit outside attack arc (%.1f° > %.1f°)"),
+		// 	AngleToTarget, Profile.ArcAngle * 0.5f);
 		return; // Outside attack arc
 	}
 
@@ -1278,8 +1298,9 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		HitInfo.bCausesHeavyBleeding = Profile.bCausesHeavyBleeding;
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s hit %s (%s, %.1f damage): %s"), *Owner->GetName(), *HitActor->GetName(),
-			*UEnum::GetValueAsString(HitBodyPart), HitInfo.BaseDamage, *UEnum::GetValueAsString(Result));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s hit %s (%s, %.1f damage): %s"), *Owner->GetName(), *HitActor->GetName(),
+		// 	*UEnum::GetValueAsString(HitBodyPart), HitInfo.BaseDamage, *UEnum::GetValueAsString(Result));
 		OnAttackHit.Broadcast(HitActor, Result, HitInfo);
 	}
 	else
@@ -1378,8 +1399,9 @@ void UMOCombatComponent::PlayAttackAnimation()
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] No attack montage set for attack type %d"),
-			static_cast<int32>(CurrentAttackType));
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] No attack montage set for attack type %d"),
+		// 	static_cast<int32>(CurrentAttackType));
 	}
 }
 

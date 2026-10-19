@@ -451,16 +451,17 @@ void AMOSurvivorController::UpdateFollowBehavior(float DeltaTime)
 	// Only move if we're too far from the follow distance
 	if (DistanceToTarget > FollowStartDistance)
 	{
-		// Log movement debug info periodically
-		static float LastLogTime = 0.f;
-		UWorld* World = GetWorld();
-		if (World && (World->GetTimeSeconds() - LastLogTime) > 2.0f)
-		{
-			const FVector Velocity = ControlledPawn->GetVelocity();
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Following: distance=%.1f, velocity=%.1f (%.1f, %.1f, %.1f)"),
-				DistanceToTarget, Velocity.Size(), Velocity.X, Velocity.Y, Velocity.Z);
-			LastLogTime = World->GetTimeSeconds();
-		}
+		// DEBUG (MOSurvivorController, disabled Oct 18): re-enable to trace a following survivor every 2 s
+		// // Log movement debug info periodically
+		// static float LastLogTime = 0.f;
+		// UWorld* World = GetWorld();
+		// if (World && (World->GetTimeSeconds() - LastLogTime) > 2.0f)
+		// {
+		// 	const FVector Velocity = ControlledPawn->GetVelocity();
+		// 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Following: distance=%.1f, velocity=%.1f (%.1f, %.1f, %.1f)"),
+		// 		DistanceToTarget, Velocity.Size(), Velocity.X, Velocity.Y, Velocity.Z);
+		// 	LastLogTime = World->GetTimeSeconds();
+		// }
 
 		// Move towards target with follow distance as acceptance radius
 		MoveToActorWithRadius(Target, FollowDistance);
@@ -2083,8 +2084,9 @@ bool AMOSurvivorController::FindNearestGatherResource(EMOSurvivorJobType JobType
 		SearchRadius = JobDef->SearchRadius;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] FindNearestGatherResource: JobType=%d, SearchRadius=%.0f"),
-		static_cast<int32>(JobType), SearchRadius);
+	// DEBUG (MOSurvivorController, disabled Oct 18): re-enable to trace resource searches
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] FindNearestGatherResource: JobType=%d, SearchRadius=%.0f"),
+	// 	static_cast<int32>(JobType), SearchRadius);
 
 	// For GatherWood, find trees (KeepOnHarvest) with GivesStick tag
 	if (JobType == EMOSurvivorJobType::GatherWood)
@@ -2140,14 +2142,16 @@ bool AMOSurvivorController::FindNearestGatherResource(EMOSurvivorJobType JobType
 			GatherTargetItemId = Instance.ItemId;
 			SimpleJobTargetLocation = Instance.InstanceTransform.GetLocation();
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorController] Found matching ground resource: %s at %s"),
-				*Instance.ItemId.ToString(), *SimpleJobTargetLocation.ToString());
+			// DEBUG (MOSurvivorController, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorController] Found matching ground resource: %s at %s"),
+			// 	*Instance.ItemId.ToString(), *SimpleJobTargetLocation.ToString());
 			return true;
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorController] No matching resources for job type %d in %d instances"),
-		static_cast<int32>(JobType), Instances.Num());
+	// DEBUG (MOSurvivorController, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorController] No matching resources for job type %d in %d instances"),
+	// 	static_cast<int32>(JobType), Instances.Num());
 	return false;
 }
 

@@ -142,15 +142,17 @@ int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, F
 			FVoxelStampRef StampRef = StampComp->GetStamp();
 			if (StampRef.IsValid())
 			{
-				// Log the old seed before changing
-				const FString OldSeed = StampRef->StampSeed.Seed;
+				// DEBUG (MOWorldSeed, disabled Oct 18): re-enable to trace verbose detail (with the log below)
+				// // Log the old seed before changing
+				// const FString OldSeed = StampRef->StampSeed.Seed;
 
 				// 1) Set the StampSeed (placement-RNG field).
 				StampRef->StampSeed.Seed = VoxelSeedString;
 				StampsUpdated++;
 
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Stamp in '%s': StampSeed '%s' -> '%s'"),
-					*Actor->GetName(), *OldSeed, *VoxelSeedString);
+				// DEBUG (MOWorldSeed, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Stamp in '%s': StampSeed '%s' -> '%s'"),
+				// 	*Actor->GetName(), *OldSeed, *VoxelSeedString);
 
 				// 2) CRITICAL FIX (2026-05): a GRAPH stamp has its OWN "Seed" parameter override that drives generation -- SEPARATE from the StampSeed
 				// above, and the graph asset's own Seed override is IGNORED in favour of the stamp's. That is the level's world-gen HeightGraphStamp
@@ -213,8 +215,9 @@ int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, F
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Stamp in '%s': no stamp data"),
-					*Actor->GetName());
+				// DEBUG (MOWorldSeed, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Stamp in '%s': no stamp data"),
+				// 	*Actor->GetName());
 			}
 		}
 	}
@@ -290,8 +293,9 @@ bool UMOWorldSeedSubsystem::ApplySeedToHeightGraphs(int32 WorldSeed, FName Voxel
 		// Check if this graph has a parameter with the expected name
 		if (!Graph->HasParameter(VoxelSeedParameterName))
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Graph '%s' has no parameter named '%s'"),
-				*Graph->GetName(), *VoxelSeedParameterName.ToString());
+			// DEBUG (MOWorldSeed, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Graph '%s' has no parameter named '%s'"),
+			// 	*Graph->GetName(), *VoxelSeedParameterName.ToString());
 			continue;
 		}
 

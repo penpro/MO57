@@ -16,10 +16,11 @@ void UMOPlayerStatusWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[PlayerStatus] NativeConstruct - HealthBar=%s, HungerBar=%s, ThirstBar=%s"),
-		HealthBar ? TEXT("valid") : TEXT("NULL"),
-		HungerBar ? TEXT("valid") : TEXT("NULL"),
-		ThirstBar ? TEXT("valid") : TEXT("NULL"));
+	// DEBUG (PlayerStatus, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[PlayerStatus] NativeConstruct - HealthBar=%s, HungerBar=%s, ThirstBar=%s"),
+	// 	HealthBar ? TEXT("valid") : TEXT("NULL"),
+	// 	HungerBar ? TEXT("valid") : TEXT("NULL"),
+	// 	ThirstBar ? TEXT("valid") : TEXT("NULL"));
 
 	SetKeyboardFocus();
 	UpdateAllDisplays();

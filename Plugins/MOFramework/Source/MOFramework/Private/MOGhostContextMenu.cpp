@@ -439,9 +439,10 @@ void UMOGhostContextMenu::UpdateButtonState()
 	const bool bAllMaterialsReady = AreAllMaterialsDeposited();
 	const bool bBuildActive = IsBuildTimerActive();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] UpdateButtonState: AllMaterials=%d, BuildActive=%d, HasProgressBar=%d, HasTimeText=%d"),
-		bAllMaterialsReady ? 1 : 0, bBuildActive ? 1 : 0,
-		BuildProgressBar != nullptr ? 1 : 0, BuildTimeText != nullptr ? 1 : 0);
+	// DEBUG (MOGhostContextMenu, disabled Oct 18): re-enable to trace every button / list refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] UpdateButtonState: AllMaterials=%d, BuildActive=%d, HasProgressBar=%d, HasTimeText=%d"),
+	// 	bAllMaterialsReady ? 1 : 0, bBuildActive ? 1 : 0,
+	// 	BuildProgressBar != nullptr ? 1 : 0, BuildTimeText != nullptr ? 1 : 0);
 
 	// Build button - enabled only when all materials deposited and not already building
 	if (BuildButton)
@@ -536,7 +537,8 @@ void UMOGhostContextMenu::UpdateMaterialTextWidget(UTextBlock* Widget, const FMO
 
 void UMOGhostContextMenu::PopulateMaterialList()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList called, MaterialEntries: %d"), MaterialEntries.Num());
+	// DEBUG (MOGhostContextMenu, disabled Oct 18): re-enable to trace every button / list refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList called, MaterialEntries: %d"), MaterialEntries.Num());
 
 	if (!MaterialListContainer)
 	{
@@ -556,10 +558,12 @@ void UMOGhostContextMenu::PopulateMaterialList()
 		{
 			MaterialListContainer->AddChild(TextWidget);
 			MaterialTextWidgets.Add(TextWidget);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Added material: %s (%d/%d)"),
-				*Entry.ItemId.ToString(), Entry.Deposited, Entry.Required);
+			// DEBUG (MOGhostContextMenu, disabled Oct 18): re-enable to trace every button / list refresh
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Added material: %s (%d/%d)"),
+			// 	*Entry.ItemId.ToString(), Entry.Deposited, Entry.Required);
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList complete, added %d widgets"), MaterialTextWidgets.Num());
+	// DEBUG (MOGhostContextMenu, disabled Oct 18): re-enable to trace every button / list refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList complete, added %d widgets"), MaterialTextWidgets.Num());
 }

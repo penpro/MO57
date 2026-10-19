@@ -818,7 +818,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 	FVector HitNormal;
 	if (!FindTerraformTarget(HitLocation, HitNormal))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOTerraforming] BeginTerraform: no valid target"));
+		// DEBUG (MOTerraforming, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOTerraforming] BeginTerraform: no valid target"));
 		return false;
 	}
 

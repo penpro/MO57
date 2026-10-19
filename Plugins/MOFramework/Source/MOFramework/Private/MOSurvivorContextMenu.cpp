@@ -55,11 +55,12 @@ void UMOSurvivorContextMenu::InitializeForSurvivor(APawn* Survivor, FVector2D Sc
 	AMOSurvivorController* SurvivorController = Cast<AMOSurvivorController>(ExistingController);
 
 	// Log what controller exists
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Survivor %s has controller: %s (IsSurvivorController: %s, IsDead: %s)"),
-		*Survivor->GetName(),
-		ExistingController ? *ExistingController->GetClass()->GetName() : TEXT("None"),
-		SurvivorController ? TEXT("Yes") : TEXT("No"),
-		bSurvivorIsDead ? TEXT("Yes") : TEXT("No"));
+	// DEBUG (MOSurvivorContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Survivor %s has controller: %s (IsSurvivorController: %s, IsDead: %s)"),
+	// 	*Survivor->GetName(),
+	// 	ExistingController ? *ExistingController->GetClass()->GetName() : TEXT("None"),
+	// 	SurvivorController ? TEXT("Yes") : TEXT("No"),
+	// 	bSurvivorIsDead ? TEXT("Yes") : TEXT("No"));
 
 	// A recruited survivor without its AI yet gets one (the shared EnsureSurvivorAIController: never from a player who drives the pawn).
 	if (!bSurvivorIsDead && !SurvivorController && Survivor->HasAuthority())

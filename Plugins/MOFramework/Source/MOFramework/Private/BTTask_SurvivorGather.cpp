@@ -282,7 +282,8 @@ bool UBTTask_SurvivorGather::FindNearestHISMResource(APawn* Pawn, EMOSurvivorJob
 
 	if (Instances.Num() == 0)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] No HISM instances found in radius %.0f"), SearchRadius);
+		// DEBUG (BTTask_SurvivorGather, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] No HISM instances found in radius %.0f"), SearchRadius);
 		return false;
 	}
 
@@ -301,14 +302,16 @@ bool UBTTask_SurvivorGather::FindNearestHISMResource(APawn* Pawn, EMOSurvivorJob
 			OutInstanceIndex = Instance.InstanceIndex;
 			OutLocation = Instance.InstanceTransform.GetLocation();
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] Found matching resource: %s at %s"),
-				*Instance.ItemId.ToString(), *OutLocation.ToString());
+			// DEBUG (BTTask_SurvivorGather, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] Found matching resource: %s at %s"),
+			// 	*Instance.ItemId.ToString(), *OutLocation.ToString());
 			return true;
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] No matching resources for job type %d in %d instances"),
-		static_cast<int32>(JobType), Instances.Num());
+	// DEBUG (BTTask_SurvivorGather, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_SurvivorGather] No matching resources for job type %d in %d instances"),
+	// 	static_cast<int32>(JobType), Instances.Num());
 	return false;
 }
 

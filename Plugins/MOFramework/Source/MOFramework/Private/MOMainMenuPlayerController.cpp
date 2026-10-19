@@ -68,7 +68,8 @@ void AMOMainMenuPlayerController::BeginPlay()
 		Sessions->ReleaseStaleSession();
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] BeginPlay called"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] BeginPlay called"));
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] MainMenuWidgetClass: %s"),
 		MainMenuWidgetClass ? *MainMenuWidgetClass->GetName() : TEXT("NULL"));
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] IntroWidgetClass: %s"),
@@ -80,15 +81,17 @@ void AMOMainMenuPlayerController::BeginPlay()
 	// Bring up the UMOPrimaryGameLayout for the main menu world.
 	{
 		UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] BeginPlay: UISubsystem=%s"),
-			UISubsystem ? *UISubsystem->GetName() : TEXT("NULL"));
+		// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] BeginPlay: UISubsystem=%s"),
+		// 	UISubsystem ? *UISubsystem->GetName() : TEXT("NULL"));
 		if (UISubsystem)
 		{
 			UISubsystem->NotifyPlayerAdded(this);
-			UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayoutForPlayer(this);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] After NotifyPlayerAdded: layout=%s (class=%s)"),
-				Layout ? *Layout->GetName() : TEXT("NULL"),
-				Layout ? *Layout->GetClass()->GetName() : TEXT("<n/a>"));
+			// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+			// UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayoutForPlayer(this);
+			// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] After NotifyPlayerAdded: layout=%s (class=%s)"),
+			// 	Layout ? *Layout->GetName() : TEXT("NULL"),
+			// 	Layout ? *Layout->GetClass()->GetName() : TEXT("<n/a>"));
 		}
 	}
 
@@ -143,9 +146,10 @@ void AMOMainMenuPlayerController::SetupInputComponent()
 
 void AMOMainMenuPlayerController::ShowMainMenu()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: existing widget=%s class=%s"),
-		MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"),
-		MainMenuWidgetClass ? *MainMenuWidgetClass->GetName() : TEXT("NULL"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: existing widget=%s class=%s"),
+	// 	MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"),
+	// 	MainMenuWidgetClass ? *MainMenuWidgetClass->GetName() : TEXT("NULL"));
 
 	if (MainMenuWidget)
 	{
@@ -169,16 +173,18 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 	// nest correctly and input handoff just works on close.
 	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
 	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayoutForPlayer(this) : nullptr;
-	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: layout=%s"),
-		Layout ? *Layout->GetName() : TEXT("NULL"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: layout=%s"),
+	// 	Layout ? *Layout->GetName() : TEXT("NULL"));
 	if (Layout)
 	{
 		UCommonActivatableWidget* Pushed = Layout->PushWidgetToLayer(
 			MOUILayerTags::Layer_Menu, MainMenuWidgetClass);
 		MainMenuWidget = Cast<UMOMainMenuWidget>(Pushed);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: pushed=%s cast=%s"),
-			Pushed ? *Pushed->GetClass()->GetName() : TEXT("NULL"),
-			MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"));
+		// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: pushed=%s cast=%s"),
+		// 	Pushed ? *Pushed->GetClass()->GetName() : TEXT("NULL"),
+		// 	MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"));
 		if (MainMenuWidget)
 		{
 			MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
@@ -373,7 +379,8 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 	// Setup media player and components
 	SetupMediaPlayer();
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: pushing intro to Modal layer"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: pushing intro to Modal layer"));
 
 	// Push intro widget onto the Modal layer so it lives in the CommonUI
 	// stack. The stack auto-activates it (which claims focus via
@@ -381,18 +388,20 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 	// (called from SkipIntro / OnVideoFinished). No manual SetFocus needed.
 	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
 	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayoutForPlayer(this) : nullptr;
-	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: layout=%s IntroWidgetClass=%s"),
-		Layout ? *Layout->GetName() : TEXT("NULL"),
-		IntroWidgetClass ? *IntroWidgetClass->GetName() : TEXT("NULL"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: layout=%s IntroWidgetClass=%s"),
+	// 	Layout ? *Layout->GetName() : TEXT("NULL"),
+	// 	IntroWidgetClass ? *IntroWidgetClass->GetName() : TEXT("NULL"));
 
 	if (Layout)
 	{
 		UCommonActivatableWidget* PushedIntro = Layout->PushWidgetToLayer(
 			MOUILayerTags::Layer_Modal, IntroWidgetClass);
 		IntroWidget = Cast<UMOIntroWidget>(PushedIntro);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: PushWidgetToLayer returned %s, cast result: %s"),
-			PushedIntro ? *PushedIntro->GetClass()->GetName() : TEXT("NULL"),
-			IntroWidget ? *IntroWidget->GetName() : TEXT("NULL (cast failed)"));
+		// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: PushWidgetToLayer returned %s, cast result: %s"),
+		// 	PushedIntro ? *PushedIntro->GetClass()->GetName() : TEXT("NULL"),
+		// 	IntroWidget ? *IntroWidget->GetName() : TEXT("NULL (cast failed)"));
 	}
 	else
 	{
@@ -889,11 +898,13 @@ void AMOMainMenuPlayerController::SetupMediaPlayer()
 		{
 			// Set the media texture on the material
 			VideoMaterialInstance->SetTextureParameterValue(FName("MediaTexture"), MediaTexture);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Video material instance created with MediaTexture"));
+			// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Video material instance created with MediaTexture"));
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Media player setup complete"));
+	// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Media player setup complete"));
 }
 
 void AMOMainMenuPlayerController::CleanupMediaPlayer()
@@ -928,7 +939,8 @@ UMediaSource* AMOMainMenuPlayerController::GetOrCreateIntroMediaSource()
 #if WITH_EDITOR
 	if (IntroVideoSource)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Using asset-based IntroVideoSource in editor"));
+		// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Using asset-based IntroVideoSource in editor"));
 		return IntroVideoSource;
 	}
 #endif
@@ -975,7 +987,8 @@ UMediaSource* AMOMainMenuPlayerController::GetOrCreateIntroMediaSource()
 	for (const FString& Path : PossiblePaths)
 	{
 		FString FullPath = FPaths::ConvertRelativePathToFull(Path);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Checking video path: %s"), *FullPath);
+		// DEBUG (MainMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Checking video path: %s"), *FullPath);
 		if (FPaths::FileExists(FullPath))
 		{
 			VideoPath = FullPath;

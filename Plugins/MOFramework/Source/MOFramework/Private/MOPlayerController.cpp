@@ -181,7 +181,8 @@ void AMOPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::SetupInputComponent called"));
+	// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+	// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::SetupInputComponent called"));
 
 	UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!EnhancedInput)
@@ -190,7 +191,8 @@ void AMOPlayerController::SetupInputComponent()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: EnhancedInputComponent is valid"));
+	// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+	// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: EnhancedInputComponent is valid"));
 
 	// ============================================================================
 	// MOVEMENT BINDINGS
@@ -199,7 +201,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (MoveAction)
 	{
 		EnhancedInput->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleMove);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound MoveAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound MoveAction"));
 	}
 	else
 	{
@@ -209,7 +212,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (LookAction)
 	{
 		EnhancedInput->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleLook);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound LookAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound LookAction"));
 	}
 	else
 	{
@@ -227,7 +231,8 @@ void AMOPlayerController::SetupInputComponent()
 		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleHustleStart);
 		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleHustleTriggered);
 		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Completed, this, &AMOPlayerController::HandleHustleEnd);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound HustleAction (tap=jog, hold=sprint)"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound HustleAction (tap=jog, hold=sprint)"));
 	}
 	else
 	{
@@ -272,13 +277,15 @@ void AMOPlayerController::SetupInputComponent()
 	if (CraftAction)
 	{
 		EnhancedInput->BindAction(CraftAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCraft);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CraftAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CraftAction"));
 	}
 
 	if (PlayerStatusAction)
 	{
 		EnhancedInput->BindAction(PlayerStatusAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlayerStatus);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
 	}
 	else
 	{
@@ -288,7 +295,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (SkillsAction)
 	{
 		EnhancedInput->BindAction(SkillsAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkills);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
 	}
 	else
 	{
@@ -298,7 +306,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (JournalAction)
 	{
 		EnhancedInput->BindAction(JournalAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleJournal);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound JournalAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound JournalAction"));
 	}
 	else
 	{
@@ -308,7 +317,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (BuildAction)
 	{
 		EnhancedInput->BindAction(BuildAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleBuild);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BuildAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BuildAction"));
 	}
 	else
 	{
@@ -318,7 +328,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (BackMenuAction)
 	{
 		EnhancedInput->BindAction(BackMenuAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleBackMenu);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BackMenuAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BackMenuAction"));
 	}
 	else
 	{
@@ -328,7 +339,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (PossessAction)
 	{
 		EnhancedInput->BindAction(PossessAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PossessAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PossessAction"));
 	}
 	else
 	{
@@ -342,7 +354,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (PlaceBuildingAction)
 	{
 		EnhancedInput->BindAction(PlaceBuildingAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlaceBuilding);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
 	}
 	else
 	{
@@ -352,7 +365,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (RotateBuildingCWAction)
 	{
 		EnhancedInput->BindAction(RotateBuildingCWAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCW);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
 	}
 	else
 	{
@@ -362,7 +376,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (RotateBuildingCCWAction)
 	{
 		EnhancedInput->BindAction(RotateBuildingCCWAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCCW);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
 	}
 	else
 	{
@@ -372,7 +387,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (FlipPlacementYawAction)
 	{
 		EnhancedInput->BindAction(FlipPlacementYawAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleFlipPlacementYaw);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound FlipPlacementYawAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound FlipPlacementYawAction"));
 	}
 	else
 	{
@@ -382,7 +398,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (CancelPlacementAction)
 	{
 		EnhancedInput->BindAction(CancelPlacementAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
 	}
 	else
 	{
@@ -396,13 +413,15 @@ void AMOPlayerController::SetupInputComponent()
 	if (TerraformToggleAction)
 	{
 		EnhancedInput->BindAction(TerraformToggleAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformToggle);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
 	}
 
 	if (TerraformCycleToolAction)
 	{
 		EnhancedInput->BindAction(TerraformCycleToolAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
 	}
 
 	// ============================================================================
@@ -412,7 +431,8 @@ void AMOPlayerController::SetupInputComponent()
 	if (ViewAction)
 	{
 		EnhancedInput->BindAction(ViewAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleView);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound ViewAction (camera shoulder toggle)"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound ViewAction (camera shoulder toggle)"));
 	}
 	else
 	{
@@ -425,12 +445,14 @@ void AMOPlayerController::SetupInputComponent()
 	if (SkipTutorialItemAction)
 	{
 		EnhancedInput->BindAction(SkipTutorialItemAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkipTutorialItem);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipTutorialItemAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipTutorialItemAction"));
 	}
 	if (SkipAllTutorialsAction)
 	{
 		EnhancedInput->BindAction(SkipAllTutorialsAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkipAllTutorials);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipAllTutorialsAction"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipAllTutorialsAction"));
 	}
 }
 
@@ -1617,7 +1639,8 @@ void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 
 	if (UIManagerComponent)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
+		// DEBUG (MOPlayerController, disabled Oct 18): re-enable to trace input binding
+		// UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
 		UIManagerComponent->TogglePossessionMenu();
 		// Tutorial objective "press P to open the possession menu" (Tutorial_Possession).
 		BroadcastTutorialEvent(TEXT("PlayerOpenedPossessionMenu"));

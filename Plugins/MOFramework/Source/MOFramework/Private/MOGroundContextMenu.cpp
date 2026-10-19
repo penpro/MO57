@@ -34,7 +34,8 @@ void UMOGroundContextMenu::NativeConstruct()
 	MouseOutsideTimer = 0.0f;
 	StartMouseCheckTimer();
 
-	UE_LOG(LogMOGroundMenu, Verbose, TEXT("[MOGroundContextMenu] NativeConstruct"));
+	// DEBUG (MOGroundContextMenu, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOGroundMenu, Verbose, TEXT("[MOGroundContextMenu] NativeConstruct"));
 }
 
 void UMOGroundContextMenu::NativeDestruct()
@@ -415,7 +416,8 @@ void UMOGroundContextMenu::StartMouseCheckTimer()
 		true  // Looping
 	);
 
-	UE_LOG(LogMOGroundMenu, Verbose, TEXT("[MOGroundContextMenu] Started mouse check timer"));
+	// DEBUG (MOGroundContextMenu, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOGroundMenu, Verbose, TEXT("[MOGroundContextMenu] Started mouse check timer"));
 }
 
 void UMOGroundContextMenu::StopMouseCheckTimer()

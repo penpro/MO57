@@ -73,8 +73,9 @@ void UMORecipeDiscoveryComponent::CheckDiscoveryFromKnowledge(FName KnowledgeId)
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery] CheckDiscoveryFromKnowledge called with KnowledgeId: %s (note: level-based discovery handled by CheckDiscoveryFromSkillLevel)"),
-		*KnowledgeId.ToString());
+	// DEBUG (MORecipeDiscovery, disabled Oct 18): re-enable to trace discovery checks
+	// UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery] CheckDiscoveryFromKnowledge called with KnowledgeId: %s (note: level-based discovery handled by CheckDiscoveryFromSkillLevel)"),
+	// 	*KnowledgeId.ToString());
 }
 
 void UMORecipeDiscoveryComponent::CheckDiscoveryFromSkillLevel(FName SkillId, int32 NewLevel)
@@ -91,7 +92,8 @@ void UMORecipeDiscoveryComponent::CheckDiscoveryFromSkillLevel(FName SkillId, in
 	TArray<FName> AllRecipeIds;
 	UMORecipeDatabaseSettings::GetAllRecipeIds(AllRecipeIds);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Checking %d total recipes..."), AllRecipeIds.Num());
+	// DEBUG (MORecipeDiscovery, disabled Oct 18): re-enable to trace discovery checks
+	// UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Checking %d total recipes..."), AllRecipeIds.Num());
 
 	int32 MatchingRecipes = 0;
 	for (const FName& RecipeId : AllRecipeIds)

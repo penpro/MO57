@@ -135,8 +135,9 @@ bool UMOFootstepComponent::EnsureBones(const USkeletalMeshComponent* Mesh)
 		if (!bBonesMissingLogged)
 		{
 			bBonesMissingLogged = true;
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOFootstep] %s: skeleton '%s' has no %s / %s bones; no footsteps"),
-				*GetNameSafe(GetOwner()), *GetNameSafe(Asset), *LeftFootBone.ToString(), *RightFootBone.ToString());
+			// DEBUG (MOFootstep, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOFootstep] %s: skeleton '%s' has no %s / %s bones; no footsteps"),
+			// 	*GetNameSafe(GetOwner()), *GetNameSafe(Asset), *LeftFootBone.ToString(), *RightFootBone.ToString());
 		}
 		return false;
 	}

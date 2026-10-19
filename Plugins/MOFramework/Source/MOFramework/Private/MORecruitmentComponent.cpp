@@ -59,7 +59,8 @@ void UMORecruitmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 void UMORecruitmentComponent::OnRep_RecruitmentState()
 {
 	// State changed from replication
-	UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] State replicated: %d"), (int32)RecruitmentState);
+	// DEBUG (Recruitment, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] State replicated: %d"), (int32)RecruitmentState);
 }
 
 // ============================================================================
@@ -94,7 +95,8 @@ FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* Interact
 	// Check if this pawn can be recruited at all (e.g., creatures like deer cannot)
 	if (!bIsRecruitable)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] %s is not recruitable"), *GetOwner()->GetName());
+		// DEBUG (Recruitment, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] %s is not recruitable"), *GetOwner()->GetName());
 		return Result;
 	}
 
@@ -188,7 +190,8 @@ bool UMORecruitmentComponent::TryCompleteQuest(APawn* InteractingPawn)
 
 	if (!CanCompleteQuest(InteractingPawn))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] Cannot complete quest - requirements not met"));
+		// DEBUG (Recruitment, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] Cannot complete quest - requirements not met"));
 		return false;
 	}
 
@@ -354,8 +357,9 @@ void UMORecruitmentComponent::RollRandomQuest()
 	const int32 Index = FMath::RandRange(0, PossibleQuests.Num() - 1);
 	ActiveQuest = PossibleQuests[Index];
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] Rolled quest type: %s"),
-		*UEnum::GetValueAsString(ActiveQuest.QuestType));
+	// DEBUG (Recruitment, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] Rolled quest type: %s"),
+	// 	*UEnum::GetValueAsString(ActiveQuest.QuestType));
 }
 
 void UMORecruitmentComponent::CheckQuestTimeout()
@@ -472,7 +476,8 @@ bool UMORecruitmentComponent::ApplySaveDataAuthority(const FMORecruitmentSaveDat
 
 	if (!InSaveData.bHasValidData)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] ApplySaveDataAuthority: No valid data to apply"));
+		// DEBUG (Recruitment, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] ApplySaveDataAuthority: No valid data to apply"));
 		return false;
 	}
 

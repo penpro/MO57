@@ -1061,14 +1061,15 @@ void UMOAudioSubsystem::StartAmbientLayered(EMOAmbientState NewState, float Fade
 	{
 		ScheduleNextBaseLayerBreathe();
 
-		// Also start periodic base layer status logging (every 10s).
-		if (UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)
-		{
-			World->GetTimerManager().SetTimer(
-				BaseLayerStatusLogTimerHandle, this,
-				&UMOAudioSubsystem::HandleBaseLayerStatusLog,
-				10.0f, /*bLoop=*/true);
-		}
+		// DEBUG (MOAudio, disabled Oct 18): re-enable to trace the base layers every 10 s (HandleBaseLayerStatusLog logs each layer at Warning)
+		// // Also start periodic base layer status logging (every 10s).
+		// if (UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr)
+		// {
+		// 	World->GetTimerManager().SetTimer(
+		// 		BaseLayerStatusLogTimerHandle, this,
+		// 		&UMOAudioSubsystem::HandleBaseLayerStatusLog,
+		// 		10.0f, /*bLoop=*/true);
+		// }
 	}
 }
 
@@ -1624,9 +1625,10 @@ void UMOAudioSubsystem::HandleBaseLayerBreatheTimer()
 
 	Layer->AdjustVolume(DriftDuration, TargetVol);
 
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[MOAudio]   breathe: layer %d -> vol=%.2f over %.1fs"),
-		PickIdx, TargetVol, DriftDuration);
+	// DEBUG (MOAudio, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[MOAudio]   breathe: layer %d -> vol=%.2f over %.1fs"),
+	// 	PickIdx, TargetVol, DriftDuration);
 
 	ScheduleNextBaseLayerBreathe();
 }
@@ -1635,17 +1637,19 @@ void UMOAudioSubsystem::HandleBaseLayerStatusLog()
 {
 	// Verbose, not Warning: this is a periodic (10s) diagnostic dump — it must
 	// not spam the default log every 10 seconds for the whole session (audit L8).
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[MOAudio] === Base layers (every 10s) — %d active ==="),
-		AmbientLayerComponents.Num());
+	// DEBUG (MOAudio, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[MOAudio] === Base layers (every 10s) — %d active ==="),
+	// 	AmbientLayerComponents.Num());
 
 	for (int32 i = 0; i < AmbientLayerComponents.Num(); ++i)
 	{
 		UAudioComponent* Comp = AmbientLayerComponents[i];
 		if (!Comp)
 		{
-			UE_LOG(LogMOFramework, Verbose,
-				TEXT("[MOAudio]   [%d] <null component>"), i);
+			// DEBUG (MOAudio, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose,
+			// 	TEXT("[MOAudio]   [%d] <null component>"), i);
 			continue;
 		}
 

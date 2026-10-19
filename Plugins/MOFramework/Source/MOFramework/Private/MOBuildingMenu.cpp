@@ -82,11 +82,12 @@ void UMOBuildingMenu::InitializeMenu(
 	UMOInventoryComponent* InInventory,
 	UMOSkillsComponent* InSkills)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] InitializeMenu called"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] KnowledgeComponent valid: %s"), IsValid(InKnowledge) ? TEXT("yes") : TEXT("no"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] DiscoveryComponent valid: %s"), IsValid(InDiscovery) ? TEXT("yes") : TEXT("no"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] InventoryComponent valid: %s"), IsValid(InInventory) ? TEXT("yes") : TEXT("no"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] SkillsComponent valid: %s"), IsValid(InSkills) ? TEXT("yes") : TEXT("no"));
+	// DEBUG (MOBuildingMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] InitializeMenu called"));
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] KnowledgeComponent valid: %s"), IsValid(InKnowledge) ? TEXT("yes") : TEXT("no"));
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] DiscoveryComponent valid: %s"), IsValid(InDiscovery) ? TEXT("yes") : TEXT("no"));
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] InventoryComponent valid: %s"), IsValid(InInventory) ? TEXT("yes") : TEXT("no"));
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] SkillsComponent valid: %s"), IsValid(InSkills) ? TEXT("yes") : TEXT("no"));
 
 	KnowledgeComponent = InKnowledge;
 	DiscoveryComponent = InDiscovery;
@@ -96,7 +97,8 @@ void UMOBuildingMenu::InitializeMenu(
 	// Initialize the recipe list widget
 	if (RecipeList)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Initializing RecipeList widget"));
+		// DEBUG (MOBuildingMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Initializing RecipeList widget"));
 		RecipeList->InitializeList(InInventory, InSkills, InDiscovery);
 	}
 	else
@@ -107,7 +109,8 @@ void UMOBuildingMenu::InitializeMenu(
 	// Initialize the detail panel
 	if (DetailPanel)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Initializing DetailPanel widget"));
+		// DEBUG (MOBuildingMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Initializing DetailPanel widget"));
 		DetailPanel->InitializePanel(InInventory, InSkills, InDiscovery);
 		DetailPanel->ClearDisplay();
 	}
@@ -185,7 +188,8 @@ void UMOBuildingMenu::HandleRecipeSelected(FName RecipeId)
 	if (DetailPanel)
 	{
 		DetailPanel->DisplayRecipe(RecipeId);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Displaying recipe in detail panel"));
+		// DEBUG (MOBuildingMenu, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Displaying recipe in detail panel"));
 	}
 	else
 	{

@@ -66,11 +66,13 @@ bool UMOMenuWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 void UMOMenuWidget::NativeOnActivated()
 {
 	Super::NativeOnActivated();
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOMenuWidget] activated %s (frame %llu)"), *GetName(), GFrameCounter);
+	// DEBUG (MOMenuWidget, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOMenuWidget] activated %s (frame %llu)"), *GetName(), GFrameCounter);
 }
 
 void UMOMenuWidget::NativeOnDeactivated()
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOMenuWidget] deactivated %s (frame %llu)"), *GetName(), GFrameCounter);
+	// DEBUG (MOMenuWidget, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOMenuWidget] deactivated %s (frame %llu)"), *GetName(), GFrameCounter);
 	Super::NativeOnDeactivated();
 }

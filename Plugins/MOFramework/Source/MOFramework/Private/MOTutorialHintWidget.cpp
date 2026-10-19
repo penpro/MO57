@@ -69,7 +69,8 @@ void UMOTutorialHintWidget::SetSuppressedByMenu(bool bSuppress)
 	}
 	bSuppressedByMenu = bSuppress;
 	SetVisibility(ComputeVisibility(bHaveHint, bSuppressedByMenu));
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOTutorialHintWidget] %s (hint active: %d)"), bSuppress ? TEXT("hidden: a menu is open") : TEXT("shown again: no menu open"), bHaveHint ? 1 : 0);
+	// DEBUG (MOTutorialHintWidget, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOTutorialHintWidget] %s (hint active: %d)"), bSuppress ? TEXT("hidden: a menu is open") : TEXT("shown again: no menu open"), bHaveHint ? 1 : 0);
 }
 
 void UMOTutorialHintWidget::HandleTutorialHintChanged()
@@ -100,7 +101,8 @@ void UMOTutorialHintWidget::HandleTutorialHintChanged()
 			DeactivateWidget();
 		}
 		SetVisibility(ESlateVisibility::Collapsed);
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOTutorialHintWidget] No active tutorial hint — collapsing"));
+		// DEBUG (MOTutorialHintWidget, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOTutorialHintWidget] No active tutorial hint — collapsing"));
 		return;
 	}
 

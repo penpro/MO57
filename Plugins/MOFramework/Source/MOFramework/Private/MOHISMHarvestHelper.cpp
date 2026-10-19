@@ -42,7 +42,8 @@ bool FMOHISMHarvestHelper::RemoveInstance(
 	// Check keep-on-harvest tag
 	if (bRespectKeepOnHarvest && ShouldKeepOnHarvest(HISM))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstance: Keeping instance due to KeepOnHarvest tag"));
+		// DEBUG (HISMHarvestHelper, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstance: Keeping instance due to KeepOnHarvest tag"));
 		return true; // Return true - operation "succeeded" by keeping the instance
 	}
 
@@ -77,7 +78,8 @@ bool FMOHISMHarvestHelper::RemoveInstance(
 	// Check keep-on-harvest tag
 	if (bRespectKeepOnHarvest && ShouldKeepOnHarvest(ISM))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstance: Keeping instance due to KeepOnHarvest tag"));
+		// DEBUG (HISMHarvestHelper, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstance: Keeping instance due to KeepOnHarvest tag"));
 		return true;
 	}
 
@@ -167,8 +169,9 @@ FMOHISMRemovalResult FMOHISMHarvestHelper::RemoveInstancesBatch(
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstancesBatch: Removed %d, Failed %d"),
-		Result.RemovedCount, Result.FailedCount);
+	// DEBUG (HISMHarvestHelper, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[HISMHarvestHelper] RemoveInstancesBatch: Removed %d, Failed %d"),
+	// 	Result.RemovedCount, Result.FailedCount);
 
 	return Result;
 }

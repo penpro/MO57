@@ -132,8 +132,9 @@ bool FMOPCGSpawnPointElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSpawnPointPlacer] Created %d spawn points for category %d"),
-		SpawnPointsCreated, (int32)Settings->SpawnCategory);
+	// DEBUG (MOSpawnPointPlacer, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSpawnPointPlacer] Created %d spawn points for category %d"),
+	// 	SpawnPointsCreated, (int32)Settings->SpawnCategory);
 
 	return true;
 }

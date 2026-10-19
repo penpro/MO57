@@ -160,8 +160,9 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 			if (!MeshPath.IsValid() && Settings->bDiscardInvalidPoints)
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGItemSpawner] Discarding point - no mesh for item '%s'"),
-					*SelectedItem->ItemId.ToString());
+				// DEBUG (MOPCGItemSpawner, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGItemSpawner] Discarding point - no mesh for item '%s'"),
+				// 	*SelectedItem->ItemId.ToString());
 				continue;
 			}
 

@@ -148,8 +148,9 @@ void UMOContextMenuBase::SetPopupPosition(FVector2D ScreenPosition)
 {
 	// Use SetPositionInViewport for reliable screen positioning
 	// Pass true to remove DPI scale since our coordinates are in screen pixels
-	UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenuBase] SetPopupPosition called: (%f, %f), IsInViewport: %s"),
-		ScreenPosition.X, ScreenPosition.Y, IsInViewport() ? TEXT("true") : TEXT("false"));
+	// DEBUG (MOContextMenuBase, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenuBase] SetPopupPosition called: (%f, %f), IsInViewport: %s"),
+	// 	ScreenPosition.X, ScreenPosition.Y, IsInViewport() ? TEXT("true") : TEXT("false"));
 
 	// Keep the whole menu on screen: a menu opened low or near an edge (the station menu at a fire's foot, grown by its runtime action buttons) ran off it. Measured
 	// after a layout pass so runtime-added buttons count; desired size is in Slate units, the position in pixels.

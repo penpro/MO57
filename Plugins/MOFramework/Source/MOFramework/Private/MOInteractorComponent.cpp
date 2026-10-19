@@ -497,8 +497,9 @@ bool UMOInteractorComponent::EvaluateInteractionHit(const FHitResult& HitResult,
 			OutTarget.bIsForageTarget = true;
 			return true;
 		}
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] ISM '%s' (%s) is neither a harvest source nor world cover"),
-			*ISMComp->GetName(), *GetNameSafe(ISMComp->GetStaticMesh()));
+		// DEBUG (MOInteractor, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] ISM '%s' (%s) is neither a harvest source nor world cover"),
+		// 	*ISMComp->GetName(), *GetNameSafe(ISMComp->GetStaticMesh()));
 	}
 
 	// Check for regular interactable component

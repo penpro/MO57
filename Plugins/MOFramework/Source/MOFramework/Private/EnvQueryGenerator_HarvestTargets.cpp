@@ -155,8 +155,9 @@ void UEnvQueryGenerator_HarvestTargets::GenerateItems(FEnvQueryInstance& QueryIn
 		QueryInstance.AddItemData<UEnvQueryItemType_Point>(Location);
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("EQS HarvestTargets: Generated %d targets within %.0f radius (tag: %s)"),
-		ResultLocations.Num(), Radius, RequiredTag.IsNone() ? TEXT("any") : *RequiredTag.ToString());
+	// DEBUG (EnvQueryGenerator_HarvestTargets, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogTemp, Verbose, TEXT("EQS HarvestTargets: Generated %d targets within %.0f radius (tag: %s)"),
+	// 	ResultLocations.Num(), Radius, RequiredTag.IsNone() ? TEXT("any") : *RequiredTag.ToString());
 }
 
 FText UEnvQueryGenerator_HarvestTargets::GetDescriptionTitle() const

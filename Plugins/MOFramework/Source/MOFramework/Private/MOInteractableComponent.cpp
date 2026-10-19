@@ -34,7 +34,8 @@ bool UMOInteractableComponent::CanInteract(AController* InteractorController) co
 bool UMOInteractableComponent::ServerInteract(AController* InteractorController)
 {
 	AActor* OwnerActor = GetOwner();
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract called on '%s'"), *GetNameSafe(OwnerActor));
+	// DEBUG (MOInteractable, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract called on '%s'"), *GetNameSafe(OwnerActor));
 
 	if (!IsValid(OwnerActor))
 	{
@@ -56,7 +57,8 @@ bool UMOInteractableComponent::ServerInteract(AController* InteractorController)
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: Calling HandleInteract"));
 	const bool bHandled = HandleInteract(InteractorController);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: HandleInteract returned %s"), bHandled ? TEXT("true") : TEXT("false"));
+	// DEBUG (MOInteractable, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: HandleInteract returned %s"), bHandled ? TEXT("true") : TEXT("false"));
 
 	if (!bHandled)
 	{

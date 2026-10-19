@@ -51,7 +51,8 @@ void UMOHISMCullingSubsystem::Tick(float DeltaTime)
 	}
 	else if (bHasRefreshedOnce && TimeSinceLastRefresh >= RefreshInterval)
 	{
-		UE_LOG(LogMOHISMCulling, Log, TEXT("MOHISMCullingSubsystem: Performing periodic refresh"));
+		// DEBUG (MOHISMCulling, disabled Oct 18): re-enable to trace every periodic refresh
+		// UE_LOG(LogMOHISMCulling, Log, TEXT("MOHISMCullingSubsystem: Performing periodic refresh"));
 		RefreshAllHISMComponents();
 		TimeSinceLastRefresh = 0.0f;
 	}
@@ -123,7 +124,8 @@ void UMOHISMCullingSubsystem::RefreshAllHISMComponents()
 		PCGComp->Refresh(EPCGChangeType::Structural | EPCGChangeType::GenerationGrid, /*bCancelExistingRefresh=*/true);
 		RefreshedCount++;
 
-		UE_LOG(LogMOHISMCulling, Log, TEXT("  -> REFRESHING PCG: %s"), *OwnerName);
+		// DEBUG (MOHISMCulling, disabled Oct 18): re-enable to trace every periodic refresh
+		// UE_LOG(LogMOHISMCulling, Log, TEXT("  -> REFRESHING PCG: %s"), *OwnerName);
 	}
 
 	UE_LOG(LogMOHISMCulling, Log, TEXT("Scan complete: %d total PCG components, %d with tag '%s', %d refreshed"),

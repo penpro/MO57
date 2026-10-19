@@ -46,7 +46,8 @@ AMOWorldItem::AMOWorldItem()
 
 bool AMOWorldItem::OnHandleInteract(AController* InteractorController)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] OnHandleInteract called for '%s'"), *GetName());
+	// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] OnHandleInteract called for '%s'"), *GetName());
 
 	if (!InteractorController)
 	{
@@ -59,7 +60,8 @@ bool AMOWorldItem::OnHandleInteract(AController* InteractorController)
 	if (bAddToInventoryOnInteract && ItemComponent)
 	{
 		bSuccess = ItemComponent->GiveToInteractorInventory(InteractorController);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] GiveToInteractorInventory returned %s"), bSuccess ? TEXT("true") : TEXT("false"));
+		// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] GiveToInteractorInventory returned %s"), bSuccess ? TEXT("true") : TEXT("false"));
 
 		if (bSuccess)
 		{
@@ -84,28 +86,32 @@ bool AMOWorldItem::IsPickupable() const
 	// Not pickupable if hidden in game
 	if (IsHidden())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s is hidden"), *GetName());
+		// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace every pickup query
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s is hidden"), *GetName());
 		return false;
 	}
 
 	// Not pickupable if collision is disabled (already picked up)
 	if (!GetActorEnableCollision())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has collision disabled"), *GetName());
+		// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace every pickup query
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has collision disabled"), *GetName());
 		return false;
 	}
 
 	// Must have a valid item component with item data
 	if (!IsValid(ItemComponent))
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has invalid ItemComponent"), *GetName());
+		// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace every pickup query
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has invalid ItemComponent"), *GetName());
 		return false;
 	}
 
 	// Must have a valid item definition
 	if (ItemComponent->ItemDefinitionId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has no ItemDefinitionId"), *GetName());
+		// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace every pickup query
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has no ItemDefinitionId"), *GetName());
 		return false;
 	}
 
@@ -268,16 +274,17 @@ void AMOWorldItem::Tick(float DeltaTime)
 	const float CurrentTime = World->GetTimeSeconds();
 	const float ElapsedTime = CurrentTime - DropPhysicsStartTime;
 
-	// Log periodically (every 0.5s) to avoid spam
-	static TMap<AActor*, float> LastLogTimes;
-	float& LastLogTime = LastLogTimes.FindOrAdd(this);
-	if (CurrentTime - LastLogTime > 0.5f)
-	{
-		LastLogTime = CurrentTime;
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Tick: %s at %s, Elapsed=%.2fs, IsSimulating=%s"),
-			*GetName(), *GetActorLocation().ToString(), ElapsedTime,
-			(IsValid(ItemMesh) && ItemMesh->IsSimulatingPhysics()) ? TEXT("true") : TEXT("false"));
-	}
+	// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace a falling drop every 0.5 s (per tick; its static map also grew one entry per dropped item, never removed)
+	// // Log periodically (every 0.5s) to avoid spam
+	// static TMap<AActor*, float> LastLogTimes;
+	// float& LastLogTime = LastLogTimes.FindOrAdd(this);
+	// if (CurrentTime - LastLogTime > 0.5f)
+	// {
+	// 	LastLogTime = CurrentTime;
+	// 	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Tick: %s at %s, Elapsed=%.2fs, IsSimulating=%s"),
+	// 		*GetName(), *GetActorLocation().ToString(), ElapsedTime,
+	// 		(IsValid(ItemMesh) && ItemMesh->IsSimulatingPhysics()) ? TEXT("true") : TEXT("false"));
+	// }
 
 	// Fell through the ground the drop found (its physics collision was not there yet): stop here and settle on it.
 	if (bHasDropGround && GetActorLocation().Z < DropGroundLocation.Z - 150.0f)
@@ -301,8 +308,9 @@ void AMOWorldItem::Tick(float DeltaTime)
 
 void AMOWorldItem::EnableDropPhysics()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics called for %s at location %s"),
-		*GetName(), *GetActorLocation().ToString());
+	// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics called for %s at location %s"),
+	// 	*GetName(), *GetActorLocation().ToString());
 
 	if (!IsValid(ItemMesh))
 	{
@@ -411,8 +419,9 @@ void AMOWorldItem::EnableDropPhysics()
 
 void AMOWorldItem::SettleOnGround()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] SettleOnGround called for %s at %s"),
-		*GetName(), *GetActorLocation().ToString());
+	// DEBUG (MOWorldItem, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] SettleOnGround called for %s at %s"),
+	// 	*GetName(), *GetActorLocation().ToString());
 
 	bDropPhysicsActive = false;
 	SetActorTickEnabled(false);

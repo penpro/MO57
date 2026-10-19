@@ -49,8 +49,9 @@ void UMOSurvivorTaskEntryWidget::InitializeFromJobDefinition(const FMOSurvivorJo
 		TaskIcon->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorTaskEntry] Initialized for job type %d: %s"),
-		static_cast<int32>(JobType), *JobDef.DisplayName.ToString());
+	// DEBUG (MOSurvivorTaskEntry, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorTaskEntry] Initialized for job type %d: %s"),
+	// 	static_cast<int32>(JobType), *JobDef.DisplayName.ToString());
 }
 
 void UMOSurvivorTaskEntryWidget::HandleAddClicked()

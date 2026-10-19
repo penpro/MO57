@@ -64,7 +64,8 @@ EBTNodeResult::Type UBTTask_ChaseTarget::ExecuteTask(UBehaviorTreeComponent& Own
 			if (AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn))
 			{
 				MovementComp->MaxWalkSpeed = Creature->GetRunSpeed();
-				UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Using creature RunSpeed: %.1f"), Creature->GetRunSpeed());
+				// DEBUG (BTChaseTarget, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Using creature RunSpeed: %.1f"), Creature->GetRunSpeed());
 			}
 			else
 			{
@@ -84,7 +85,8 @@ EBTNodeResult::Type UBTTask_ChaseTarget::ExecuteTask(UBehaviorTreeComponent& Own
 
 	AIController->MoveTo(MoveRequest);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Started chasing %s"), *TargetActor->GetName());
+	// DEBUG (BTChaseTarget, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Started chasing %s"), *TargetActor->GetName());
 
 	return EBTNodeResult::InProgress;
 }
@@ -247,7 +249,8 @@ bool UBTTask_ChaseTarget::HandleStuckRecovery(APawn* Pawn, AActor* Target, FBTCh
 			Memory->StuckTime = 0.f;
 			Memory->LastPosition = CurrentPosition;
 
-			UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Recovery complete, resuming chase"));
+			// DEBUG (BTChaseTarget, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[BTChaseTarget] Recovery complete, resuming chase"));
 			return false;
 		}
 

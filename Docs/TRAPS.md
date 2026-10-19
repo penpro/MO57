@@ -312,7 +312,8 @@
 
 - **One survivor order froze the host for minutes** -> `UMOPCGInteractionSubsystem::GetItemIdForMesh` logged a Warning plus the whole
   mesh-to-item cache (~130 lines) for every unmapped mesh; a Gather Wood search over 200 m met 122 of them inside `EnqueueJob` (2 min 44 s) ->
-  a miss is normal and logs one Verbose line. Never dump a table per miss in a lookup that runs over every instance. (Oct 18)
+  a miss is normal and logs one Verbose line (commented out since Oct 18 with every other Verbose line: TECHNICAL_REFERENCE "Code
+  Conventions"). Never dump a table per miss in a lookup that runs over every instance. (Oct 18)
 - **An overlap query never returns a PCG instance** -> `OverlapMultiByChannel(ECC_Visibility)` around the aim point came back with the terrain
   only, a stick 2 cm away (the near-the-aim-point pass, Oct 18): a small item flush with the ground was never a target -> find instances by
   their components' bounds (`TObjectIterator<UInstancedStaticMeshComponent>`, world + bounds filter) and `GetInstancesOverlappingSphere`, as

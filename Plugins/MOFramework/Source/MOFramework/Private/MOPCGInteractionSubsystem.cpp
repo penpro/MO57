@@ -65,13 +65,15 @@ void UMOPCGInteractionSubsystem::RebuildMeshLookupCache()
 		// Add to cache
 		MeshToItemCache.Add(Item->WorldVisual.StaticMesh, Item->ItemId);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Mapped mesh '%s' (path: %s) -> item '%s'"),
-			*Item->WorldVisual.StaticMesh.GetAssetName(),
-			*Item->WorldVisual.StaticMesh.GetLongPackageName(),
-			*Item->ItemId.ToString());
+		// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Mapped mesh '%s' (path: %s) -> item '%s'"),
+		// 	*Item->WorldVisual.StaticMesh.GetAssetName(),
+		// 	*Item->WorldVisual.StaticMesh.GetLongPackageName(),
+		// 	*Item->ItemId.ToString());
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Built mesh lookup cache with %d entries"), MeshToItemCache.Num());
+	// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Built mesh lookup cache with %d entries"), MeshToItemCache.Num());
 }
 
 FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
@@ -88,8 +90,9 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	const FName* FoundItem = MeshToItemCache.Find(SoftMesh);
 	if (FoundItem)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s'"),
-			*MeshPath, *FoundItem->ToString());
+		// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s'"),
+		// 	*MeshPath, *FoundItem->ToString());
 		return *FoundItem;
 	}
 
@@ -98,8 +101,9 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	{
 		if (Pair.Key.Get() == Mesh)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by pointer)"),
-				*MeshPath, *Pair.Value.ToString());
+			// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by pointer)"),
+			// 	*MeshPath, *Pair.Value.ToString());
 			return Pair.Value;
 		}
 	}
@@ -114,8 +118,9 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 		const FString CachedAssetPath = Pair.Key.ToSoftObjectPath().GetAssetPathString();
 		if (MeshAssetPath == CachedAssetPath)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by path string)"),
-				*MeshPath, *Pair.Value.ToString());
+			// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by path string)"),
+			// 	*MeshPath, *Pair.Value.ToString());
 			return Pair.Value;
 		}
 	}
@@ -126,7 +131,8 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	if (!LoggedMisses.Contains(MeshPath))
 	{
 		LoggedMisses.Add(MeshPath);
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] No item mapping for mesh '%s' (asset: %s; %d mapped meshes)"), *MeshPath, *MeshAssetPath, MeshToItemCache.Num());
+		// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] No item mapping for mesh '%s' (asset: %s; %d mapped meshes)"), *MeshPath, *MeshAssetPath, MeshToItemCache.Num());
 	}
 
 	return NAME_None;
@@ -259,12 +265,13 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		InstanceIndex, *ItemId.ToString(), Quantity,
 		bAdded ? TEXT("true") : TEXT("false"),
 		Inventory->GetEntryCount());
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested HISM instance %d: %s x%d (added: %s) at %s"),
-		InstanceIndex,
-		*ItemId.ToString(),
-		Quantity,
-		bAdded ? TEXT("yes") : TEXT("no"),
-		*InstanceTransform.GetLocation().ToString());
+	// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested HISM instance %d: %s x%d (added: %s) at %s"),
+	// 	InstanceIndex,
+	// 	*ItemId.ToString(),
+	// 	Quantity,
+	// 	bAdded ? TEXT("yes") : TEXT("no"),
+	// 	*InstanceTransform.GetLocation().ToString());
 
 	return true;
 }
@@ -375,12 +382,13 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 
 	OutItemId = ItemId;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested ISM instance %d: %s x%d (added: %s) at %s"),
-		InstanceIndex,
-		*ItemId.ToString(),
-		Quantity,
-		bAdded ? TEXT("yes") : TEXT("no"),
-		*InstanceTransform.GetLocation().ToString());
+	// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested ISM instance %d: %s x%d (added: %s) at %s"),
+	// 	InstanceIndex,
+	// 	*ItemId.ToString(),
+	// 	Quantity,
+	// 	bAdded ? TEXT("yes") : TEXT("no"),
+	// 	*InstanceTransform.GetLocation().ToString());
 
 	return true;
 }
@@ -412,8 +420,9 @@ void UMOPCGInteractionSubsystem::RegisterTagItemMapping(FName Tag, FName ItemId)
 	}
 
 	TagToItemMap.Add(Tag, ItemId);
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Registered tag mapping: '%s' -> '%s'"),
-		*Tag.ToString(), *ItemId.ToString());
+	// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Registered tag mapping: '%s' -> '%s'"),
+	// 	*Tag.ToString(), *ItemId.ToString());
 }
 
 FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(const UActorComponent* Component) const
@@ -429,8 +438,9 @@ FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(const UActorComponen
 		const FName* FoundItem = TagToItemMap.Find(Tag);
 		if (FoundItem)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found tag '%s' -> item '%s'"),
-				*Tag.ToString(), *FoundItem->ToString());
+			// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found tag '%s' -> item '%s'"),
+			// 	*Tag.ToString(), *FoundItem->ToString());
 			return *FoundItem;
 		}
 	}
@@ -444,8 +454,9 @@ FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(const UActorComponen
 			const FName* FoundItem = TagToItemMap.Find(Tag);
 			if (FoundItem)
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found actor tag '%s' -> item '%s'"),
-					*Tag.ToString(), *FoundItem->ToString());
+				// DEBUG (MOPCGInteraction, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found actor tag '%s' -> item '%s'"),
+				// 	*Tag.ToString(), *FoundItem->ToString());
 				return *FoundItem;
 			}
 		}

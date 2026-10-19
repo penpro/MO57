@@ -168,8 +168,9 @@ void UMOQuestSubsystem::SetQuestTracked(FName QuestId, bool bTracked)
 
 	State->bIsTracked = bTracked;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Quest '%s' tracked: %s"),
-		*QuestId.ToString(), bTracked ? TEXT("YES") : TEXT("NO"));
+	// DEBUG (MOQuestSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Quest '%s' tracked: %s"),
+	// 	*QuestId.ToString(), bTracked ? TEXT("YES") : TEXT("NO"));
 }
 
 void UMOQuestSubsystem::ReportObjectiveProgress(FName QuestId, FName ObjectiveId, int32 Count)
@@ -205,7 +206,8 @@ void UMOQuestSubsystem::ReportObjectiveProgress(FName QuestId, FName ObjectiveId
 
 void UMOQuestSubsystem::FireGameEvent(FName EventName)
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Game event fired: %s"), *EventName.ToString());
+	// DEBUG (MOQuestSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Game event fired: %s"), *EventName.ToString());
 	ProcessEventForObjectives(EMOObjectiveType::Event, EventName, 1);
 }
 
@@ -575,11 +577,12 @@ void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName T
 			else if (Objective.Type == Type)
 			{
 				// Same type but different target - log at Verbose level
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem]   Quest '%s' obj '%s': target mismatch (want '%s', got '%s')"),
-					*State.QuestId.ToString(),
-					*Objective.ObjectiveId.ToString(),
-					*Objective.TargetEventOrId.ToString(),
-					*TargetId.ToString());
+				// DEBUG (MOQuestSubsystem, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem]   Quest '%s' obj '%s': target mismatch (want '%s', got '%s')"),
+				// 	*State.QuestId.ToString(),
+				// 	*Objective.ObjectiveId.ToString(),
+				// 	*Objective.TargetEventOrId.ToString(),
+				// 	*TargetId.ToString());
 			}
 		}
 
@@ -962,8 +965,9 @@ void UMOQuestSubsystem::RebuildActiveEventListeners()
 		}
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Rebuilt event listener cache: %d entries"),
-		ActiveEventListeners.Num());
+	// DEBUG (MOQuestSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Rebuilt event listener cache: %d entries"),
+	// 	ActiveEventListeners.Num());
 }
 
 // ---- IMOSaveDomain (Quest) — see MOSaveDomainInterface.h ----

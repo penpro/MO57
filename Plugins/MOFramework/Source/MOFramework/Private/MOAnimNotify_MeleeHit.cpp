@@ -27,7 +27,8 @@ void UMOAnimNotify_MeleeHit::Notify(USkeletalMeshComponent* MeshComp, UAnimSeque
 	UMOCombatComponent* CombatComp = Owner->FindComponentByClass<UMOCombatComponent>();
 	if (!CombatComp)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOAnimNotify_MeleeHit] No CombatComponent found on %s"), *Owner->GetName());
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOAnimNotify_MeleeHit] No CombatComponent found on %s"), *Owner->GetName());
 		return;
 	}
 
@@ -35,7 +36,8 @@ void UMOAnimNotify_MeleeHit::Notify(USkeletalMeshComponent* MeshComp, UAnimSeque
 	// This handles cases where animation continues but combat state has changed
 	if (CombatComp->IsAttacking())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOAnimNotify_MeleeHit] Triggering hit detection for %s"), *Owner->GetName());
+		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOAnimNotify_MeleeHit] Triggering hit detection for %s"), *Owner->GetName());
 		// Note: ExecuteAttack is called by the combat component's state machine timing
 		// This notify can be used for additional hit detection windows if needed
 		// For now, the state machine handles ExecuteAttack timing

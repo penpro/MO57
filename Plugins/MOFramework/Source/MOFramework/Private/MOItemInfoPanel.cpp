@@ -12,9 +12,10 @@ void UMOItemInfoPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] NativeConstruct - InfoGrid=%s, PlaceholderText=%s"),
-		InfoGrid ? TEXT("valid") : TEXT("NULL"),
-		PlaceholderText ? TEXT("valid") : TEXT("NULL"));
+	// DEBUG (ItemInfoPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] NativeConstruct - InfoGrid=%s, PlaceholderText=%s"),
+	// 	InfoGrid ? TEXT("valid") : TEXT("NULL"),
+	// 	PlaceholderText ? TEXT("valid") : TEXT("NULL"));
 
 	RefreshPanel();
 }
@@ -46,8 +47,9 @@ void UMOItemInfoPanel::SetItemByDefinitionId(FName InItemDefinitionId, int32 InQ
 	InventoryComponent = nullptr;
 	DirectItemDefinitionId = InItemDefinitionId;
 	DirectQuantity = FMath::Max(1, InQuantity);
-	UE_LOG(LogMOFramework, Log, TEXT("[ItemInfoPanel] SetItemByDefinitionId - ItemId=%s, Quantity=%d"),
-		*InItemDefinitionId.ToString(), DirectQuantity);
+	// DEBUG (ItemInfoPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[ItemInfoPanel] SetItemByDefinitionId - ItemId=%s, Quantity=%d"),
+	// 	*InItemDefinitionId.ToString(), DirectQuantity);
 	RefreshPanel();
 }
 
@@ -135,10 +137,11 @@ FLinearColor UMOItemInfoPanel::GetRarityColor(EMOItemRarity Rarity) const
 
 void UMOItemInfoPanel::RefreshPanel()
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - SelectedGuid=%s, InventoryComponent=%s, DirectItemId=%s"),
-		*SelectedGuid.ToString(EGuidFormats::Short),
-		IsValid(InventoryComponent) ? TEXT("valid") : TEXT("NULL"),
-		*DirectItemDefinitionId.ToString());
+	// DEBUG (ItemInfoPanel, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - SelectedGuid=%s, InventoryComponent=%s, DirectItemId=%s"),
+	// 	*SelectedGuid.ToString(EGuidFormats::Short),
+	// 	IsValid(InventoryComponent) ? TEXT("valid") : TEXT("NULL"),
+	// 	*DirectItemDefinitionId.ToString());
 
 	// Direct definition ID mode (for world items)
 	if (!DirectItemDefinitionId.IsNone())
@@ -183,9 +186,10 @@ void UMOItemInfoPanel::RefreshPanel()
 	// Standard GUID + Inventory mode
 	if (!SelectedGuid.IsValid() || !IsValid(InventoryComponent))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - EARLY EXIT: GuidValid=%s, InvCompValid=%s"),
-			SelectedGuid.IsValid() ? TEXT("true") : TEXT("false"),
-			IsValid(InventoryComponent) ? TEXT("true") : TEXT("false"));
+		// DEBUG (ItemInfoPanel, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - EARLY EXIT: GuidValid=%s, InvCompValid=%s"),
+		// 	SelectedGuid.IsValid() ? TEXT("true") : TEXT("false"),
+		// 	IsValid(InventoryComponent) ? TEXT("true") : TEXT("false"));
 		ClearAllFields();
 		SetDetailWidgetsVisibility(ESlateVisibility::Collapsed);
 		if (PlaceholderText)
@@ -218,8 +222,9 @@ void UMOItemInfoPanel::RefreshPanel()
 	}
 	SetDetailWidgetsVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - Found entry: ItemDefId=%s, Quantity=%d"),
-		*FoundEntry.ItemDefinitionId.ToString(), FoundEntry.Quantity);
+	// DEBUG (ItemInfoPanel, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - Found entry: ItemDefId=%s, Quantity=%d"),
+	// 	*FoundEntry.ItemDefinitionId.ToString(), FoundEntry.Quantity);
 
 	// Debug fields (backwards compatibility)
 	if (DebugSelectedGuidText)

@@ -82,15 +82,17 @@ void UMOVoxelReadinessSubsystem::PollVoxelReady()
 	AVoxelWorld* VoxelWorld = FindVoxelWorld();
 	if (!VoxelWorld)
 	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MOVoxelReadiness] No AVoxelWorld in level yet — continuing poll"));
+		// DEBUG (MOVoxelReadiness, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MOVoxelReadiness] No AVoxelWorld in level yet — continuing poll"));
 		return;
 	}
 
 	if (!VoxelWorld->IsVoxelWorldReady())
 	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MOVoxelReadiness] Voxel runtime not ready yet"));
+		// DEBUG (MOVoxelReadiness, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MOVoxelReadiness] Voxel runtime not ready yet"));
 		return;
 	}
 

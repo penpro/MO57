@@ -70,10 +70,11 @@ void UMOItemContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTi
 	const bool bMouseOver = IsMouseOverMenu();
 
 	// Debug logging
-	UE_LOG(LogMOFramework, Verbose, TEXT("[ContextMenu] Tick - MouseOver=%s, Timer=%.2f, ButtonContainer=%s"),
-		bMouseOver ? TEXT("true") : TEXT("false"),
-		MouseOutsideTimer,
-		ButtonContainer ? TEXT("valid") : TEXT("NULL"));
+	// DEBUG (ContextMenu, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[ContextMenu] Tick - MouseOver=%s, Timer=%.2f, ButtonContainer=%s"),
+	// 	bMouseOver ? TEXT("true") : TEXT("false"),
+	// 	MouseOutsideTimer,
+	// 	ButtonContainer ? TEXT("valid") : TEXT("NULL"));
 
 	// Auto-close when mouse leaves the menu
 	if (!bMouseOver)
@@ -397,7 +398,8 @@ void UMOItemContextMenu::BindButtonEvents()
 
 void UMOItemContextMenu::CloseMenu()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[ContextMenu] CloseMenu called"));
+	// DEBUG (ContextMenu, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[ContextMenu] CloseMenu called"));
 
 	// Stop the timer first
 	StopMouseCheckTimer();

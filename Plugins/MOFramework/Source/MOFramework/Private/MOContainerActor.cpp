@@ -92,7 +92,8 @@ void AMOContainerActor::PlayOpenSound()
 			OpenSoundComponent->SetSound(Sound);
 			OpenSoundComponent->SetVolumeMultiplier(SoundVolume);
 			OpenSoundComponent->Play();
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing OpenSound"));
+			// DEBUG (MOContainerActor, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing OpenSound"));
 		}
 	}
 }
@@ -113,7 +114,8 @@ void AMOContainerActor::PlayCloseSound()
 			CloseSoundComponent->SetSound(Sound);
 			CloseSoundComponent->SetVolumeMultiplier(SoundVolume);
 			CloseSoundComponent->Play();
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing CloseSound"));
+			// DEBUG (MOContainerActor, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing CloseSound"));
 		}
 	}
 }

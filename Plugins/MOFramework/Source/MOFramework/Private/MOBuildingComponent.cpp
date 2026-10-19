@@ -396,9 +396,10 @@ void UMOBuildingComponent::RotateGhostZ(float DeltaDegrees)
 		SnapEdgeIndex = (SnapEdgeIndex + 3) % 4;
 	}
 
-	UE_LOG(LogMOFramework, Log,
-		TEXT("[MOBuildingComponent] RotateGhostZ delta=%.2f -> UserYaw=%.2f SnapEdgeIndex=%d"),
-		DeltaDegrees, UserRotationOffset.Yaw, SnapEdgeIndex);
+	// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace rotation input
+	// UE_LOG(LogMOFramework, Log,
+	// 	TEXT("[MOBuildingComponent] RotateGhostZ delta=%.2f -> UserYaw=%.2f SnapEdgeIndex=%d"),
+	// 	DeltaDegrees, UserRotationOffset.Yaw, SnapEdgeIndex);
 }
 
 void UMOBuildingComponent::ToggleGhostFlipYaw()
@@ -761,7 +762,8 @@ void UMOBuildingComponent::ApplyGhostMaterial(bool bValid)
 	}
 
 	CurrentGhost->SetGhostVisual(bValid ? ValidPlacementColor : InvalidPlacementColor);
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildingComponent] Ghost tint -> %s"), bValid ? TEXT("valid") : TEXT("invalid"));
+	// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildingComponent] Ghost tint -> %s"), bValid ? TEXT("valid") : TEXT("invalid"));
 }
 
 bool UMOBuildingComponent::CheckGhostCollision() const
@@ -968,10 +970,11 @@ FBox UMOBuildingComponent::GetActorLocalBox(const AActor* Actor) const
 	                  LocalBounds.Max.Z * Scale.Z);
 	const FBox Final(Min, Max);
 
-	UE_LOG(LogMOFramework, VeryVerbose,
-		TEXT("[MOBuildingComponent] GetActorLocalBox(%s): priority=%s extent=%s center=%s"),
-		*Actor->GetName(), MatchedPriority,
-		*Final.GetExtent().ToString(), *Final.GetCenter().ToString());
+	// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, VeryVerbose,
+	// 	TEXT("[MOBuildingComponent] GetActorLocalBox(%s): priority=%s extent=%s center=%s"),
+	// 	*Actor->GetName(), MatchedPriority,
+	// 	*Final.GetExtent().ToString(), *Final.GetCenter().ToString());
 
 	return Final;
 }
@@ -999,8 +1002,9 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 	const FBox GhostLocalBox = GetActorLocalBox(CurrentGhost);
 	if (!GhostLocalBox.IsValid)
 	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MOBuildingComponent] TryEdgeSnap: ghost has no valid bounds, skipping snap"));
+		// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MOBuildingComponent] TryEdgeSnap: ghost has no valid bounds, skipping snap"));
 		return Result;
 	}
 	const FVector GhostExtent = GhostLocalBox.GetExtent();
@@ -1133,11 +1137,12 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 		// when UE's log buffer flushes. The actual snap-fire logs further
 		// below stay at Log level because they only fire for matching cases.
 		// Re-enable with console: Log LogMOFramework Verbose
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MOBuildingComponent] Snap eval: target=%s otherExt=%s ghostExt=%s flat=%d tall=%d forceStack=%d ghostFlat=%d targetWall=%d vert=%d floorOnWall=%d horiz=%d"),
-			*Other->GetName(), *OtherExtent.ToString(), *GhostExtent.ToString(),
-			bTargetIsFlat, bGhostIsTall, bGhostForcesStack, bGhostIsFlat, bTargetIsWall,
-			bVerticalStackCase, bFloorOnWallCase, bHorizontalStackCase);
+		// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MOBuildingComponent] Snap eval: target=%s otherExt=%s ghostExt=%s flat=%d tall=%d forceStack=%d ghostFlat=%d targetWall=%d vert=%d floorOnWall=%d horiz=%d"),
+		// 	*Other->GetName(), *OtherExtent.ToString(), *GhostExtent.ToString(),
+		// 	bTargetIsFlat, bGhostIsTall, bGhostForcesStack, bGhostIsFlat, bTargetIsWall,
+		// 	bVerticalStackCase, bFloorOnWallCase, bHorizontalStackCase);
 
 		// 3D closest-point-on-AABB eligibility. Replaces the old XY-only
 		// version so vertical stack (wall above floor) can correctly
@@ -1240,10 +1245,11 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 				const FVector GhostCubeOffsetWorld = FinalQuat.RotateVector(GhostLocalCenter);
 				SnapPos -= GhostCubeOffsetWorld;
 
-				UE_LOG(LogMOFramework, Log,
-					TEXT("[MOBuildingComponent] WallEndToEnd: target=%s cursorCubeLocal=%s longAxis=%s totOff=%.1f snapPos=%s"),
-					*Other->GetName(), *CursorInCubeLocal.ToString(),
-					*LongAxisLocal.ToString(), TotalOffset, *SnapPos.ToString());
+				// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+				// UE_LOG(LogMOFramework, Log,
+				// 	TEXT("[MOBuildingComponent] WallEndToEnd: target=%s cursorCubeLocal=%s longAxis=%s totOff=%.1f snapPos=%s"),
+				// 	*Other->GetName(), *CursorInCubeLocal.ToString(),
+				// 	*LongAxisLocal.ToString(), TotalOffset, *SnapPos.ToString());
 
 				if (Closest3DDistSq < BestDistSq)
 				{
@@ -1317,12 +1323,13 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 			SnapPos.X -= CubeOffsetWorld.X;
 			SnapPos.Y -= CubeOffsetWorld.Y;
 
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOBuildingComponent] VertStack: %s target=%s otherLoc=%s otherCenter=%s otherExtZ=%.1f ghostCenter=%s ghostExtZ=%.1f cursorZ=%.1f snapPos=%s"),
-				bAbove ? TEXT("ABOVE") : TEXT("BELOW"),
-				*Other->GetName(), *OtherLoc.ToString(), *OtherLocalCenter.ToString(), OtherExtent.Z,
-				*GhostLocalCenter.ToString(), GhostExtent.Z, RawLocation.Z,
-				*SnapPos.ToString());
+			// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+			// UE_LOG(LogMOFramework, Log,
+			// 	TEXT("[MOBuildingComponent] VertStack: %s target=%s otherLoc=%s otherCenter=%s otherExtZ=%.1f ghostCenter=%s ghostExtZ=%.1f cursorZ=%.1f snapPos=%s"),
+			// 	bAbove ? TEXT("ABOVE") : TEXT("BELOW"),
+			// 	*Other->GetName(), *OtherLoc.ToString(), *OtherLocalCenter.ToString(), OtherExtent.Z,
+			// 	*GhostLocalCenter.ToString(), GhostExtent.Z, RawLocation.Z,
+			// 	*SnapPos.ToString());
 
 			// PRIMARY vs FALLBACK distinction for stack-below:
 			//   - bAbove (upper half of cube): PRIMARY stack-above
@@ -1399,11 +1406,12 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 			SnapPos.X -= FoCubeOffsetWorld.X;
 			SnapPos.Y -= FoCubeOffsetWorld.Y;
 
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOBuildingComponent] FloorOnWall: %s target=%s approachDir=%s otherLoc=%s snapPos=%s zDelta=%.1f"),
-				bAbove ? TEXT("ABOVE") : TEXT("BELOW"),
-				*Other->GetName(), *LocalApproachDir.ToString(),
-				*OtherLoc.ToString(), *SnapPos.ToString(), ZDelta);
+			// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+			// UE_LOG(LogMOFramework, Log,
+			// 	TEXT("[MOBuildingComponent] FloorOnWall: %s target=%s approachDir=%s otherLoc=%s snapPos=%s zDelta=%.1f"),
+			// 	bAbove ? TEXT("ABOVE") : TEXT("BELOW"),
+			// 	*Other->GetName(), *LocalApproachDir.ToString(),
+			// 	*OtherLoc.ToString(), *SnapPos.ToString(), ZDelta);
 
 			// Stored as a fallback — if any FLOOR-target snap also exists,
 			// that one wins (user almost certainly wants to extend the
@@ -1453,12 +1461,13 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 			SnapPos.X -= HsCubeOffsetWorld.X;
 			SnapPos.Y -= HsCubeOffsetWorld.Y;
 
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOBuildingComponent] HorizStack: edge=%d target=%s otherLoc=%s otherCenter=%s ghostCenter=%s snapPos=%s deltaXY=(%.1f,%.1f) yawOff=%.1f"),
-				StackEdge, *Other->GetName(),
-				*OtherLoc.ToString(), *OtherLocalCenter.ToString(), *GhostLocalCenter.ToString(),
-				*SnapPos.ToString(),
-				SnapPos.X - OtherLoc.X, SnapPos.Y - OtherLoc.Y, YawOffsetDeg);
+			// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+			// UE_LOG(LogMOFramework, Log,
+			// 	TEXT("[MOBuildingComponent] HorizStack: edge=%d target=%s otherLoc=%s otherCenter=%s ghostCenter=%s snapPos=%s deltaXY=(%.1f,%.1f) yawOff=%.1f"),
+			// 	StackEdge, *Other->GetName(),
+			// 	*OtherLoc.ToString(), *OtherLocalCenter.ToString(), *GhostLocalCenter.ToString(),
+			// 	*SnapPos.ToString(),
+			// 	SnapPos.X - OtherLoc.X, SnapPos.Y - OtherLoc.Y, YawOffsetDeg);
 
 			if (Closest3DDistSq < BestDistSq)
 			{
@@ -1638,15 +1647,16 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 			// (For wall/floor target, SnapPos.Z was set explicitly above using
 			// GhostLocalCenter.Z, so no double-subtract.)
 
-			const FVector CursorInCubeLocalDbg = CursorInLocal - OtherLocalCenter;
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOBuildingComponent] RoofSnap: target=%s targetWall=%d targetIsRoof=%d endToEnd=%d cursorLocal=%s cursorCubeLocal=%s approachDir=%s otherLoc=%s otherLocalCenter=%s snapPos=%s localOff=%s"),
-				*Other->GetName(), bTargetIsWall ? 1 : 0, bTargetIsRoof ? 1 : 0,
-				bRoofEndToEnd ? 1 : 0,
-				*CursorInLocal.ToString(), *CursorInCubeLocalDbg.ToString(),
-				*RoofApproachDir.ToString(), *OtherLoc.ToString(),
-				*OtherLocalCenter.ToString(),
-				*SnapPos.ToString(), *LocalOffset.ToString());
+			// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+			// const FVector CursorInCubeLocalDbg = CursorInLocal - OtherLocalCenter;
+			// UE_LOG(LogMOFramework, Log,
+			// 	TEXT("[MOBuildingComponent] RoofSnap: target=%s targetWall=%d targetIsRoof=%d endToEnd=%d cursorLocal=%s cursorCubeLocal=%s approachDir=%s otherLoc=%s otherLocalCenter=%s snapPos=%s localOff=%s"),
+			// 	*Other->GetName(), bTargetIsWall ? 1 : 0, bTargetIsRoof ? 1 : 0,
+			// 	bRoofEndToEnd ? 1 : 0,
+			// 	*CursorInLocal.ToString(), *CursorInCubeLocalDbg.ToString(),
+			// 	*RoofApproachDir.ToString(), *OtherLoc.ToString(),
+			// 	*OtherLocalCenter.ToString(),
+			// 	*SnapPos.ToString(), *LocalOffset.ToString());
 
 			if (Closest3DDistSq < BestDistSq)
 			{
@@ -1684,9 +1694,10 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 			SnapPos.X -= CpCubeOffsetWorld.X;
 			SnapPos.Y -= CpCubeOffsetWorld.Y;
 
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOBuildingComponent] Coplanar: target=%s approachDir=%s snapPos=%s"),
-				*Other->GetName(), *LocalApproachDir.ToString(), *SnapPos.ToString());
+			// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+			// UE_LOG(LogMOFramework, Log,
+			// 	TEXT("[MOBuildingComponent] Coplanar: target=%s approachDir=%s snapPos=%s"),
+			// 	*Other->GetName(), *LocalApproachDir.ToString(), *SnapPos.ToString());
 
 			if (Closest3DDistSq < BestDistSq)
 			{
@@ -1705,8 +1716,9 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 	{
 		BestXform = BestWallFallbackXform;
 		bAnySnap = true;
-		UE_LOG(LogMOFramework, Log,
-			TEXT("[MOBuildingComponent] Using FloorOnWall fallback (no floor target in range)"));
+		// DEBUG (MOBuildingComponent, disabled Oct 18): re-enable to trace edge snaps (fires every frame while snapped)
+		// UE_LOG(LogMOFramework, Log,
+		// 	TEXT("[MOBuildingComponent] Using FloorOnWall fallback (no floor target in range)"));
 	}
 
 	if (bOutDidSnap) { *bOutDidSnap = bAnySnap; }

@@ -267,14 +267,16 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		ISM->AddInstances(ItemData.Transforms, false, true);
 		InstancesAdded += ItemData.Transforms.Num();
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Added %d instances of '%s' (mesh: %s, tag: %s)"),
-			ItemData.Transforms.Num(), *ItemData.ItemId.ToString(), *ItemData.Mesh->GetName(), *TagName.ToString());
+		// DEBUG (MOMeshSpawner, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Added %d instances of '%s' (mesh: %s, tag: %s)"),
+		// 	ItemData.Transforms.Num(), *ItemData.ItemId.ToString(), *ItemData.Mesh->GetName(), *TagName.ToString());
 
 		ComponentsCreated++;
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Spawned %d instances across %d components (%d points processed, %d discarded)"),
-		InstancesAdded, ComponentsCreated, TotalPointsProcessed, TotalPointsDiscarded);
+	// DEBUG (MOMeshSpawner, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Spawned %d instances across %d components (%d points processed, %d discarded)"),
+	// 	InstancesAdded, ComponentsCreated, TotalPointsProcessed, TotalPointsDiscarded);
 
 	return true;
 }
@@ -327,8 +329,9 @@ TMap<FName, FMOPCGMeshSpawnerElement::FItemSpawnData> FMOPCGMeshSpawnerElement::
 		ItemData.ItemId = Entry.ItemId;
 		ItemData.Mesh = Mesh;
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Loaded mesh '%s' for item '%s'"),
-			*Mesh->GetName(), *Entry.ItemId.ToString());
+		// DEBUG (MOMeshSpawner, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Loaded mesh '%s' for item '%s'"),
+		// 	*Mesh->GetName(), *Entry.ItemId.ToString());
 	}
 
 	return Result;

@@ -103,7 +103,8 @@ void UMOAppearanceSubsystem::ScanDirectoryForSkeletalMeshes(const FString& Path,
 		CategoryAssets.Add(Entry);
 		KnownAssetPaths.Add(Entry.AssetPath);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("  Found skeletal mesh: %s"), *Entry.AssetPath);
+		// DEBUG (MOAppearanceSubsystem, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("  Found skeletal mesh: %s"), *Entry.AssetPath);
 	}
 }
 
@@ -134,7 +135,8 @@ void UMOAppearanceSubsystem::ScanDirectoryForGrooms(const FString& Path, EMOAppe
 		CategoryAssets.Add(Entry);
 		KnownAssetPaths.Add(Entry.AssetPath);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("  Found groom asset: %s"), *Entry.AssetPath);
+		// DEBUG (MOAppearanceSubsystem, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("  Found groom asset: %s"), *Entry.AssetPath);
 	}
 }
 
@@ -361,8 +363,9 @@ bool UMOAppearanceSubsystem::ApplyBodyParameters(AMOMetaHumanCharacter* Characte
 	// For now, we store the values but don't apply visual changes
 	// This is where Mutable's CustomizableObject would be updated
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("UMOAppearanceSubsystem: Body params - Fat: %.2f, Muscle: %.2f, Height: %.2f"),
-		BodyFat, MuscleMass, Height);
+	// DEBUG (MOAppearanceSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("UMOAppearanceSubsystem: Body params - Fat: %.2f, Muscle: %.2f, Height: %.2f"),
+	// 	BodyFat, MuscleMass, Height);
 
 	// Height can be applied via actor scale as a simple fallback
 	Character->SetActorScale3D(FVector(1.0f, 1.0f, Height));
@@ -531,8 +534,9 @@ void UMOAppearanceSubsystem::ApplyColorsToActor(AActor* Actor, const FMOCharacte
 			}
 		}
 	}
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOAppearance] %s: skin %.2f (value %.2f), hair melanin %.2f / red %.2f, eyes %s"),
-		*Actor->GetName(), Appearance.SkinTone, SkinValue, Appearance.HairMelanin, Appearance.HairRedness, *Appearance.EyeColor.ToString());
+	// DEBUG (MOAppearance, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOAppearance] %s: skin %.2f (value %.2f), hair melanin %.2f / red %.2f, eyes %s"),
+	// 	*Actor->GetName(), Appearance.SkinTone, SkinValue, Appearance.HairMelanin, Appearance.HairRedness, *Appearance.EyeColor.ToString());
 }
 
 // ============================================================================

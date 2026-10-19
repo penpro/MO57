@@ -137,8 +137,9 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 			// harvested via recipes, not picked up directly. They yield products like sticks/bark.
 			if (FMOHISMHarvestHelper::ShouldKeepOnHarvest(ISM))
 			{
-				UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Skipping KeepOnHarvest component on '%s'"),
-					*GetNameSafe(Actor));
+				// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Skipping KeepOnHarvest component on '%s'"),
+				// 	*GetNameSafe(Actor));
 				continue;
 			}
 
@@ -156,8 +157,9 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 			if (ItemId.IsNone())
 			{
 				// Not a harvestable mesh - log the mesh path for debugging
-				UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM on '%s' has non-harvestable mesh: %s"),
-					*GetNameSafe(Actor), *ISMMesh->GetPathName());
+				// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM on '%s' has non-harvestable mesh: %s"),
+				// 	*GetNameSafe(Actor), *ISMMesh->GetPathName());
 				continue;
 			}
 
@@ -196,8 +198,9 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return A.Distance < B.Distance;
 	});
 
-	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM Query: %d components found, %d with mesh, %d harvestable, %d instances within %.0f units"),
-		TotalISMComponentsFound, TotalISMComponentsWithMesh, TotalHarvestableComponents, Result.Num(), Radius);
+	// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace every ISM query
+	// UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM Query: %d components found, %d with mesh, %d harvestable, %d instances within %.0f units"),
+	// 	TotalISMComponentsFound, TotalISMComponentsWithMesh, TotalHarvestableComponents, Result.Num(), Radius);
 
 	return Result;
 }
@@ -297,8 +300,9 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 			}
 		}
 	}
-	UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM removal: %d removed, %d failed"),
-		RemovedCount, FailedCount);
+	// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM removal: %d removed, %d failed"),
+	// 	RemovedCount, FailedCount);
 
 	// Award XP
 	if (ForagingPawn && SpawnedItems.Num() > 0)
@@ -606,7 +610,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 			WorldItem->EnableDropPhysics();
 
 			SpawnedItems.Add(WorldItem);
-			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Dug up %s x%d"), *Entry.ItemId.ToString(), Quantity);
+			// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Dug up %s x%d"), *Entry.ItemId.ToString(), Quantity);
 		}
 	}
 
@@ -678,7 +683,8 @@ int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 Fo
 		if (Inventory->AddItemByGuid(NewItemGuid, Entry.ItemId, Quantity))
 		{
 			ItemsAdded++;
-			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Added %s x%d to inventory"), *Entry.ItemId.ToString(), Quantity);
+			// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Added %s x%d to inventory"), *Entry.ItemId.ToString(), Quantity);
 		}
 	}
 
@@ -754,7 +760,8 @@ int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APaw
 		if (Inventory->AddItemByGuid(NewItemGuid, Data.ItemId, 1))
 		{
 			ItemsAdded++;
-			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Foraged %s to inventory"), *Data.ItemId.ToString());
+			// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Foraged %s to inventory"), *Data.ItemId.ToString());
 		}
 	}
 
@@ -843,5 +850,6 @@ void UMOForagingSubsystem::AwardForagingXP(APawn* Pawn, float Amount)
 	}
 
 	SkillsComp->AddExperience(FName("Foraging"), Amount);
-	UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Awarded %.1f Foraging XP"), Amount);
+	// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Awarded %.1f Foraging XP"), Amount);
 }

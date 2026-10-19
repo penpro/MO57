@@ -39,7 +39,8 @@ UDataTable* UMOSurvivorJobDatabaseSettings::GetJobDefinitionsDataTable() const
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorJobDatabaseSettings] Soft ref is NULL, trying fallback path..."));
+		// DEBUG (MOSurvivorJobDatabaseSettings, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorJobDatabaseSettings] Soft ref is NULL, trying fallback path..."));
 	}
 
 	// Try fallback path for packaged builds

@@ -26,7 +26,8 @@ UMOModalWidget::UMOModalWidget(const FObjectInitializer& ObjectInitializer)
 
 void UMOModalWidget::RequestClose()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOModalWidget] RequestClose called on %s"), *GetName());
+	// DEBUG (MOModalWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOModalWidget] RequestClose called on %s"), *GetName());
 	OnRequestClose.Broadcast();
 }
 

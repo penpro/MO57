@@ -72,16 +72,17 @@ void UMOInGameMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Construct-entry diagnostic (demoted to Verbose -- routine event, L6-family log hygiene).
-	const UWorld* DiagWorld = GetWorld();
-	const AGameModeBase* DiagGM = DiagWorld ? DiagWorld->GetAuthGameMode() : nullptr;
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[MOInGameMenu] NativeConstruct '%s'  bClosesOnOutsideClick=%s  World=%s  GameMode=%s (class=%s)"),
-		*GetName(),
-		bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"),
-		DiagWorld ? *DiagWorld->GetName() : TEXT("(null)"),
-		DiagGM ? *DiagGM->GetName() : TEXT("(null)"),
-		DiagGM ? *DiagGM->GetClass()->GetName() : TEXT("(null)"));
+	// DEBUG (MOInGameMenu, disabled Oct 18): re-enable to trace verbose detail
+	// // Construct-entry diagnostic (demoted to Verbose -- routine event, L6-family log hygiene).
+	// const UWorld* DiagWorld = GetWorld();
+	// const AGameModeBase* DiagGM = DiagWorld ? DiagWorld->GetAuthGameMode() : nullptr;
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[MOInGameMenu] NativeConstruct '%s'  bClosesOnOutsideClick=%s  World=%s  GameMode=%s (class=%s)"),
+	// 	*GetName(),
+	// 	bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"),
+	// 	DiagWorld ? *DiagWorld->GetName() : TEXT("(null)"),
+	// 	DiagGM ? *DiagGM->GetName() : TEXT("(null)"),
+	// 	DiagGM ? *DiagGM->GetClass()->GetName() : TEXT("(null)"));
 
 	// Context-dependent close policy:
 	// - Pause menu in gameplay: click-outside should dismiss (game behind it)

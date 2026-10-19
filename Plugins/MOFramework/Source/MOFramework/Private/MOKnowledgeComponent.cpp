@@ -97,13 +97,14 @@ FMOInspectionResult UMOKnowledgeComponent::InspectItem(FName ItemDefinitionId, U
 			// Check if at max level for this item
 			const bool bAtMaxLevel = (Grant.MaxLevel > 0 && CurrentLevel >= Grant.MaxLevel);
 
-			UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]   Grant: Id='%s', bIsKnowledge=%s, XPAmount=%.1f, MaxLevel=%d, CurrentLevel=%d, bAtMaxLevel=%s"),
-				*Grant.Id.ToString(),
-				Grant.bIsKnowledge ? TEXT("true") : TEXT("false"),
-				Grant.XPAmount,
-				Grant.MaxLevel,
-				CurrentLevel,
-				bAtMaxLevel ? TEXT("true") : TEXT("false"));
+			// DEBUG (MOKnowledge, disabled Oct 18): re-enable to trace every grant / potential check
+			// UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]   Grant: Id='%s', bIsKnowledge=%s, XPAmount=%.1f, MaxLevel=%d, CurrentLevel=%d, bAtMaxLevel=%s"),
+			// 	*Grant.Id.ToString(),
+			// 	Grant.bIsKnowledge ? TEXT("true") : TEXT("false"),
+			// 	Grant.XPAmount,
+			// 	Grant.MaxLevel,
+			// 	CurrentLevel,
+			// 	bAtMaxLevel ? TEXT("true") : TEXT("false"));
 
 			if (!bAtMaxLevel)
 			{
@@ -134,8 +135,9 @@ FMOInspectionResult UMOKnowledgeComponent::InspectItem(FName ItemDefinitionId, U
 						*Grant.Id.ToString(), *ItemDefinitionId.ToString());
 				}
 
-				UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]     -> XP granted, level %d -> %d"),
-					CurrentLevel, NewLevel);
+				// DEBUG (MOKnowledge, disabled Oct 18): re-enable to trace every grant / potential check
+				// UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]     -> XP granted, level %d -> %d"),
+				// 	CurrentLevel, NewLevel);
 			}
 		}
 	}
@@ -302,10 +304,11 @@ EMOLearningPotential UMOKnowledgeComponent::GetLearningPotential(FName ItemDefin
 		// If MaxLevel == 0, it's unlimited so never maxed out
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge] GetLearningPotential for '%s': TotalGrants=%d, MaxedOutGrants=%d"),
-		*ItemDefinitionId.ToString(),
-		TotalGrants,
-		MaxedOutGrants);
+	// DEBUG (MOKnowledge, disabled Oct 18): re-enable to trace every grant / potential check
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge] GetLearningPotential for '%s': TotalGrants=%d, MaxedOutGrants=%d"),
+	// 	*ItemDefinitionId.ToString(),
+	// 	TotalGrants,
+	// 	MaxedOutGrants);
 
 	// Determine learning potential
 	if (TotalGrants == 0)

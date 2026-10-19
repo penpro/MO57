@@ -77,9 +77,10 @@ void UMOStatusEffectStripWidget::AddOrUpdateMoodle(const FMOStatusMoodle& Moodle
 
 	UpdateVisibility();
 
-	UE_LOG(LogMOFramework, Verbose,
-		TEXT("[MOStatusStrip] Added moodle '%s' (now %d active)"),
-		*Moodle.Id.ToString(), ActiveMoodles.Num());
+	// DEBUG (MOStatusStrip, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose,
+	// 	TEXT("[MOStatusStrip] Added moodle '%s' (now %d active)"),
+	// 	*Moodle.Id.ToString(), ActiveMoodles.Num());
 }
 
 void UMOStatusEffectStripWidget::RemoveMoodle(FName MoodleId)
@@ -94,9 +95,10 @@ void UMOStatusEffectStripWidget::RemoveMoodle(FName MoodleId)
 		RebuildOrder();
 		UpdateVisibility();
 
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MOStatusStrip] Removed moodle '%s' (%d remaining)"),
-			*MoodleId.ToString(), ActiveMoodles.Num());
+		// DEBUG (MOStatusStrip, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MOStatusStrip] Removed moodle '%s' (%d remaining)"),
+		// 	*MoodleId.ToString(), ActiveMoodles.Num());
 	}
 }
 

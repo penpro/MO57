@@ -417,8 +417,9 @@ APawn* UMOSpawnManagerSubsystem::TrySpawnForCategory(EMOSpawnCategory Category)
 	const int32 CurrentCount = GetSpawnedCount(Category);
 	if (CurrentCount >= Config.MaxSpawnedCount)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] At cap (%d) for category %d — skipping spawn"),
-			Config.MaxSpawnedCount, (int32)Category);
+		// DEBUG (SpawnManager, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] At cap (%d) for category %d — skipping spawn"),
+		// 	Config.MaxSpawnedCount, (int32)Category);
 		return nullptr;
 	}
 
@@ -541,7 +542,8 @@ void UMOSpawnManagerSubsystem::AdoptRestoredEntity(APawn* Pawn)
 
 	if (!bFoundCategory)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] (H35) AdoptRestoredEntity: %s matches no spawn category — left untracked"), *Pawn->GetName());
+		// DEBUG (SpawnManager, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] (H35) AdoptRestoredEntity: %s matches no spawn category — left untracked"), *Pawn->GetName());
 		return;
 	}
 
@@ -607,8 +609,9 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 
 	if (OldestIndex == INDEX_NONE)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] No entities far enough to despawn for category %d (min distance: %.0fcm)"),
-			(int32)Category, MinDespawnDistance);
+		// DEBUG (SpawnManager, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] No entities far enough to despawn for category %d (min distance: %.0fcm)"),
+		// 	(int32)Category, MinDespawnDistance);
 		return false;
 	}
 
@@ -1235,8 +1238,9 @@ APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpa
 	// "found a survivor in the canopy" reports. The voxel-only trace above guarantees GroundZ is real terrain, not foliage.
 	if (Config.bRestrictSpawnZ && (GroundZ < Config.MinSpawnZ || GroundZ > Config.MaxSpawnZ))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] %s: rejected ground Z=%.1f for %s (allowed: %.1f..%.1f)"),
-			*Source, GroundZ, *UEnum::GetValueAsString(Config.Category), Config.MinSpawnZ, Config.MaxSpawnZ);
+		// DEBUG (SpawnManager, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] %s: rejected ground Z=%.1f for %s (allowed: %.1f..%.1f)"),
+		// 	*Source, GroundZ, *UEnum::GetValueAsString(Config.Category), Config.MinSpawnZ, Config.MaxSpawnZ);
 		return nullptr;
 	}
 	const FVector SpawnLocation = GroundHit.ImpactPoint + FVector(0, 0, 100.0f);
@@ -1604,8 +1608,9 @@ void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
 		if (DistanceSq <= WakeDistanceSq)
 		{
 			WakeSpawnedPawn(Record);
-			UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] Woke %s (player %.1fm away)"),
-				*Pawn->GetName(), FMath::Sqrt(DistanceSq) / 100.0f);
+			// DEBUG (SpawnManager, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] Woke %s (player %.1fm away)"),
+			// 	*Pawn->GetName(), FMath::Sqrt(DistanceSq) / 100.0f);
 		}
 	}
 }

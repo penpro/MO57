@@ -8,7 +8,8 @@
 
 TSharedRef<SWidget> UMODragVisualWidget::RebuildWidget()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MODragVisual] RebuildWidget called"));
+	// DEBUG (MODragVisual, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MODragVisual] RebuildWidget called"));
 
 	// Initialize brush
 	UpdateBrush();
@@ -30,9 +31,10 @@ void UMODragVisualWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MODragVisual] NativeConstruct - IconTexture=%s, VisualSize=%.0fx%.0f"),
-		IsValid(IconTexture) ? *IconTexture->GetName() : TEXT("NULL"),
-		VisualSize.X, VisualSize.Y);
+	// DEBUG (MODragVisual, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Warning, TEXT("[MODragVisual] NativeConstruct - IconTexture=%s, VisualSize=%.0fx%.0f"),
+	// 	IsValid(IconTexture) ? *IconTexture->GetName() : TEXT("NULL"),
+	// 	VisualSize.X, VisualSize.Y);
 
 	// Update the brush with current texture
 	UpdateBrush();

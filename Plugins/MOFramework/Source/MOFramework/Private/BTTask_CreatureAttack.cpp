@@ -68,8 +68,9 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 	Memory->bDamageApplied = false;
 	Memory->bMontageStarted = false;
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s starting attack on %s"),
-		*OwnerPawn->GetName(), *TargetActor->GetName());
+	// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s starting attack on %s"),
+	// 	*OwnerPawn->GetName(), *TargetActor->GetName());
 
 	// Stop movement during attack
 	AIController->StopMovement();
@@ -90,13 +91,15 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 					if (Duration > 0.f)
 					{
 						Memory->bMontageStarted = true;
-						UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Playing attack montage: %s (duration: %.2fs)"),
-							*AttackMontage->GetName(), Duration);
+						// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+						// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Playing attack montage: %s (duration: %.2fs)"),
+						// 	*AttackMontage->GetName(), Duration);
 					}
 					else
 					{
-						UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Failed to play attack montage: %s"),
-							*AttackMontage->GetName());
+						// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+						// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Failed to play attack montage: %s"),
+						// 	*AttackMontage->GetName());
 					}
 				}
 			}
@@ -104,7 +107,8 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] No attack montage set"));
+		// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] No attack montage set"));
 	}
 
 	return EBTNodeResult::InProgress;
@@ -135,7 +139,8 @@ EBTNodeResult::Type UBTTask_CreatureAttack::AbortTask(UBehaviorTreeComponent& Ow
 						if (UAnimInstance* AnimInstance = Mesh->GetAnimInstance())
 						{
 							AnimInstance->Montage_Stop(0.2f, AttackMontage);
-							UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Stopped attack montage on abort"));
+							// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+							// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] Stopped attack montage on abort"));
 						}
 					}
 				}
@@ -167,8 +172,9 @@ void UBTTask_CreatureAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 			float Distance = FVector::Dist(OwnerPawn->GetActorLocation(), TargetActor->GetActorLocation());
 			if (Distance <= AttackRange * 1.5f) // Slightly forgiving range for mid-attack
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s hits %s for %.1f damage"),
-					*OwnerPawn->GetName(), *TargetActor->GetName(), BaseDamage);
+				// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s hits %s for %.1f damage"),
+				// 	*OwnerPawn->GetName(), *TargetActor->GetName(), BaseDamage);
 
 				if (UMOAnatomyComponent* TargetAnatomy = TargetActor->FindComponentByClass<UMOAnatomyComponent>())
 				{
@@ -187,8 +193,9 @@ void UBTTask_CreatureAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s missed - target moved out of range"),
-					*OwnerPawn->GetName());
+				// DEBUG (BTCreatureAttack, disabled Oct 18): re-enable to trace verbose detail
+				// UE_LOG(LogMOFramework, Verbose, TEXT("[BTCreatureAttack] %s missed - target moved out of range"),
+				// 	*OwnerPawn->GetName());
 			}
 		}
 	}

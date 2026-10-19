@@ -112,7 +112,8 @@ void UMOBuildingRecipeEntryWidget::HandleButtonClicked()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] HandleButtonClicked - Recipe: %s"), *EntryData.RecipeId.ToString());
+	// DEBUG (MOBuildingRecipeEntryWidget, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] HandleButtonClicked - Recipe: %s"), *EntryData.RecipeId.ToString());
 
 	// Call base to broadcast generic OnEntrySelected
 	Super::HandleButtonClicked();

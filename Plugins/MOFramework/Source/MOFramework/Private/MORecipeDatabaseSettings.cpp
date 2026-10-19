@@ -272,19 +272,21 @@ void UMORecipeDatabaseSettings::BuildCaches()
 	// query (H41 freshness), so Log-level here would spam on every menu open.
 	if (ModRecipeDefinitions.Num() > 0)
 	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MORecipeDatabaseSettings] Cache built: %d base + %d mod = %d total recipes (%d buildings, %d craftable, %d stations, %d categories)"),
-			BaseRecipeCount, ModRecipeDefinitions.Num(), VisitedIds.Num(),
-			BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),
-			RecipesByStation.Num(), RecipesByCategory.Num());
+		// DEBUG (MORecipeDatabaseSettings, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MORecipeDatabaseSettings] Cache built: %d base + %d mod = %d total recipes (%d buildings, %d craftable, %d stations, %d categories)"),
+		// 	BaseRecipeCount, ModRecipeDefinitions.Num(), VisitedIds.Num(),
+		// 	BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),
+		// 	RecipesByStation.Num(), RecipesByCategory.Num());
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
-			BaseRecipeCount,
-			BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),
-			RecipesByStation.Num(), RecipesByCategory.Num());
+		// DEBUG (MORecipeDatabaseSettings, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose,
+		// 	TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
+		// 	BaseRecipeCount,
+		// 	BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),
+		// 	RecipesByStation.Num(), RecipesByCategory.Num());
 	}
 }
 

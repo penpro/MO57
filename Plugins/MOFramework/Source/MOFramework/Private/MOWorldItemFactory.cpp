@@ -169,8 +169,9 @@ AMOWorldItem* UMOWorldItemFactory::SpawnWorldItemInternal(
 		WorldItem->EnableDropPhysics();
 	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[WorldItemFactory] Spawned world item '%s' x%d at %s"),
-		*Params.ItemDefinitionId.ToString(), Params.Quantity, *Params.Location.ToString());
+	// DEBUG (WorldItemFactory, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[WorldItemFactory] Spawned world item '%s' x%d at %s"),
+	// 	*Params.ItemDefinitionId.ToString(), Params.Quantity, *Params.Location.ToString());
 
 	return WorldItem;
 }

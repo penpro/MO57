@@ -94,8 +94,9 @@ void UEnvQueryGenerator_HarvestableItems::GenerateItems(FEnvQueryInstance& Query
 		QueryInstance.AddItemData<UEnvQueryItemType_Point>(Location);
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("EQS HarvestableItems: Generated %d items within %.0f radius"),
-		ResultLocations.Num(), Radius);
+	// DEBUG (EnvQueryGenerator_HarvestableItems, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogTemp, Verbose, TEXT("EQS HarvestableItems: Generated %d items within %.0f radius"),
+	// 	ResultLocations.Num(), Radius);
 }
 
 FText UEnvQueryGenerator_HarvestableItems::GetDescriptionTitle() const

@@ -122,16 +122,17 @@ void AMOCraftingStationActor::InitializeBuilding(FName InRecipeId)
 		FuelConsumptionRate = Recipe->FuelConsumptionRate;
 		AcceptedFuelItems = Recipe->AcceptedFuelItems;
 
-		// Debug logging for fuel configuration
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Fuel config from recipe %s:"), *InRecipeId.ToString());
-		UE_LOG(LogMOFramework, Log, TEXT("  bRequiresFuel: %s"), bRequiresFuel ? TEXT("true") : TEXT("false"));
-		UE_LOG(LogMOFramework, Log, TEXT("  MaxFuel: %.1f"), MaxFuel);
-		UE_LOG(LogMOFramework, Log, TEXT("  FuelConsumptionRate: %.1f"), FuelConsumptionRate);
-		UE_LOG(LogMOFramework, Log, TEXT("  AcceptedFuelItems (%d):"), AcceptedFuelItems.Num());
-		for (const FName& FuelId : AcceptedFuelItems)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("    - '%s'"), *FuelId.ToString());
-		}
+		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace the fuel config
+		// // Debug logging for fuel configuration
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Fuel config from recipe %s:"), *InRecipeId.ToString());
+		// UE_LOG(LogMOFramework, Log, TEXT("  bRequiresFuel: %s"), bRequiresFuel ? TEXT("true") : TEXT("false"));
+		// UE_LOG(LogMOFramework, Log, TEXT("  MaxFuel: %.1f"), MaxFuel);
+		// UE_LOG(LogMOFramework, Log, TEXT("  FuelConsumptionRate: %.1f"), FuelConsumptionRate);
+		// UE_LOG(LogMOFramework, Log, TEXT("  AcceptedFuelItems (%d):"), AcceptedFuelItems.Num());
+		// for (const FName& FuelId : AcceptedFuelItems)
+		// {
+		// 	UE_LOG(LogMOFramework, Log, TEXT("    - '%s'"), *FuelId.ToString());
+		// }
 	}
 	else
 	{
@@ -390,7 +391,8 @@ void AMOCraftingStationActor::PlayOnSound()
 			OnSoundComponent->SetSound(Sound);
 			OnSoundComponent->SetVolumeMultiplier(SoundVolume);
 			OnSoundComponent->Play();
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Playing OnSound"));
+			// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Playing OnSound"));
 		}
 	}
 }
@@ -400,7 +402,8 @@ void AMOCraftingStationActor::StopOnSound()
 	if (OnSoundComponent && OnSoundComponent->IsPlaying())
 	{
 		OnSoundComponent->Stop();
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Stopped OnSound"));
+		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Stopped OnSound"));
 	}
 }
 
@@ -420,7 +423,8 @@ void AMOCraftingStationActor::PlayUseSound()
 			UseSoundComponent->SetSound(Sound);
 			UseSoundComponent->SetVolumeMultiplier(SoundVolume);
 			UseSoundComponent->Play();
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Playing UseSound"));
+			// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Playing UseSound"));
 		}
 	}
 }
@@ -430,7 +434,8 @@ void AMOCraftingStationActor::StopUseSound()
 	if (UseSoundComponent && UseSoundComponent->IsPlaying())
 	{
 		UseSoundComponent->Stop();
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Stopped UseSound"));
+		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Stopped UseSound"));
 	}
 }
 
@@ -449,7 +454,8 @@ void AMOCraftingStationActor::ActivateParticles()
 		{
 			ActiveParticleComponent->SetAsset(System);
 			ActiveParticleComponent->Activate();
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Activated particles"));
+			// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Activated particles"));
 		}
 	}
 	else
@@ -464,7 +470,8 @@ void AMOCraftingStationActor::DeactivateParticles()
 	if (ActiveParticleComponent && ActiveParticleComponent->IsActive())
 	{
 		ActiveParticleComponent->Deactivate();
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated particles"));
+		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated particles"));
 	}
 }
 
@@ -484,7 +491,8 @@ void AMOCraftingStationActor::ActivateLight()
 	// Reset flicker accumulator
 	FlickerTimeAccumulator = FMath::FRand() * 100.0f; // Random start for variety
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Activated light"));
+	// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Activated light"));
 }
 
 void AMOCraftingStationActor::DeactivateLight()
@@ -492,7 +500,8 @@ void AMOCraftingStationActor::DeactivateLight()
 	if (ActiveLightComponent)
 	{
 		ActiveLightComponent->SetVisibility(false);
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated light"));
+		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated light"));
 	}
 }
 

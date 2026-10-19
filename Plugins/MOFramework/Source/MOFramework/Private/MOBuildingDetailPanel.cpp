@@ -136,8 +136,9 @@ void UMOBuildingDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recip
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] OnDisplayRecipe: %s, BuildParts.Num()=%d"),
-		*DisplayedRecipeId.ToString(), Recipe->BuildParts.Num());
+	// DEBUG (MOBuildingDetailPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] OnDisplayRecipe: %s, BuildParts.Num()=%d"),
+	// 	*DisplayedRecipeId.ToString(), Recipe->BuildParts.Num());
 
 	GatherRange = Recipe->BuildRange;
 
@@ -145,12 +146,14 @@ void UMOBuildingDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recip
 	CachedBuildParts.Empty();
 	for (const FMOBuildPart& Part : Recipe->BuildParts)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel]   BuildPart: ItemId=%s, ActionId=%s, Qty=%d"),
-			*Part.ItemDefinitionId.ToString(), *Part.ActionId.ToString(), Part.Quantity);
+		// DEBUG (MOBuildingDetailPanel, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel]   BuildPart: ItemId=%s, ActionId=%s, Qty=%d"),
+		// 	*Part.ItemDefinitionId.ToString(), *Part.ActionId.ToString(), Part.Quantity);
 		CachedBuildParts.Add(BuildPartData(Part));
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] CachedBuildParts.Num()=%d after processing"), CachedBuildParts.Num());
+	// DEBUG (MOBuildingDetailPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] CachedBuildParts.Num()=%d after processing"), CachedBuildParts.Num());
 
 	// Build output data
 	CachedOutputs.Empty();
@@ -167,8 +170,9 @@ void UMOBuildingDetailPanel::PopulateRequirementsContainer()
 	// Clear existing widgets using base class helper
 	ClearTextWidgets(IngredientTextWidgets);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] PopulateRequirementsContainer: IngredientsContainer=%s, CachedBuildParts.Num()=%d"),
-		IngredientsContainer ? TEXT("valid") : TEXT("NULL"), CachedBuildParts.Num());
+	// DEBUG (MOBuildingDetailPanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] PopulateRequirementsContainer: IngredientsContainer=%s, CachedBuildParts.Num()=%d"),
+	// 	IngredientsContainer ? TEXT("valid") : TEXT("NULL"), CachedBuildParts.Num());
 
 	if (!IngredientsContainer)
 	{

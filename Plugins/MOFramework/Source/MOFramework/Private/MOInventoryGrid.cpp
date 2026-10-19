@@ -128,12 +128,14 @@ void UMOInventoryGrid::ClearGrid()
 
 	InventoryComponent = nullptr;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] Grid cleared (Pooled=%d)"), PooledSlotWidgets.Num());
+	// DEBUG (MOInventoryGrid, disabled Oct 18): re-enable to trace every grid refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] Grid cleared (Pooled=%d)"), PooledSlotWidgets.Num());
 }
 
 void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData>& VisualData)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData called with %d entries"), VisualData.Num());
+	// DEBUG (MOInventoryGrid, disabled Oct 18): re-enable to trace every grid refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData called with %d entries"), VisualData.Num());
 
 	if (!SlotsUniformGrid)
 	{
@@ -154,7 +156,8 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: All checks passed, acquiring slots from pool..."));
+	// DEBUG (MOInventoryGrid, disabled Oct 18): re-enable to trace every grid refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: All checks passed, acquiring slots from pool..."));
 
 	// Release existing slots to pool
 	SlotsUniformGrid->ClearChildren();
@@ -189,8 +192,9 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 		SlotWidgets.Add(NewSlotWidget);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: Acquired %d slots (SlotWidgets=%d, Pooled=%d) from %d visual data entries"),
-		SlotCount, SlotWidgets.Num(), PooledSlotWidgets.Num(), VisualData.Num());
+	// DEBUG (MOInventoryGrid, disabled Oct 18): re-enable to trace every grid refresh
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: Acquired %d slots (SlotWidgets=%d, Pooled=%d) from %d visual data entries"),
+	// 	SlotCount, SlotWidgets.Num(), PooledSlotWidgets.Num(), VisualData.Num());
 }
 
 void UMOInventoryGrid::HandleSlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
@@ -210,7 +214,8 @@ void UMOInventoryGrid::HandleSlotRightClicked(int32 SlotIndex, const FGuid& Item
 
 void UMOInventoryGrid::HandleSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryGrid] HandleSlotDropReceived: Target=%d, Source=%d"), TargetSlotIndex, SourceSlotIndex);
+	// DEBUG (MOInventoryGrid, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryGrid] HandleSlotDropReceived: Target=%d, Source=%d"), TargetSlotIndex, SourceSlotIndex);
 	OnGridSlotDropReceived.Broadcast(TargetSlotIndex, SourceSlotIndex, SourceInventory);
 }
 

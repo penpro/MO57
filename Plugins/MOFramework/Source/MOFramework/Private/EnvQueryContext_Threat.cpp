@@ -35,14 +35,16 @@ void UEnvQueryContext_Threat::ProvideContext(FEnvQueryInstance& QueryInstance, F
 
 	if (!AIController)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No AI controller found"));
+		// DEBUG (EnvQueryContext_Threat, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No AI controller found"));
 		return;
 	}
 
 	UBlackboardComponent* Blackboard = AIController->GetBlackboardComponent();
 	if (!Blackboard)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No blackboard found"));
+		// DEBUG (EnvQueryContext_Threat, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No blackboard found"));
 		return;
 	}
 
@@ -50,7 +52,8 @@ void UEnvQueryContext_Threat::ProvideContext(FEnvQueryInstance& QueryInstance, F
 	AActor* ThreatActor = Cast<AActor>(Blackboard->GetValueAsObject(ThreatBlackboardKey));
 	if (!ThreatActor)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No threat actor in blackboard key '%s'"), *ThreatBlackboardKey.ToString());
+		// DEBUG (EnvQueryContext_Threat, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogTemp, Verbose, TEXT("EQS ThreatContext: No threat actor in blackboard key '%s'"), *ThreatBlackboardKey.ToString());
 		return;
 	}
 

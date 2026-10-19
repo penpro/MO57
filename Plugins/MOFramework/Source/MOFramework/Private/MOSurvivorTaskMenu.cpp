@@ -236,7 +236,8 @@ void UMOSurvivorTaskMenu::RefreshJobQueue()
 	}
 
 	TArray<FMOSurvivorJobEntry> Jobs = JobQueue->GetAllJobs();
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorTaskMenu] Displaying %d jobs in queue"), Jobs.Num());   // every replicated job change: verbose
+	// DEBUG (MOSurvivorTaskMenu, disabled Oct 18): re-enable to trace verbose detail
+	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOSurvivorTaskMenu] Displaying %d jobs in queue"), Jobs.Num());   // every replicated job change: verbose
 
 	// Create entry widgets for each job in queue
 	for (const FMOSurvivorJobEntry& Job : Jobs)

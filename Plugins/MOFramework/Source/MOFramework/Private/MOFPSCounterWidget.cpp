@@ -21,7 +21,8 @@ void UMOFPSCounterWidget::NativeConstruct()
 	RefreshVisibility();
 	UpdateFPSDisplay();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOFPSCounter] NativeConstruct - Visibility: %d"), static_cast<int32>(GetVisibility()));
+	// DEBUG (MOFPSCounter, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MOFPSCounter] NativeConstruct - Visibility: %d"), static_cast<int32>(GetVisibility()));
 }
 
 void UMOFPSCounterWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -50,8 +51,9 @@ void UMOFPSCounterWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		const float SmoothingFactor = 0.3f;
 		SmoothedFPS = FMath::Lerp(SmoothedFPS, CurrentFPS, SmoothingFactor);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOFPSCounter] Frames: %d, Elapsed: %.3f, Current: %.1f, Smoothed: %.1f"),
-			FrameCount, ElapsedTime, CurrentFPS, SmoothedFPS);
+		// DEBUG (MOFPSCounter, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOFPSCounter] Frames: %d, Elapsed: %.3f, Current: %.1f, Smoothed: %.1f"),
+		// 	FrameCount, ElapsedTime, CurrentFPS, SmoothedFPS);
 
 		// Reset for next interval
 		FrameCount = 0;

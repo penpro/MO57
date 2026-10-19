@@ -18,28 +18,32 @@ void UMONewGamePanel::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] NativeConstruct called"));
+	// DEBUG (MONewGamePanel, disabled Oct 18): re-enable to trace setup steps
+	// UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] NativeConstruct called"));
 
 	// Bind button events
 	if (RandomSeedButton)
 	{
 		RandomSeedButton->OnClicked().RemoveAll(this);
 		RandomSeedButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleRandomSeedClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] RandomSeedButton bound"));
+		// DEBUG (MONewGamePanel, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] RandomSeedButton bound"));
 	}
 
 	if (StartGameButton)
 	{
 		StartGameButton->OnClicked().RemoveAll(this);
 		StartGameButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleStartGameClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] StartGameButton bound"));
+		// DEBUG (MONewGamePanel, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] StartGameButton bound"));
 	}
 
 	if (BackButton)
 	{
 		BackButton->OnClicked().RemoveAll(this);
 		BackButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleBackClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] BackButton bound"));
+		// DEBUG (MONewGamePanel, disabled Oct 18): re-enable to trace setup steps
+		// UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] BackButton bound"));
 	}
 
 	UMOUIUtils::ApplyReadableTextInputStyle(WorldNameInputBox);

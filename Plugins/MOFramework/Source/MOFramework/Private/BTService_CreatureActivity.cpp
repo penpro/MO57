@@ -54,7 +54,8 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		if (CurrentState == EMOCreatureActivityState::Resting ||
 			CurrentState == EMOCreatureActivityState::Sleeping)
 		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("BTService_CreatureActivity: Waking up due to threat!"));
+			// DEBUG (BTService_CreatureActivity, disabled Oct 18): re-enable to trace verbose detail
+			// UE_LOG(LogMOFramework, Verbose, TEXT("BTService_CreatureActivity: Waking up due to threat!"));
 			Controller->SetActivityState(EMOCreatureActivityState::Active);
 			CurrentStateDuration = 0.f;
 		}
