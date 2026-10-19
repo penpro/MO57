@@ -176,17 +176,28 @@ saved graphs keep their meaning.
   unless it scales the world term down first (what decides it is the float spacing of the SUM, compared with one texel or one period).
 - **The other wind graphs hold (N-167, measured Oct 18 night):** every remaining time + world site scales the world term down before
   the add. Epic `SimpleGrassWind` (hornbeams, and the ferns / elderberry of the `Content/Custom` Megascans masters, through
-  `MF_SimpleWind` of `MS_Foliage_Material_LATEST`; the Fab graph's optional secondary sway): WorldPosition / 1024 and / 200 + time, so at 15 km the sum's spacing is 1.2e-4 / 4.9e-4 of a sway period. `MF_WindGust`
-  (MSPresets and LATEST) and Fab `QMF_WindGust`: UV = rotate(WorldPosition x 1e-4) x tiling (0.5 / 1) + time x speed, |UV| <= ~150 at
-  15 km, spacing <= 1.5e-5 UV (1/16 of a texel of the 4096 px `T_WindNoise`, 1/2000 of the 32 px Fab one). Fab `QMF_WindAnimation`
-  (black locust, wild / dune grass, through `/Game/Materials/FabOverrides/M_MS_Foliage`, which calls the `/Fab` plugin copy: same graph
-  node for node) adds time only to a per-instance random in [0, 1) and vertex colour. Measured (motion_probe jump share, wind strength
-  6, AA off): in the world, hornbeams at 10.9 km 0-4 % against 0-2 % at 0.2 km, black locust at 11.6 km 0-2 % against 0-14 % at
-  1 km. Controlled: the same four meshes added as runtime instances 300 m up, seen against the sky by the same camera, at 0 / 11.6 /
-  15 / 40 / 80 km from the origin, mean jump share per plant: hornbeam sapling 4.8 / 3.2 / 5.3 / 8.5 / 1.2 %, black locust 6.8 / 9.5 /
-  8.7 %, wild grass 27 / 25 / 26 % (thin crossing blades defeat the tracker equally everywhere), black alder sapling (`MA_Foliage`
-  after the N-166 fix) 2.0 / 6.7 / 10.2 / 5.2 / 2.8 %. No distance trend, and a time-precision term left anywhere would be worst at
-  80 km; the 1-10 % spread follows each site's gust strength and leaflet flutter. No graph needed the Fmod.
+  `MF_SimpleWind` of `MS_Foliage_Material_LATEST`; the Fab graph's optional secondary sway): WorldPosition / 1024 and / 200 + time,
+  so at 15 km the sum's spacing is 1.2e-4 / 4.9e-4 of a sway period. `MF_WindGust` (MSPresets and LATEST) and Fab `QMF_WindGust`:
+  UV = rotate(WorldPosition x 1e-4) x tiling (0.5 / 1) + time x speed, |UV| <= ~150 at 15 km, spacing <= 1.5e-5 UV (1/16 of a texel
+  of the 4096 px `T_WindNoise`, 1/2000 of the 32 px Fab one). Fab `QMF_WindAnimation` (black locust, wild / dune grass, through
+  `/Game/Materials/FabOverrides/M_MS_Foliage`, which calls the `/Fab` plugin copy: same graph node for node) adds time only to a
+  per-instance random in [0, 1) and vertex colour. Measured (motion_probe jump share, wind strength 6, AA off): in the world,
+  hornbeams at 10.9 km 0-4 % against 0-2 % at 0.2 km, black locust at 11.6 km 0-2 % against 0-14 % at 1 km. Controlled: the same
+  meshes added as runtime instances 300 m up, seen against the sky by the same camera, at 0 / 11.6 / 15 / 40 / 80 km from the origin,
+  mean jump share: hornbeam sapling 4.8 / 3.2 / 5.3 / 8.5 / 1.2 %, black locust 8.7 / 7.3 / 5.3 / 8.5 / 10.5 % (the same three
+  leaflet-tip patches flutter at every distance), wild grass 0.8 / 1.7 / 1.3 / 0.5 / 0.0 %, black alder sapling (`MA_Foliage` after
+  the N-166 fix) 2.0 / 6.7 / 10.2 / 5.2 / 2.8 %. No distance trend, and a time-precision term left anywhere would be worst at 80 km
+  (its float spacing is 7x the 11.6 km one); the spread follows each site's gust strength and leaflet flutter. No graph needed the Fmod.
+- **Guard:** `MOFramework.Data.FoliageWindPrecision` (editor context) walks every /Game material function that depends on a
+  PivotPainter2 package: an Add of a time-only and a pivot-only operand must take the pivot operand straight from the `MO_WindPrecision`
+  Fmod (a synthetic graph checks the detector both ways first). Oct 18: 10 functions, 3 sites (MF_AdvancedWind_Level, both
+  PN_WindAnimation), all reduced. A reimported vendor graph fails it: rerun `foliage_wind_precision.py` (add the function to its list).
+- **Pivot Painter data textures** are data, sampled at each branch's own texel: no mips, never streamed, sRGB off, nearest filter.
+  `Content/Python/pivot_painter_textures.py` (editor, idempotent) enforces exactly that on every texture in a `PivotPainter` folder and
+  reports the rest: the compression differs by design (positions 16-bit `TC_HDR`, axis / extent 8-bit `TC_VECTOR_DISPLACEMENTMAP`,
+  62 each). Oct 18 it fixed the 6 BlackAlder Forest_08 / Sapling_01 / Seedling_01 textures (8x2 px, mips from the texture group and
+  streaming on; mip 0 unchanged, so the vertex wind reads what it read before); those trees render and sway like the rest. All 124
+  live in gitignored vendor folders (BlackAlder, CommonHazel, Megascans, PN_WildBerries): rerun after a reimport.
 - **How it was measured (reuse it):** a timestamped `PrintWindow` burst of the game window, sub-pixel phase-correlation tracking of
   64 px leaf / twig patches with AA off, "step share" = the share of a patch's travel made in frames over 4x its median speed (before
   34-47 %, after 0-1 %) and a jump count with TSR on (before 4-7 per 15 s on the 1.56 / 0.78 s grid, after 0):
@@ -199,4 +210,7 @@ saved graphs keep their meaning.
   before 35-37 %, after 0 %; a gusty hornbeam canopy read 14-57 % step share but 0-4 % jump share). `track` also reports how many jumps
   fall on hitch frames (frame pacing, not the material). For an A/B where only the distance from the origin changes, add runtime
   instances of the mesh to a loaded PCG instanced-mesh component (`add_instance`, nothing saved) high in the sky at each distance and
-  aim `MO.Cam.LookAt` at them from the same offset; pick patches by texture on the near frame and reuse them.
+  aim `MO.Cam.LookAt` at them from the same offset; pick patches by texture on the near frame and reuse them. Keep the camera
+  >= 2.5 m from the foliage you measure (narrow the FOV instead): the camera fade dithers leaves 40-160 cm from the lens with a
+  pattern that changes every frame, which the tracker reads as jumps at any distance from the origin (wild grass at 1.2 m: 25-64 %;
+  at 3 m: 0-2 %).

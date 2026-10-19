@@ -277,6 +277,11 @@
 - **Beach sand over the whole coastal plain** -> a fixed 40 m height band -> band = 8 % of the edge's height above sea. (terrain-material-far-tiling)
 - **Clouds blocky in a 4K shot** -> `r.VolumetricRenderTarget 0`; the sky only moves FORWARD in game time; `MO.Weather.Director 0` + `SetPreset Clear_Skies` for stable shots. (steam-store-art)
 - **"STREAMING POOL OVER BUDGET"** -> Epic texture pool 1000 MB -> 4000 (Cine 6000) + LimitPoolSizeToVRAM. (overnight-polish)
+- **Trees freeze, then snap, every 0.4-1.6 s, only far from the origin** -> a wind graph adds time to a WORLD-space term (a Pivot Painter
+  pivot) in float: 5-15 km out the sum moves a whole texel at a time -> reduce the world term mod a period first
+  (`foliage_wind_precision.py`, test `MOFramework.Data.FoliageWindPrecision`); graphs that scale it down first are fine. (`Docs/PCG.md` §9, Oct 18)
+- **Foliage within ~1.6 m of the camera reads as jumping in `motion_probe` (and looks noisy with AA off)** -> the camera fade dithers every
+  leaf 40-160 cm from the lens with a pattern that changes each frame -> measure foliage from >= 2.5 m (narrow the FOV instead). (Oct 18)
 
 ## 13. UI (CommonUI / UMG)
 

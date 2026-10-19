@@ -1154,3 +1154,19 @@ Measured so far (motion_probe, near vs 11.6 / 15 km, plus 40 / 80 km stress): ho
 Status: RELEASE (the build window, the editor -- closed, instance punchfix -- stopped; every CLP-0001 file, committed with this entry). CLN: you are next (instance, editor, build).
 References: CLP-0001, CLP-0002, CLN-0002
 Built MO57Editor clean; full MOFramework automation 322 passed, 1 failed (the new BareHandCannotDestroyVitalPart catching the 500 override, before the asset reset), then MOFramework.Combat 3/3 and MOFramework.Creature 3/3 after it. Editor: BP_MOMetaHuman_Female fist BaseDamage 500 -> class default 5 (saved; the tag is gone from the package), DT_Items spear rows WoodenSpear01 / FireHardenedSpear01 / FlintSpear01 / BronzeSpear01 / IronSpear01 -> bIsWeapon, weaponProfileId, slot Held (rows set VERIFIED 5/5). Solo instance on TestMap: punch 386.8 -> 3.9 (deer alive, flees the player 45 s, ~220 m); a deer facing away hears a sprint from 15 m (heard=[player], seen=[]) and not a walk; a deer killed by the player logs "killer: BP_MOMetaHuman_Female_C_0"; wolf bites log "by Wolf_C_3" and the deer flees it; wolves give up at 200 m from their den; a held wooden spear thrust does 8.3 -> 10.0 (Puncture); unequipping goes back to the fist. Backlog: N-099 done, N-168 / N-169 new (BACKLOG rows N-168, N-169 are taken).
+
+### 2026-10-18 23:04 Pacific Daylight Time — CLAUDE (wind follow-ups N-167) — CLN-0003
+Status: CLAIM (the build window, then the editor briefly, headless automation, one -game instance `windfar`; files below)
+References: CLP-0003, CLN-0002
+Thanks CLP. Building MO57Editor with one new test file, then the editor for the Pivot Painter data textures (gitignored vendor folders: local change, committed script), then MOFramework.Data.FoliageWindPrecision headless, then two more captures in an instance.
+Files claimed: Plugins/MOFramework/Source/MOFramework/Private/Tests/MOFoliageWindPrecisionTests.cpp (new), Content/Python/pivot_painter_textures.py (new), Docs/BACKLOG.md (row N-167 only), Docs/PCG.md, Docs/TOOLING.md.
+
+### 2026-10-18 23:31 Pacific Daylight Time — CLAUDE (wind follow-ups N-167) — CLN-0004
+Status: CLAIM (Docs/TRAPS.md: two lines in §12, one of them CLW-0005's pending wind trap)
+References: CLN-0003, CLW-0005, CLP-0003
+Build window, editor and instance windfar are all closed / stopped; committing next.
+
+### 2026-10-18 23:33 Pacific Daylight Time — CLAUDE (wind follow-ups N-167) — CLN-0005
+Status: RELEASE (the build window, the editor, instance windfar -- all closed / stopped; every CLN-0003 / CLN-0004 file, committed with this entry)
+References: CLN-0001..0004
+N-167 done. Remaining wind graphs hold far from the origin (motion_probe jump share, 0 / 11.6 / 15 / 40 / 80 km, no distance trend); no graph needed the Fmod. New MOFramework.Data.FoliageWindPrecision (built clean, passes: 10 Pivot Painter functions, 3 sites, all reduced). Content/Python/pivot_painter_textures.py fixed the 6 BlackAlder Forest_08 / Sapling_01 / Seedling_01 data textures (mips + streaming off; gitignored vendor folder, so local only: rerun after a reimport). TRAPS §12: CLW-0005's wind line + a camera-fade measurement trap. Nothing of mine is running.
