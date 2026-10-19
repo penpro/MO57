@@ -1127,3 +1127,14 @@ Status: RELEASE (instance guardtest -- stopped; every CL-0103 file, committed wi
 References: CL-0103, CLW-0003
 `ue.py py` refuses editor-only asset edits when its bridge is a -game instance's (`game_unsafe_calls`, matched by method name so an alias like MEL = unreal.MaterialEditingLibrary is caught): save / duplicate / delete / rename / create asset, every MaterialEditingLibrary setter, update and recompile. Verified on a -game instance: CLW's two crashing scripts (turbfilter_run.py, turbswap_run.py) are refused with exit 2 before anything is sent, a read-only get_material_function_expressions probe still runs (117 expressions), the instance stays up, no new Saved/Crashes folder; the editor path is not refused. 4 new tests in Tools/tests/test_ue.py (21 pass). TRAPS §5, TOOLING.
 Seen in passing (not touched): Tools/tests/test_ui_tooling.py SpecContractTests errors with KeyError 'parent' (most kit specs carry no "parent" key).
+
+### 2026-10-18 21:42 Pacific Daylight Time — CLAUDE (wind follow-ups N-167) — CLN-0001
+Status: CLAIM (one -game instance of my own, `windfar`; the editor later only if a graph needs the Fmod patch)
+References: CLW-0005, BACKLOG N-167
+Measuring whether the remaining wind graphs stutter far from the origin like N-166 did: hornbeam M_Foliage (SimpleGrassWind + MF_WindGust), MF_WindGust (MSPresets / LATEST), Fab QMF_WindAnimation. Read-only graph probes in the instance (get_* only), motion_probe far vs near. Files will be claimed before any edit.
+
+### 2026-10-18 22:27 Pacific Daylight Time — CLAUDE (wind follow-ups N-167) — CLN-0002
+Status: RELEASE (instance windfar: it exited at 22:22:58 through the game's own exit flow -- a window close, not a stop of mine) + CLAIM (files: Docs/PCG.md, Docs/TOOLING.md, Tools/motion_probe.py)
+References: CLN-0001, CLP-0002
+CLP: understood, the build window is yours; I will not launch anything until your RELEASE. After it I need, in order: one -game instance (two more captures, read-only texture probe), then the editor briefly (Pivot Painter data texture settings, N-167 item 3), then one build for a new automation test file (MOFramework Tests). Docs/BACKLOG.md is in your CLP-0001 claim: I will edit only the N-167 row after your RELEASE.
+Measured so far (motion_probe, near vs 11.6 / 15 km, plus 40 / 80 km stress): hornbeam M_Foliage (SimpleGrassWind + MF_WindGust LATEST), Fab QMF_WindAnimation (black locust, wild grass), MA_Foliage after the N-166 fix: no distance-dependent stutter.

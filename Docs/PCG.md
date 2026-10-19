@@ -172,9 +172,21 @@ saved graphs keep their meaning.
   rates 1-4, so both lookups read exactly the texels they read before; only the sum stays small. Rerun it after reimporting MSPresets /
   the PN packs (`PN_WildBerries` is a gitignored vendor folder: its copy is patched locally only).
 - **Rule:** any material term that adds a time-driven offset to a WORLD-space position (Pivot Painter pivots, `ObjectPivotPoint`,
-  `WorldPosition` demoted to float) must reduce the world term (frac / fmod by a period the consumer is blind to) BEFORE the add.
-  Still to measure the same way: `MF_WindGust`, Epic's `SimpleGrassWind` (the hornbeam master `MS_Foliage_Material_LATEST/M_Foliage`),
-  Fab `QMF_WindAnimation` (BACKLOG N-167).
+  `WorldPosition` demoted to float) must reduce the world term (frac / fmod by a period the consumer is blind to) BEFORE the add,
+  unless it scales the world term down first (what decides it is the float spacing of the SUM, compared with one texel or one period).
+- **The other wind graphs hold (N-167, measured Oct 18 night):** every remaining time + world site scales the world term down before
+  the add. Epic `SimpleGrassWind` (hornbeams, and the ferns / elderberry of the `Content/Custom` Megascans masters, through
+  `MF_SimpleWind` of `MS_Foliage_Material_LATEST`; the Fab graph's optional secondary sway): WorldPosition / 1024 and / 200 + time, so at 15 km the sum's spacing is 1.2e-4 / 4.9e-4 of a sway period. `MF_WindGust`
+  (MSPresets and LATEST) and Fab `QMF_WindGust`: UV = rotate(WorldPosition x 1e-4) x tiling (0.5 / 1) + time x speed, |UV| <= ~150 at
+  15 km, spacing <= 1.5e-5 UV (1/16 of a texel of the 4096 px `T_WindNoise`, 1/2000 of the 32 px Fab one). Fab `QMF_WindAnimation`
+  (black locust, wild / dune grass, through `/Game/Materials/FabOverrides/M_MS_Foliage`, which calls the `/Fab` plugin copy: same graph
+  node for node) adds time only to a per-instance random in [0, 1) and vertex colour. Measured (motion_probe jump share, wind strength
+  6, AA off): in the world, hornbeams at 10.9 km 0-4 % against 0-2 % at 0.2 km, black locust at 11.6 km 0-2 % against 0-14 % at
+  1 km. Controlled: the same four meshes added as runtime instances 300 m up, seen against the sky by the same camera, at 0 / 11.6 /
+  15 / 40 / 80 km from the origin, mean jump share per plant: hornbeam sapling 4.8 / 3.2 / 5.3 / 8.5 / 1.2 %, black locust 6.8 / 9.5 /
+  8.7 %, wild grass 27 / 25 / 26 % (thin crossing blades defeat the tracker equally everywhere), black alder sapling (`MA_Foliage`
+  after the N-166 fix) 2.0 / 6.7 / 10.2 / 5.2 / 2.8 %. No distance trend, and a time-precision term left anywhere would be worst at
+  80 km; the 1-10 % spread follows each site's gust strength and leaflet flutter. No graph needed the Fmod.
 - **How it was measured (reuse it):** a timestamped `PrintWindow` burst of the game window, sub-pixel phase-correlation tracking of
   64 px leaf / twig patches with AA off, "step share" = the share of a patch's travel made in frames over 4x its median speed (before
   34-47 %, after 0-1 %) and a jump count with TSR on (before 4-7 per 15 s on the 1.56 / 0.78 s grid, after 0):
@@ -182,4 +194,9 @@ saved graphs keep their meaning.
   `Saved/WindStutter/` (not tracked). Traps met on the way: an ROI that included the HUD FPS counter (refreshes every 0.25 s) read as
   a periodic jump; `r.Test.OverrideTimeMaterialExpressions` also zeroes velocities, and TSR then blends small steps away (measure with
   `r.AntiAliasingMethod 0`); `MaterialEditingLibrary.update_material_instance` and `EditorAssetLibrary.duplicate_asset` crash a `-game`
-  instance (graph edits belong in the editor).
+  instance (graph edits belong in the editor). Read the **jump share** (N-167), not the step share, on mostly-still foliage: the travel
+  made in frames over 4x the median of the 10 frames around them, so a staircase counts and a gust ramp does not (the N-166 captures:
+  before 35-37 %, after 0 %; a gusty hornbeam canopy read 14-57 % step share but 0-4 % jump share). `track` also reports how many jumps
+  fall on hitch frames (frame pacing, not the material). For an A/B where only the distance from the origin changes, add runtime
+  instances of the mesh to a loaded PCG instanced-mesh component (`add_instance`, nothing saved) high in the sky at each distance and
+  aim `MO.Cam.LookAt` at them from the same offset; pick patches by texture on the near frame and reuse them.
