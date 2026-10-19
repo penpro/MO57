@@ -34,6 +34,14 @@ struct MOFRAMEWORK_API FMOSpeciesPlacement
 	 *  then every species sinks SinkFraction of its scaled height (auto: 0.25 aligned, 0 upright) plus SinkMinCm. */
 	static float BurialOffsetCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale);
 
+	/** bFaceDownhill: the instance rotation -- world up, the mesh's face (FaceYawDeg) turned toward the downhill direction of SurfaceNormal, plus JitterRad.
+	 *  Flat ground has no downhill: FallbackYawRad. */
+	static FQuat FaceDownhillRotation(const FMOBiomeSpeciesEntry& Species, const FVector& SurfaceNormal, float JitterRad, float FallbackYawRad);
+
+	/** bFaceDownhill: how much lower the ground lies under the mesh's face edge than at its pivot (cm) on a slope of SlopeRad -- the extra burial that seats the
+	 *  front (0 for other species and on flat ground). */
+	static float FaceDropCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale, float SlopeRad);
+
 	/** True for profiles that stop the character. */
 	static bool ProfileBlocks(FName Profile);
 

@@ -1253,3 +1253,16 @@ References: CL-0117
 Status: PROGRESS (F30 A + F31 A commit) + RELEASE (the CL-0118 files, build window, instances)
 References: CL-0118
 Wes's F30 A: built cave entrances ON in karst, generator v12 (PinnedProbeCave re-pinned; heights unchanged; CaveReach shipped 25.0 %). F31 A: building skill slows and wastes, never gates (FMOBuildSkillPenalty). Suite 329 / 1 (WorldGen.Caves needed the built-entrance zone excluded; rerun after a corrective build: pass). In game: a Forge at Smithing 0 / 30 -- 240 s, 9 spoils, a pause and a resume; `poi CaveEntrance` lands at a doline 4.3 km from the spawn; MO.WorldGen.Checksum match=1 v12.
+
+### 2026-10-19 10:29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0120
+Status: CLAIM (BR18-14 / BR18-19 cliff slabs upright: MOFrameworkCore MOBiomeDefinitionRow.h, MOSpeciesPlacement.h/.cpp, MOPCGBiomeSpawnerSettings.cpp, Content/Python/biome_palettes.py, DT_Biomes cliff species; the editor, then the build window and instance acthost)
+References: CL-0119
+
+### 2026-10-19 11:06 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0121
+Status: PROGRESS (BR18-14 / BR18-19 commit) + RELEASE (the CL-0120 files, instance acthost)
+References: CL-0120
+Open-backed HugeSandstoneCliff slabs stand upright with their face down the slope (bFaceDownhill / FaceYawDeg; FMOSpeciesPlacement::FaceDownhillRotation / FaceDropCm). Measured in game: tilt 0.0, front base 1.8-4.5 m under ground. Suite 331 / 0.
+
+### 2026-10-19 11:06 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0122
+Status: CLAIM (BR18-16 UDW wetness / puddles / snow on the voxel terrain: Content/Python/upgrade_terrain_material.py + M_QuixelBase and the MI_ surface instances, new /Game/Penumbra/Maps/VFM_MOWeatherShelter, MOWorldGenSettings.h, MOWorldSeedSubsystem.cpp; the build window, the editor, instances)
+References: CL-0121

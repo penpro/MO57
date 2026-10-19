@@ -83,6 +83,14 @@ saved graphs keep their meaning.
   `MOFramework.Data.SolidMeshCollision`.
 - **Rock alignment:** aligned species rotate as `PointRot * FQuat(Up, Yaw)` (yaw about the surface normal), pivot-to-bottom
   lift + `SinkFraction` (auto 0.25 for aligned) / `SinkMinCm`.
+- **Open-backed cliff slabs face downhill (Oct 19 2026, BR18-14 / BR18-19):** a mesh that is only a rock face with a hollow back
+  must never take the slope's normal (on a 36 deg slope it leaned with the hill, showed its back and floated its loose chunks).
+  `bFaceDownhill` + `FaceYawDeg` (where the mesh's face looks, measured by `Content/Python/cliff_face_probe.py`: area-weighted
+  triangle normals; HugeSandstoneCliff = 90) stand it world-up, the face turned down the slope (+-10 deg jitter), and sink it by
+  the ground's drop under its face (`FMOSpeciesPlacement::FaceDownhillRotation` / `FaceDropCm`, test
+  `MOFramework.PCG.CliffSlabsFaceDownhill`). A closed rock (probe strength ~0, the Nordic coastal cliff) stays aligned. Measured
+  on seed 670711536 (RockyHighland, `MO.BiomeTest`): two slabs probed three times, tilt 0.0, face within 2-25 deg of the probe's
+  downhill (it reads the slope over 12 m, the spawner the point normal), the front base 1.8-4.5 m under ground.
 
 ## 5. Palettes: where the numbers live
 

@@ -11,6 +11,7 @@
 #include "MOGameClockSubsystem.h"
 #include "MOQuestSubsystem.h"
 #include "MOBuildingTypes.h"
+#include "MOSpeciesPlacement.h"
 #include "MOPossessionTypes.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOGameState.h"
@@ -1399,6 +1400,36 @@ bool FMOBuild_SkillSlowsAndWastesNeverGates::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no skill line on the recipe: no penalty"), FMOBuildSkillPenalty::For(0, 0).TimeScale, 1.0f);
 	// CONTROL (can fail): the shortfall really scales -- a level below the requirement costs something.
 	TestTrue(TEXT("CONTROL: one level short costs time"), FMOBuildSkillPenalty::For(29, 30).TimeScale > 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSpecies_CliffSlabsFaceDownhill,
+	"MOFramework.PCG.CliffSlabsFaceDownhill",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSpecies_CliffSlabsFaceDownhill::RunTest(const FString& Parameters)
+{
+	// BR18-14 / BR18-19 (Oct 18 2026): an open-backed cliff slab aligned to a steep slope leaned with it and showed its hollow back. Now it stands upright
+	// with its face (FaceYawDeg, measured from the mesh) turned down the slope, and sinks by the ground's drop under its face.
+	FMOBiomeSpeciesEntry Slab;
+	Slab.bFaceDownhill = true;
+	Slab.FaceYawDeg = 90.0f;   // the HugeSandstoneCliff slabs face +Y
+	const float Slope = FMath::DegreesToRadians(30.0f);
+	const FVector Normal(-FMath::Sin(Slope), 0.0f, FMath::Cos(Slope));   // ground rising toward +X: downhill is -X
+	const FQuat Rot = FMOSpeciesPlacement::FaceDownhillRotation(Slab, Normal, 0.0f, 0.0f);
+	const FVector Face = Rot.RotateVector(FVector(0.0f, 1.0f, 0.0f));
+	TestTrue(FString::Printf(TEXT("the face points downhill (-X), got %s"), *Face.ToCompactString()), Face.Equals(FVector(-1.0f, 0.0f, 0.0f), 1.0e-3f));
+	TestTrue(TEXT("upright: the mesh's up stays world up"), Rot.GetUpVector().Equals(FVector::UpVector, 1.0e-4f));
+	TestTrue(TEXT("flat ground has no downhill: the fallback yaw"), FMOSpeciesPlacement::FaceDownhillRotation(Slab, FVector::UpVector, 0.0f, 1.0f).Equals(FQuat(FVector::UpVector, 1.0f), 1.0e-4f));
+
+	// SM_HugeSandstoneCliff_07's bounds: origin (5, 45, 318), extent (1108, 420, 335): its face is 465 cm downhill of the pivot.
+	const FBoxSphereBounds Bounds(FVector(5.0f, 45.0f, 318.0f), FVector(1108.0f, 420.0f, 335.0f), 1200.0f);
+	TestEqual(TEXT("the face sits 465 x tan 30 deg lower: sunk that much more"), FMOSpeciesPlacement::FaceDropCm(Slab, Bounds, 1.0f, Slope), 465.0f * FMath::Tan(Slope), 0.5f);
+	TestEqual(TEXT("flat ground: no extra burial"), FMOSpeciesPlacement::FaceDropCm(Slab, Bounds, 1.0f, 0.0f), 0.0f);
+	// CONTROL (can fail): a species that does not face downhill gets no drop.
+	FMOBiomeSpeciesEntry Rock;
+	Rock.bAlignToSurfaceNormal = true;
+	TestEqual(TEXT("CONTROL: an aligned rock gets no face drop"), FMOSpeciesPlacement::FaceDropCm(Rock, Bounds, 1.0f, Slope), 0.0f);
 	return true;
 }
 

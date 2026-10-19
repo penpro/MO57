@@ -738,7 +738,14 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			const float Scale = RandomStream.FRandRange(Sp.MinScale, Sp.MaxScale);
 			Xf.SetScale3D(FVector(Scale));
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
-			if (Sp.bAlignToSurfaceNormal)
+			const FVector SurfaceNormal = Point.Transform.GetRotation().GetUpVector();
+			if (Sp.bFaceDownhill)
+			{
+				// Open-backed cliff slabs (BR18-14 / BR18-19): upright, the rock face turned down the slope (a little jitter so a cluster is not a fence).
+				const float Jitter = FMath::DegreesToRadians(RandomStream.FRandRange(-10.0f, 10.0f));
+				Xf.SetRotation(FMOSpeciesPlacement::FaceDownhillRotation(Sp, SurfaceNormal, Jitter, Yaw));
+			}
+			else if (Sp.bAlignToSurfaceNormal)
 			{
 				// Rocks/debris: sit ON the surface normal the sampler gave the point, spun about THEIR OWN up axis. (The old `FQuat(WorldUp, Yaw) * PointRotation` spun the already
 				// aligned rock about WORLD up, which swings its up axis around the normal: on a slope every rock leaned in a random direction, up to twice the slope angle off the ground.)
@@ -757,7 +764,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 
 			// Burial (FMOSpeciesPlacement: the gallery places the same way): along the instance's own up axis, so a rock on a slope goes into the slope, not into the air below it.
 			{
-				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale);
+				const float SlopeRad = FMath::Acos(FMath::Clamp(static_cast<float>(SurfaceNormal.Z), -1.0f, 1.0f));
+				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale) - FMOSpeciesPlacement::FaceDropCm(Sp, Mesh->GetBounds(), Scale, SlopeRad);
 				if (!FMath::IsNearlyZero(Offset))
 				{
 					Xf.AddToTranslation(Xf.GetRotation().GetUpVector() * Offset);

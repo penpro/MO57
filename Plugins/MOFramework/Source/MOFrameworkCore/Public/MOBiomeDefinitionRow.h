@@ -114,6 +114,20 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	bool bAlignToSurfaceNormal = false;
 
 	/**
+	 * Stand world-up with the mesh's rock face (FaceYawDeg) turned DOWN the slope: open-backed cliff slabs (BR18-14 / BR18-19, Oct 19 2026). Aligned to the
+	 * normal, a 17 m slab leaned 36 deg with a steep slope, showed its hollow back from above and lifted its base off the ground. Upright and facing downhill,
+	 * its long side follows the contour, its open back sits in the hill, and the spawner sinks it by the ground's drop under its face so the front meets the
+	 * ground (FMOSpeciesPlacement::FaceDropCm). Overrides bAlignToSurfaceNormal.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	bool bFaceDownhill = false;
+
+	/** Where the mesh's rock face looks (degrees about its up axis, from +X): measured from the mesh -- an open back has no faces, so the area-weighted
+	 *  normal points out of the face (the HugeSandstoneCliff slabs: 90, +Y). Used with bFaceDownhill. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="-180.0", ClampMax="180.0"))
+	float FaceYawDeg = 0.0f;
+
+	/**
 	 * How deep the species is buried, as a fraction of its own (scaled) height, pushed along its up axis. Rocks and debris that merely rest ON the surface read as dropped props; buried a quarter of their
 	 * height they read as part of the terrain. -1 (default) = auto: 0.25 for species that align to the terrain normal (rocks, debris), 0 for upright plants and trees.
 	 */

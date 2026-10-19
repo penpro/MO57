@@ -72,7 +72,7 @@ def rock(folder, code):
 
 
 def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, align=False, tilt=8.0, sweep=False, smin=0.85, smax=1.25, collision="Auto", sink=-1.0, sink_cm=0.0,
-            min_slope=0.0, max_slope=90.0):
+            min_slope=0.0, max_slope=90.0, face_yaw=None):
     # Every Black Locust variant is a GROUND-LEVEL plant (0.5 - 1.5 m tall, up to 1.8 m wide) that the resource table calls a Tree, so by resource type it blocks the pawn like an oak: you walk
     # into a knee-high bush and stop. They are walk-through (found 2026-10-10 by Wes: "a small locust bush, or a collection of them"; I had first blamed the saplings and been wrong).
     if collision == "Auto" and "wdvhberja" in path:
@@ -89,7 +89,9 @@ def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, 
         smin, smax = round(min(smin, 0.75 * mid), 3), round(max(smax, 1.25 * mid), 3)
     return {"Mesh": path, "DensityPerHectare": density, "ClusterRadius": cluster, "ClusterGroup": group, "ClusterCore": core, "HISMTag": tag or "None",
             "ResourceNodeId": res, "bAlignToSurfaceNormal": align, "MaxRandomTiltDeg": tilt, "bAutoSweepOnTerraform": sweep, "MinScale": smin, "MaxScale": smax, "Collision": collision,
-            "SinkFraction": sink, "SinkMinCm": sink_cm, "MinSlopeDeg": min_slope, "MaxSlopeDeg": max_slope}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
+            "SinkFraction": sink, "SinkMinCm": sink_cm, "MinSlopeDeg": min_slope, "MaxSlopeDeg": max_slope,
+            # face_yaw (degrees, where the mesh's rock face looks): stand upright and turn that face DOWN the slope (bFaceDownhill; open-backed cliff slabs, BR18-14 / BR18-19)
+            "bFaceDownhill": face_yaw is not None, "FaceYawDeg": 0.0 if face_yaw is None else float(face_yaw)}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
 
 
 def tree(name, density, group=0, core=0.7, res="BlackAlder", smin=0.8, smax=1.3):
@@ -337,10 +339,13 @@ def ed_plate(folder, mesh, density, cluster=2600.0, smin=0.9, smax=1.7, sink_cm=
                    max_slope=28.0)   # steeper and the aligned plate stands on its edge, hollow back showing (playtest 2026-10-14 #1 / #26)
 
 
-def ed_cliff(mesh, density, cluster=6000.0, smin=0.7, smax=1.3, folder="HugeSandstoneCliff"):
-    """A 11-22 m cliff slab (sandstone by default, `folder` picks another): solid, aligned, buried a fifth of its height."""
-    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=0.2, collision="Solid",
-                   min_slope=25.0)   # a cliff on gentle ground is a monolith (playtest 2026-10-14 #26)
+def ed_cliff(mesh, density, cluster=6000.0, smin=0.7, smax=1.3, folder="HugeSandstoneCliff", face_yaw=None):
+    """A 11-22 m cliff (sandstone by default, `folder` picks another): solid, buried a fifth of its height.
+    An OPEN-BACKED slab (face_yaw = where its rock face looks, measured from the mesh by Content/Python/cliff_face_probe.py -- the HugeSandstoneCliff slabs face +Y, 90) stands
+    upright with that face turned down the slope and sinks by the ground's drop under its face: aligned to a 36 deg slope it leaned with it, showed its hollow back
+    and lifted its base (BR18-14 / BR18-19, Oct 18 2026). A closed rock (face_yaw None: the Nordic coastal cliff) stays aligned to the ground."""
+    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=face_yaw is None, tilt=0.0, smin=smin, smax=smax, sink=0.2, collision="Solid",
+                   min_slope=25.0, face_yaw=face_yaw)   # a cliff on gentle ground is a monolith (playtest 2026-10-14 #26)
 
 
 def scree(density_each, smin=1.2, smax=2.8):
@@ -376,7 +381,7 @@ def thin(species_list, factor, tags=("MOBiomeCover_Grass", "MOBiomeCover_Flower"
 
 # steep ground (slope >= 28 deg, any height): rock first. The old list kept for the plants (trees / scrub / grass at a third), the rocks replaced.
 PALETTES["RockyHighland"] = (mountain_rocks(1.0, 1.0, 1.0) + scree(55.0)
-    + [ed_cliff("SM_HugeSandstoneCliff_07", 0.25), ed_cliff("SM_HugeSandstoneCliff_04", 0.2)]
+    + [ed_cliff("SM_HugeSandstoneCliff_07", 0.25, face_yaw=90.0), ed_cliff("SM_HugeSandstoneCliff_04", 0.2, face_yaw=90.0)]
     + thin([sp for sp in PALETTES["RockyHighland"] if sp["HISMTag"] != "MOResource_Rock"], 0.4, ("MOBiomeCover_Grass", "MOBiomeCover_Flower", "MOResource_Tree", "MOResource_Bush")))
 
 # alpine heath (>= 320 m, gentler ground): scrub and heath, boulders and some slabs
@@ -400,7 +405,7 @@ ALPINE_ROCK = {
     "heightMin": 95000.0, "heightMax": 100000000.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 90.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 1.0,
     "priority": 22, "groundSurfaceType": surface("IcelandicQuarryRock"), "edgeBlendWidth": 5000.0,   # dark volcanic rock above the heath
     "species": mountain_rocks(0.5, 1.4, 1.2) + scree(95.0, 1.4, 3.2)
-    + [boulder("forest", 8.0, 2000.0, 0.8, 2.2), boulder("beach_a", 5.0, 2600.0, 0.8, 2.0), ed_cliff("SM_HugeSandstoneCliff_04", 0.15)],
+    + [boulder("forest", 8.0, 2000.0, 0.8, 2.2), boulder("beach_a", 5.0, 2600.0, 0.8, 2.0), ed_cliff("SM_HugeSandstoneCliff_04", 0.15, face_yaw=90.0)],
 }
 
 # --- ELECTRIC FOREST (2026-10-12, Wes: "try to make a 1:1 copy of the electric dreams demo as a biome") ---------------------------------------------------------------------------------------
