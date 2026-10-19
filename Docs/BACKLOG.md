@@ -11,6 +11,14 @@
 > Aliases column so a search for either finds the row. Forks for Wes are **F-n** (`Docs/DECISIONS.md`).
 > **How to use:** pick work here; when you finish, set DONE-date and the commit; when you find work, add a row (next free N id).
 
+## Wes: check by eye (look-and-feel results deferred to Wes, Oct 18; add a line, he ticks them off)
+
+| What to look at | Where / how | Fixed looks like | From |
+|---|---|---|---|
+| Megascans tree wind far from the world origin | Wes's world (seed 670711536), several km from spawn; any Megascans tree in wind | leaves and branches move smoothly; no ~0.75 s move / 0.25 s freeze / snap cycle | N-166 / N-167 (4e349e37, 6d956730) |
+| Survivor task menu | Recruit a survivor, open its task menu | solid dark panel, readable names / descriptions, clear Queue buttons | BR18-26 (a736a2df) |
+| Bark container in the world | Drop one on the ground next to a stick | about 14 x 13 x 12 cm: a small, real 1 L folded-bark vessel (deliberate) | BR18-29 |
+
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
 F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F7 building refund ·

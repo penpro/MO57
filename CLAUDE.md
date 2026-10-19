@@ -50,6 +50,9 @@ Production-ready software: fix systems, not symptoms. These override convenience
   changes/fixes to make and THEN package and test"): write about 10 fixes, then ONE build, ONE `ue.py auto`, ONE host + joiner pass with a
   checklist covering every fix (package only when the batch needs packaged behaviour), then commit each verified fix on its own. A fix that
   fails moves to the next batch; never rebuild for one fix. `Docs/TOOLING.md` § Batch verification.
+- **Defer look-and-feel checks to Wes** (2026-10-18: "for visual things like the glitchy foliage material wind motion that are easy for me
+  to verify, differ those to me, just create a list"): verify mechanics, numbers and co-op behaviour yourself, but whether something LOOKS
+  right (wind smoothness, a material, a slab seated, readability) goes on the "Wes: check by eye" list in `Docs/BACKLOG.md`.
 - Codex works in the same tree: stage your exact paths, **never `git add -A`**, never stage or edit another agent's uncommitted files,
   never stage `.claude/settings.local.json` or `Content/Developers/penum/MegaMaterialCache.uasset`.
 - `git add` fails silently here (case-insensitive paths; one bad pathspec stages nothing): check the staged column of `git status --short`

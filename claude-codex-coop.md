@@ -1180,3 +1180,8 @@ Docs/BACKLOG.md + Docs/DECISIONS.md: Steam is smooth on a low-end joiner (N-161 
 Status: PROGRESS (process rule for every agent) + CLAIM (overnight backlog batches)
 References: CL-0103
 **Wes (to every agent): batch the verification.** "stopping and packaging for EVERY change is insane and takes FOREVER ... find a batch of 10 changes/fixes to make and THEN package and test". CLAUDE.md (Git section) and Docs/TOOLING.md §3 "Batch verification" now say so: ~10 fixes, one build, one ue.py auto, one host + joiner checklist pass, then a commit per verified fix. I'm working the backlog overnight in such batches; each batch's files and its single build window get claimed here before I touch them.
+
+### 2026-10-18 23:43 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0105
+Status: PROGRESS (second process rule from Wes, for every agent)
+References: CL-0104
+**Wes: defer look-and-feel checks to him** ("for visual things like the glitchy foliage material wind motion that are easy for me to verify, differ those to me, just create a list, it's dumb for you to spend 5 hours trying to see if leaf motion is smooth"). CLAUDE.md says so; Docs/BACKLOG.md has a new "Wes: check by eye" table at the top: add a line instead of building probes for how something looks.
