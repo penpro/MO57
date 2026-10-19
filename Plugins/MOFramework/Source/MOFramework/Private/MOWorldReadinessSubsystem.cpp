@@ -4,10 +4,12 @@
 #include "EngineUtils.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Camera/PlayerCameraManager.h"
 #include "HAL/IConsoleManager.h"
 #include "MOFramework.h"
 #include "MOBugReport.h"
+#include "MOPCGBiomeSpawnerSettings.h"
 #include "Grid/PCGPartitionActor.h"
 #include "MOVoxelReadinessSubsystem.h"
 #include "PCGComponent.h"
@@ -378,6 +380,7 @@ void UMOWorldReadinessSubsystem::EnterStage(EMOWorldReadyStage NewStage)
 	PcgQuietSeconds = 0.0;
 	if (Stage == EMOWorldReadyStage::Vegetation)
 	{
+		MOPCGBiomeSpawner::GetRunTotals(VegetationStartSpawnerRuns, VegetationStartSpawnerAccepted);
 		RaisePcgBudget();
 	}
 	else
@@ -537,6 +540,18 @@ void UMOWorldReadinessSubsystem::Poll()
 				bLastVegetationCapped = true;
 				LastCappedNearCount = NearCount;
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] vegetation stage capped at %.0fs with PCG still working (%d spawned instances within %.0f m; far field keeps filling behind the reveal)"), StageElapsed, NearCount, CVarNearInstanceRadiusCm.GetValueOnGameThread() / 100.0f);
+				// A player standing on bare ground at the cap is a world that may grow nothing at all (Oct 19: one load of seed 670711536 had 0 instances anywhere; the same
+				// seed reloaded was fine). Say whether the biome spawner ran for this load, so the next one carries its own diagnosis.
+				const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+				const APawn* Player = PC ? PC->GetPawn() : nullptr;
+				if (NearCount == 0 && Player)
+				{
+					int32 Runs = 0;
+					int64 Accepted = 0;
+					MOPCGBiomeSpawner::GetRunTotals(Runs, Accepted);
+					UE_LOG(LogMOFramework, Error, TEXT("[MOReadiness] NO VEGETATION around %s at %s after %.0fs: the biome spawner finished %d run(s) for this load, planting %lld instance(s) (process total %d / %lld)"),
+						*Player->GetName(), *Player->GetActorLocation().ToCompactString(), StageElapsed, Runs - VegetationStartSpawnerRuns, Accepted - VegetationStartSpawnerAccepted, Runs, Accepted);
+				}
 			}
 			SetProgress(VegetationEnd);
 			EnterStage(EMOWorldReadyStage::Streaming);

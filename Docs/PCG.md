@@ -151,6 +151,12 @@ saved graphs keep their meaning.
 - Timings: packaged new-game READY 45.7 s -> 29.1 s (da3c8c22) -> 7.1 s (Oct 13 pm, far voxel chunks no longer resolve
   sub-voxel lakes: `FMOWorldGen::IsWaterTierResolved`) -> ~14-17 s after the Oct 14 coverage pass (more instances).
 - Bug reports carry `WorldBuild.*` fields from the readiness subsystem (for PCG stalls on Shipping, which writes no log).
+- **A load that grew nothing says so** (Oct 19): when the vegetation stage caps with the player standing on bare ground (0 instances within
+  `mo.Readiness.NearInstanceRadiusCm`), `[MOReadiness] NO VEGETATION around <pawn> at <location> after Ns` (Error) reports how many biome-spawner
+  runs finished for this load and what they planted (`MOPCGBiomeSpawner::GetRunTotals`, snapshotted when the stage begins), so the next
+  empty world tells whether the spawner ran at all. Found: one new game on seed 670711536 had 0 instances in every `MO.PCG.Rings` ring; the same
+  seed reloaded was fine (BugReports_2026-10-18, WATCH). Control: `mo.Readiness.NearInstanceRadiusCm 1` + `mo.Readiness.MaxPcgSeconds 3`
+  + `mo.Readiness.MaxPcgHardSeconds 4` before a new game -> the line prints (137 runs, 152,886 instances planted).
 
 ## 9. Foliage wind keeps its precision far from the origin (Oct 18 2026)
 

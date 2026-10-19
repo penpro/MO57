@@ -1339,4 +1339,43 @@ bool FMOBugReportLookAtRowsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOQuest_ItemObjectiveCountsItsKind,
+	"MOFramework.Quest.ItemObjectiveCountsItsKind",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOQuest_ItemObjectiveCountsItsKind::RunTest(const FString& Parameters)
+{
+	// The project's DT_Quests and DT_Items. Found Oct 19 2026 in a first-ten-minutes playtest: "Collect Fallen Branches" counted only Stick01 (a green
+	// branch), so picking up the stripped branches (Stick02) lying around never moved it. An item objective may now name a kind (an item tag).
+	UGameInstance* Outer = NewObject<UGameInstance>(GetTransientPackage());
+	UMOQuestSubsystem* Quests = NewObject<UMOQuestSubsystem>(Outer);
+	Quests->LoadQuestDefinitionsForTest();
+	Quests->ResetAllQuests();
+	if (!TestTrue(TEXT("Tutorial_GatherSticks is active from the start"), Quests->IsQuestActive(TEXT("Tutorial_GatherSticks"))))
+	{
+		return false;
+	}
+	auto Progress = [Quests](FName QuestId, FName ObjectiveId)
+	{
+		FMOQuestState State;
+		return Quests->GetQuestState(QuestId, State) ? State.GetObjectiveProgress(ObjectiveId) : -1;
+	};
+	Quests->ApplyReportedEvent(EMOObjectiveType::ItemPickup, TEXT("Stick02"), 2);
+	TestEqual(TEXT("two stripped branches count as sticks"), Progress(TEXT("Tutorial_GatherSticks"), TEXT("GatherSticks")), 2);
+	Quests->ApplyReportedEvent(EMOObjectiveType::ItemPickup, TEXT("Stick01"), 1);
+	TestEqual(TEXT("a green branch counts too"), Progress(TEXT("Tutorial_GatherSticks"), TEXT("GatherSticks")), 3);
+	// CONTROL (can fail): an item of another kind does not.
+	Quests->ApplyReportedEvent(EMOObjectiveType::ItemPickup, TEXT("Stone01"), 1);
+	TestEqual(TEXT("CONTROL: a stone is not a stick"), Progress(TEXT("Tutorial_GatherSticks"), TEXT("GatherSticks")), 3);
+
+	FMOItemDefinitionRow Bark;
+	for (const TCHAR* BarkId : { TEXT("Bark01"), TEXT("BirchBark01"), TEXT("OakBark01") })
+	{
+		TestTrue(FString::Printf(TEXT("%s is tagged Bark (Tutorial_GatherBark counts every bark)"), BarkId),
+			UMOItemDatabaseSettings::GetItemDefinition(BarkId, Bark) && Bark.Tags.Contains(FName(TEXT("Bark"))));
+	}
+	Quests->ResetAllQuests();
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

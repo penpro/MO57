@@ -2806,6 +2806,9 @@ void AMOCharacter::UpdateRemotePlayerTerrainDetail()
 
 namespace
 {
+	/** How far under a remote pawn's capsule this machine looks for a floor before letting its proxy simulate gravity (N-160). */
+	constexpr double RemotePawnFloorReachCm = 200.0;
+
 	/** TEST ONLY control: let simulated proxies predict falls like the stock engine (the original bug). */
 	TAutoConsoleVariable<bool> CVarRemotePawnSimGravity(
 		TEXT("MO.RemotePawn.SimGravity"), false,
@@ -2815,10 +2818,28 @@ namespace
 void AMOCharacter::OnUpdateSimulatedPosition(const FVector& OldLocation, const FQuat& OldRotation)
 {
 	Super::OnUpdateSimulatedPosition(OldLocation, OldRotation); // resets bSimGravityDisabled, then sets it only if the proxy is encroaching geometry
-	if (GetLocalRole() == ROLE_SimulatedProxy && !CVarRemotePawnSimGravity.GetValueOnGameThread())
+	if (GetLocalRole() != ROLE_SimulatedProxy || CVarRemotePawnSimGravity.GetValueOnGameThread() || bSimGravityDisabled)
+	{
+		return;
+	}
+	// A remote pawn with no floor under it ON THIS MACHINE (its terrain not built here yet) must not predict a fall: it would free-fall forever
+	// (the host's pawn fell to z = -498,790 on clients). But disabling sim gravity on EVERY proxy (until Oct 19) made the engine's SimulateMovement
+	// treat it as stuck and zero its velocity each tick: remote players read as standing still and were never extrapolated between updates (N-160).
+	// So: no gravity only when nothing is under the pawn within reach.
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	UWorld* World = GetWorld();
+	if (!Move || !Move->UpdatedComponent || !Capsule || !World)
 	{
 		bSimGravityDisabled = true;
+		return;
 	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MORemotePawnFloor), false, this);
+	FCollisionResponseParams Response;
+	Move->InitCollisionParams(Params, Response);
+	const FVector Start = GetActorLocation();
+	const FVector End = Start - FVector(0.0, 0.0, Capsule->GetScaledCapsuleHalfHeight() + RemotePawnFloorReachCm);
+	bSimGravityDisabled = !World->LineTraceTestByChannel(Start, End, Move->UpdatedComponent->GetCollisionObjectType(), Params, Response);
 }
 
 void AMOCharacter::SetLoadHold(bool bHold)

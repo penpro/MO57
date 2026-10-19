@@ -62,8 +62,10 @@
   `NotifyControllerChanged` and `OnPlayerStateChanged`). Pawns stand on the TOPMOST of the voxel world's two collision layers, and the render
   chunks' (visibility) collision follows this machine's camera: without it a joiner 1 km from the host stood on coarse terrain up to ~1 m too
   high on the host and was corrected on every move (section 7).
-- A client's simulated copy of a remote pawn must never apply gravity (`AMOCharacter::OnUpdateSimulatedPosition`): with no floor under a
-  proxy the client predicts a fall (the host's pawn free-fell to z = -498,790 on clients). Control: `MO.RemotePawn.SimGravity 1`.
+- A client's simulated copy of a remote pawn must not apply gravity with no floor under it (`AMOCharacter::OnUpdateSimulatedPosition`): the
+  client predicts a fall (the host's pawn free-fell to z = -498,790 on clients). Since Oct 19 (N-160) each position update traces 2 m under the
+  proxy's capsule on this machine: no floor -> sim gravity off; a floor -> the stock simulation (velocity kept, extrapolated between updates).
+  Control: `MO.RemotePawn.SimGravity 1`. Nettest `_remote_pawn_stays_put` + `_remote_pawn_velocity`.
 - PCG removals replicate (`AMOGameState::RemovedInstances`, `Docs/PCG.md` §7). Per-machine actors (lakes) don't replicate (`Docs/Water.md`).
 - **A joiner enters behind the same world-building gate as the host** (Wes, Oct 17).
   * `UMOWorldSeedSubsystem::OnWorldBeginPlay` (client) calls `UMOGameInstance::HoldLoadingOverlayForWorldEntry`: overlay up, owned by
@@ -212,12 +214,13 @@ on a current build is not confirmed yet (N-164). Nothing measured smoothness the
   0.125 s: 0.094 s x 450 = 42 cm), **0 cm** without the hitch. In the first run a 449 ms joiner frame (14 meadow-flower materials
   recompiling, an editor-binary hitch; Shipping has its own: shader / PSO compiles on first sight, streaming) at a turn gave a 230 cm snap.
   Decision for Wes: F25.
-- **Remote players' pawns have velocity 0 on every other machine** (N-160): `AMOCharacter::OnUpdateSimulatedPosition` sets
+- **Remote players' pawns had velocity 0 on every other machine** (N-160, FIXED Oct 19): `AMOCharacter::OnUpdateSimulatedPosition` set
   `bSimGravityDisabled` on every simulated proxy (the fall-through fix in section 3), and the engine's `SimulateMovement` reads that flag as
-  "stuck": it zeroes the proxy's velocity every tick. The proxy is never extrapolated between updates (it moves in steps of the host's
-  update rate, smoothed only by the mesh) and anything reading its velocity sees a standing pawn. Control: `MO.RemotePawn.SimGravity 1` on
-  the joiner -> the host's walking pawn reads 250 cm/s instead of 0. (One screenshot still showed the walking pose, so the animation
-  blueprint does not read only that velocity: the Steam A/B decides how much this matters.)
+  "stuck": it zeroed the proxy's velocity every tick, so the proxy was never extrapolated between updates (it moved in steps of the host's
+  update rate, smoothed only by the mesh) and anything reading its velocity saw a standing pawn. Now the flag is set only when this machine has
+  no floor under the proxy. Verified (nettest `_remote_pawn_velocity`, probe `MO.Test.RemotePawns` on the joiner): the walking host's pawn reads
+  250 cm/s with sim gravity on (0 before); standing, 0 (control); `_remote_pawn_stays_put` still passes (no floor: the copy holds; the stock
+  behaviour falls to z -22,711). A standing pawn keeps the flag from its last update (no updates while it stands).
 - **Small height corrections:** about 2 cm (dz +1.8..2.4, just over the engine's 1.73 cm tolerance) on 0.8% of the joiner's moves, 14%
   with +100 ms emulated lag; never visible (snap <= 2 cm) (N-162).
 - **Replication references per-machine PCG components:** 84 `FNetGUIDCache::SupportsObject ... InstancedStaticMeshComponent

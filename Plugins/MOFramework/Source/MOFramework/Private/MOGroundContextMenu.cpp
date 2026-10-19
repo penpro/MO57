@@ -53,6 +53,7 @@ void UMOGroundContextMenu::InitializeForLocation(FVector WorldLocation, APawn* I
 {
 	TargetLocation = WorldLocation;
 	ForagingPawn = InForagingPawn;
+	PawnLocationAtOpen = InForagingPawn ? InForagingPawn->GetActorLocation() : FVector::ZeroVector;
 
 	// Get foraging subsystem
 	UWorld* World = GetWorld();
@@ -438,6 +439,19 @@ void UMOGroundContextMenu::CheckMousePosition()
 	{
 		MouseOutsideTimer = 0.0f;
 		return;
+	}
+
+	// Walked away (Oct 19): movement keys still move the pawn under this Game-and-UI menu, and the menu used to ride along in the middle of the screen
+	// (the hidden cursor stays on it, so it never timed out), offering to search a spot the player had left.
+	if (const APawn* Pawn = ForagingPawn.Get())
+	{
+		const float MovedCm = FVector::Dist2D(Pawn->GetActorLocation(), PawnLocationAtOpen);
+		if (MovedCm > WalkAwayCloseCm)
+		{
+			UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Closing - the player walked %.0f cm away from where it opened"), MovedCm);
+			RequestClose();
+			return;
+		}
 	}
 
 	const bool bMouseOver = IsMouseOverMenu();

@@ -167,6 +167,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ContextMenu")
 	virtual void RequestClose();
 
+	/**
+	 * Back's fallback when keyboard focus drifted off the popup (AMOPlayerController::HandleBackMenu): closes the newest open context menu this player
+	 * owns and returns true, or returns false when none is open. Every context menu counts itself open from NativeConstruct to NativeDestruct.
+	 */
+	static bool CloseNewestOpenFor(const APlayerController* PC);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

@@ -197,6 +197,10 @@ private:
 	/** The pawn performing the foraging action. */
 	TWeakObjectPtr<APawn> ForagingPawn;
 
+	/** Where the pawn stood when the menu opened: walking further than WalkAwayCloseCm from it closes the menu (it is about the spot the player left). */
+	FVector PawnLocationAtOpen = FVector::ZeroVector;
+	static constexpr float WalkAwayCloseCm = 300.0f;
+
 	/** Calculated search radius based on skill. */
 	float SearchRadius = 0.0f;
 

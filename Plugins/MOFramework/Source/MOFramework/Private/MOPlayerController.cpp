@@ -51,6 +51,7 @@
 #include "MOInventoryUIController.h"
 #include "MOForagingSubsystem.h"
 #include "MOGroundContextMenu.h"
+#include "MOContextMenuBase.h"
 #include "MOCraftingUIController.h"
 #include "MOBuildingUIController.h"
 #include "MOCharacterUIController.h"
@@ -1574,6 +1575,12 @@ void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleBuildingMenu();
+		// Tutorial_BuildControls' first step reads "Open the build menu": opening it is the step (until Oct 19 only picking a recipe -- entering placement
+		// -- counted, so the tracker sat at 0/1 with the menu open in front of the player). Placement still fires the same event for the hotkey path.
+		if (UIManagerComponent->IsBuildingMenuOpen())
+		{
+			BroadcastTutorialEvent(TEXT("OpenedBuildMenu"));
+		}
 	}
 }
 
@@ -1619,6 +1626,13 @@ void AMOPlayerController::HandleBackMenu(const FInputActionValue& Value)
 	//   - Nothing open → open the in-game system menu.
 	//
 	// Does NOT pause. MO57 is real-time — see Docs/PAUSE_POLICY.md.
+	//
+	// A context menu (the forage / ghost / station / survivor popups) is the topmost thing on screen, so Back closes it first. Its own key handler does that
+	// while it has keyboard focus; this is the path when focus drifted to the viewport -- until Oct 19 it opened the system menu over the popup.
+	if (UMOContextMenuBase::CloseNewestOpenFor(this))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		if (UIManagerComponent->IsAnyMenuOpen())

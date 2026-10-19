@@ -7,6 +7,8 @@
 #include "MOCraftingSubsystem.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -532,6 +534,18 @@ void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName T
 	// (CheckQuestCompletion may remove from ActiveQuests, invalidating iteration)
 	TArray<FName> QuestsToCheck;
 
+	// An item objective may name a kind of item -- one of the item definitions' Tags -- instead of one item: "Collect 10 sticks" counts a green branch
+	// (Stick01) and a stripped one (Stick02) alike. Until Oct 19 only the one id counted, so the fallen branches lying around never moved the tutorial.
+	TArray<FName> ItemTags;
+	if (Type == EMOObjectiveType::ItemPickup || Type == EMOObjectiveType::ItemCraft || Type == EMOObjectiveType::ItemDrop)
+	{
+		FMOItemDefinitionRow ItemDef;
+		if (UMOItemDatabaseSettings::GetItemDefinition(TargetId, ItemDef))
+		{
+			ItemTags = ItemDef.Tags;
+		}
+	}
+
 	// Iterate all active quests
 	for (auto& Pair : ActiveQuests)
 	{
@@ -568,8 +582,8 @@ void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName T
 				}
 			}
 
-			// Check type and target match
-			if (Objective.Type == Type && Objective.TargetEventOrId == TargetId)
+			// Check type and target match (an item objective's target may be one of the item's tags)
+			if (Objective.Type == Type && (Objective.TargetEventOrId == TargetId || ItemTags.Contains(Objective.TargetEventOrId)))
 			{
 				UpdateObjectiveProgress(State, Objective, Count);
 				bProgressMade = true;

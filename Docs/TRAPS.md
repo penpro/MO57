@@ -172,9 +172,13 @@
   hit** (trees hid the terrain: use object-type traces); **a client predicts gravity for a simulated proxy with no floor** (never apply it);
   **vacuous checks** ("client z == server z" with no client terrain) need a negative control (`--skew-seed`); a UI request on the server's copy of
   a joiner's controller opens nowhere (`ForwardUIContractRequest`); dropped items need ECC_PhysicsBody in object queries.
-- **A remote player's pawn reads velocity 0 on every other machine** -> `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled`
-  on every proxy, and the engine's `SimulateMovement` treats that flag as "stuck" and zeroes the velocity every tick (no extrapolation;
-  anything reading velocity sees a standing pawn) -> control `MO.RemotePawn.SimGravity 1`; open N-160. (Oct 17)
+- **`bSimGravityDisabled` on a simulated proxy zeroes its velocity** -> the engine's `SimulateMovement` treats that flag as "stuck" (no
+  extrapolation; anything reading velocity sees a standing pawn). Set it only when the proxy has no floor on this machine
+  (`AMOCharacter::OnUpdateSimulatedPosition`, N-160 fixed Oct 19); probe `MO.Test.RemotePawns`. (Oct 17 / 19)
+- **A context popup in a BACKGROUND -game window closes itself in 0.15 s** -> `UMOGroundContextMenu` auto-closes when the real cursor is
+  off it, and a window that isn't in front never gets the cursor warp: bring it to the front with the cursor on the popup
+  (`win_input.ps1 -Action move`) before testing anything that needs the popup open; `MOUI_LOG` lines are compiled out of these builds, so
+  prove a popup is open or closed with `MO.Test.FindWidget <its button text>`. (Oct 19)
 - **A joiner hitch of 250 ms or more while moving = a rubber band** -> the host extrapolates a joiner that sends no moves
   (`AGameNetworkManager::MAXCLIENTUPDATEINTERVAL` 0.25) and corrects it when it comes back: 500 ms hitch at 450 cm/s -> 124 cm, 3/3 ->
   `set GameNetworkManager MAXCLIENTUPDATEINTERVAL 0` on the host leaves 42 cm (`p.NetServerMaxMoveDeltaTimeScalar` 1.75); fork F25. (Oct 17)

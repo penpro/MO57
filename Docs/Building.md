@@ -40,6 +40,9 @@
 - Server checks (Oct 18 re-check of the July H19 note): `ServerPlaceBuilding` holds the transform to the pawn's reach
   (`MaxPlacementDistance + ServerMaxPlacementMargin`); build requests need the pawn within `MaxBuildRequestReachCm`. Not re-checked on the
   server: collision, slope, recipe knowledge (BACKLOG N-171, low priority for friends-only co-op).
+- **A building's SKILL line is shown, not enforced** (found Oct 19): the menu reads e.g. "Smithing: 0/30" in red for the Forge, yet a new player
+  places its ghost at minute 1, and neither placement nor construction checks a skill. Forge and Bloomery are listed from the start. What the
+  requirement should do is fork F31 (DECISIONS): enforcing it as written deadlocks the metal era (Smithing is trained almost only at a Forge).
 
 ## 3. How a building looks
 

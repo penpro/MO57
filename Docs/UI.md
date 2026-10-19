@@ -143,6 +143,12 @@ if (MyButton)
 - **Input actions are handled in C++** in `AMOPlayerController` (`SetupInputComponent`; raw keys Enhanced Input can't bind in `InputKey`).
   Key map (IMC_MODefault): I inventory, K skills, Esc / Tab back-menu, C craft, B build, E interact, P possess, Y status, T terraform
   toggle, R terraform cycle, F1 HUD mode, LeftCtrl crouch, LeftShift hustle, Space jump, Tilde dev console.
+- **Back closes the topmost thing, context menus first** (Oct 19): a context menu (`UMOContextMenuBase`: forage, ghost, station, survivor,
+  keep-on-harvest, world action) closes itself on Esc / Tab while it has keyboard focus; when focus drifted to the viewport,
+  `AMOPlayerController::HandleBackMenu` asks `UMOContextMenuBase::CloseNewestOpenFor` first (every context menu counts itself open from
+  NativeConstruct to NativeDestruct). Before, Back opened the system menu over the popup.
+- **The forage (ground) menu closes when the player walks away** (Oct 19): movement keys still move the pawn under a Game-and-UI popup, and the
+  hidden cursor stays on it, so it never timed out; it now closes once the pawn is 3 m from where it opened (`UMOGroundContextMenu::CheckMousePosition`).
 
 ## 3. Activation, stacks and the HUD
 
@@ -166,6 +172,12 @@ if (MyButton)
   sequential Rotate objective and a required non-sequential PlaceGhost objective, so the quest completes when the first ghost is placed,
   rotated or not (Oct 18, N-083: the hint used to come back after the first build and stay). Test
   `MOFramework.Quest.TutorialHint.FreshGameStartsWithMovement` reads the live DT_Quests.
+- Its first step, "Open the build menu" (event `OpenedBuildMenu`), fires when the B key OPENS the menu (`AMOPlayerController::HandleBuild`; Oct 19:
+  only entering placement fired it, so the tracker sat at 0/1 with the menu open). Entering placement still fires it.
+- **An item objective may name a kind of item** (Oct 19): `ItemPickup` / `ItemCraft` / `ItemDrop` match the item id OR one of the item
+  definition's `Tags` (`UMOQuestSubsystem::ProcessEventForObjectives`). "Collect Fallen Branches" targets `Stick` (Stick01 green branch, Stick02
+  stripped branch -- the ground has both; only Stick01 counted before) and "Harvest Bark" targets `Bark` (Bark01, BirchBark01, OakBark01).
+  A new member of a kind needs only the tag on its DT_Items row. Test `MOFramework.Quest.ItemObjectiveCountsItsKind`.
 ### In-game menu: Save, Load and the exits (one save per world, Oct 17)
 - **Save** (`UMOInGameMenu::HandleSaveClicked`) saves this world to its own slot immediately: `OnSaveRequested` with an empty slot name ->
   `UMOSystemMenuUIController::HandleSaveRequested` -> `SaveThisWorld`, plus a toast ("World saved" / "The host saves this world" /

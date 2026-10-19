@@ -26,6 +26,7 @@
 #include "ISMPartition/ISMComponentDescriptor.h"
 #include "Async/ParallelFor.h"
 #include "Helpers/PCGHelpers.h"
+#include <atomic>
 
 #define LOCTEXT_NAMESPACE "MOPCGBiomeSpawner"
 
@@ -261,6 +262,18 @@ void MOPCGBiomeSpawner::ApplyNearDrawFloor(FISMComponentDescriptorBase& Descript
 	}
 	Descriptor.InstanceMinDrawDistance = FMath::RoundToInt(MinDistanceCm);
 	Descriptor.InstanceEndCullDistance = FMath::Max(Descriptor.InstanceEndCullDistance, NearFloorEndCullCm);
+}
+
+namespace
+{
+	std::atomic<int32> GBiomeSpawnerRuns{0};
+	std::atomic<int64> GBiomeSpawnerAccepted{0};
+}
+
+void MOPCGBiomeSpawner::GetRunTotals(int32& OutRuns, int64& OutAccepted)
+{
+	OutRuns = GBiomeSpawnerRuns.load();
+	OutAccepted = GBiomeSpawnerAccepted.load();
 }
 
 namespace
@@ -1035,6 +1048,8 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 	}
 	Context->BuildMs += (FPlatformTime::Seconds() - SliceStart) * 1000.0;
 
+	++GBiomeSpawnerRuns;
+	GBiomeSpawnerAccepted += Context->TotalAccepted;
 	// Per-bucket breakdown so density tuning reads from the log, not guesses. ms = the planting slice; build = the game-thread time of every build slice (slices = frames it took).
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (build %.1f in %d slice(s) worst batch %.1f; %s) inBounds=%s |%s"),

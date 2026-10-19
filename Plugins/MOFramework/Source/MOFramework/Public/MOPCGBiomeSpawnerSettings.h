@@ -67,6 +67,10 @@ namespace MOPCGBiomeSpawner
 	 * NaniteResources.cpp, InstancedStaticMesh.cpp) -- so a minimum alone is silently ignored. The start distance stays 0 (a start turns on the classic proxy's per-instance fade). 0 = no floor.
 	 */
 	MOFRAMEWORK_API void ApplyNearDrawFloor(FISMComponentDescriptorBase& Descriptor, float MinDistanceCm);
+
+	/** Process-wide tallies of the spawner's finished runs (each logged [MOBiomeSpawner] summary): how many ran and how many instances they planted. Diagnostics only --
+	 *  MOReadiness reports them when the ground around a new player stays bare, so a world that grew nothing says whether the spawner ran at all. */
+	MOFRAMEWORK_API void GetRunTotals(int32& OutRuns, int64& OutAccepted);
 }
 
 /**

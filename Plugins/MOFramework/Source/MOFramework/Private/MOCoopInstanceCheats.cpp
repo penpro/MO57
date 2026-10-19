@@ -13,6 +13,7 @@
 //   MO.Test.Inspect <ItemId>                         the inventory's Inspect on the first carried item of that kind (UMOUIManagerComponent::StartItemInspection), next tick
 //   MO.Test.SurvivorCommand <FollowMe|StayHere|SetHome|GoHome|Job <JobType>>  the survivor menus' order to the nearest recruited survivor
 //                                                    (FMOSurvivorCommands::Submit), next tick
+//   MO.Test.RemotePawns                              every OTHER player's pawn as THIS machine simulates it: speed, sim gravity off, floor (N-160)
 //
 // Instance names and indices differ per machine (MOInstanceRef.h), so every verb names an instance by mesh + world location.
 
@@ -25,6 +26,10 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerState.h"
+#include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
 #include "UObject/UObjectIterator.h"
@@ -161,6 +166,28 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] GROUND_ITEM i=%d item=%s mesh=%s at=%.1f,%.1f,%.1f dist=%.0f"),
 					K, *F.Item.ToString(), *F.Mesh, F.At.X, F.At.Y, F.At.Z, F.Dist);
 			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GRemotePawnsCmd(
+		TEXT("MO.Test.RemotePawns"),
+		TEXT("Test: every other player's pawn as THIS machine simulates it (a client's simulated proxies): its speed, whether sim gravity is off, its movement mode. Logs [MOTEST] REMOTE_PAWN lines. Usage: MO.Test.RemotePawns"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Count = 0;
+			for (TActorIterator<ACharacter> It(World); It; ++It)
+			{
+				ACharacter* Other = *It;
+				if (Other->IsLocallyControlled() || !Other->GetPlayerState())
+				{
+					continue;   // this machine's own player, or a pawn no player drives
+				}
+				const UCharacterMovementComponent* Move = Other->GetCharacterMovement();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] REMOTE_PAWN name=%s role=%s speed=%.0f simGravityOff=%d mode=%s at=%s"),
+					*Other->GetName(), *UEnum::GetValueAsString(Other->GetLocalRole()), Other->GetVelocity().Size2D(), Other->bSimGravityDisabled ? 1 : 0,
+					Move ? *UEnum::GetValueAsString(Move->MovementMode.GetValue()) : TEXT("-"), *Other->GetActorLocation().ToCompactString());
+				++Count;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] REMOTE_PAWNS n=%d"), Count);
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GInstanceAtCmd(

@@ -65,10 +65,32 @@ UMOContextMenuBase::UMOContextMenuBase(const FObjectInitializer& ObjectInitializ
 	// They use AddToViewport() and handle their own key events via NativeOnKeyDown
 }
 
+namespace
+{
+	/** The context menus on screen, oldest first (CloseNewestOpenFor). */
+	TArray<TWeakObjectPtr<UMOContextMenuBase>> GOpenContextMenus;
+}
+
+bool UMOContextMenuBase::CloseNewestOpenFor(const APlayerController* PC)
+{
+	for (int32 I = GOpenContextMenus.Num() - 1; I >= 0; --I)
+	{
+		UMOContextMenuBase* Menu = GOpenContextMenus[I].Get();
+		if (Menu && Menu->IsInViewport() && (!PC || Menu->GetOwningPlayer() == PC))
+		{
+			MOUI_LOG(Menu, "ContextMenu", "  %s: closed by Back (focus was elsewhere)", *Menu->GetName());
+			Menu->RequestClose();
+			return true;
+		}
+	}
+	return false;
+}
+
 void UMOContextMenuBase::NativeConstruct()
 {
 	MOUI_LOG(this, "ContextMenu", "CONSTRUCT  %s", *GetName());
 	Super::NativeConstruct();
+	GOpenContextMenus.Add(this);
 
 	TimeSinceConstruct = 0.0f;
 
@@ -119,6 +141,7 @@ void UMOContextMenuBase::NativeConstruct()
 void UMOContextMenuBase::NativeDestruct()
 {
 	MOUI_LOG(this, "ContextMenu", "DESTRUCT   %s", *GetName());
+	GOpenContextMenus.RemoveAll([this](const TWeakObjectPtr<UMOContextMenuBase>& Menu) { return !Menu.IsValid() || Menu.Get() == this; });
 
 	// Always unregister the click-outside handler before tearing down. Leaving
 	// it registered after destruction would still be safe (it holds a weak

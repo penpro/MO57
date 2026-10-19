@@ -1215,3 +1215,13 @@ Built cave entrances (F30 A) in MOFrameworkCore MOWorldGen.h/.cpp + MOWorldGenCa
 Status: PROGRESS (batch 3 commit) + RELEASE (build window, instances, the CL-0110 files)
 References: CL-0110
 Batch 3 verified (suite 328 / 0; host + joiner pass; a corrective build for one fix found in the pass): a dead body has no mind (job queue cancelled, AI removed, UnPossessed never re-minds a corpse); N-155 bodies persist with their gear through a load; load possession skips deceased records; Continue's successor excludes other players' pawns (joiner respawns directly); refuel failure reasons; "A survivor" instead of an actor name in notices.
+
+### 2026-10-19 02:37 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0112
+Status: CLAIM (batch 4: the files below, the editor briefly for DT_Items / DT_Quests rows, then ONE build window, headless automation, instances acthost / actclient)
+References: CL-0111
+Batch 4 from a first-ten-minutes playtest (N-078): the build menu's opening ticks "Open the build menu" (MOPlayerController.cpp); an item objective may name an item tag ("Stick" counts Stick01 + Stick02; "Bark" every bark: MOQuestSubsystem.cpp, MOQuestTypes.h, DT_Items Tags, DT_Quests GatherSticks / GatherBark targets); a bare-ground load reports whether the biome spawner ran (MOWorldReadinessSubsystem.h/.cpp, MOPCGBiomeSpawnerSettings.h/.cpp); the forage menu closes when the player walks away (MOGroundContextMenu.h/.cpp); Back closes an open context menu before opening the system menu (MOContextMenuBase.h/.cpp, MOPlayerController.cpp); N-160 remote pawns keep their velocity (MOCharacter.cpp; probe MO.Test.RemotePawns in MOCoopInstanceCheats.cpp); Tools/ue_inst.py keeps game.prev.log. Tests in Tests/MOFrameworkTests.cpp.
+
+### 2026-10-19 03:07 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0113
+Status: PROGRESS (batch 4 commit) + RELEASE (the CL-0112 files; build window and instances free except acthost, a playtest instance)
+References: CL-0112
+Batch 4 verified (suite 329 / 0; host + joiner pass: nettest `_client_inspect`, `_remote_pawn_velocity` (new), `_remote_pawn_stays_put` PASS; host / joiner checks for the build-menu step, Stick02 counting on both machines, the forage popup closing at 303 cm, Back closing a popup; the NO VEGETATION report forced by a control). Docs: UI, Coop §7, TRAPS, PCG §8, TOOLING, Building, DECISIONS F31, BugReports, BACKLOG. Next: batch 5 from the playtest (drink reach first: MOPlayerController.cpp FindWaterAtCrosshair).

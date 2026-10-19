@@ -95,7 +95,8 @@ struct MOFRAMEWORK_API FMOQuestObjective
 	/**
 	 * Target to match for completion.
 	 * - Event: Event name (e.g., "CraftingMenuOpened")
-	 * - ItemCraft/Pickup/Drop: ItemId (e.g., "Stick01")
+	 * - ItemCraft/Pickup/Drop: ItemId (e.g., "Stick01"), or one of the item definitions' Tags (e.g., "Stick": any item tagged Stick counts -- "collect sticks"
+	 *   means a green branch or a stripped one; Oct 19)
 	 * - SkillLevelUp: SkillId (e.g., "Woodcutting")
 	 * - LocationReach: Location tag
 	 * - Custom: Ignored (use manual reporting)

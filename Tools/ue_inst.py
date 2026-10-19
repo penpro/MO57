@@ -105,6 +105,12 @@ def start(name, uproject, editor_exe, **kw):
         raise RuntimeError(f"instance {name!r} is already running (pid {pid}); `ue.py inst stop {name}` first")
     d = inst_dir(name)
     os.makedirs(d, exist_ok=True)
+    # The last run's log survives one restart as game.prev.log: a one-off failure (an empty world, a crash) found only after a
+    # restart keeps its evidence (Oct 19: a world with no vegetation lost its log to the restart that checked it).
+    try:
+        os.replace(game_log(name), os.path.join(d, "game.prev.log"))
+    except OSError:
+        pass
     for f in ("ue_cmd.txt", "ue_out.txt", "game.log"):
         try:
             os.remove(os.path.join(d, f))
@@ -2737,9 +2743,31 @@ def _client_ground(client, on):
                    f"out('GROUND {flag} actors=%d' % len(n))")
 
 
+def _remote_pawn_velocity(rep, host, client):
+    """N-160: a remote player's pawn read velocity 0 on every other machine. Sim gravity was switched off on EVERY proxy (the fall-through fix below), and the
+    engine's SimulateMovement reads that as "stuck": velocity zeroed each tick, no extrapolation between updates. Since Oct 19 only a proxy with no floor under it
+    on this machine has it off. The HOST walks; the JOINER reads its copy of the host's pawn (MO.Test.RemotePawns). CONTROL: standing, it reads ~0."""
+    def sample():
+        off = log_size(client)
+        console(client, "MO.Test.RemotePawns")
+        m = wait_log(client, r"REMOTE_PAWN name=\S+ role=\S+ speed=(\d+) simGravityOff=(\d) mode=(\S+)", since=off, timeout=5)
+        return (int(m.group(1)), int(m.group(2)), m.group(3)) if m else None
+
+    still = sample()
+    rep.step("CONTROL: the joiner reads the standing host's pawn at about 0 cm/s", bool(still) and still[0] < 30, str(still))
+    console(host, "MO.Test.MoveFor 0 1 6.0")
+    time.sleep(1.5)
+    walking = [sample() for _ in range(3)]
+    seen = [w for w in walking if w]
+    rep.step("joiner: the walking host's pawn reads a walking speed (not 0), with sim gravity on",
+             bool(seen) and max(w[0] for w in seen) >= 150 and all(w[1] == 0 for w in seen), str(walking))
+    time.sleep(4)   # the walk ends before the next case
+
+
 def _remote_pawn_stays_put(rep, host, client):
     """The bug Wes reported ("the client can't see the host's pawn"), second half: a CLIENT draws the host's pawn as a simulated proxy; with no floor under it the engine predicts a fall,
-    and a pawn that stands still gets no position updates to correct that -- it fell at terminal velocity for ever (z=-498790 after a minute). Gravity is never simulated on a proxy now.
+    and a pawn that stands still gets no position updates to correct that -- it fell at terminal velocity for ever (z=-498790 after a minute). Gravity is never simulated on a
+    proxy with no floor under it on the client (Oct 19, N-160: one WITH a floor simulates it, so it keeps its velocity -- _remote_pawn_velocity).
     No local floor is made by switching the client's voxel collision off. CONTROL: MO.RemotePawn.SimGravity 1 (the stock engine behaviour) must make the copy fall, so the check can fail."""
     p = _pawn_xyz(host, 0)
     if not rep.step("host: located its own pawn", bool(p), str(p)):
@@ -3061,7 +3089,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_velocity, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

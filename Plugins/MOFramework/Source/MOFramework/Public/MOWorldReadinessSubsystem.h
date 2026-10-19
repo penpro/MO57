@@ -151,6 +151,9 @@ private:
 	/** The last load's vegetation stage hit its cap with PCG still working, and how much stood near the camera then. */
 	bool bLastVegetationCapped = false;
 	int32 LastCappedNearCount = 0;
+	/** The biome spawner's process-wide run totals when this load's vegetation stage began (MOPCGBiomeSpawner::GetRunTotals): the "nothing grew" report gives this load's share. */
+	int32 VegetationStartSpawnerRuns = 0;
+	int64 VegetationStartSpawnerAccepted = 0;
 	double NextTraceSeconds = 0.0;
 
 	FTimerHandle PollTimerHandle;
