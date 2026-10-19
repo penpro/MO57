@@ -154,6 +154,13 @@
 
 ## 6. Co-op and RPC
 
+- **A joiner's own death showed nothing on the joiner** -> the death ran server-side only (anatomy events fire on the server) -> a
+  replicated record + one "enter dead state" routine run by the server and by every client's OnRep (`FMODeathRecord`, Oct 18). Any
+  state change a player must SEE on their own machine needs a replicated trigger, not a server-side broadcast.
+- **A per-pawn delegate binding (the death recap) silently stopped firing on a joiner** -> a possession settle unpossessed and re-possessed
+  the pawn and the client got no pawn-changed callback to rebind -> listen to a global event (`AMOCharacter::OnAnyPawnDied`) and filter.
+- **A Client RPC "reached" the host instead of the joiner in a test** -> it was sent from inside an editor-Python call (trap 2 in §3:
+  such RPCs run locally) -> drive it from a console verb that defers a tick (`MO.Test.SurvivorCommand`, `MO.Fire.Do`).
 - **A joiner's UI keeps an item, job or condition the server already removed ("Simple Cordage (2/2)" with 0 carried)** -> FastArray
   `PostReplicatedAdd` / `PostReplicatedChange` / `PreReplicatedRemove` run while removed entries are still in the array, and there is no
   array-level `PostReplicatedRemove` (ours never ran) -> whole-list notifications go in `PostReplicatedReceive`, once per receive

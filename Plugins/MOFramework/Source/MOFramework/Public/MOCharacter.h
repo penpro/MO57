@@ -181,6 +181,9 @@
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnPawnDied, AMOCharacter*, DeadCharacter, EMOBodyPartType, CausePart);
 
+/** Every character's death, on every machine where it enters the dead state (AMOCharacter::OnAnyPawnDied). */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FMOOnAnyPawnDied, AMOCharacter* /*DeadCharacter*/, EMOBodyPartType /*CausePart*/);
+
 /**
  * What killed a character, told apart at the source (the body part alone cannot: a drowning read "Brain destroyed", a bleed-out "None destroyed").
  * Set by AMOCharacter::DieOf before the one death path runs; read with GetDeathCause (the death recap does).
@@ -198,6 +201,30 @@ enum class EMODeathCause : uint8
 	CardiacArrest,
 	/** Breathing / oxygenation failed until the heart followed. */
 	RespiratoryFailure,
+};
+
+/**
+ * A death as every machine sees it: the server writes it once (AMOCharacter::HandleInstantDeath) and each client enters the dead state from
+ * it (OnRep_DeathRecord -> EnterDeadState). Before Oct 18 the whole death ran on the server only: a joiner who died got no death recap
+ * and stayed upright on every screen (N-064).
+ */
+USTRUCT()
+struct FMODeathRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	bool bDead = false;
+
+	UPROPERTY()
+	EMODeathCause Cause = EMODeathCause::BodyPartDestroyed;
+
+	UPROPERTY()
+	EMOBodyPartType Part = EMOBodyPartType::None;
+
+	/** Who dealt the last wound before the death ("Wolf", a survivor's name); empty = no attacker (drowning, illness, a fall). N-169. */
+	UPROPERTY()
+	FText KillerName;
 };
 
 /**
@@ -544,6 +571,18 @@ public:
 
 	/** The body part tied to the death (the destroyed part; Brain / Heart / LungLeft for the systemic causes). */
 	EMOBodyPartType GetDeathCausePart() const { return DeathCausePart; }
+
+	/** Who killed this character ("Wolf", a survivor's name); empty when nothing did (drowning, illness). Replicated with the death. */
+	FText GetDeathKillerName() const { return DeathRecord.KillerName; }
+
+	/**
+	 * Every death, broadcast right after the dead character's own OnPawnDied, on the server and on every client. A listener that cares about
+	 * ONE pawn (the local player's death recap) filters here instead of binding to that pawn: a joiner's per-pawn binding was dropped by a
+	 * possession settle (unpossess + re-possess with no pawn-changed callback on the client) and its recap never opened (Oct 18).
+	 */
+	static FMOOnAnyPawnDied OnAnyPawnDied;
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** THE death path with its cause: records it, then runs HandleInstantDeath (virtual: creatures add their own teardown). Single-fire. */
 	void DieOf(EMODeathCause Cause, EMOBodyPartType Part);
@@ -1368,9 +1407,20 @@ protected:
 	/** Handle interaction from another pawn for recruitment. */
 	bool HandleRecruitmentInteraction(AController* InteractorController);
 
-	/** Handle instant death from anatomy (vital organ destroyed or blood loss). */
+	/** Handle instant death from anatomy (vital organ destroyed or blood loss). Server: records the death, then EnterDeadState. */
 	UFUNCTION()
 	virtual void HandleInstantDeath(EMOBodyPartType CausePart);
+
+	/** The dead state, run on the server AND on every client (from the replicated record): OnPawnDied (the death recap), input, movement,
+	 *  collision, ragdoll. The server-only parts (the save's deceased record, the Death interrupt) stay in HandleInstantDeath's authority path. */
+	void EnterDeadState(EMOBodyPartType CausePart);
+
+	/** Replicated once at death; clients enter the dead state from it (N-064). */
+	UPROPERTY(ReplicatedUsing=OnRep_DeathRecord)
+	FMODeathRecord DeathRecord;
+
+	UFUNCTION()
+	void OnRep_DeathRecord();
 
 	// ============================================================================
 	// DEATH AND RAGDOLL

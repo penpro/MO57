@@ -4,6 +4,8 @@
 #include "MOIdentityComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOCraftingQueueComponent.h"
+#include "MOPlayerController.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
 UMOSurvivorJobQueueComponent::UMOSurvivorJobQueueComponent()
@@ -40,6 +42,7 @@ void UMOSurvivorJobQueueComponent::GetLifetimeReplicatedProps(TArray<FLifetimePr
 	DOREPLIFETIME(UMOSurvivorJobQueueComponent, JobQueue);
 	DOREPLIFETIME(UMOSurvivorJobQueueComponent, HomeLocation);
 	DOREPLIFETIME(UMOSurvivorJobQueueComponent, HomeBuildingGuid);
+	DOREPLIFETIME(UMOSurvivorJobQueueComponent, LastFailure);
 }
 
 // ============================================================================
@@ -442,6 +445,11 @@ void UMOSurvivorJobQueueComponent::UpdateJobProgress(const FGuid& JobId, float P
 
 void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 {
+	CompleteCurrentJobWithReason(bSuccess, FText::GetEmpty());
+}
+
+void UMOSurvivorJobQueueComponent::CompleteCurrentJobWithReason(bool bSuccess, const FText& FailureReason)
+{
 	if (!GetOwner()->HasAuthority())
 	{
 		return;
@@ -455,6 +463,19 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 
 	const FGuid JobId = CurrentJob->JobId;
 	const FMOSurvivorJobEntry Removed = *CurrentJob;
+
+	// What the players are told (N-090): a failed job leaves the queue right below, so this is the only trace of it they get.
+	if (bSuccess)
+	{
+		LastFailure = FMOSurvivorJobFailure();
+	}
+	else
+	{
+		const FMOSurvivorJobDefinitionRow* JobDef = GetJobDefinitionPtr(Removed.JobType);
+		LastFailure.JobName = JobDef ? JobDef->DisplayName : UEnum::GetDisplayValueAsText(Removed.JobType);
+		LastFailure.Why = FailureReason;
+		NotifyPlayersOfFailure();
+	}
 	CurrentJob->State = bSuccess ? EMOSurvivorJobState::Completed : EMOSurvivorJobState::Failed;
 	CurrentJob->Progress = bSuccess ? 1.0f : CurrentJob->Progress;
 
@@ -473,6 +494,42 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJob(bool bSuccess)
 
 	OnJobCompleted.Broadcast(JobId, bSuccess);
 	OnQueueChanged.Broadcast();
+}
+
+void UMOSurvivorJobQueueComponent::NotifyPlayersOfFailure()
+{
+	UWorld* World = GetWorld();
+	if (!World || !GetOwner() || !LastFailure.IsSet())
+	{
+		return;
+	}
+	FText Who = FText::FromString(GetOwner()->GetName());
+	if (const UMOIdentityComponent* Identity = GetOwner()->FindComponentByClass<UMOIdentityComponent>(); Identity && !Identity->DisplayName.IsEmpty())
+	{
+		Who = Identity->DisplayName;
+	}
+	const FText Job = LastFailure.JobName.ToLower();
+	const FText Message = LastFailure.Why.IsEmpty()
+		? FText::Format(NSLOCTEXT("MOSurvivorJobs", "JobFailed", "{0} couldn't {1}."), Who, Job)
+		: FText::Format(NSLOCTEXT("MOSurvivorJobs", "JobFailedWhy", "{0} couldn't {1}: {2}"), Who, Job, LastFailure.Why);
+
+	const FString Key = Message.ToString();
+	const double Now = FPlatformTime::Seconds();
+	if (Key == LastFailureNoticeKey && Now - LastFailureNoticeSeconds < 60.0)
+	{
+		return;   // the colony retrying the same job: one notice a minute is enough
+	}
+	LastFailureNoticeKey = Key;
+	LastFailureNoticeSeconds = Now;
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] Job failed: %s"), *Key);
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (AMOPlayerController* PC = Cast<AMOPlayerController>(It->Get()))
+		{
+			PC->ClientShowNotification(Message, 5.0f, EMONotificationType::Warning);
+		}
+	}
 }
 
 void UMOSurvivorJobQueueComponent::CompleteCurrentIteration()

@@ -26,6 +26,18 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
+namespace MOSurvivorJobWhy
+{
+	// What a player reads when a survivor's job fails (N-090). The BT gather / forage tasks use the same keys.
+	FText NothingToGather() { return NSLOCTEXT("MOSurvivorJobs", "NothingToGather", "found nothing to gather nearby"); }
+	FText CantReach() { return NSLOCTEXT("MOSurvivorJobs", "CantReach", "couldn't get there"); }
+	FText StationGone() { return NSLOCTEXT("MOSurvivorJobs", "StationGone", "the station is gone"); }
+	FText StorageGone() { return NSLOCTEXT("MOSurvivorJobs", "StorageGone", "the storage is gone"); }
+	FText NoIngredients() { return NSLOCTEXT("MOSurvivorJobs", "NoIngredients", "the ingredients aren't in the storage"); }
+	FText CraftCancelled() { return NSLOCTEXT("MOSurvivorJobs", "CraftCancelled", "the craft was cancelled"); }
+	FText NothingLeftToDig() { return NSLOCTEXT("MOSurvivorJobs", "NothingLeftToDig", "there is nothing left to dig there"); }
+}
+
 void AMOSurvivorController::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 {
 	Super::GatherRuntimeAssets(Out);
@@ -692,7 +704,7 @@ void AMOSurvivorController::StartSimpleJobExecution()
 			// No resources found
 			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] No gather resources found for job type %d"),
 				static_cast<int32>(CurrentJob.JobType));
-			CompleteSimpleJob(false);
+			FailSimpleJob(MOSurvivorJobWhy::NothingToGather());
 			return;
 		}
 	}
@@ -871,8 +883,17 @@ void AMOSurvivorController::CompleteSimpleJobIteration(const FGuid& ExpectedJobI
 	else StartSimpleJobExecution();
 }
 
+void AMOSurvivorController::FailSimpleJob(const FText& Why)
+{
+	PendingFailureWhy = Why;
+	CompleteSimpleJob(false);
+}
+
 void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 {
+	// The reason belongs to this completion only (a success, or a failure nobody explained, reports none).
+	const FText FailureWhy = bSuccess ? FText::GetEmpty() : PendingFailureWhy;
+	PendingFailureWhy = FText::GetEmpty();
 	const FGuid CompletedJobId = CurrentJob.JobId;
 	ReleaseCraftJob(!bSuccess);
 	SimpleJobState = 0;
@@ -904,7 +925,7 @@ void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	if (JobQueue && CurrentJob.IsValid() && JobQueue->GetCurrentJob().JobId == CompletedJobId)
 	{
-		JobQueue->CompleteCurrentJob(bSuccess);
+		JobQueue->CompleteCurrentJobWithReason(bSuccess, FailureWhy);
 	}
 
 	bIsProcessingJob = false;
@@ -1239,7 +1260,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 	case 10: // moving to storage (withdraw leg)
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 11;
@@ -1259,11 +1280,11 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 			{
 				if (!TransferCraftIngredients())
 				{
-					CompleteSimpleJob(false);
+					FailSimpleJob(MOSurvivorJobWhy::NoIngredients());
 					return;
 				}
 				AActor* Station = CraftStationActor.Get();
-				if (!Station) { CompleteSimpleJob(false); return; }
+				if (!Station) { FailSimpleJob(MOSurvivorJobWhy::StationGone()); return; }
 				SimpleJobState = 12;
 				MoveLegBestDistance = FLT_MAX;
 				MoveLegNoProgressSeconds = 0.0f;
@@ -1279,7 +1300,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 	case 12: // moving to station
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				UMOCraftingQueueComponent* CraftQueue = ControlledPawn->FindComponentByClass<UMOCraftingQueueComponent>();
@@ -1306,7 +1327,14 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				{
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft enqueue failed for %s"),
 						*CraftJobRecipeId.ToString());
-					CompleteSimpleJob(false);
+					FText Why;
+					if (const UMOCraftingSubsystem* Crafting = GetWorld() ? GetWorld()->GetSubsystem<UMOCraftingSubsystem>() : nullptr)
+					{
+						Why = Crafting->CanCraftRecipeAtStation(CraftJobRecipeId, ControlledPawn->FindComponentByClass<UMOKnowledgeComponent>(),
+							ControlledPawn->FindComponentByClass<UMOSkillsComponent>(), ControlledPawn->FindComponentByClass<UMOInventoryComponent>(),
+							CraftStationActor.Get()).FailureReason;
+					}
+					FailSimpleJob(Why);
 					return;
 				}
 				SimpleJobState = 13;
@@ -1337,7 +1365,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 			if (!bJobCraftCompleted && !CraftQueue->GetQueueEntry(CraftQueueEntryId, OwnedEntry))
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Owned craft was cancelled before completion"));
-				CompleteSimpleJob(false);
+				FailSimpleJob(MOSurvivorJobWhy::CraftCancelled());
 				return;
 			}
 			if (bJobCraftCompleted)
@@ -1346,7 +1374,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				if (CraftQueue->GetPendingMaterialLotCount() > 0) break;
 				// Craft finished - outputs are in the pawn inventory. Head back.
 				AActor* Storage = CraftStorageActor.Get();
-				if (!Storage) { CompleteSimpleJob(false); return; }
+				if (!Storage) { FailSimpleJob(MOSurvivorJobWhy::StorageGone()); return; }
 				SimpleJobState = 14;
 				MoveLegBestDistance = FLT_MAX;
 				MoveLegNoProgressSeconds = 0.0f;
@@ -1374,7 +1402,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 	case 14: // returning to storage (deposit leg)
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 15;
@@ -1546,7 +1574,7 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 	case 20: // moving to storage (fuel withdraw leg)
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 21;
@@ -1581,7 +1609,7 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 				RefuelCarried = Take;
 
 				AActor* Station = CraftStationActor.Get();
-				if (!Station) { CompleteSimpleJob(false); return; }
+				if (!Station) { FailSimpleJob(MOSurvivorJobWhy::StationGone()); return; }
 				SimpleJobState = 22;
 				MoveLegBestDistance = FLT_MAX;
 				MoveLegNoProgressSeconds = 0.0f;
@@ -1595,7 +1623,7 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 	case 22: // moving to station
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 23;
@@ -1672,7 +1700,7 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	if (!Desig->FindZone(ExcavateDigZoneId, DigZone) || DigZone.RemainingVolumeM3 <= 0.0f)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate job: dig zone missing/exhausted - failing"));
-		CompleteSimpleJob(false);
+		FailSimpleJob(MOSurvivorJobWhy::NothingLeftToDig());
 		return;
 	}
 
@@ -1792,7 +1820,7 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 	case 30: // moving to the dig zone
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 31;
@@ -1857,7 +1885,7 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 	case 32: // hauling to the dump target
 		{
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
 			if (Arrive > 0)
 			{
 				SimpleJobState = 33;

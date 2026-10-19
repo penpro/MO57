@@ -138,6 +138,15 @@ bool CancelJob(const FGuid& JobId);
 void CancelAllJobs();
 ```
 
+**A failed job says why** (Oct 18, N-090): a failed job leaves the queue at once, so it used to vanish with nothing said.
+`CompleteCurrentJobWithReason(bSuccess, Why)` records `LastFailure` (job name + reason, replicated; a success clears it), and every player
+gets one notice ("Harper couldn't gather sticks: found nothing to gather nearby"), at most once a minute per survivor and message. The
+task menu shows it while the survivor is idle ("Idle. Couldn't refuel station."). The controller's `FailSimpleJob(Why)` tags the
+meaningful sites (`MOSurvivorJobWhy`: nothing to gather, couldn't get there, station / storage gone, ingredients not in storage, craft
+cancelled, nothing left to dig, and the crafting rules' own refusal for a craft, which names a missing tool); internal failures report
+none. Test `MOFramework.Colony.JobFailureKeepsItsReason`; host + joiner: the joiner's order failed, both players got the notice, the
+joiner's task menu said why.
+
 ### Colony Membership (UMORecruitmentComponent)
 
 `EMORecruitmentState::Recruited` = colony member. `IsPossessable()` returns true for recruited pawns.

@@ -145,6 +145,13 @@ void UMOSurvivorTaskMenu::UpdateDisplayTexts()
 					JobText = JobDef->DisplayName;
 				}
 			}
+			else if (const FMOSurvivorJobFailure& Failure = JobQueue->GetLastFailure(); Failure.IsSet())
+			{
+				// A failed job leaves the queue at once: say why the survivor stopped (N-090).
+				JobText = Failure.Why.IsEmpty()
+					? FText::Format(NSLOCTEXT("MOSurvivorJobs", "IdleAfterFailure", "Idle. Couldn't {0}."), Failure.JobName.ToLower())
+					: FText::Format(NSLOCTEXT("MOSurvivorJobs", "IdleAfterFailureWhy", "Idle. Couldn't {0}: {1}"), Failure.JobName.ToLower(), Failure.Why);
+			}
 		}
 
 		CurrentJobText->SetText(JobText);

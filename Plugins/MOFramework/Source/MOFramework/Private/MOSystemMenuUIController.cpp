@@ -44,6 +44,10 @@ void UMOSystemMenuUIController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// The death recap listens to every death and keeps its own pawn's (HandleAnyPawnDied).
+	AMOCharacter::OnAnyPawnDied.RemoveAll(this);
+	AMOCharacter::OnAnyPawnDied.AddUObject(this, &UMOSystemMenuUIController::HandleAnyPawnDied);
+
 	// Closing the game window is a way out of the world too: save first (no save-scumming).
 	// PIE is skipped: closing a PIE window is ending a dev session, not a player leaving.
 	const APlayerController* PC = Cast<APlayerController>(GetOwner());
@@ -149,6 +153,7 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 	// widget cache. The widget itself is on Layer_Modal and will be cleaned
 	// up by the layer stack when the level tears down.
 	UnbindDeathListener();
+	AMOCharacter::OnAnyPawnDied.RemoveAll(this);
 	DeathRecapWidget.Reset();
 
 	Super::EndPlay(EndPlayReason);
@@ -1044,15 +1049,25 @@ void UMOSystemMenuUIController::BindDeathListenerToPawn(AMOCharacter* Character)
 		return;
 	}
 
-	// AddUnique pattern via Remove-then-Add: dynamic delegates don't expose
-	// "already bound" cheaply, so we always remove first.
-	Character->OnPawnDied.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
-	Character->OnPawnDied.AddDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
-
+	// Only remembered: the recap is delivered by AMOCharacter::OnAnyPawnDied (HandleAnyPawnDied), which does not depend on catching
+	// every possession change. A per-pawn OnPawnDied binding here was lost on a joiner and its recap never opened (Oct 18).
 	SubscribedDeathPawn = Character;
 
 	UE_LOG(LogMOFramework, Log,
-		TEXT("[MOSysUI] Bound OnPawnDied listener to '%s'"), *Character->GetName());
+		TEXT("[MOSysUI] Death recap follows '%s'"), *Character->GetName());
+}
+
+void UMOSystemMenuUIController::HandleAnyPawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart)
+{
+	const APlayerController* PC = ResolveOwningPlayerController();
+	if (!DeadCharacter || !PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	if (DeadCharacter == PC->GetPawn() || DeadCharacter == SubscribedDeathPawn.Get())
+	{
+		HandlePawnDied(DeadCharacter, CausePart);
+	}
 }
 
 void UMOSystemMenuUIController::UnbindDeathListener()

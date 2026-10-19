@@ -136,6 +136,13 @@ FMODeathRecapData UMODeathRecapWidget::BuildRecapData(AMOCharacter* DeadCharacte
 	}
 	}
 
+	// Who did it, when an attacker did (replicated with the death, so a joiner's recap names it too: N-169).
+	const FText Killer = DeadCharacter->GetDeathKillerName();
+	if (!Killer.IsEmpty())
+	{
+		Data.CauseOfDeath = FText::Format(NSLOCTEXT("MO", "DeathRecap.KilledByFormat", "{0} (killed by {1})"), Data.CauseOfDeath, Killer);
+	}
+
 	// World location — keep it compact. Player won't memorize coordinates,
 	// but a rough "where am I in the world" reading helps with respawn
 	// orientation decisions later.

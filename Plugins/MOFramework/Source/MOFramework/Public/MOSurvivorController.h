@@ -375,6 +375,12 @@ private:
 
 	/** Complete the current simple job. */
 	void CompleteSimpleJob(bool bSuccess);
+
+	/** Fail the current job and say why, in the player's words (N-090): the reason reaches the task menu and a notice to the players. */
+	void FailSimpleJob(const FText& Why);
+
+	/** The reason the next CompleteSimpleJob(false) reports (set by FailSimpleJob; consumed and cleared there). */
+	FText PendingFailureWhy;
 	/** Shared gather/craft iteration acknowledgement on the owning persisted job entry. */
 	void CompleteSimpleJobIteration(const FGuid& ExpectedJobId);
 	bool bUpdatingSimpleJob = false;

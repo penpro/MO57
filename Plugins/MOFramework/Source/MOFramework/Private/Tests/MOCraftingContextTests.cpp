@@ -898,6 +898,7 @@ bool FMOCraftingMissingToolNamed::RunTest(const FString&)
 	TestTrue(FString::Printf(TEXT("Carrying the named item lets the craft through ('%s')"), *With.FailureReason.ToString()), With.bCanCraft);
 	return true;
 }
+
 // N-083 (first-ten-minutes): the campfire's menu listed hand recipes ("Select Crude Club", a splint, a bandage, a hide blanket). A station
 // lists its own recipes and the station-less ones that need heat; the hand menu lists the station-less ones.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCraftingStationListGate, "MOFramework.Crafting.StationListsItsOwnRecipes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -924,6 +925,29 @@ bool FMOCraftingStationListGate::RunTest(const FString&)
 	F.PublishRecipe();
 	TestTrue(TEXT("A campfire recipe is in the campfire's menu"), Listed(EMOCraftingStation::Campfire));
 	TestFalse(TEXT("A campfire recipe is not in the hand crafting menu"), Listed(EMOCraftingStation::None));
+	return true;
+}
+
+// N-090: a failed survivor job left the queue at once and nothing said why. The queue now keeps the failure (job name + reason) until the
+// next success, and the task menu shows it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSurvivorJobFailureReasonGate, "MOFramework.Colony.JobFailureKeepsItsReason", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOSurvivorJobFailureReasonGate::RunTest(const FString&)
+{
+	using namespace MOCraftingContextTests;
+	FWorld F;
+	auto* Jobs = NewObject<UMOSurvivorJobQueueComponent>(F.Pawn);
+	F.Pawn->AddInstanceComponent(Jobs);
+	Jobs->RegisterComponent();
+	TestFalse(TEXT("No failure before any job"), Jobs->GetLastFailure().IsSet());
+	TestTrue(TEXT("A gather job is queued"), Jobs->EnqueueJob(EMOSurvivorJobType::GatherWood, 1).IsValid());
+	const FText Why = NSLOCTEXT("MOTest", "Why", "found nothing to gather nearby");
+	Jobs->CompleteCurrentJobWithReason(false, Why);
+	TestFalse(TEXT("The failed job left the queue"), Jobs->GetCurrentJob().IsValid());
+	TestTrue(TEXT("The failure names the job"), Jobs->GetLastFailure().IsSet());
+	TestEqual(TEXT("The failure keeps its reason"), Jobs->GetLastFailure().Why.ToString(), Why.ToString());
+	TestTrue(TEXT("A second job is queued"), Jobs->EnqueueJob(EMOSurvivorJobType::GatherWood, 1).IsValid());
+	Jobs->CompleteCurrentJobWithReason(true, FText::GetEmpty());
+	TestFalse(TEXT("A success clears the failure"), Jobs->GetLastFailure().IsSet());
 	return true;
 }
 #endif

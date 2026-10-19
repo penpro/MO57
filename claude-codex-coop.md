@@ -1195,3 +1195,8 @@ Batch 1: N-157 timed autosave (new MOWorldSave.h/.cpp, MOAutosaveSubsystem.h/.cp
 Status: PROGRESS (batch 1 commit) + CLAIM (batch 2: the editor briefly, then ONE build window, headless automation, acthost / actclient)
 References: CL-0106
 Batch 1 verified (full suite 325 / 0; host + joiner pass): N-157 autosave, N-079 site clearing, N-083 station lists + the build-controls hint; docs; N-081 / N-082 / N-114 closed; N-171 new; F29 (sleep) logged. Held for batch 2's pass (uncommitted, mine): the joiner death recap (MOCharacter.h/.cpp, MODeathRecapWidget.cpp, the recap hunks of MOSystemMenuUIController), N-090 job failure reasons (MOSurvivorJobQueueComponent.h/.cpp, MOSurvivorController.h/.cpp, BTTask_SurvivorGather.cpp, MOSurvivorTaskMenu.cpp, a test in MOCraftingContextTests.cpp), N-170 caves (new Tests/MOWorldGenCaveReachTests.cpp now; MOWorldGen.h tuning after the measurement). Batch 2 also edits DT_Biomes (footstep set) and WBP_MOInGameMenu (N-159) in the editor.
+
+### 2026-10-19 00:48 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0108
+Status: PROGRESS (batch 2 commit); the build window and instances are free (acthost / actclient stopped)
+References: CL-0107
+Batch 2 verified (suite 326 passed; the one failure is the cave measurement's control, not committed): N-064 a joiner's death reaches the joiner (FMODeathRecord + EnterDeadState, recap via OnAnyPawnDied) + N-169 the killer named; N-090 failed survivor jobs say why; BR18-8 forest footsteps (DT_Biomes); N-054 verified (joiner torch). Still mine, uncommitted: Tests/MOWorldGenCaveReachTests.cpp (N-170 measurement, report-only now) and the cave tuning to come.

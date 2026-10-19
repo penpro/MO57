@@ -63,6 +63,26 @@ struct FMOSurvivorIterationResult
 class UDataTable;
 
 /**
+ * Why a survivor's last job failed, as the players read it (N-090). A failed job leaves the queue at once, so before Oct 18 it simply
+ * vanished: the task menu said "Idle" and nothing said why. Replicated; cleared by the next job that succeeds.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOSurvivorJobFailure
+{
+	GENERATED_BODY()
+
+	/** The job's name ("Gather Sticks"); empty = no failure to show. */
+	UPROPERTY(BlueprintReadOnly, Category = "MO|Survivor|Jobs")
+	FText JobName;
+
+	/** Why, in the player's words ("found nothing to gather nearby", "Needs a tool: Axe ..."); empty when the cause is internal. */
+	UPROPERTY(BlueprintReadOnly, Category = "MO|Survivor|Jobs")
+	FText Why;
+
+	bool IsSet() const { return !JobName.IsEmpty(); }
+};
+
+/**
  * Delegate fired when the job queue changes (add, remove, reorder).
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOJobQueueChangedDelegate);
@@ -245,6 +265,16 @@ public:
 	void CompleteCurrentJob(bool bSuccess);
 
 	/**
+	 * Complete the current job, saying why when it failed (N-090): the reason becomes the survivor's LastFailure (the task menu shows it)
+	 * and one notice to every player ("Harper couldn't Gather Sticks: found nothing to gather nearby"), at most once a minute per survivor
+	 * and reason. A success clears LastFailure.
+	 */
+	void CompleteCurrentJobWithReason(bool bSuccess, const FText& FailureReason);
+
+	/** Why the last failed job failed (replicated); unset after a success. */
+	const FMOSurvivorJobFailure& GetLastFailure() const { return LastFailure; }
+
+	/**
 	 * Mark an iteration of the current job as complete.
 	 * If more iterations remain, resets progress for the next iteration.
 	 * If all iterations are done, removes the job from queue.
@@ -365,6 +395,20 @@ private:
 	/** The job queue (replicated via FastArray). */
 	UPROPERTY(Replicated)
 	FMOSurvivorJobList JobQueue;
+
+	/** Why the last failed job failed (N-090). Its own notify: it can land after the job list's receive already told listeners. */
+	UPROPERTY(ReplicatedUsing = OnRep_LastFailure)
+	FMOSurvivorJobFailure LastFailure;
+
+	UFUNCTION()
+	void OnRep_LastFailure() { OnQueueChanged.Broadcast(); }
+
+	/** Server: the last failure notice sent (its text and real time), so a job the colony retries cannot flood the players. */
+	FString LastFailureNoticeKey;
+	double LastFailureNoticeSeconds = -1000.0;
+
+	/** Server: tell every player about LastFailure (once a minute at most per message). */
+	void NotifyPlayersOfFailure();
 
 	/** Create a new job entry with defaults. */
 	FMOSurvivorJobEntry CreateJobEntry(EMOSurvivorJobType JobType, int32 RepeatCount);

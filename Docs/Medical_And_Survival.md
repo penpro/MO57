@@ -62,7 +62,16 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
   colony pawn, the respawn measures its 5 mi from the deceased record's location. Verified in a `-game` instance: the new survivor
   landed 4.96 mi from the death spot. Before this it was a sky camera with no pawn. Gap: the dead pawn's body and gear don't survive the
   reload (BACKLOG N-155).
-- Not verified: a remote client's respawn RPC; a death during another spawn settle (refused).
+- **A death reaches every machine** (Oct 18, N-064): until then the whole death (cause, ragdoll, input lock, `OnPawnDied` -> the recap)
+  ran on the server only, so a joiner who died got no recap and stood upright on every screen. The server writes a replicated
+  `FMODeathRecord` (cause, part, killer's name) in `HandleInstantDeath`; every client enters the dead state from it
+  (`OnRep_DeathRecord` -> `AMOCharacter::EnterDeadState`, the one routine both run). The save's deceased record and the Death interrupt
+  stay server-only. The recap names the killer for wound deaths ("Brain destroyed (killed by Elijah Jones)"; N-169).
+- The recap is delivered by `AMOCharacter::OnAnyPawnDied` (every death, every machine) filtered to the local player's pawn
+  (`UMOSystemMenuUIController::HandleAnyPawnDied`): a per-pawn `OnPawnDied` binding was dropped on a joiner by a possession settle
+  (unpossess + re-possess, no pawn-changed callback on the client).
+- Verified Oct 18 on a host + joiner: the joiner's recap opens with the killer's name; Continue lists the colony (the only pawn was the
+  host's, "Taken"), Create character gives the joiner a new survivor. Not verified: a death during another spawn settle (refused).
 
 ## 3. Food, water and the meters (two models today)
 

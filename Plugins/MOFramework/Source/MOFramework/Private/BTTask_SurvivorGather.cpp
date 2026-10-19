@@ -75,8 +75,8 @@ EBTNodeResult::Type UBTTask_SurvivorGather::ExecuteTask(UBehaviorTreeComponent& 
 	if (!FindNearestHISMResource(Pawn, JobType, HISMComponent, InstanceIndex, ResourceLocation))
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[BTTask_SurvivorGather] No HISM resources found nearby for job type %d"), static_cast<int32>(JobType));
-		// Mark job as failed - no resources
-		JobQueue->CompleteCurrentJob(false);
+		// Mark job as failed - no resources (the players are told why: N-090)
+		JobQueue->CompleteCurrentJobWithReason(false, NSLOCTEXT("MOSurvivorJobs", "NothingToGather", "found nothing to gather nearby"));
 		return EBTNodeResult::Failed;
 	}
 
@@ -165,7 +165,7 @@ void UBTTask_SurvivorGather::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 					}
 					else
 					{
-						JobQueue->CompleteCurrentJob(false);
+						JobQueue->CompleteCurrentJobWithReason(false, NSLOCTEXT("MOSurvivorJobs", "CantReach", "couldn't get there"));
 						FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 					}
 				}

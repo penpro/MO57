@@ -404,6 +404,9 @@ private:
 	UFUNCTION()
 	void HandlePawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart);
 
+	/** AMOCharacter::OnAnyPawnDied: opens the recap when the dead character is this local player's pawn. */
+	void HandleAnyPawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart);
+
 	/** Bind OnPawnDied on Pawn (rebinds if already subscribed elsewhere). */
 	void BindDeathListenerToPawn(AMOCharacter* Character);
 

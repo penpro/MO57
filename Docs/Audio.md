@@ -61,7 +61,7 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   underground / the BIOME, `FMOBiomeDefinitionRow::FootstepSet`). The set name is the middle of the sound-bank ids `SFX.Footsteps.<Set>1` /
   `<Set>2`: a new surface = bank rows + a data value, never code. Crouched = Sneak gait (quiet).
 - Dev verbs: `MO.Footstep.Probe|Log|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
-- Biome sets: Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
+- Biome sets (DT_Biomes `FootstepSet`; Temperate / Locust had drifted to SandTrail in the data, restored Oct 18, BR18-8): Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
   Rainforest MuddyStep, AlpineRock StoneStep; props on terrain (rocks) read as BareWood (no physical materials).
 
 **Water:** splash / wading / stroke sounds (`AMOCharacter::UpdateWaterSounds`, ids `SFX.Footsteps.WaterSplash1/2`).

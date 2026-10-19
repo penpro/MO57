@@ -1,5 +1,8 @@
 #include "MOCharacter.h"
 #include "MOAIController.h"
+#include "MOCreature.h"
+#include "MOCreatureDefinitionRow.h"
+#include "Net/UnrealNetwork.h"
 #include "MOFramework.h"
 #include "MOSpawnClearance.h"
 #include "HAL/IConsoleManager.h"
@@ -1804,6 +1807,48 @@ void AMOCharacter::TickWater(float DeltaTime)
 	bWasSwimmingLastTick = bSwimming;
 }
 
+namespace MOCharacterDeath
+{
+	/** Who to name on the death recap: the anatomy's last attacker, for deaths an attacker causes (wounds); empty for the environment. */
+	FText DescribeKiller(const AMOCharacter& Victim, EMODeathCause Cause)
+	{
+		if (Cause != EMODeathCause::BodyPartDestroyed && Cause != EMODeathCause::BledOut)
+		{
+			return FText::GetEmpty();   // drowned, heart / breathing failure: no one to name
+		}
+		const UMOAnatomyComponent* Anatomy = Victim.FindComponentByClass<UMOAnatomyComponent>();
+		const AActor* Killer = Anatomy ? Anatomy->GetLastDamageInstigator() : nullptr;
+		if (const AController* Controller = Cast<AController>(Killer))
+		{
+			Killer = Controller->GetPawn();
+		}
+		if (!Killer || Killer == &Victim)
+		{
+			return FText::GetEmpty();
+		}
+		if (const AMOCreature* Creature = Cast<AMOCreature>(Killer))
+		{
+			if (const FMOCreatureDefinitionRow* Row = Creature->GetCreatureDefinitionRow(); Row && !Row->DisplayName.IsEmpty())
+			{
+				return Row->DisplayName;   // the species ("Wolf")
+			}
+		}
+		if (const UMOIdentityComponent* Identity = Killer->FindComponentByClass<UMOIdentityComponent>(); Identity && !Identity->DisplayName.IsEmpty())
+		{
+			return Identity->DisplayName;   // a survivor or player
+		}
+		return FText::GetEmpty();   // unknown: say nothing rather than an actor name
+	}
+}
+
+FMOOnAnyPawnDied AMOCharacter::OnAnyPawnDied;
+
+void AMOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMOCharacter, DeathRecord);
+}
+
 void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 {
 	if (bIsDead)
@@ -1811,7 +1856,6 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 		return; // Already dead
 	}
 
-	bIsDead = true;
 	if (!bDeathCauseSet)   // came straight from anatomy's OnInstantDeath: a destroyed body part
 	{
 		DeathCause = EMODeathCause::BodyPartDestroyed;
@@ -1819,14 +1863,51 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 		bDeathCauseSet = true;
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: %s (body part %d)"),
-		*GetName(), *UEnum::GetValueAsString(DeathCause), static_cast<int32>(CausePart));
+	if (HasAuthority())
+	{
+		// The record every client enters the dead state from (OnRep_DeathRecord). Written before EnterDeadState so the server's own
+		// listeners (the host's recap) read the same killer.
+		DeathRecord.bDead = true;
+		DeathRecord.Cause = DeathCause;
+		DeathRecord.Part = CausePart;
+		DeathRecord.KillerName = MOCharacterDeath::DescribeKiller(*this, DeathCause);
+		ForceNetUpdate();
+	}
+
+	EnterDeadState(CausePart);
+}
+
+void AMOCharacter::OnRep_DeathRecord()
+{
+	if (!DeathRecord.bDead || bIsDead)
+	{
+		return;
+	}
+	DeathCause = DeathRecord.Cause;
+	DeathCausePart = DeathRecord.Part;
+	bDeathCauseSet = true;
+	EnterDeadState(DeathRecord.Part);
+}
+
+void AMOCharacter::EnterDeadState(EMOBodyPartType CausePart)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+	bIsDead = true;
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: %s (body part %d)%s%s [%s]"),
+		*GetName(), *UEnum::GetValueAsString(DeathCause), static_cast<int32>(CausePart),
+		DeathRecord.KillerName.IsEmpty() ? TEXT("") : TEXT(", killed by "), *DeathRecord.KillerName.ToString(),
+		HasAuthority() ? TEXT("server") : TEXT("client"));
 
 	// Broadcast the death event BEFORE the interrupt cascade tears down
 	// state. Listeners (death recap UI, kill feed, spectator handoff) get a
 	// clean snapshot — vitals/skills/inventory haven't been touched yet,
 	// so the recap can pull final stats accurately.
 	OnPawnDied.Broadcast(this, CausePart);
+	OnAnyPawnDied.Broadcast(this, CausePart);
 
 	// Permadeath: record the death in the save so this pawn doesn't resurrect on
 	// reload (MarkPawnDeceased previously had zero callers — H28). Authority-only:
@@ -1850,8 +1931,11 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	// and run their terminal cleanup — refund materials, cancel widgets,
 	// drop UI. This is the second example source on the event bus alongside
 	// movement detection; the pattern is the same for every future source
-	// (combat-start, knockdown, sleep, etc.).
-	BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::Death, this));
+	// (combat-start, knockdown, sleep, etc.). Server only, as it always ran: its listeners refund and cancel authoritative work.
+	if (HasAuthority())
+	{
+		BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::Death, this));
+	}
 
 	// Disable input and movement
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))

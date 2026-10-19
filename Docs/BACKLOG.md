@@ -21,6 +21,9 @@
 | Grass cleared on a building site | Place a campfire (or any building) in tall grass, host and joiner | a cleared circle around it on both screens, still clear after a reload; trees and bushes untouched | N-079 (Oct 18) |
 | Build site menu's material sources | Right-click a placed ghost | Inventory / Nearby containers / Surrounding area labels sit left, next to their boxes | N-083 |
 | Item icons with no checkerboard | Inventory with sticks and stones | clean icons on the dark slot, no grey checker pattern | N-075 |
+| A joiner's death screen | Kill the joiner (a wolf, or a host punch) | the joiner's own screen: the body falls, "You have died" names the killer; Continue works | N-064 (Oct 18) |
+| Forest footsteps (by ear) | Walk in a temperate or locust woodland | leaf-litter steps, not sand | BR18-8 |
+| A survivor's failed job | Order a survivor to gather where there is nothing | a notice says why; its task menu says "Idle. Couldn't ..." | N-090 |
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
@@ -80,7 +83,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-051 | OPEN | Claude | Swimming as a complete loop: load-dependent buoyancy (no inventory mass API), fall damage into water, Space surfacing feel, swimming creatures, clothing distorts on horizontal poses, swim blends | Water §3 | P-1, G17 |
 | N-052 | OPEN | Claude | Softer mud lake bed (texture set) | worldgen To-do | |
 | N-053 | DEFERRED | Claude | Hair buns under water + creator DOF: engine patch #1 needs a source engine. Wes, Oct 18: "i originally thought one of the fixes for the processing was breaking the lakes but that was a separate issue we will revisit" | `Docs/Engine_Patches.md` | F11 |
-| N-054 | OPEN | Claude | Co-op: a client lighting its own torch at a fire (retest after a9a4de5d; reconcile with Light_Sources "verified") | Night report | |
+| N-054 | DONE-2026-10-18 | Claude | A joiner lights its own torch at a fire: `MO.Fire.Do LightCarried` from the joiner, 6 s on the server, lit on the joiner (6 cd, eye adapts) and rendered on the host (6.45 cd light on the joiner's pawn) | Light_Sources | |
 | N-055 | OPEN | Claude | Torch-raising arm pose (animation) | Light_Sources | |
 | N-056 | OPEN | Claude | Not modelled: smoke in dead-end galleries; rain on torches; torch from torch + survivors carrying torches; lamp fuel refill; snuff key; torch as fire for other uses | Light_Sources | |
 | N-057 | OPEN | Claude | Weather per biome (rain / snow line at altitude) + the sound layers that go with it | AAA P2 | P-8 |
@@ -95,7 +98,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
 | N-062 | OPEN | Claude | Early dressing before cloth exists (MakeBandage needs WovenCloth01) | PROGRESSION_ROADMAP §3 | |
 | N-063 | VERIFY | Claude | Thermal extremes have an enforced failure (orphaned IsCritical / cardiac / respiratory broadcasts were the July finding; DieOf systemic clocks landed Oct 13) | dev_status | M13 |
-| N-064 | OPEN | Claude | Death recap: remote client's respawn RPC not verified | Medical §2 | |
+| N-064 | DONE-2026-10-18 | Claude | A joiner's death reaches the joiner (replicated FMODeathRecord + EnterDeadState; the recap delivered by OnAnyPawnDied); host + joiner: recap with the killer, Continue -> Characters -> Create character -> a new survivor | Medical §2 | |
 | N-065 | WAITING | Wes | Nobody can sleep (players or survivors) while Energy only recovers by sleeping: every pawn runs down for good. How sleep works is fork F29 | DECISIONS F29 | |
 
 ## Crafting, progression, content
@@ -128,7 +131,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
-| N-090 | OPEN | Claude | Blocked-job reasons at the data layer (`EMOJobBlockReason`: MissingIngredient / NoPath / TooCold / TooTired / NoStation / StorageFull / ToolMissing / ThreatNearby) + tier-2 alert + `MO.Colony.Status` | `Docs/AI_And_Colony.md` | pipeline B1 |
+| N-090 | DONE-2026-10-18 | Claude | A failed survivor job says why: LastFailure (replicated), a notice to every player, the task menu's idle line; reasons at the meaningful sites (`MOSurvivorJobWhy`). Not built: TooCold / TooTired / ThreatNearby (no code refuses for those yet), tier-2 alerts, `MO.Colony.Status` | `Docs/AI_And_Colony.md` | pipeline B1 |
 | N-091 | OPEN | Claude | Possession-transition "while you were away" summary (`BuildAwaySummary`) | AI_And_Colony | pipeline A6 |
 | N-092 | OPEN | Claude | Tedium tools: transfer-all with a combined timer (verify the existing TransferAll code), sweep pickup (timed radius gather), haul jobs generalized to food / water restocking | AI_And_Colony | pipeline T1-T3 |
 | N-093 | OPEN | Claude | Readability: "why" readouts (cold because wet + wind + no roof), action timers everywhere, a failure string for every bucket | pipeline R1 | |
@@ -139,7 +142,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-098 | OPEN | Claude | Combat feel: hit-stop, hit-flash, camera shake, impact VFX, weighty audio, directional hit reactions; movesets + weapon variety; parry / block / dodge windows + stamina; enemy combat AI (predators that fight, hostile humanoids); ranged (bow / atlatl / sling); surface the wound sim | archived Fable 5 charter Pillar 4 | |
 | N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
 | N-168 | OPEN | Claude | Bronze and iron spears (BronzeSpear01 / IronSpear01, their spearheads): items, recipes and DT_Weapons profiles exist, no meshes / icons yet (wooden, fire-hardened and flint spears have both) | `Docs/Item_Art_Pipeline.md` | Wes Oct 18 |
-| N-169 | OPEN | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths still name no killer (`OnPawnDied` has no instigator; the anatomy's `GetLastDamageInstigator` has it) | AI_And_Colony §1 | Oct 18 |
+| N-169 | IN PROGRESS | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths name the killer since Oct 18 (`FMODeathRecord::KillerName`, on the recap) | AI_And_Colony §1 | Oct 18 |
 | N-100 | OPEN | Claude | Re-evaluate the Fab purchase list against the ComfyUI image-to-3D pipeline (Wes, Oct 18: "reevaluate these since i've moved a lot of stuff to the comfyui 3d modeling pipeline"): what still needs a bought asset (rigged / animated, large sets) vs what TRELLIS.2 can make | pipeline V3, `Docs/Item_Art_Pipeline.md` §8 | |
 
 ## Co-op
@@ -164,7 +167,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR18-5 | DONE-2026-10-18 | Claude | A joiner leaving "reset" the pawn's skills / knowledge: inspection (and harvest XP) ran on the joiner's copy only. Server-owned inspection (`FMOInspectionActions`, `ServerInspectItem`); `_client_inspect` (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-6 | DONE-2026-10-18 | Claude | Possession window took no click: the row's full-row EntryButton (overlay) covered Select and nothing handled it; bound to the same select; `_host_possession_click` (a real click) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-7 | DONE-2026-10-18 | Claude | A joiner couldn't order a survivor: every order ran on the clicking machine. One request + server RPC (`FMOSurvivorCommands`, `ServerSurvivorCommand`); also the gather search's log stall (2 min 44 s on the host); `_client_survivor_command` (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
-| BR18-8 | IN PROGRESS | Claude | Audio: footsteps played unattenuated (every pawn as loud as your own): footstep profile + event fallback for one-shots; the joiner's own surface not yet reproduced | `Docs/BugReports_2026-10-18.md` | |
+| BR18-8 | DONE-2026-10-18 | Claude | Footsteps: attenuation fixed (e316e4b5); the forest biomes (TemperateForest, LocustWoodland) played SandTrail in the data, now LeafCrunch | `Docs/BugReports_2026-10-18.md` | |
 | BR18-9 | DONE-2026-10-18 | Claude | Status vitals once per showing (pooled panel re-added its fields) and the crafting menu's far campfire (active station never cleared): both fixed; the status panel checked on screen (each vital once on the third showing), the far campfire not yet looked at (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-10 | DONE-2026-10-18 | Claude | Tool / focus hint showed through menus and world popups: one visibility rule (menu or world popup), checked on screen (7a83bda8) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-11 | DONE-2026-10-18 | Claude | Terraform 1 s in developer mode: `MO.Dev.TerraformSeconds` (default 1) while the world's HOST is in developer mode (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
@@ -249,7 +252,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 | N-151 | CLOSED-2026-10-18 | Wes | CS399 weekly progress: Wes, Oct 18: "disregard this" | `Docs/CS399/CS399_WEEKLY_PROGRESS.md` |
 | N-156 | DONE-2026-10-18 | Codex | Corrected MOPlayerController SetPause comment and policy reference: controller-routed paths refuse, direct AGameModeBase::SetPause bypasses and must never be called. No runtime pause change | `7f73356b`; `Docs/PAUSE_POLICY.md` § Enforcement |
 | N-158 | OPEN | Claude | Store an explicit WorldId (FGuid) in UMOWorldSaveGame, made at new game and carried by every save, so identity no longer rides on the slot name (F24). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | DECISIONS 2026-10-17 F24 |
-| N-159 | OPEN | Claude | Optional cleanup: remove the unreachable `WBP_SavePanel` child from `WBP_MOInGameMenu` (`python Tools/ue.py ui remove`); `UMOInGameMenu::ShowSavePanel` / `UMOSavePanel::CreateNewSave` then have no caller | `Docs/UI.md` § 3 |
+| N-159 | OPEN | Claude | Optional cleanup: remove the unreachable `WBP_SavePanel` child from `WBP_MOInGameMenu` (`python Tools/ue.py ui remove`); `UMOInGameMenu::ShowSavePanel` / `UMOSavePanel::CreateNewSave` then have no caller. TRAP (Oct 18): `SwitchToPanel` uses fixed indices (`PanelIndex_Save` 2, `PanelIndex_Load` 3), so removing the child shifts Load: switch by widget first | `Docs/UI.md` § 3 |
 | N-152 | OPEN | Claude | Codex's July audit docs in `Docs/agent/` say "Status: In progress" and were never closed: ask Codex to close or archive them | `Docs/agent/` |
 | N-153 | WAITING | Wes | Law 6 ("commit only when asked"). Wes, Oct 18: "we got rid of this"; checked 2026-10-18: the global `C:/Users/penum/.claude/CLAUDE.md` (Law 6, line 11) and `D:/ClaudeMaster/CLAUDE_BIBLE.md` (lines 30 and 183) still say it. MO57's CLAUDE.md overrides it here (N1) | DECISIONS N1, N4 |
 
