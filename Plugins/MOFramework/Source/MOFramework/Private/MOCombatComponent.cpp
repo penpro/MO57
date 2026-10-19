@@ -15,6 +15,8 @@ namespace
 #include "MOEquipmentComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOCombatMedicalTypes.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 #include "Engine/DataTable.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
@@ -58,11 +60,63 @@ void UMOCombatComponent::BeginPlay()
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOCombatComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 	CacheComponents();
+
+	// The right hand's item is the main-hand weapon: the server follows the equipment slot (MainHandWeapon replicates to clients).
+	if (CachedEquipmentComp && GetOwner() && GetOwner()->HasAuthority())
+	{
+		CachedEquipmentComp->OnEquipmentChanged.RemoveDynamic(this, &UMOCombatComponent::HandleEquipmentChanged);
+		CachedEquipmentComp->OnEquipmentChanged.AddDynamic(this, &UMOCombatComponent::HandleEquipmentChanged);
+		SyncMainHandFromEquipment();   // already held (a save load ran first)
+	}
 }
 
 void UMOCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (CachedEquipmentComp)
+	{
+		CachedEquipmentComp->OnEquipmentChanged.RemoveDynamic(this, &UMOCombatComponent::HandleEquipmentChanged);
+	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void UMOCombatComponent::HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)
+{
+	if (EquipSlot == EMOEquipmentSlot::RightHand)
+	{
+		SyncMainHandFromEquipment();
+	}
+}
+
+void UMOCombatComponent::SyncMainHandFromEquipment()
+{
+	if (!CachedEquipmentComp || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	const FMOEquippedItem Held = CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand);
+	FMOItemDefinitionRow Definition;
+	const bool bHoldsWeapon = Held.IsValid() && UMOItemDatabaseSettings::GetItemDefinition(Held.ItemDefinitionId, Definition)
+		&& Definition.bIsWeapon && !Definition.WeaponProfileId.IsNone();
+	if (!bHoldsWeapon)
+	{
+		if (MainHandWeapon.WeaponProfileId != NAME_None)
+		{
+			UnequipMainHandWeapon();   // back to the bare hand
+		}
+		return;
+	}
+	if (MainHandWeapon.ItemGuid != Held.ItemGuid || MainHandWeapon.WeaponProfileId != Definition.WeaponProfileId)
+	{
+		if (!EquipMainHandWeapon(Held.ItemGuid, Definition.WeaponProfileId))
+		{
+			return;   // the profile row is missing (logged): the hand fights bare
+		}
+		DrawWeapon();
+	}
+	if (Held.CurrentDurability > 0)
+	{
+		MainHandWeapon.CurrentDurability = Held.CurrentDurability;   // the item's own wear (a profile max for an item that keeps none)
+	}
 }
 
 void UMOCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -499,8 +553,15 @@ void UMOCombatComponent::OnRep_CombatState(EMOCombatState OldState)
 // DAMAGE API
 // ============================================================================
 
-EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCombatHitInfo& HitInfo)
+EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCombatHitInfo& InHitInfo)
 {
+	// The blow carries who struck it into the anatomy (a death's killer, a creature's flight); a caller that built the hit without one named the attacker here.
+	FMOCombatHitInfo HitInfo = InHitInfo;
+	if (!HitInfo.Instigator)
+	{
+		HitInfo.Instigator = Attacker;
+	}
+
 	// Check if in dodge i-frames
 	if (bInDodgeIFrames)
 	{
@@ -982,10 +1043,7 @@ void UMOCombatComponent::ExecuteAttack()
 
 	OnAttackExecuted.Broadcast(CurrentAttackType);
 
-	// Apply durability loss
-	ApplyWeaponDurabilityLoss(1);
-
-	// Perform hit detection via sphere trace
+	// Perform hit detection via sphere trace (a weapon wears where the blow lands, below: a swing through the air costs it nothing)
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
@@ -1050,13 +1108,18 @@ void UMOCombatComponent::ExecuteAttack()
 		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
 
 		// Process each hit - draw blue sphere at impact points
+		bool bStruck = false;
 		for (const FHitResult& Hit : HitResults)
 		{
 			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 			// #if ENABLE_DRAW_DEBUG
 			// DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 20.0f, 8, FColor::Blue, false, DebugDuration);
 			// #endif
-			ProcessHit(Hit, *Profile, TraceDirection);
+			bStruck |= ProcessHit(Hit, *Profile, TraceDirection);
+		}
+		if (bStruck)
+		{
+			ApplyWeaponDurabilityLoss(1);   // one blow, however many it touched
 		}
 	}
 	else
@@ -1155,11 +1218,17 @@ void UMOCombatComponent::UpdateFacingSwing(float DeltaTime)
 	Owner->SetActorRotation(FRotator(Now.Pitch, FMath::FixedTurn(Now.Yaw, FacingSwingYaw, FaceSwingTurnRateDegPerSec * DeltaTime), Now.Roll));
 }
 
-EMOAttackResult UMOCombatComponent::ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& HitInfo)
+EMOAttackResult UMOCombatComponent::ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& InHitInfo)
 {
 	if (!Target)
 	{
 		return EMOAttackResult::Missed;
+	}
+
+	FMOCombatHitInfo HitInfo = InHitInfo;
+	if (!HitInfo.Instigator)
+	{
+		HitInfo.Instigator = GetOwner();   // this component's owner struck it
 	}
 
 	UMOCombatComponent* TargetCombat = Target->FindComponentByClass<UMOCombatComponent>();
@@ -1234,6 +1303,24 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		return;
 	}
 
+	// The held item keeps its own wear: wear it there (a worn-out item leaves the hand, and SyncMainHandFromEquipment goes back to the bare hand).
+	if (CachedEquipmentComp && CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemGuid == MainHandWeapon.ItemGuid)
+	{
+		bool bDestroyed = false;
+		if (CachedEquipmentComp->ReduceEquippedDurability(EMOEquipmentSlot::RightHand, Amount, bDestroyed))
+		{
+			if (bDestroyed)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
+			}
+			else
+			{
+				MainHandWeapon.CurrentDurability = CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).CurrentDurability;
+			}
+			return;
+		}
+	}
+
 	MainHandWeapon.CurrentDurability = FMath::Max(0, MainHandWeapon.CurrentDurability - Amount);
 
 	if (MainHandWeapon.IsBroken())
@@ -1243,18 +1330,18 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 	}
 }
 
-void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection)
+bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
 	{
-		return;
+		return false;
 	}
 
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
-		return;
+		return false;
 	}
 
 	// Check if hit is within attack arc -- around the swing (flat), not the body's facing
@@ -1272,7 +1359,7 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Hit outside attack arc (%.1f° > %.1f°)"),
 		// 	AngleToTarget, Profile.ArcAngle * 0.5f);
-		return; // Outside attack arc
+		return false; // Outside attack arc
 	}
 
 	// Determine body part from bone name (skeletal mesh)
@@ -1296,6 +1383,7 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		HitInfo.TargetBodyPart = HitBodyPart;
 		HitInfo.ArmorPenetration = Profile.ArmorPenetration;
 		HitInfo.bCausesHeavyBleeding = Profile.bCausesHeavyBleeding;
+		HitInfo.Instigator = Owner;
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
 		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
@@ -1308,6 +1396,7 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		// Non-combat actor (resources, world objects)
 		OnHitNonCombatActor.Broadcast(HitActor, Hit.ImpactPoint, Hit.ImpactNormal, Hit.BoneName);
 	}
+	return true;
 }
 
 FVector UMOCombatComponent::GetAttackOrigin() const

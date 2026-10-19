@@ -75,6 +75,10 @@
  * [2024-02] STAMINA COSTS: FMOCombatStaminaCosts values are placeholder.
  *   Tune based on combat pacing requirements.
  *
+ * [2026-10] ARMOR PENETRATION is armor-only: GetFinalDamage no longer multiplies by it (no hit carries target armor yet).
+ *   INSTIGATOR: every hit carries its attacker into InflictDamage (UMOAnatomyComponent::GetLastDamageInstigator); a hit built
+ *   without one reaches the anatomy as "nobody", and a creature then dies with no killer and flees from nothing.
+ *
  * =============================================================================
  * RELATED FILES: MOMedicalTypes.h, MOAnatomyComponent.h, MOVitalsComponent.h,
  *                MOCombatComponent.h
@@ -89,6 +93,7 @@
 #include "MOCombatMedicalTypes.generated.h"
 
 // Forward declarations
+class AActor;
 class UMOAnatomyComponent;
 class UMOVitalsComponent;
 class UMOMentalStateComponent;
@@ -163,12 +168,19 @@ struct MOFRAMEWORK_API FMOCombatHitInfo
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Combat")
 	bool bHighInfectionRisk = false;
 
+	/** Who struck the blow (the attacking pawn). Carried into the anatomy so a death or a flight knows its cause. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Combat")
+	TObjectPtr<AActor> Instigator = nullptr;
+
 	/**
 	 * Calculate final damage after all modifiers.
+	 * ArmorPenetration does not scale it: penetration is how much of the blow gets THROUGH armor (the profile's 0 = stopped by any armor,
+	 * 1 = ignores armor), and no hit carries target armor yet, so an unarmored body takes the whole blow. (It used to multiply here: a
+	 * wooden spear's 10 at penetration 0.1 landed 1, a fifth of a punch.)
 	 */
 	float GetFinalDamage() const
 	{
-		return BaseDamage * ArmorPenetration * CriticalMultiplier;
+		return BaseDamage * CriticalMultiplier;
 	}
 
 	/**

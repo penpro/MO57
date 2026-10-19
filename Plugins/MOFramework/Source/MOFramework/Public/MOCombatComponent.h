@@ -78,6 +78,7 @@
 #include "Components/ActorComponent.h"
 #include "MOWeaponTypes.h"
 #include "MOCombatMedicalTypes.h"
+#include "MOEquipmentComponent.h"
 #include "MOCombatComponent.generated.h"
 
 // Forward declarations
@@ -498,6 +499,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Combat|Weapon")
 	bool GetCurrentWeaponProfile(FMOWeaponDamageProfileRow& OutProfile) const;
 
+	/** The bare-hand blow (the class default unless a Blueprint overrides it: a Feb override of 500 made one punch kill a deer). */
+	const FMOAttackDamageProfile& GetUnarmedAttackProfile() const { return UnarmedAttackProfile; }
+
+	/** The main-hand weapon state (equipped from the right hand by SyncMainHandFromEquipment). */
+	const FMOWeaponState& GetMainHandWeapon() const { return MainHandWeapon; }
+
 	// ============================================================================
 	// QUERY API
 	// ============================================================================
@@ -699,8 +706,9 @@ private:
 	void ExecuteAttack();
 
 	/** Process a hit result from the attack trace. SwingDirection: where the blow went -- the attack arc is measured around it, not the body's facing
-	 *  (a player's swing goes where the camera aims; with the body still facing its last walk, every such hit fell "outside the arc" and did nothing). */
-	void ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection);
+	 *  (a player's swing goes where the camera aims; with the body still facing its last walk, every such hit fell "outside the arc" and did nothing).
+	 *  True if the blow struck something within the arc (a creature, a pawn or the world): what wears a weapon. */
+	bool ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection);
 
 	/** Get the attack origin point (weapon tip or hand socket). */
 	FVector GetAttackOrigin() const;
@@ -729,8 +737,19 @@ private:
 	/** Consume stamina for an action. */
 	bool ConsumeStamina(float Amount);
 
-	/** Apply weapon durability loss. */
+	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. */
 	void ApplyWeaponDurabilityLoss(int32 Amount);
+
+	/** Server: the right hand changed. */
+	UFUNCTION()
+	void HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);
+
+	/**
+	 * Server: the item in the right hand IS the main-hand weapon. A weapon item (bIsWeapon + WeaponProfileId) there is equipped and
+	 * drawn (in the hand = ready to strike); anything else, or nothing, leaves the bare hand. Nothing else ever called EquipMainHandWeapon,
+	 * so a held spear fought with the fist's profile (Oct 18 2026).
+	 */
+	void SyncMainHandFromEquipment();
 
 	/** Play the appropriate attack animation montage. */
 	void PlayAttackAnimation();

@@ -69,7 +69,10 @@ void AMOCreature::BeginPlay()
 	// We override HandleInstantDeath to add creature-specific death behavior
 	if (UMOAnatomyComponent* Anatomy = GetAnatomyComponent())
 	{
+		Anatomy->OnBodyPartDestroyed.RemoveDynamic(this, &AMOCreature::HandleBodyPartDestroyed);
 		Anatomy->OnBodyPartDestroyed.AddDynamic(this, &AMOCreature::HandleBodyPartDestroyed);
+		Anatomy->OnBodyPartDamaged.RemoveDynamic(this, &AMOCreature::HandleBodyPartDamaged);
+		Anatomy->OnBodyPartDamaged.AddDynamic(this, &AMOCreature::HandleBodyPartDamaged);
 	}
 }
 
@@ -85,6 +88,7 @@ void AMOCreature::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UMOAnatomyComponent* Anatomy = GetAnatomyComponent())
 	{
 		Anatomy->OnBodyPartDestroyed.RemoveDynamic(this, &AMOCreature::HandleBodyPartDestroyed);
+		Anatomy->OnBodyPartDamaged.RemoveDynamic(this, &AMOCreature::HandleBodyPartDamaged);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -214,9 +218,7 @@ void AMOCreature::HandleInstantDeath(EMOBodyPartType CausePart)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s died from instant death (part: %d)"),
 		*GetName(), static_cast<int32>(CausePart));
 
-	// Find the killer (could be from combat component or last damage source)
-	// For now, we don't have a direct reference, so pass nullptr
-	OnDeath(nullptr);
+	OnDeath(GetLastDamageInstigator());   // whoever wounded it last (a bleed-out too)
 }
 
 void AMOCreature::HandleBodyPartDestroyed(EMOBodyPartType Part, bool bInstantDeath)
@@ -234,7 +236,28 @@ void AMOCreature::HandleBodyPartDestroyed(EMOBodyPartType Part, bool bInstantDea
 
 	// For creatures, destruction of vital body parts causes death
 	// This is simpler than the full human medical simulation
-	bool bIsVitalPart = false;
+	if (IsVitalPart(Part))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s died from vital part destruction (part: %d)"),
+			*GetName(), static_cast<int32>(Part));
+		OnDeath(GetLastDamageInstigator());
+	}
+}
+
+void AMOCreature::HandleBodyPartDamaged(EMOBodyPartType Part, float Damage, float NewHP)
+{
+	if (bIsDead || !HasAuthority())
+	{
+		return;
+	}
+	if (AMOCreatureController* CreatureAI = GetCreatureController())
+	{
+		CreatureAI->NotifyDamaged(GetLastDamageInstigator());
+	}
+}
+
+bool AMOCreature::IsVitalPart(EMOBodyPartType Part)
+{
 	switch (Part)
 	{
 	case EMOBodyPartType::Head:
@@ -245,18 +268,16 @@ void AMOCreature::HandleBodyPartDestroyed(EMOBodyPartType Part, bool bInstantDea
 	case EMOBodyPartType::SpineThoracic:
 	case EMOBodyPartType::Liver:
 	case EMOBodyPartType::Stomach:
-		bIsVitalPart = true;
-		break;
+		return true;
 	default:
-		break;
+		return false;
 	}
+}
 
-	if (bIsVitalPart)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s died from vital part destruction (part: %d)"),
-			*GetName(), static_cast<int32>(Part));
-		OnDeath(nullptr);
-	}
+AActor* AMOCreature::GetLastDamageInstigator() const
+{
+	const UMOAnatomyComponent* Anatomy = GetAnatomyComponent();
+	return Anatomy ? Anatomy->GetLastDamageInstigator() : nullptr;
 }
 
 void AMOCreature::PlayHitReaction()

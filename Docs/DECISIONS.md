@@ -56,6 +56,23 @@
 
 ## Decisions, newest first
 
+### 2026-10-18
+- ~22:00: **"the deer should "hear" a predator/player coming up behind it if they're not stealthy also, and they should run a long ways
+  if they get damaged (like by a wolf) ... right now a player can SPRINT up to the deer from behind and punch it to kill it"** -> creature
+  hearing works (it never had: NoTeam vs NoTeam is Friendly to the hearing sense), footfalls are as loud as the pawn's real speed
+  (crouched x0.5), a wounded animal flees whoever hurt it for 45 s, and the fist is back to its class default (BP_MOMetaHuman_Female had
+  BaseDamage 500 from a Feb debug session). `Docs/AI_And_Colony.md` §1.
+- ~22:00: **"a wolf should lose interest after a while of chasing the deer, maybe a set distance from "the den" (spawn point)"** -> a
+  predator gives up a chase 200 m from where it spawned or after 20 s without closing in, then ignores that quarry for 2 min.
+- ~22:00: **"we need a wooden spear and a stone tip spear and bronze and iron, but wooden and stone are the first ones we need"** -> the
+  items, recipes and DT_Weapons profiles already existed (WoodenSpear01 / FireHardenedSpear01 / FlintSpear01 / BronzeSpear01 /
+  IronSpear01); what was missing is that a held weapon never reached combat: the right hand's weapon item is now the main-hand weapon,
+  the five spear rows in DT_Items are flagged as weapons (`bIsWeapon`, `weaponProfileId`, slot Held: they were not equippable to a
+  hand), and ArmorPenetration no longer cuts unarmored damage (a wooden spear did 1). Bronze and iron spears still need meshes / icons.
+- Small calls (Claude, Oct 18; Wes may override): the fist stays the class default (5 Blunt = ~4 HP off a 200 HP torso per blow; no fist
+  kills a deer); leash 200 m, no-gain 20 s, give-up memory 120 s, wounded flight 45 s (all `FMOCreatureDefinitionRow` fields); the deer's
+  20 m hearing range is unchanged (a sprint is heard at 20 m, a walk at 6 m, a crouched creep at ~1.5 m).
+
 ### 2026-10-17
 - ~21:00: **"F6 is resolved, i tested weather and time updates to the client and those are great"** -> F6 closed: native UDS/UDW
   replication plus the MO clock sync carry weather and time to clients; no client-side apply in `BP_WeatherBridge` is needed

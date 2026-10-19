@@ -101,7 +101,8 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 	bool bApplied = AnatomyComp->InflictDamage(
 		HitInfo.TargetBodyPart,
 		HitInfo.GetFinalDamage(),
-		HitInfo.GetWoundType()
+		HitInfo.GetWoundType(),
+		HitInfo.Instigator
 	);
 
 	if (!bApplied)

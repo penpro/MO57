@@ -124,6 +124,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Creature|State")
 	float GetWalkSpeed() const { return WalkSpeed; }
 
+	/** A body part whose destruction kills a creature outright (simpler than the human medical death rules). */
+	static bool IsVitalPart(EMOBodyPartType Part);
+
 	// ============================================================================
 	// EVENTS
 	// ============================================================================
@@ -205,6 +208,13 @@ private:
 	/** Handle body part destruction - creatures die when vital parts are destroyed. */
 	UFUNCTION()
 	void HandleBodyPartDestroyed(EMOBodyPartType Part, bool bInstantDeath);
+
+	/** Hurt: the controller turns to whoever did it (prey flees, a predator turns on it). Server. */
+	UFUNCTION()
+	void HandleBodyPartDamaged(EMOBodyPartType Part, float Damage, float NewHP);
+
+	/** Who dealt the most recent damage (the anatomy records it on every InflictDamage): the killer, when it dies of it. */
+	AActor* GetLastDamageInstigator() const;
 
 	/** Timer handle for delayed destroy after death. */
 	FTimerHandle DestroyTimerHandle;

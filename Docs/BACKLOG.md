@@ -126,7 +126,9 @@ F25 co-op rubber band after a joiner hitch (Steam A/B first) · F26 how long stu
 | N-096 | OPEN | Claude | Creature ABP state machines + EQS query assets (Blueprint setup; C++ complete); more fauna (fox / pig / crow assets exist; birds also unblock feathers); creature footsteps (no ball bones); unify the creature flee decision before fire-fear | AI_And_Colony §1 | P-9 |
 | N-097 | OPEN | Claude | Survivor quests: no survivor has `PossibleQuests` configured (data task) | AI_And_Colony §2 | |
 | N-098 | OPEN | Claude | Combat feel: hit-stop, hit-flash, camera shake, impact VFX, weighty audio, directional hit reactions; movesets + weapon variety; parry / block / dodge windows + stamina; enemy combat AI (predators that fight, hostile humanoids); ranged (bow / atlatl / sling); surface the wound sim | archived Fable 5 charter Pillar 4 | |
-| N-099 | OPEN | Claude | Combat weapon subsystem not wired to equipment | dev_status July 7 | old #24 |
+| N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
+| N-168 | OPEN | Claude | Bronze and iron spears (BronzeSpear01 / IronSpear01, their spearheads): items, recipes and DT_Weapons profiles exist, no meshes / icons yet (wooden, fire-hardened and flint spears have both) | `Docs/Item_Art_Pipeline.md` | Wes Oct 18 |
+| N-169 | OPEN | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths still name no killer (`OnPawnDied` has no instigator; the anatomy's `GetLastDamageInstigator` has it) | AI_And_Colony §1 | Oct 18 |
 | N-100 | WAITING | Wes | V3 real art via Fab (needs Wes's purchases; debug meshes hold) | pipeline V3 | |
 
 ## Co-op
@@ -240,6 +242,8 @@ re-checked defects were already fixed): **re-verify against current code before 
 | N-153 | OPEN | Wes | Global CLAUDE.md and `D:\ClaudeMaster\CLAUDE_BIBLE.md` were corrected for the engine type and the principles' new home on 2026-10-17; Law 6 still says "commit only when asked" globally (MO57 overrides it per N1) | DECISIONS N1, N4 |
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
+
+- DONE-2026-10-18 hunting (Wes, Oct 18: deer should hear what comes up behind them, run far when hurt; wolves lose interest; spears): one punch no longer kills a deer (BP_MOMetaHuman_Female's fist BaseDamage 500 -> the class default 5), deaths name their killer (the attacker reaches the anatomy), creatures hear (NoTeam vs NoTeam was Friendly to the hearing sense), footfalls follow the real speed, a wounded deer flees 45 s, a wolf gives up 200 m from its den or after 20 s without gaining, a held spear fights with its own profile (N-099) and ArmorPenetration no longer cuts unarmored damage (`Docs/AI_And_Colony.md` §1).
 
 - DONE-2026-10-18 N-166 (Wes, Oct 18: the Megascans trees' wind "moves smoothly ... then freeze[s] ... then glitch[es]"): the Pivot Painter wind added time to a WORLD-space pivot term in float, so 5-15 km from the origin each branch level moved one texel at a time; `Content/Python/foliage_wind_precision.py` reduces the offset mod 1200 first (MF_AdvancedWind_Level, PN_WindAnimation). Step share 34-47 % -> 0-1 %, TSR jumps 4-7 per 15 s -> 0 (`Docs/PCG.md` §9).
 - DONE-2026-10-18 N-162: a joiner far from the host was corrected on every move (host's coarse render-chunk collision up to ~1 m high); every machine now refines the terrain around every other player (`RemotePlayerTerrainDetail`): +93.1 -> +2.8 cm, 0 of 136 corrected.

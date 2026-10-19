@@ -301,10 +301,18 @@ public:
 	 * @param Part The body part to damage.
 	 * @param Damage Amount of damage.
 	 * @param WoundType Type of wound to create.
+	 * @param DamageInstigator Who dealt it (the attacker; null = the environment or unknown). Kept as GetLastDamageInstigator, read
+	 *        BEFORE the damage events fire, so a death or a flight from this damage knows who caused it.
 	 * @return True if damage was applied.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Anatomy|Damage")
-	bool InflictDamage(EMOBodyPartType Part, float Damage, EMOWoundType WoundType);
+	bool InflictDamage(EMOBodyPartType Part, float Damage, EMOWoundType WoundType, AActor* DamageInstigator = nullptr);
+
+	/** Who dealt the most recent damage (null = the environment / unknown, or nothing yet). Server only. */
+	AActor* GetLastDamageInstigator() const { return LastDamageInstigator.Get(); }
+
+	/** World time (seconds) of the most recent damage; a negative value = never damaged. Server only. */
+	double GetLastDamageTime() const { return LastDamageTime; }
 
 	/**
 	 * Inflict damage with a custom wound.
@@ -536,6 +544,12 @@ private:
 
 	/** Remaining time on death timer. */
 	float DeathTimerRemaining = 0.0f;
+
+	/** Who dealt the most recent damage (InflictDamage). Not replicated: deaths and creature reactions run on the server. */
+	TWeakObjectPtr<AActor> LastDamageInstigator;
+
+	/** World time of the most recent damage (-1 = never). */
+	double LastDamageTime = -1.0;
 
 	/** Cached reference to vitals component. */
 	UPROPERTY(Transient)

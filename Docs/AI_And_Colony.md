@@ -12,7 +12,8 @@
 > `RunExcavationPass`, `CanRecruitByStanding`), `UMOPersonalityComponent`, `UMOCharacterHistoryComponent`, `UMOPossessionSubsystem`,
 > `UMOSpawnManagerSubsystem`. **Dev verbs:** `MO.Colony.Found|SpawnSurvivor|Recruit|PlaceBuilding|Stock|SetSkill|AssignJob|UI|SendTo|Status`,
 > `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Possess.List|Take`.
-> **Tests:** `MOFramework.Colony.*` (incl. `Colony.Recruit.GateMath`, `Colony.Excavation.*`), live gates `Content/Python/test_village_*.py`,
+> **Tests:** `MOFramework.Colony.*` (incl. `Colony.Recruit.GateMath`, `Colony.Excavation.*`), `MOFramework.Creature.*` (hearing,
+> pursuit, footfalls) and `MOFramework.Combat.Damage.*` (fist vs vital parts, instigator, armor penetration), live gates `Content/Python/test_village_*.py`,
 > `test_fire_heat.py`. **Open items:** `Docs/BACKLOG.md` § AI, colony, combat. **North star:** `Docs/MedievalDynasty_Village_Reference.md`;
 > colony design: `Docs/MO57_Colony_Management_Design.docx`.
 
@@ -33,6 +34,52 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 - **BT_Prey**: Death → Flee (ShouldFlee AND HasTarget) → Threatened (fight if cornered) → Idle (wander/graze)
 - **BT_Predator**: Death → Flee (wounded) → Combat (chase/attack) → Hunt (lost target) → Idle/Patrol
+- *As read from the assets (Oct 18 2026):* **BT_Deer** / BT_Prey = a selector of `HasTarget` (abort Both) -> `FleeFromThreat`
+  (legs of 20-30 m, ThreatActorKey = TargetActor) and `CreatureWander` (MaxDistanceFromHome 40 m): a deer flees whenever its
+  controller holds a threat; health plays no part. BT_Predator = `HasTarget` -> `ChaseTarget` / `IsInAttackRange` -> `CreatureAttack`
+  (AM_WolfBite), else wander.
+
+### Senses, wounds and the chase (Oct 18 2026)
+
+- **Hearing** works from Oct 18: every creature sense uses `AMOCreatureController::SenseAllAffiliations()`. The hearing sense compares
+  raw team ids and the engine's default solver calls NoTeam vs NoTeam Friendly, so with friendlies off (as before) no creature ever
+  heard a footstep. MO57 has no teams; `OnTargetPerceptionUpdated` decides what is a threat (same class ignored).
+- **Footfalls** (`AMOCharacter::GetMovementNoiseLoudness`, every 0.3 s while moving, server): the loudness follows the pawn's ACTUAL
+  speed through its own gaits (walk 0.3 at WalkSpeed, jog 0.6, sprint 1.0; below the walk proportionally quieter; crouched x0.5), heard
+  within HearingRange x loudness. A deer (HearingRange 20 m) hears a sprinting player or a running wolf at 20 m, a walk at 6 m, a
+  crouched creep at ~1.5 m. A wolf used to be stuck at the walk value (its gait state is player-only).
+- **A wound names its cause**: every hit carries its attacker (`FMOCombatHitInfo::Instigator`, the wolf's bite passes the wolf) into
+  `UMOAnatomyComponent::InflictDamage(..., DamageInstigator)`, kept as `GetLastDamageInstigator()`. A creature's death names it as the
+  killer (was always None).
+- **A wounded animal runs** (`AMOCreatureController::NotifyDamaged`, from `AMOCreature::HandleBodyPartDamaged`): whoever hurt it is
+  its threat for `WoundedPanicSeconds` (definition, 45 s) whether or not it was ever seen or heard, so the BT's flee legs chain: a deer
+  runs ~340 m at 7.5 m/s (measured Oct 18: a punched deer ended ~220 m from the player, the legs zig-zag), then wanders. A predator
+  hurt the same way turns on its attacker.
+- **A predator's chase is leashed** (`UpdatePursuit` / `JudgeChase`, 5 Hz): it gives up past `ChaseLeashRadius` (200 m) from home (its
+  den: where it spawned) or after `ChaseNoGainSeconds` (20 s) without closing in by 2 m, then ignores that quarry for
+  `ChaseGiveUpCooldownSeconds` (120 s) unless it is hurt by it; wander then walks it home. Wolf and deer both run 750 cm/s, so a healthy
+  deer that hears the wolf in time escapes.
+- The four numbers are `FMOCreatureDefinitionRow` fields (defaults apply to rows that do not set them; `bIsPredator` turns the leash on).
+
+### Melee damage (Oct 18 2026)
+
+- **The blow**: `UMOCombatComponent::ProcessHit` -> `BaseDamage` x distance falloff (1.0 at the body, 0.7 at full range) -> the target's
+  `ReceiveAttack` -> `UMOCombatMedicalHelpers::ApplyCombatDamage` -> `InflictDamage(part, BaseDamage x CriticalMultiplier, wound type of
+  the damage category)` -> the part loses that x the wound's `BaseDamageMultiplier` (DT_Wounds: Blunt 0.8). A creature dies when a vital
+  part (`AMOCreature::IsVitalPart`: head, brain, torso, heart, spine C/T, liver, stomach) reaches 0 HP (DT_BodyParts: torso 200, head
+  150, liver 60, brain / stomach 50, heart 30; one table for people and animals).
+- **The fist** is the class default (`UnarmedAttackProfile`: 5 Blunt, range 100 cm): about 4 HP off a part per blow. BP_MOMetaHuman_Female
+  (every survivor) overrode it with 500 from a Feb 26 debug session (3452e7cb), so one punch destroyed a deer's torso; reset Oct 18.
+  `MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart` checks every survivor pawn's own fist against the vital parts.
+- **ArmorPenetration** only matters through armor ("0 = stopped by any armor, 1 = ignores armor"): `GetFinalDamage` no longer multiplies
+  by it (no hit carries target armor yet). It did: a wooden spear's 10 at 0.1 landed 1, a fifth of a punch.
+- **The weapon in the hand**: the item in the right-hand equipment slot IS the main-hand weapon (`SyncMainHandFromEquipment`, server, on
+  every right-hand change and at BeginPlay): an item with `bIsWeapon` + `WeaponProfileId` (DT_Weapons) is equipped and drawn; anything
+  else fights bare. Nothing called `EquipMainHandWeapon` before, so every spear fought with the fist; the five spear rows in DT_Items
+  were also not weapons (`bIsWeapon` false, slot None) until Oct 18. A weapon wears only when a blow lands, on the held item's own
+  durability (a worn-out item leaves the hand; an item that keeps none, like the spears, wears the profile's MaxDurability counter).
+  Measured Oct 18 (solo instance, deer frozen in front): fist 3.9 -> 3.1 HP off the torso; wooden spear light thrust 8.3 -> 10.0 HP
+  (Puncture x1.2) with a bleeding puncture wound; before the reset the fist did 386.8 -> 309.4 and killed it.
 
 ### AI Known Issues
 

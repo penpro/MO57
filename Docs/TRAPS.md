@@ -325,6 +325,14 @@
   `UMOInteractorComponent::FindInteractableNearAimPoint` and `FMOInstanceRef::Resolve` do. A line or sweep trace still hits them. (Oct 18)
 - **Creatures are blind** -> a perception component with no senses at OnRegister is never registered -> `RequestStimuliListenerUpdate()` before
   `ConfigureSense`. **"IsInAttackRange does not exist"** -> blackboard values pushed before the BT bound the blackboard -> prime in Tick. (post-reveal, caves-and-lighting)
+- **Creatures are deaf** -> the hearing sense filters by raw team ids, the engine's default solver calls NoTeam vs NoTeam Friendly, and every
+  MO57 pawn is NoTeam: with `bDetectFriendlies` off no footstep was ever heard (sight checks per actor and worked) -> every creature sense
+  uses `AMOCreatureController::SenseAllAffiliations()`; threats are decided in `OnTargetPerceptionUpdated`. (Oct 18)
+- **A number in combat is 100x what the code says** -> a Blueprint component template overrides the C++ default (BP_MOMetaHuman_Female's
+  `UnarmedAttackProfile.BaseDamage` = 500, a Feb debug value: one punch killed a deer) -> read the pawn BP's own template (a test can walk
+  its `SimpleConstructionScript`, as `MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart` does). (Oct 18)
+- **A held spear fights like a fist** -> nothing linked the right-hand item to the combat profile, and `GetFinalDamage` multiplied by
+  ArmorPenetration on unarmored bodies -> `UMOCombatComponent::SyncMainHandFromEquipment`; penetration only acts through armor. (Oct 18)
 - **A spawn hitches on soft assets** -> `LoadSynchronous` at spawn -> declare in `GatherRuntimeAssets`. **Fallback deer under the sea** -> `MOSpawnClearance`. (post-reveal)
 - **Survivor behaviour trees don't exist** -> survivors are `AMOSurvivorController`'s C++ state machine. (dev_status)
 - **Ore mined with no pick** -> the tool gate lived only in the menu -> `HasToolForAction` in `BeginHarvest` (one gate). (progression-pass1)

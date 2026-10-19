@@ -11,6 +11,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "TimerManager.h"
 
 UMOAnatomyComponent::UMOAnatomyComponent()
@@ -120,7 +122,7 @@ void UMOAnatomyComponent::InitializeBodyParts()
 // DAMAGE API
 // ============================================================================
 
-bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOWoundType WoundType)
+bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOWoundType WoundType, AActor* DamageInstigator)
 {
 	AActor* Owner = GetOwner();
 
@@ -154,13 +156,17 @@ bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOW
 	FMOBodyPartDefinitionRow PartDef;
 	GetBodyPartDefinition(Part, PartDef);
 
+	// Who did it, recorded before any event below fires: a death (CheckDeathConditions) or a creature's flight reads it from them.
+	LastDamageInstigator = DamageInstigator;
+	LastDamageTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
 	// Apply damage
 	float ActualDamage = Damage * WoundDef.BaseDamageMultiplier;
 	float OldHP = PartState->CurrentHP;
 	PartState->CurrentHP = FMath::Max(0.0f, PartState->CurrentHP - ActualDamage);
 
-	UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] InflictDamage: Part=%d, Damage=%.1f (actual=%.1f), HP %.1f -> %.1f"),
-		static_cast<int32>(Part), Damage, ActualDamage, OldHP, PartState->CurrentHP);
+	UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] InflictDamage: Part=%d, Damage=%.1f (actual=%.1f), HP %.1f -> %.1f, by %s"),
+		static_cast<int32>(Part), Damage, ActualDamage, OldHP, PartState->CurrentHP, DamageInstigator ? *DamageInstigator->GetName() : TEXT("nobody"));
 
 	// Update status
 	if (PartState->CurrentHP <= 0.0f)

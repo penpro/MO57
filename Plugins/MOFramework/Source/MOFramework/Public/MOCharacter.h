@@ -1032,8 +1032,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0", ClampMax="1"))
 	float SprintingNoiseLoudness = 1.0f;
 
+	/** Crouched footfalls scale the loudness by this (sneaking: a crouched walk is heard at a quarter of a walk's distance or less). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0", ClampMax="1"))
+	float CrouchedNoiseScale = 0.5f;
+
 	/** Time since last noise was generated. */
 	float TimeSinceLastNoise = 0.f;
+
+	/**
+	 * How loud this pawn's footfalls are at Speed (cm/s), 0-1 (a listener hears it within HearingRange x loudness): its ACTUAL speed
+	 * through its own gaits -- below the walk quieter, Walking at WalkSpeed, Jogging at JogSpeed, Sprinting at SprintSpeed -- so an AI
+	 * pawn (a running wolf) is as loud as its run, not stuck at the walk value its player-only gait state left it; crouched x CrouchedNoiseScale.
+	 */
+	float GetMovementNoiseLoudness(float Speed) const;
 
 	// ============================================================================
 	// FALL-THROUGH SAFETY

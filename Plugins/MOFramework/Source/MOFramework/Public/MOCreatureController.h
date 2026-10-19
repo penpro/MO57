@@ -175,6 +175,34 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Creature|AI")
 	float GetAttackRange() const { return AttackRange; }
 
+	// ============================================================================
+	// DAMAGE REACTION / PURSUIT
+	// ============================================================================
+
+	/**
+	 * Server: the creature was hurt (AMOCreature, from its anatomy). Whoever did it becomes the threat for WoundedPanicSeconds whether
+	 * or not it was ever seen or heard -- prey runs from it leg after leg, a predator turns on it. Null (the environment) changes nothing.
+	 */
+	void NotifyDamaged(AActor* DamageInstigator);
+
+	/** True while a wound's flight lasts (NotifyDamaged): the threat is held regardless of perception. */
+	UFUNCTION(BlueprintPure, Category="MO|Creature|AI")
+	bool IsPanicked() const;
+
+	/** True for a creature that chases its threat (definition bIsPredator): its pursuit is leashed to home and given up when not gaining. */
+	bool PursuesThreats() const { return bPursuesThreats; }
+
+	/** The affiliations every creature sense detects: all of them (MO57 has no teams; OnTargetPerceptionUpdated decides what is a threat). */
+	static FAISenseAffiliationFilter SenseAllAffiliations();
+
+	/**
+	 * One look at a chase (UpdatePursuit, 5 Hz): progress is being within reach (AttackReach) or closer than the last mark by a step;
+	 * InOutMarkDistance / InOutLastGainTime carry the mark between looks. Returns why to give it up (past the leash from home, or no
+	 * progress for NoGainSeconds), or nullptr to keep chasing. A zero leash or NoGainSeconds disables that test.
+	 */
+	static const TCHAR* JudgeChase(float DistanceToQuarry, float DistanceFromHome, double Now, float AttackReach, float LeashRadius,
+		float NoGainSeconds, float& InOutMarkDistance, double& InOutLastGainTime);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
@@ -234,6 +262,13 @@ protected:
 	/** Attack range (cm). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Combat")
 	float AttackRange = 150.f;
+
+	/** From the definition (ApplyBehaviorSettings): see FMOCreatureDefinitionRow. */
+	bool bPursuesThreats = false;
+	float WoundedPanicSeconds = 45.f;
+	float ChaseLeashRadius = 20000.f;
+	float ChaseNoGainSeconds = 20.f;
+	float ChaseGiveUpCooldownSeconds = 120.f;
 
 	// ============================================================================
 	// ACTIVITY SETTINGS
@@ -296,6 +331,17 @@ protected:
 	/** Time accumulator for throttled blackboard updates. */
 	float ThreatUpdateAccumulator = 0.0f;
 
+	/** World time a wound's flight ends (NotifyDamaged); before it the threat is held whatever perception says. */
+	double PanicUntilTime = -1.0;
+
+	/** The quarry the current chase measures, the closest it got, and when it last closed in (UpdatePursuit). */
+	TWeakObjectPtr<AActor> ChaseQuarry;
+	float ChaseBestDistance = MAX_FLT;
+	double ChaseLastGainTime = 0.0;
+
+	/** Quarries given up on, until when (world time): perception ignores them till then. */
+	TMap<TWeakObjectPtr<AActor>, double> GivenUpUntil;
+
 	/** Interval between blackboard threat updates (seconds). */
 	static constexpr float ThreatUpdateInterval = 0.2f;
 
@@ -318,4 +364,16 @@ private:
 
 	/** Update blackboard with current threat info. */
 	void UpdateBlackboardThreatInfo();
+
+	/** The definition's behavior numbers (flee threshold, attack range, panic, pursuit), applied at once whether perception is ready or not. */
+	void ApplyBehaviorSettings(const FMOCreatureDefinitionRow& Definition);
+
+	/** A pursuer's chase (5 Hz): gives it up past ChaseLeashRadius from home or after ChaseNoGainSeconds without closing in. */
+	void UpdatePursuit();
+
+	/** Drop the current threat and ignore it for ChaseGiveUpCooldownSeconds. */
+	void GiveUpChase(const TCHAR* Reason);
+
+	/** Forget the threat after Seconds unless something renews it (a sighting, a sound, a wound). */
+	void StartThreatForgetTimer(AActor* Threat, float Seconds);
 };

@@ -140,6 +140,25 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior")
 	bool bIsPredator = false;
 
+	/**
+	 * A wounded animal's flight (s): whatever hurt it stays its threat this long, seen or heard or not, so it runs leg after leg
+	 * (the behavior tree's flee legs chain while it has a threat) -- a deer at 7.5 m/s for 45 s covers ~340 m. 0 = no flight from damage.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	float WoundedPanicSeconds = 45.f;
+
+	/** A pursuer (bIsPredator) gives up its chase this far (cm) from home (its den: where it spawned). 0 = no leash. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	float ChaseLeashRadius = 20000.f;
+
+	/** A pursuer gives up when it has not closed on its quarry for this long (s): a chase it is not winning. 0 = never. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	float ChaseNoGainSeconds = 20.f;
+
+	/** After giving up, a pursuer ignores that quarry for this long (s). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	float ChaseGiveUpCooldownSeconds = 120.f;
+
 	// ============================================================================
 	// AI
 	// ============================================================================

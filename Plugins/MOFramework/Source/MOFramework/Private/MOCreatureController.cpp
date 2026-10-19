@@ -47,6 +47,7 @@ void AMOCreatureController::Tick(float DeltaTime)
 	if (ThreatUpdateAccumulator >= ThreatUpdateInterval)
 	{
 		ThreatUpdateAccumulator = 0.0f;
+		UpdatePursuit();   // may give the chase up (and clear the threat)
 		if (CurrentThreatActor.IsValid())
 		{
 			UpdateBlackboardThreatInfo();
@@ -96,9 +97,7 @@ void AMOCreatureController::SetupPerception()
 		SightConfig->PeripheralVisionAngleDegrees = DefaultPeripheralVisionAngle;
 		SightConfig->SetMaxAge(MaxStimulusAge);
 		SightConfig->AutoSuccessRangeFromLastSeenLocation = -1.f;
-		SightConfig->DetectionByAffiliation.bDetectEnemies = true;
-		SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
-		SightConfig->DetectionByAffiliation.bDetectFriendlies = false;
+		SightConfig->DetectionByAffiliation = SenseAllAffiliations();
 	}
 
 	HearingConfig = NewObject<UAISenseConfig_Hearing>(this, UAISenseConfig_Hearing::StaticClass(), TEXT("HearingConfig"));
@@ -106,9 +105,7 @@ void AMOCreatureController::SetupPerception()
 	{
 		HearingConfig->HearingRange = DefaultHearingRange;
 		HearingConfig->SetMaxAge(MaxStimulusAge);
-		HearingConfig->DetectionByAffiliation.bDetectEnemies = true;
-		HearingConfig->DetectionByAffiliation.bDetectNeutrals = true;
-		HearingConfig->DetectionByAffiliation.bDetectFriendlies = false;
+		HearingConfig->DetectionByAffiliation = SenseAllAffiliations();
 	}
 
 	// Bind to perception updates
@@ -172,8 +169,7 @@ void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionR
 		PendingHearingRange = Definition.HearingRange;
 
 		// Still apply combat settings immediately
-		FleeHealthThreshold = Definition.FleeThreshold;
-		AttackRange = Definition.AttackRange;
+		ApplyBehaviorSettings(Definition);
 		return;
 	}
 
@@ -200,8 +196,7 @@ void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionR
 	}
 
 	// Apply combat settings from definition
-	FleeHealthThreshold = Definition.FleeThreshold;
-	AttackRange = Definition.AttackRange;
+	ApplyBehaviorSettings(Definition);
 
 	// Request perception system update
 	if (PerceptionComp)
@@ -281,6 +276,16 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		return;
 	}
 
+	// A quarry this pursuer gave up on stays ignored for a while (GiveUpChase); a wound from it ends that (NotifyDamaged).
+	if (const double* Until = GivenUpUntil.Find(Actor))
+	{
+		if (GetWorld()->GetTimeSeconds() < *Until)
+		{
+			return;
+		}
+		GivenUpUntil.Remove(Actor);
+	}
+
 	if (Stimulus.WasSuccessfullySensed())
 	{
 		// TARGET STICKINESS: Don't switch targets unless we don't have one or current is invalid
@@ -331,26 +336,13 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Lost sight of %s, remembering for %.1fs"),
 			// 	*Actor->GetName(), ThreatMemoryDuration);
 
-			// Start timer to forget the threat after ThreatMemoryDuration
-			// But keep CurrentThreatActor valid until then!
-			GetWorld()->GetTimerManager().SetTimer(
-				ThreatMemoryTimerHandle,
-				[this, Actor]()
-				{
-					// Only clear if this is still the remembered threat
-					if (RememberedThreatActor.Get() == Actor)
-					{
-						// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
-						// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Threat forgotten: %s"),
-						// 	Actor ? *Actor->GetName() : TEXT("Unknown"));
-						CurrentThreatActor.Reset();
-						RememberedThreatActor.Reset();
-						UpdateBlackboardThreatInfo();
-					}
-				},
-				ThreatMemoryDuration,
-				false
-			);
+			// Forget the threat after ThreatMemoryDuration (a wounded animal's flight holds it longer), keeping CurrentThreatActor valid until then.
+			float Memory = ThreatMemoryDuration;
+			if (IsPanicked())
+			{
+				Memory = FMath::Max(Memory, static_cast<float>(PanicUntilTime - GetWorld()->GetTimeSeconds()));
+			}
+			StartThreatForgetTimer(Actor, Memory);
 		}
 	}
 }
@@ -575,4 +567,152 @@ void AMOCreatureController::SetDead()
 	{
 		Brain->StopLogic(TEXT("Creature died"));
 	}
+}
+
+void AMOCreatureController::StartThreatForgetTimer(AActor* Threat, float Seconds)
+{
+	const TWeakObjectPtr<AActor> WeakThreat = Threat;
+	GetWorld()->GetTimerManager().SetTimer(ThreatMemoryTimerHandle, FTimerDelegate::CreateWeakLambda(this, [this, WeakThreat]()
+	{
+		// Only clear if this is still the remembered threat, and not while a sense still has it (a lost-sight event restarts the memory then).
+		if (RememberedThreatActor != WeakThreat)
+		{
+			return;
+		}
+		TArray<AActor*> Perceived;
+		if (UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent())
+		{
+			PerceptionComp->GetCurrentlyPerceivedActors(nullptr, Perceived);
+		}
+		if (WeakThreat.IsValid() && Perceived.Contains(WeakThreat.Get()))
+		{
+			return;
+		}
+		// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
+		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Threat forgotten: %s"), *GetNameSafe(WeakThreat.Get()));
+		CurrentThreatActor.Reset();
+		RememberedThreatActor.Reset();
+		UpdateBlackboardThreatInfo();
+	}), FMath::Max(0.1f, Seconds), false);
+}
+
+void AMOCreatureController::ApplyBehaviorSettings(const FMOCreatureDefinitionRow& Definition)
+{
+	FleeHealthThreshold = Definition.FleeThreshold;
+	AttackRange = Definition.AttackRange;
+	bPursuesThreats = Definition.bIsPredator;
+	WoundedPanicSeconds = Definition.WoundedPanicSeconds;
+	ChaseLeashRadius = Definition.ChaseLeashRadius;
+	ChaseNoGainSeconds = Definition.ChaseNoGainSeconds;
+	ChaseGiveUpCooldownSeconds = Definition.ChaseGiveUpCooldownSeconds;
+}
+
+bool AMOCreatureController::IsPanicked() const
+{
+	const UWorld* World = GetWorld();
+	return World && World->GetTimeSeconds() < PanicUntilTime;
+}
+
+void AMOCreatureController::NotifyDamaged(AActor* DamageInstigator)
+{
+	APawn* ControlledPawn = GetPawn();
+	UWorld* World = GetWorld();
+	if (!ControlledPawn || !World || !DamageInstigator || DamageInstigator == ControlledPawn || WoundedPanicSeconds <= 0.0f || IsDead())
+	{
+		return;
+	}
+	GivenUpUntil.Remove(DamageInstigator);   // it hurt us: no longer ignored
+	PanicUntilTime = World->GetTimeSeconds() + WoundedPanicSeconds;
+	CurrentThreatActor = DamageInstigator;
+	RememberedThreatActor = DamageInstigator;
+	LastKnownThreatLocation = DamageInstigator->GetActorLocation();
+	StartThreatForgetTimer(DamageInstigator, WoundedPanicSeconds);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s hurt by %s: %s it for %.0f s"), *ControlledPawn->GetName(), *DamageInstigator->GetName(),
+		bPursuesThreats ? TEXT("turns on") : TEXT("flees"), WoundedPanicSeconds);
+	UpdateBlackboardThreatInfo();
+}
+
+FAISenseAffiliationFilter AMOCreatureController::SenseAllAffiliations()
+{
+	// Friendlies too -- for hearing that is what makes it work at all: the hearing sense compares raw team ids, the engine's default solver
+	// calls NoTeam vs NoTeam FRIENDLY, and every MO57 pawn and controller is NoTeam, so with friendlies off no creature ever heard a footstep
+	// (a wolf or a sprinting player came up behind a deer unheard; Oct 18 2026). Sight checks attitude per actor (a pawn without a team
+	// agent is Neutral) and always worked.
+	FAISenseAffiliationFilter Filter;
+	Filter.bDetectEnemies = true;
+	Filter.bDetectNeutrals = true;
+	Filter.bDetectFriendlies = true;
+	return Filter;
+}
+
+const TCHAR* AMOCreatureController::JudgeChase(float DistanceToQuarry, float DistanceFromHome, double Now, float AttackReach, float LeashRadius,
+	float NoGainSeconds, float& InOutMarkDistance, double& InOutLastGainTime)
+{
+	static constexpr float ChaseGainStepCm = 200.f;   // closing in by this much since the last mark is progress
+	if (DistanceToQuarry <= AttackReach || DistanceToQuarry < InOutMarkDistance - ChaseGainStepCm)
+	{
+		InOutMarkDistance = DistanceToQuarry;
+		InOutLastGainTime = Now;
+	}
+	if (LeashRadius > 0.0f && DistanceFromHome > LeashRadius)
+	{
+		return TEXT("too far from home");
+	}
+	if (NoGainSeconds > 0.0f && Now - InOutLastGainTime > NoGainSeconds)
+	{
+		return TEXT("not gaining on it");
+	}
+	return nullptr;
+}
+
+void AMOCreatureController::UpdatePursuit()
+{
+	APawn* ControlledPawn = GetPawn();
+	AActor* Quarry = CurrentThreatActor.Get();
+	UWorld* World = GetWorld();
+	if (!bPursuesThreats || !ControlledPawn || !Quarry || !World || IsDead())
+	{
+		ChaseQuarry.Reset();
+		return;
+	}
+	const double Now = World->GetTimeSeconds();
+	const float Distance = FVector::Dist(ControlledPawn->GetActorLocation(), Quarry->GetActorLocation());
+	if (ChaseQuarry.Get() != Quarry)
+	{
+		ChaseQuarry = Quarry;   // a new chase starts here
+		ChaseBestDistance = Distance;
+		ChaseLastGainTime = Now;
+	}
+	if (const TCHAR* Reason = JudgeChase(Distance, FVector::Dist2D(ControlledPawn->GetActorLocation(), HomeLocation), Now, AttackRange * 1.5f,
+		ChaseLeashRadius, ChaseNoGainSeconds, ChaseBestDistance, ChaseLastGainTime))
+	{
+		GiveUpChase(Reason);
+	}
+}
+
+void AMOCreatureController::GiveUpChase(const TCHAR* Reason)
+{
+	AActor* Quarry = CurrentThreatActor.Get();
+	UWorld* World = GetWorld();
+	if (!Quarry || !World)
+	{
+		return;
+	}
+	const double Now = World->GetTimeSeconds();
+	for (auto It = GivenUpUntil.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid() || It.Value() <= Now)
+		{
+			It.RemoveCurrent();
+		}
+	}
+	GivenUpUntil.Add(Quarry, Now + ChaseGiveUpCooldownSeconds);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s gives up chasing %s (%s; %.0f m from home)"), *GetNameSafe(GetPawn()), *Quarry->GetName(), Reason,
+		GetPawn() ? FVector::Dist2D(GetPawn()->GetActorLocation(), HomeLocation) / 100.0f : 0.0f);
+	World->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
+	CurrentThreatActor.Reset();
+	RememberedThreatActor.Reset();
+	ChaseQuarry.Reset();
+	PanicUntilTime = -1.0;
+	UpdateBlackboardThreatInfo();
 }

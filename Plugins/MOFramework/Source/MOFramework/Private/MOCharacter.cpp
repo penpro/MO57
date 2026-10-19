@@ -476,6 +476,32 @@ void AMOCharacter::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 	}
 }
 
+float AMOCharacter::GetMovementNoiseLoudness(float Speed) const
+{
+	// Piecewise through this pawn's own gaits (a creature's WalkSpeed / SprintSpeed come from its definition): the speed is what is heard.
+	const float Walk = FMath::Max(WalkSpeed, 1.0f);
+	const float Sprint = FMath::Max(SprintSpeed, Walk + 1.0f);
+	const float Jog = FMath::Clamp(JogSpeed, Walk + 0.5f, Sprint - 0.5f);
+	float Loudness;
+	if (Speed <= Walk)
+	{
+		Loudness = WalkingNoiseLoudness * FMath::Max(Speed, 0.0f) / Walk;
+	}
+	else if (Speed <= Jog)
+	{
+		Loudness = FMath::Lerp(WalkingNoiseLoudness, JoggingNoiseLoudness, (Speed - Walk) / (Jog - Walk));
+	}
+	else
+	{
+		Loudness = FMath::Lerp(JoggingNoiseLoudness, SprintingNoiseLoudness, FMath::Min(1.0f, (Speed - Jog) / (Sprint - Jog)));
+	}
+	if (bIsCrouched)
+	{
+		Loudness *= CrouchedNoiseScale;
+	}
+	return FMath::Clamp(Loudness, 0.0f, 1.0f);
+}
+
 void AMOCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -500,20 +526,9 @@ void AMOCharacter::Tick(float DeltaTime)
 		{
 			TimeSinceLastNoise = 0.f;
 
-			// Determine loudness based on movement mode
-			float Loudness = WalkingNoiseLoudness;
-			if (bIsSprinting)
-			{
-				Loudness = SprintingNoiseLoudness;
-			}
-			else if (CurrentMovementMode == EMOMovementMode::Jogging)
-			{
-				Loudness = JoggingNoiseLoudness;
-			}
-
-			// Report noise event to AI perception system
+			// Report noise event to AI perception system (server: AActor::MakeNoise does nothing on a client)
 			// MaxRange of 0 means use the loudness to determine range
-			MakeNoise(Loudness, this, GetActorLocation());
+			MakeNoise(GetMovementNoiseLoudness(Speed), this, GetActorLocation());
 		}
 	}
 

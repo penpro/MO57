@@ -188,7 +188,7 @@ void UBTTask_CreatureAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 					};
 					EMOBodyPartType TargetPart = TargetParts[FMath::RandRange(0, TargetParts.Num() - 1)];
 
-					TargetAnatomy->InflictDamage(TargetPart, BaseDamage, EMOWoundType::Laceration);
+					TargetAnatomy->InflictDamage(TargetPart, BaseDamage, EMOWoundType::Laceration, OwnerPawn);   // the biter: the victim's killer / what it flees
 				}
 			}
 			else
