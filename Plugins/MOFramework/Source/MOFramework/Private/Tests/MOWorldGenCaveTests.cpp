@@ -95,7 +95,7 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 	// 2. Air above the ground needs no carving; 3. rock under FLAT ground stays intact down to the cover (v9: a gallery opens only into a steep slope,
 	//    an entrance -- never a hole in flat ground to fall into; Wes, Oct 16 2026).
 	{
-		int32 AboveWrong = 0, CoverWrong = 0, CoverChecked = 0, SteepColumns = 0, SteepOpen = 0;
+		int32 AboveWrong = 0, CoverWrong = 0, CoverChecked = 0, SteepColumns = 0, SteepOpen = 0, NearEntrance = 0;
 		const float FlatTan = FMath::Tan(FMath::DegreesToRadians(T.CaveEntranceSlopeMinDeg - 2.0f));
 		for (int32 I = 0; I < 6000; ++I)
 		{
@@ -110,6 +110,13 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 			const float Gy2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X, Y - 300.0, CaveTestSeed)) / 300.0f;
 			const float Depth = R.FRandRange(0.0f, T.CaveCoverCm - 50.0f);
 			const bool bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) <= 0.0f;
+			// A built entrance (v12, F30 A) is a designed opening on gentle ground: its hollow is walked into and its passage runs a few metres under
+			// the ground nearby. Its own test (WorldGen.CaveEntranceBuilt) holds the top 1-3 m whole out to 60 m; this one judges the rest of the field.
+			if (FMOWorldGen::DistanceToCaveEntranceHollow(*P, X, Y, CaveTestSeed) < 6000.0f)
+			{
+				++NearEntrance;
+				continue;
+			}
 			if (FMath::Max(FMath::Sqrt(Gx * Gx + Gy * Gy), FMath::Sqrt(Gx2 * Gx2 + Gy2 * Gy2)) < FlatTan)
 			{
 				++CoverChecked;
@@ -121,7 +128,7 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 				SteepOpen += bOpen ? 1 : 0;
 			}
 		}
-		AddInfo(FString::Printf(TEXT("steep columns: %d, of which open inside the cover (a gallery entrance): %d"), SteepColumns, SteepOpen));
+		AddInfo(FString::Printf(TEXT("steep columns: %d, of which open inside the cover (a gallery entrance): %d; %d column(s) within 60 m of a built entrance left to its own test"), SteepColumns, SteepOpen, NearEntrance));
 		TestEqual(TEXT("no cave above the ground (6000 columns)"), AboveWrong, 0);
 		TestEqual(*FString::Printf(TEXT("under ground flatter than %.0f deg no gallery / cavern breaks the %.0f cm cover (%d columns): no hole to fall into"),
 			T.CaveEntranceSlopeMinDeg - 2.0f, T.CaveCoverCm, CoverChecked), CoverWrong, 0);

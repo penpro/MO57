@@ -28,6 +28,7 @@
 | Meadow flowers in color | A new game, any meadow with flowers (the main menu backdrop has some) | colored flowers, not flat grey (their material lacked "Used with Nanite" since Oct 14) | Oct 19 batch 5 |
 | Ghost look on stones and sticks | Place a campfire or a stick wall ghost | the pale-white ghost look, not flat grey checker | Oct 19 batch 5 |
 | Save thumbnails | Save in daylight, open Load | the thumbnail shows the world (harness saves from background windows are near-black; unsure if yours are) | Oct 19 |
+| A built cave entrance | `poi CaveEntrance` (dev console) -> the doline; walk down the passage that leaves its uphill side into the chamber (take a torch) | a bowl you can walk into and a slope down into the dark, no hole to fall through, no seam where the hollow meets the hill | F30 A (Oct 19) |
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
@@ -35,7 +36,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F30 how caves become common (built entrances) · F31 what a building's skill line does (shown, never enforced) · F32 which Fab buys still make sense (pelts, a rigged bow later).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -129,7 +130,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-081 | DONE-2026-10-18 | Claude | `ServerPlaceBuilding` re-checked: the server holds the transform to the pawn's reach and build requests to `MaxBuildRequestReachCm`; the rest -> N-171 | Building §2 | H19 residual |
 | N-082 | DONE-2026-10-18 | Claude | `ServerApplyTerraform` re-checked: server reach (25 m) and a rate limit (80 % of the action time); the tool requirement is client-side only -> N-171 | OVERNIGHT_LOG | H17 |
 | N-171 | OPEN | Claude | Server re-checks a hostile client could skip (low priority for friends-only co-op): building collision / slope / recipe knowledge in `ServerPlaceBuilding`. (The terraform part is moot: digging has no tool requirement anywhere -- ROADMAP: hard rock costs time, not a tool gate) | Building §2 | N-081, N-082 |
-| N-172 | WAITING | Wes | The building menu lets a new player place a Forge at minute 1 and shows "Smithing 0 / 30" that nothing enforces: fork F31 (recommended: skill slows the work and wastes material, never gates -- ROADMAP no hard locks) | DECISIONS F31, Building §2 | |
+| N-172 | DONE-2026-10-19 | Claude | A building's skill is how well, never whether (F31 A, Wes Oct 19): `FMOBuildSkillPenalty` -- x2 time and a quarter of the material spoiled with no skill, linear to none at the level; spoils replaced from the builder's sources or the build pauses; the menu shows the time at your skill. Verified: a Forge at Smithing 0 / 30 took 240 s, 9 of 36 units spoiled (5 replaced, 1 paused until a stone was added, 3 more replaced) | `Docs/Building.md` §2 | |
 | N-083 | DONE-2026-10-18 | Claude | Site menu nits: the campfire listed hand recipes (fixed: a station lists its own + heat recipes, test StationListsItsOwnRecipes); the "Rotate and Flip" hint lingered after the first build (fixed: Tutorial_BuildControls completes on the first placed ghost); the source labels: left-aligned since the kit spec (`ui_specs/kit_build_context.py`) -- Wes: check by eye | first-ten-minutes | |
 | N-084 | OPEN | Claude | Voxel Nanite material crash after two simultaneous digs (not reproduced): watch | Terraform header | |
 
@@ -149,7 +150,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
 | N-168 | OPEN | Claude | Bronze and iron spears (BronzeSpear01 / IronSpear01, their spearheads): items, recipes and DT_Weapons profiles exist, no meshes / icons yet (wooden, fire-hardened and flint spears have both) | `Docs/Item_Art_Pipeline.md` | Wes Oct 18 |
 | N-169 | IN PROGRESS | Claude | Hit reactions: `AMOCreature::PlayHitReaction` has no caller and its montage would play on the server only (needs a multicast or a replicated hit counter); human deaths name the killer since Oct 18 (`FMODeathRecord::KillerName`, on the recap) | AI_And_Colony §1 | Oct 18 |
-| N-100 | WAITING | Wes | Fab buys re-evaluated against the ComfyUI image-to-3D pipeline (Oct 19): TRELLIS.2 covers the static props (hafted tools, leather, bones, herbs, eggs, fish, the uncovered rows); still worth buying: Animal Pelts Vol. 1 (fur edges), one rigged bow pack when bows animate, optionally Primitive props. Fork F32 | DECISIONS F32, `Docs/Item_Art_Pipeline.md` §8 | |
+| N-100 | DONE-2026-10-19 | Wes | Fab buys after TRELLIS.2 (F32 A, Wes Oct 19): he buys Animal Pelts Vol. 1 now and one rigged bow pack later, when bows animate; everything else goes to the image-to-3D queue | DECISIONS 2026-10-19, `Docs/Item_Art_Pipeline.md` §8 | |
 
 ## Co-op
 
@@ -179,7 +180,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR18-11 | DONE-2026-10-18 | Claude | Terraform 1 s in developer mode: `MO.Dev.TerraformSeconds` (default 1) while the world's HOST is in developer mode (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-12 | DONE-2026-10-18 | Claude | Lakes calmer: `mo.Lakes.WaveScale` 0.4 of the preset's wave heights; checked (lake amplitude 20 vs the sea's 50; calm in a screenshot) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-13 | DONE-2026-10-18 | Wes | "All the caves are gone": answered, Wes, Oct 18: "yes caves need to be decently common since they're ALSO hard to spot" -> N-170 | `Docs/BugReports_2026-10-18.md` | |
-| N-170 | WAITING | Wes | Caves decently common (BR18-13): the shipped caves put a walk-in mouth in 0 % of ordinary 1 km tiles; built entrances (doline hollow + uphill passage) are built, tested and OFF -- on, 25 % (karst) or 62.5 % (any rock). Wes picks in F30; turning them on is a tuning default + a generator version bump + re-pinned probes | DECISIONS F30, `Docs/Caves_And_Geology.md` | BR18-13 |
+| N-170 | DONE-2026-10-19 | Claude | Caves decently common (BR18-13; F30 A, Wes Oct 19: "turn on built cave entrances in limestone"): built entrances ON in karst, `CaveEntranceChance` 0.7 per 500 m cell, generator v12 (a walk-in mouth in ~25 % of 1 km tiles of cave country, was 0 %); `PinnedProbeCave` 0xAB796FA0 (heights unchanged); `poi CaveEntrance` lands at one (4.3 km from the 670711536 spawn) | `Docs/Caves_And_Geology.md` §1, DECISIONS 2026-10-19 | BR18-13 |
 | BR18-14 | OPEN | Claude | Cliffs not seated, see-through back side: the aligned `ed_cliff` slab species (SM_HugeSandstoneCliff_07) tilted with a steep slope (N-030 family, F9) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-15 | DONE-2026-10-18 | Claude | Caves in the POI list: "Cave entrance" (`FMOWorldGen::FindNearestCaveMouth`); checked in game (a mouth 6.4 km away, found in 1.8 s) (e316e4b5) | `Docs/BugReports_2026-10-18.md` | |
 | BR18-16 | OPEN | Claude | UDW dynamic landscape weather effects: feed UDW's wetness / snow / puddles into M_QuixelBase's MO_Finish (scoped in the tracker) | `Docs/BugReports_2026-10-18.md` | |
@@ -264,6 +265,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-19 Wes's F30 A + F31 A: built cave entrances ON in karst (generator v12, ~25 % of cave-country tiles get a walk-in mouth); a building's skill slows and wastes, never gates (`FMOBuildSkillPenalty`; verified on a Forge at Smithing 0 / 30). F32 A recorded (Wes buys the pelts).
 - DONE-2026-10-19 batch 6 (playtest of recruiting / possession / night): every E press logged an Error (a January debug line, `[MOInteract] *** ServerExecuteInteract ENTRY ***`) -> Log; the Characters list showed "0 years" for the player's own pawn, recruits and wild survivors -> a stable 18-40 years from the GUID wherever a record lacks an age (`FMOPersistedPawnRecord::DefaultAgeInDays`). Recruiting (first survivor joins), possession by a real click and the night sky checked on screen.
 - DONE-2026-10-19 batch 5 (playtest, N-078): drinking from the edge (the crosshair's water 3-4 m out fell back to none: "Get closer" a step from a pond); building ghosts on Nanite meshes drew the engine's grey (force the non-Nanite fallback while ghosted); the PN meadow flowers drew grey in game since Oct 14 (MA_Flowers lacked "Used with Nanite"); play time was never counted (every save "0m"); 214 routine [MOHarvest] warnings per ten minutes removed; N-127 checked.
 - DONE-2026-10-19 batch 4 (first-ten-minutes playtest, N-078): the B key's opening of the build menu ticks "Open the build menu" (only placement did); an item objective may name an item TAG -- "Collect Fallen Branches" counts Stick01 and Stick02 (only Stick01 did, the ground has both), "Harvest Bark" every bark (DT_Items Tags, DT_Quests targets; test Quest.ItemObjectiveCountsItsKind; host + joiner verified); the forage popup closes when the player walks 3 m away (it rode along mid-screen); Back closes an open context menu before it opens the system menu; N-160 remote pawns keep their velocity; a load whose player stands on bare ground logs NO VEGETATION with the spawner's runs; `ue.py inst start` keeps game.prev.log.

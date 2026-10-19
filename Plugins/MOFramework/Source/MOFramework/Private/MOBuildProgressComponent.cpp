@@ -11,6 +11,8 @@
 #include "MOCharacter.h"
 #include "MOSkillsComponent.h"
 #include "MOMaterialSourceInterface.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MOPlayerController.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -55,6 +57,7 @@ void UMOBuildProgressComponent::PublishRepState(bool bForce)
 	}
 	RepState.State = Progress.State;
 	RepState.ElapsedTime = Progress.ElapsedTime;
+	RepState.TotalBuildTime = Progress.SkillTimeScale > 0.0f ? Progress.TotalBuildTime : 0.0f;
 	LastPublishedElapsed = Progress.ElapsedTime;
 	RepState.Deposits.Reset(Progress.DepositedMaterials.Num());
 	for (const TPair<FName, int32>& Pair : Progress.DepositedMaterials)
@@ -78,6 +81,10 @@ void UMOBuildProgressComponent::ApplyRepState(const FMOBuildRepState& Previous, 
 	const EMOBuildState OldState = Progress.State;
 	Progress.State = RepState.State;
 	Progress.ElapsedTime = RepState.ElapsedTime;
+	if (RepState.TotalBuildTime > 0.0f)
+	{
+		Progress.TotalBuildTime = RepState.TotalBuildTime;   // the first builder's skill scaled it on the server (F31)
+	}
 	Progress.DepositedMaterials.Reset();
 	for (const FMOBuildDeposit& Deposit : RepState.Deposits)
 	{
@@ -203,6 +210,12 @@ void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Option
 	if (InBuilderInventory)
 	{
 		BuilderInventory = InBuilderInventory;
+	}
+
+	// How well this builder does the work (F31): decided once, at the first start.
+	if (Progress.SkillTimeScale <= 0.0f)
+	{
+		ApplyBuilderSkill();
 	}
 
 	// Start construction timer
@@ -767,6 +780,20 @@ void UMOBuildProgressComponent::ProcessConstruction(float DeltaTime)
 	// Materials are pre-deposited, so just advance the timer
 	Progress.ElapsedTime += DeltaTime;
 
+	// Unskilled work spoils material at evenly spread points (F31): the k-th of N at k / (N + 1) of the way.
+	if (Progress.SpoilsLeft > 0 && Progress.TotalBuildTime > 0.0f)
+	{
+		const int32 Next = Progress.SpoilsPlanned - Progress.SpoilsLeft + 1;
+		if (Progress.ElapsedTime / Progress.TotalBuildTime >= static_cast<float>(Next) / static_cast<float>(Progress.SpoilsPlanned + 1))
+		{
+			SpoilOneUnit();
+			if (Progress.State != EMOBuildState::Constructing)
+			{
+				return;   // paused: nothing to replace the spoiled unit with
+			}
+		}
+	}
+
 	// Check for completion
 	if (Progress.ElapsedTime >= Progress.TotalBuildTime)
 	{
@@ -776,6 +803,97 @@ void UMOBuildProgressComponent::ProcessConstruction(float DeltaTime)
 
 	// Broadcast progress update
 	OnConstructionProgress.Broadcast(Progress.GetOverallProgress());
+}
+
+void UMOBuildProgressComponent::ApplyBuilderSkill()
+{
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	const AActor* Builder = BuilderInventory.IsValid() ? BuilderInventory->GetOwner() : nullptr;
+	const int32 Required = (Recipe && !Recipe->RequiredSkillId.IsNone()) ? Recipe->RequiredSkillLevel : 0;
+	const UMOSkillsComponent* Skills = Builder ? Builder->FindComponentByClass<UMOSkillsComponent>() : nullptr;
+	// No known builder (a path without one): judged as skilled, never punished for a missing link.
+	const int32 Current = !Builder ? Required : (Skills && Required > 0 ? Skills->GetSkillLevel(Recipe->RequiredSkillId) : 0);
+	const FMOBuildSkillPenalty Penalty = FMOBuildSkillPenalty::For(Current, Required);
+
+	Progress.SkillTimeScale = Penalty.TimeScale;
+	Progress.TotalBuildTime *= Penalty.TimeScale;
+	CalculateTotalWeight();
+	int32 Units = 0;
+	for (const FMOBuildPart& Part : BuildParts)
+	{
+		Units += Part.IsItemPart() ? Part.Quantity : 0;
+	}
+	Progress.SpoilsPlanned = FMath::RoundToInt(static_cast<float>(Units) * Penalty.WasteFraction);
+	Progress.SpoilsLeft = Progress.SpoilsPlanned;
+
+	if (Current < Required)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] %s builds %s at %s %d / %d: time x%.2f (%.0f s), %d of %d unit(s) will be spoiled"),
+			*GetNameSafe(Builder), *RecipeId.ToString(), *Recipe->RequiredSkillId.ToString(), Current, Required, Penalty.TimeScale,
+			Progress.TotalBuildTime, Progress.SpoilsPlanned, Units);
+		NotifyBuilder(FText::Format(NSLOCTEXT("MOBuild", "Unskilled", "You are unskilled at this ({0} {1} / {2}): the work will take longer and waste some material."),
+			FText::FromName(Recipe->RequiredSkillId), FText::AsNumber(Current), FText::AsNumber(Required)));
+	}
+}
+
+void UMOBuildProgressComponent::SpoilOneUnit()
+{
+	if (!CheckAuthority(TEXT("SpoilOneUnit")))
+	{
+		return;
+	}
+	--Progress.SpoilsLeft;
+	// The material the work uses most is the one it wastes (ties by id: the same ledger always spoils the same thing).
+	FName Spoiled = NAME_None;
+	int32 Most = 0;
+	for (const TPair<FName, int32>& Pair : Progress.DepositedMaterials)
+	{
+		if (Pair.Value > Most || (Pair.Value == Most && Pair.Value > 0 && Pair.Key.LexicalLess(Spoiled)))
+		{
+			Spoiled = Pair.Key;
+			Most = Pair.Value;
+		}
+	}
+	if (Spoiled.IsNone())
+	{
+		return;
+	}
+	if (--Progress.DepositedMaterials[Spoiled] <= 0)
+	{
+		Progress.DepositedMaterials.Remove(Spoiled);
+	}
+
+	uint8 Sources = 0;
+	Sources |= Progress.bDrawFromInventory ? MOMaterialSourceBit(EMOMaterialSource::Inventory) : 0;
+	Sources |= Progress.bDrawFromNearbyContainers ? MOMaterialSourceBit(EMOMaterialSource::NearbyContainers) : 0;
+	Sources |= Progress.bDrawFromSurroundingArea ? MOMaterialSourceBit(EMOMaterialSource::SurroundingArea) : 0;
+	GatherMissingMaterials(BuilderInventory.Get(), Sources);
+	const bool bReplaced = AreAllMaterialsDeposited();
+	const FText ItemName = UMOItemDatabaseSettings::GetItemDisplayName(Spoiled);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] %s: unskilled work spoiled 1 %s (%d of %d) -- %s"), *GetNameSafe(GetOwner()),
+		*Spoiled.ToString(), Progress.SpoilsPlanned - Progress.SpoilsLeft, Progress.SpoilsPlanned,
+		bReplaced ? TEXT("replaced from the builder's sources") : TEXT("nothing to replace it: paused"));
+	if (bReplaced)
+	{
+		NotifyBuilder(FText::Format(NSLOCTEXT("MOBuild", "SpoiledReplaced", "Your clumsy work spoiled a {0}; you used another."), ItemName));
+	}
+	else
+	{
+		NotifyBuilder(FText::Format(NSLOCTEXT("MOBuild", "SpoiledPaused", "Your clumsy work spoiled a {0}. Add another to go on."), ItemName));
+		OnMaterialNeeded.Broadcast(Spoiled, 1);
+		PauseConstruction();
+	}
+	PublishRepState(/*bForce=*/true);
+	OnDepositsChanged.Broadcast();
+}
+
+void UMOBuildProgressComponent::NotifyBuilder(const FText& Message) const
+{
+	const APawn* Builder = BuilderInventory.IsValid() ? Cast<APawn>(BuilderInventory->GetOwner()) : nullptr;
+	if (AMOPlayerController* PC = Builder ? Cast<AMOPlayerController>(Builder->GetController()) : nullptr)
+	{
+		PC->ClientShowNotification(Message, 4.0f, EMONotificationType::Info);
+	}
 }
 
 void UMOBuildProgressComponent::CheckMaterialConsumption()

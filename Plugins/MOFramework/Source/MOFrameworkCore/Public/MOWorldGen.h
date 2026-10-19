@@ -580,16 +580,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="500"))
 	float SinkholeDepthCm = 3800.0f;
 	/**
-	 * BUILT ENTRANCES (fork F30, N-170; off until Wes picks): a hillside is the only place a gallery opens, and ordinary ground is too gentle for that -- a walk-in
+	 * BUILT ENTRANCES (F30 A, Wes Oct 19 2026: on, karst only; generator v12): a hillside is the only place a gallery opens, and ordinary ground is too gentle for that -- a walk-in
 	 * mouth in 0 % of 1 km tiles of cave country (MOFramework.WorldGen.CaveReach, Oct 19 2026). A built entrance is a shallow collapse hollow (a doline) with a
 	 * sloping passage leading down out of its side into a small chamber: a slope you walk down, never a shaft to fall into, and a hollow you can see. One candidate
 	 * per cell of this edge (cm), on karst (bCavesOnlyInLimestone), dry and below the high ground like every cave feature.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="20000"))
 	float CaveEntranceCellCm = 50000.0f;
-	/** Chance (0..1) that a cell holds a built entrance. 0 = the feature is off (and out of the params hash: worlds made without it keep their identity). */
+	/** Chance (0..1) that a cell holds a built entrance (0.7: a walk-in mouth in ~25 % of 1 km tiles of cave country, MOFramework.WorldGen.CaveReach).
+	 *  0 = the feature is off (and out of the params hash). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
-	float CaveEntranceChance = 0.0f;
+	float CaveEntranceChance = 0.7f;
 
 	// --- Water: rivers and lakes are carved into low ground and sit AT SEA LEVEL; the water plane of the world (WaterBodyCustom at SeaLevelCm) fills them ----------
 	// Everything below SeaLevelCm is water, so a channel or basin is just terrain dipping under sea level: no per-lake water actor, no flow simulation.
@@ -751,7 +752,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 11;   // v11: caves only in limestone (karst); v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 12;   // v12: built cave entrances in karst (a doline hollow with a passage leading down into a chamber; F30 A, Wes Oct 19); v11: caves only in limestone (karst); v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -935,7 +936,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0x0FBFC116u;     // v11 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0xAB796FA0u;     // v12 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the

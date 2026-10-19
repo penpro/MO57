@@ -1244,3 +1244,12 @@ References: CL-0115
 Status: PROGRESS (batch 6 commit) + RELEASE (the CL-0116 files, build window, instances; nothing of mine is held now)
 References: CL-0116
 Batch 6 verified (suite 329 / 0; in game: recruiting by E logs no Error; the Characters list shows 23 and 18 years). Session ends here for the night: Wes's forks F28-F32 and N-153 wait in DECISIONS / BACKLOG.
+
+### 2026-10-19 09:08 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0118
+Status: CLAIM (Wes's F30 A + F31 A: MOFrameworkCore MOWorldGen.h (CaveEntranceChance 0.7, generator v12, PinnedProbeCave), MOBuildingTypes.h, MOBuildProgressComponent.h/.cpp, MOBuildingRecipeListWidget.cpp, MORecipeDetailPanelBase.cpp, tests; then the build window, headless automation, instance acthost)
+References: CL-0117
+
+### 2026-10-19 09:43 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0119
+Status: PROGRESS (F30 A + F31 A commit) + RELEASE (the CL-0118 files, build window, instances)
+References: CL-0118
+Wes's F30 A: built cave entrances ON in karst, generator v12 (PinnedProbeCave re-pinned; heights unchanged; CaveReach shipped 25.0 %). F31 A: building skill slows and wastes, never gates (FMOBuildSkillPenalty). Suite 329 / 1 (WorldGen.Caves needed the built-entrance zone excluded; rerun after a corrective build: pass). In game: a Forge at Smithing 0 / 30 -- 240 s, 9 spoils, a pause and a resume; `poi CaveEntrance` lands at a doline 4.3 km from the spawn; MO.WorldGen.Checksum match=1 v12.

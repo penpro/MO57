@@ -223,7 +223,7 @@ bool FMOWorldGen_CaveReach::RunTest(const FString& Parameters)
 }
 
 
-// F30 A, built entrances (off in shipped worlds: CaveEntranceChance 0). With them on: the hollow is open, a passage and chamber lie 8-16 m under it, the rock
+// F30 A, built entrances (on in shipped worlds since generator v12, Wes Oct 19 2026; every cell on here). With them on: the hollow is open, a passage and chamber lie 8-16 m under it, the rock
 // 1-3 m under the ground stays whole outside the hollow (no hole in flat ground), and the field has no cliff (the other cave tests' gradient limit).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveEntranceBuilt,
 	"MOFramework.WorldGen.CaveEntranceBuilt",
@@ -232,11 +232,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveEntranceBuilt,
 bool FMOWorldGen_CaveEntranceBuilt::RunTest(const FString& Parameters)
 {
 	using namespace MOCaveReachTest;
-	const FMOWorldGenParamsRef Off = UMOWorldGenSettings::BuildParams();
-	const FMOWorldGenParamsRef P = Variant(Off, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 50000.0f; T.CaveEntranceChance = 1.0f; });
+	const FMOWorldGenParamsRef Shipped = UMOWorldGenSettings::BuildParams();
+	const FMOWorldGenParamsRef P = Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 50000.0f; T.CaveEntranceChance = 1.0f; });
+	const FMOWorldGenParamsRef Off = Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceChance = 0.0f; });   // the field without the feature
 	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(670711536);
-	TestEqual(TEXT("off by default: the shipped params hash ignores the feature"), Off->GetHash(),
-		Variant(Off, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 12345678.0f; })->GetHash());
+	// On by default since generator v12 (F30 A, Wes Oct 19 2026: "turn on built cave entrances in limestone").
+	TestEqual(TEXT("on by default: 70 % of the 500 m cells"), Shipped->Tuning.CaveEntranceChance, 0.7f);
+	TestNotEqual(TEXT("on by default: the feature is part of the shipped params hash"), Shipped->GetHash(),
+		Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 12345678.0f; })->GetHash());
 
 	// Find entrances: scan 50 x 50 cells (25 km) at each cell's 9 candidate points for a negative hollow distance, then walk to the hollow's centre.
 	int32 Found = 0, Checked = 0;

@@ -10,6 +10,7 @@
 #include "MOTerraformingComponent.h"
 #include "MOGameClockSubsystem.h"
 #include "MOQuestSubsystem.h"
+#include "MOBuildingTypes.h"
 #include "MOPossessionTypes.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOGameState.h"
@@ -1375,6 +1376,29 @@ bool FMOQuest_ItemObjectiveCountsItsKind::RunTest(const FString& Parameters)
 			UMOItemDatabaseSettings::GetItemDefinition(BarkId, Bark) && Bark.Tags.Contains(FName(TEXT("Bark"))));
 	}
 	Quests->ResetAllQuests();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuild_SkillSlowsAndWastesNeverGates,
+	"MOFramework.Building.SkillSlowsAndWastesNeverGates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuild_SkillSlowsAndWastesNeverGates::RunTest(const FString& Parameters)
+{
+	// F31 (Wes, Oct 19 2026: "building skill slows the work and wastes material, never gates"). One rule for the construction and the menu.
+	const FMOBuildSkillPenalty None = FMOBuildSkillPenalty::For(0, 30);
+	TestEqual(TEXT("no skill: twice as long"), None.TimeScale, 2.0f);
+	TestEqual(TEXT("no skill: a quarter of the material spoiled"), None.WasteFraction, 0.25f);
+	const FMOBuildSkillPenalty Half = FMOBuildSkillPenalty::For(15, 30);
+	TestEqual(TEXT("half the level: half the extra time"), Half.TimeScale, 1.5f);
+	TestEqual(TEXT("half the level: half the waste"), Half.WasteFraction, 0.125f);
+	const FMOBuildSkillPenalty Met = FMOBuildSkillPenalty::For(30, 30);
+	TestEqual(TEXT("at the level: the recipe's own time"), Met.TimeScale, 1.0f);
+	TestEqual(TEXT("at the level: nothing wasted"), Met.WasteFraction, 0.0f);
+	TestEqual(TEXT("above the level: no bonus past the recipe"), FMOBuildSkillPenalty::For(60, 30).TimeScale, 1.0f);
+	TestEqual(TEXT("no skill line on the recipe: no penalty"), FMOBuildSkillPenalty::For(0, 0).TimeScale, 1.0f);
+	// CONTROL (can fail): the shortfall really scales -- a level below the requirement costs something.
+	TestTrue(TEXT("CONTROL: one level short costs time"), FMOBuildSkillPenalty::For(29, 30).TimeScale > 1.0f);
 	return true;
 }
 

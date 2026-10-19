@@ -536,4 +536,13 @@ private:
 
 	/** Finalize construction. */
 	void FinalizeConstruction();
+
+	/** First start only (F31): scale the build time and plan the spoiled units by the builder's skill against the recipe (FMOBuildSkillPenalty). */
+	void ApplyBuilderSkill();
+
+	/** One unit of the deposited material is spoiled by unskilled work: replaced from the builder's sources at once, or the build pauses for it. */
+	void SpoilOneUnit();
+
+	/** A notice on the builder's screen when the builder is a player (nothing for a survivor). */
+	void NotifyBuilder(const FText& Message) const;
 };

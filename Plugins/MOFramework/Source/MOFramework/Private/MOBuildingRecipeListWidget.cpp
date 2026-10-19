@@ -161,21 +161,7 @@ bool UMOBuildingRecipeListWidget::CanBuildRecipe(FName RecipeId) const
 		}
 	}
 
-	// Check skill requirements
-	if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
-	{
-		if (UMOSkillsComponent* Skills = SkillsComponent.Get())
-		{
-			if (!Skills->HasSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel))
-			{
-				return false;
-			}
-		}
-		else
-		{
-			return false;
-		}
-	}
-
+	// A building's skill never gates it (F31, Wes Oct 19 2026): below the level the work is slower and wastes material (FMOBuildSkillPenalty),
+	// so only the materials decide whether the row reads as buildable now.
 	return true;
 }

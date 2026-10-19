@@ -1,8 +1,8 @@
 # Caves and geology
 
 > **Covers:** cave shape and placement, bedrock and ore bodies, what digging yields, dig time by rock, what grows/lies in caves.
-> **Current state (2026-10-17):** world generator **v11**. Caves are level limestone galleries entered from hillsides, kept away
-> from sea level and shores; bedrock provinces carry realistic ore bodies; both dig paths (player + survivors) yield from the
+> **Current state (2026-10-19):** world generator **v12**. Caves are level limestone galleries entered from hillsides and, since v12,
+> from built entrances in karst (a doline hollow with a passage down into a chamber; F30 A); kept away from sea level and shores; bedrock provinces carry realistic ore bodies; both dig paths (player + survivors) yield from the
 > geology through one map; dig time scales with rock hardness. Torches make caves playable (`Docs/Light_Sources.md`).
 > **Entry points:** `FMOWorldGen::SampleCaveDistanceAtGround` (`MOFrameworkCore/Private/MOWorldGenCaves.cpp`), `SampleBedrock` /
 > `SampleOreIn` / `FindCaveSurfaces` / `FindOutcrops` / `SampleDig` (`MOWorldGenGeology.cpp`), `FMOGeologyYield` (MOFramework),
@@ -13,7 +13,7 @@
 > **Open items:** `Docs/BACKLOG.md` § World: terrain, caves, geology. **Decisions:** `Docs/DECISIONS.md` (Oct 16 caves v8, Oct 17 geology calls).
 > **History:** the dated build log is `Docs/Terrain_Generation_Exploration.md` ("Geology", "Update 2026-10-10" caves, to-do list).
 
-## 1. Shape and placement (generator v9-v11)
+## 1. Shape and placement (generator v9-v12)
 
 | Rule | Value | Since |
 |---|---|---|
@@ -25,8 +25,8 @@
 | Water gate | no cave air below sea level + `CaveWaterClearanceCm` 5 m (fade 6 m; `CaveMinZCm` starts there); no cave within `CaveShoreKeepOutCm` 250 m of LOW ground (base height under the 18 m river/basin ceiling); 120-180 m from upland lake shores | v10, Oct 17 |
 | Karst only | `bCavesOnlyInLimestone` (in the params hash): non-limestone nodes of the 16 m water-gate lattice close, so a contact tapers over a few metres | v11, Oct 17 |
 | Density | ~4 mouths per km2 of hill country (16-32 deg band), ~11 per km2 of karst hillside; none on flat lowland or in the ranges. A coastal spawn can be ~9 km from the nearest mouth (world 31415926) | measured Oct 17 |
-| Reach | Ordinary ground: a walk-in mouth in 0 % of 24 random 1 km tiles of cave country (3 worlds); most tiles have no ground at >= 16 deg. `MOFramework.WorldGen.CaveReach` reports it per world and per tile (slope, limestone, passages) and for candidate tunings. Making caves common is fork F30 (N-170) | measured Oct 19 |
-| Built entrances (OFF: F30) | `CaveEntranceCellCm` 500 m / `CaveEntranceChance` 0 (out of the params hash while 0): a doline hollow (spherical cap 11-15 m across, 3.5-5 m deep, walkable rim) with a 3.4 m passage leading UPHILL out of its side at ~27 deg into a chamber; gated on karst + dry at both ends, ground <= 20 deg, 3 m of rock over the chamber; inside its cell's jitter margin. `DistanceToSinkholeRimZone` includes the hollow (plants, world features, spawns keep out). On (0.7): a mouth in 25 % of 1 km tiles. Test `MOFramework.WorldGen.CaveEntranceBuilt` | built Oct 19 |
+| Reach | Ordinary ground: a walk-in mouth in 0 % of 24 random 1 km tiles of cave country (3 worlds); most tiles have no ground at >= 16 deg. `MOFramework.WorldGen.CaveReach` reports it per world and per tile (slope, limestone, passages) and for candidate tunings. With the built entrances (v12) a walk-in mouth in ~25 % of those tiles (5 of the 8 limestone ones) | measured Oct 19 |
+| Built entrances (ON since v12, F30 A: Wes Oct 19) | `CaveEntranceCellCm` 500 m / `CaveEntranceChance` 0.7 (in the params hash; 0 turns them off and out of it): a doline hollow (spherical cap 11-15 m across, 3.5-5 m deep, walkable rim) with a 3.4 m passage leading UPHILL out of its side at ~27 deg into a chamber; gated on karst + dry at both ends, ground <= 20 deg, 3 m of rock over the chamber; inside its cell's jitter margin. `DistanceToSinkholeRimZone` includes the hollow (plants, world features, spawns keep out). On (0.7): a mouth in 25 % of 1 km tiles. Test `MOFramework.WorldGen.CaveEntranceBuilt` | built Oct 19 |
 
 Why the 16-32 deg band: lower bands give more mouths (14-24: 8.5/km2, 12-20: 13, 10-16: 18.5) but a 3 m tube on a gentle slope cuts
 an open trench, which Wes ruled out ("no holes in flat ground").

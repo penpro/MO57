@@ -5,6 +5,7 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOUIUtils.h"
+#include "MOBuildingTypes.h"
 #include "MOCommonButton.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
@@ -91,6 +92,11 @@ void UMORecipeDetailPanelBase::DisplayRecipe(FName RecipeId)
 				CurrentLevel,
 				Recipe->RequiredSkillLevel
 			);
+			// A building's skill is how well, never whether (F31): say what the shortfall costs instead of reading like a lock.
+			if (Recipe->bIsBuilding && CurrentLevel < Recipe->RequiredSkillLevel)
+			{
+				SkillText = FText::Format(NSLOCTEXT("MOCrafting", "BuildSkillShort", "{0} (slower, wastes some material)"), SkillText);
+			}
 			SkillRequirementText->SetText(SkillText);
 			SkillRequirementText->SetVisibility(ESlateVisibility::Visible);
 		}
@@ -333,6 +339,13 @@ float UMORecipeDetailPanelBase::GetRecipeTime(const FMORecipeDefinitionRow* Reci
 	// Use TotalBuildTime for buildings, CraftTime for regular recipes
 	if (Recipe->bIsBuilding && Recipe->TotalBuildTime > 0.0f)
 	{
+		// The time at THIS builder's skill (F31: FMOBuildSkillPenalty, the rule the construction itself applies).
+		if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
+		{
+			const UMOSkillsComponent* Skills = SkillsComponent.Get();
+			const int32 Current = Skills ? Skills->GetSkillLevel(Recipe->RequiredSkillId) : 0;
+			return Recipe->TotalBuildTime * FMOBuildSkillPenalty::For(Current, Recipe->RequiredSkillLevel).TimeScale;
+		}
 		return Recipe->TotalBuildTime;
 	}
 	return Recipe->CraftTime;

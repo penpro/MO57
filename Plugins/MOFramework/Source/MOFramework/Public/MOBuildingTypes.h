@@ -195,6 +195,37 @@ struct MOFRAMEWORK_API FMOBuildRepState
 	/** Sorted by ItemId, so the same ledger always replicates the same bytes. */
 	UPROPERTY()
 	TArray<FMOBuildDeposit> Deposits;
+
+	/** The build's whole duration, once the first builder's skill has scaled it (F31); 0 = the recipe's own, as every machine already knows it. */
+	UPROPERTY()
+	float TotalBuildTime = 0.0f;
+};
+
+/**
+ * A building's SKILL line says how well the work goes, never whether it may be done (F31, Wes Oct 19 2026: "building skill slows the work and
+ * wastes material, never gates"; PROGRESSION_ROADMAP section 1, "no hard locks"). Below the recipe's level, linearly in the shortfall: the work
+ * takes longer (twice as long with no skill at all) and spoils part of its material along the way (a quarter of it with none). One rule for the
+ * construction (UMOBuildProgressComponent) and for what the building menu shows.
+ */
+struct FMOBuildSkillPenalty
+{
+	static constexpr float MaxExtraTime = 1.0f;
+	static constexpr float MaxWasteFraction = 0.25f;
+
+	float TimeScale = 1.0f;
+	float WasteFraction = 0.0f;
+
+	static FMOBuildSkillPenalty For(int32 CurrentLevel, int32 RequiredLevel)
+	{
+		FMOBuildSkillPenalty Penalty;
+		if (RequiredLevel > 0)
+		{
+			const float Shortfall = 1.0f - FMath::Clamp(static_cast<float>(CurrentLevel) / static_cast<float>(RequiredLevel), 0.0f, 1.0f);
+			Penalty.TimeScale = 1.0f + MaxExtraTime * Shortfall;
+			Penalty.WasteFraction = MaxWasteFraction * Shortfall;
+		}
+		return Penalty;
+	}
 };
 
 /**
@@ -256,6 +287,18 @@ struct MOFRAMEWORK_API FMOBuildProgress
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Progress")
 	TMap<FName, int32> DepositedMaterials;
+
+	/** The first builder's skill against the recipe (FMOBuildSkillPenalty), applied when the work first starts: the build time's multiplier.
+	 *  0 = not started yet; kept through pauses, cancels and saves so the time is never scaled twice. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Progress")
+	float SkillTimeScale = 0.0f;
+
+	/** Units of material the unskilled work spoils along the way (F31): all of them, and those still to come (spread evenly through the work). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Progress")
+	int32 SpoilsPlanned = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Progress")
+	int32 SpoilsLeft = 0;
 
 	/** Get overall progress (0.0 - 1.0). */
 	float GetOverallProgress() const

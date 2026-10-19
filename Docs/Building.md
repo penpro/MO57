@@ -40,9 +40,14 @@
 - Server checks (Oct 18 re-check of the July H19 note): `ServerPlaceBuilding` holds the transform to the pawn's reach
   (`MaxPlacementDistance + ServerMaxPlacementMargin`); build requests need the pawn within `MaxBuildRequestReachCm`. Not re-checked on the
   server: collision, slope, recipe knowledge (BACKLOG N-171, low priority for friends-only co-op).
-- **A building's SKILL line is shown, not enforced** (found Oct 19): the menu reads e.g. "Smithing: 0/30" in red for the Forge, yet a new player
-  places its ghost at minute 1, and neither placement nor construction checks a skill. Forge and Bloomery are listed from the start. What the
-  requirement should do is fork F31 (DECISIONS): enforcing it as written deadlocks the metal era (Smithing is trained almost only at a Forge).
+- **A building's skill is how well, never whether** (F31 A, Wes Oct 19: "building skill slows the work and wastes material, never gates"):
+  `FMOBuildSkillPenalty` (MOBuildingTypes.h) is the one rule. When the work first starts (`UMOBuildProgressComponent::ApplyBuilderSkill`) the
+  builder's level against the recipe's scales the build time (x2 with no skill, linearly to x1 at the level) and plans how many units the work
+  spoils (a quarter of the material with no skill); the scaled time replicates (`FMOBuildRepState::TotalBuildTime`) and is saved. Spoils fall
+  at even points through the work (`SpoilOneUnit`): the most-used material loses a unit, replaced at once from the builder's sources (pack,
+  nearby containers, the ground) or the build pauses "add another to go on". The menu shows the time at your skill and "Smithing: 0/30
+  (slower, wastes some material)"; the list no longer treats skill as a lock. Crafting still gates on skill (F18 is open). Verified: a Forge
+  at Smithing 0 / 30 -- 240 s instead of 120, 9 of 36 units spoiled, the first five replaced from 5 spare stones, the sixth paused the build.
 
 ## 3. How a building looks
 
