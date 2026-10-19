@@ -87,6 +87,7 @@
 #include "CoreMinimal.h"
 #include "MOUIControllerBase.h"
 #include "MOPossessionTypes.h"
+#include "MOWorldSave.h"
 #include "MOSystemMenuUIController.generated.h"
 
 class UMOInGameMenu;
@@ -104,14 +105,6 @@ enum class EMOBodyPartType : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationCancelledDelegate);
-
-/** What a save of this world did (SaveThisWorld). A client is not a failure: the host owns the world save. */
-enum class EMOWorldSaveResult : uint8
-{
-	Saved,
-	NotHost,
-	Failed
-};
 
 /**
  * Specialized UI controller for system-related UI.

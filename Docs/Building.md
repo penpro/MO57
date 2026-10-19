@@ -33,8 +33,13 @@
 - The aim trace from the shoulder camera must reach the ground within reach: before Oct 15 it never did within 10 m, so the ghost
   floated invalid, and its tint wrote a "Color" parameter `M_BuildPreview` does not have (invalid looked green). **The co-op build test
   passed throughout because it places through a server call, not the ghost: test the real input path.**
-- Residual audit note (July): `ServerPlaceBuilding` trusted the client FTransform with no reach / collision recheck (H19 residual);
-  recheck against current code before closing (BACKLOG).
+- **The site is cleared** (Oct 18, N-079): `ServerPlaceBuilding` registers a worked-ground zone over the new building (radius = its bounds'
+  half-diagonal + 30 cm, 100-800 cm) and sweeps it, so the decorative ground cover (the AutoSweepTags scatter: grass; never harvestable
+  plants) under and around it goes on every machine and stays gone in the save. A campfire no longer sits in tall grass. Measured on a host +
+  joiner: a campfire placed by the joiner, radius 118 cm, 17 instances swept on the host and the same 17 on the joiner.
+- Server checks (Oct 18 re-check of the July H19 note): `ServerPlaceBuilding` holds the transform to the pawn's reach
+  (`MaxPlacementDistance + ServerMaxPlacementMargin`); build requests need the pawn within `MaxBuildRequestReachCm`. Not re-checked on the
+  server: collision, slope, recipe knowledge (BACKLOG N-171, low priority for friends-only co-op).
 
 ## 3. How a building looks
 

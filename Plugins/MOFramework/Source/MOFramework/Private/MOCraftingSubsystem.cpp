@@ -150,8 +150,15 @@ void UMOCraftingSubsystem::GetAvailableRecipes(
 			continue;
 		}
 
-		// Check station requirement (context-specific)
+		// Check station requirement (context-specific). A station's menu lists the station's own recipes and the station-less ones that
+		// need heat (any fire serves them); plain hand recipes live in the hand crafting menu (N-083: the campfire listed "Select Crude
+		// Club", a splint, a bandage, a hide blanket).
 		if (Recipe->RequiredStation != EMOCraftingStation::None && Recipe->RequiredStation != Station)
+		{
+			continue;
+		}
+		if (Station != EMOCraftingStation::None && Recipe->RequiredStation == EMOCraftingStation::None
+			&& Recipe->MinimumProcessTemperatureCelsius <= 0.0f)
 		{
 			continue;
 		}

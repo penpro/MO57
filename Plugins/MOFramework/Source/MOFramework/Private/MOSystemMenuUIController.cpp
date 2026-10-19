@@ -1217,28 +1217,8 @@ void UMOSystemMenuUIController::ContinueAfterDeath(const AMOCharacter* DeadChara
 
 EMOWorldSaveResult UMOSystemMenuUIController::SaveThisWorld(const TCHAR* Reason)
 {
-	UWorld* World = GetWorld();
-	if (World && World->GetNetMode() == NM_Client)
-	{
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOSysUI] Saving this world (%s): client -- the host owns the world save, nothing written"), Reason);
-		return EMOWorldSaveResult::NotHost;
-	}
-
-	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
-	UMOPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
-	if (!Persistence)
-	{
-		UE_LOG(LogMOFramework, Error,
-			TEXT("[MOSysUI] Saving this world (%s): no persistence subsystem -- NOT saved"), Reason);
-		return EMOWorldSaveResult::Failed;
-	}
-
-	const bool bSaved = Persistence->SaveToCurrentSlot();
-	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOSysUI] Saving this world (%s): slot '%s' ok=%d"),
-		Reason, *Persistence->GetCurrentSlotName(), bSaved ? 1 : 0);
-	return bSaved ? EMOWorldSaveResult::Saved : EMOWorldSaveResult::Failed;
+	// The one save step every caller shares (the timed autosave too: UMOAutosaveSubsystem).
+	return MOWorldSave::SaveThisWorld(GetWorld(), Reason);
 }
 
 void UMOSystemMenuUIController::HandlePlayerNeedsNextLife(APlayerController* PC)

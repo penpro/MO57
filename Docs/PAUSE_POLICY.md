@@ -9,7 +9,7 @@
 > force the save... i don't want people to be able to 'save-scum'".
 > **Entry points:** `AMOPlayerController::SetPause`, `UMOSystemMenuUIController::SaveThisWorld` / `HandleSaveRequested` /
 > `ReturnToMainMenuImmediate` / `QuitGameImmediate` / `HandleLoadRequested` / `HandleViewportCloseRequested`. **Open:** a crash or a
-> killed process still loses everything since the last save (no timed autosave: BACKLOG N-157).
+> killed process loses at most the last few minutes: the host autosaves every `MO.Save.AutosaveMinutes` (10) real minutes (N-157).
 
 **MO57 does not pause. Ever. By design.**
 
@@ -88,7 +88,8 @@ Every way out of a world goes through one save, `UMOSystemMenuUIController::Save
   close can't offer one; it logs the failure.
 - Log line to check: `[MOSysUI] Saving this world (<reason>): slot '<slot>' ok=1` (reasons: `save`, `exit to main menu`, `exit game`,
   `load another save`, `window closed`).
-- Not covered: a crash or a killed process (no autosave timer exists yet: BACKLOG N-157), and the console `quit` command (developer console only).
+- A crash or a killed process loses up to `MO.Save.AutosaveMinutes` (10) minutes (the timed autosave, N-157); the console `quit` command
+  (developer console only) does not save.
 - Verified 2026-10-17 in a `-game` instance: Exit to Main Menu, Exit Game, the death recap's Return and the window close each logged
   `save to slot ... ok=1` with no dialog. Reloading the save made at a death now respawns a new survivor 4.96 mi from the recorded death
   spot; before that fix it left a sky camera with no pawn. After F24: Save wrote the world's own slot with the toast and no new slot

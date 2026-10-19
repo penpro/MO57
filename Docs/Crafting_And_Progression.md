@@ -39,6 +39,10 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
 - **A missing tool is named, everywhere** (crafting, harvesting, cover gathering, carcasses): `UMOItemDatabaseSettings::DescribeToolNeed` gives the
   tool and the simplest item that serves it, "Needs a tool: Hammer (Hammerstone or better)." (`FindSimplestToolItem`, cached). New tool gates
   use it instead of their own text (BR18-28).
+- **A station's menu lists its own recipes** (Oct 18, N-083): `UMOCraftingSubsystem::GetAvailableRecipes(Station)` returns the recipes that
+  need that station plus the station-less ones that need heat (`MinimumProcessTemperatureCelsius > 0`: any fire serves them); plain hand
+  recipes stay in the hand crafting menu (the campfire used to list "Select Crude Club", a splint, a bandage, a hide blanket). Test
+  `MOFramework.Crafting.StationListsItsOwnRecipes`.
 - Recipe queuing and workshop batches are the approved QoL: N items at N x their real duration (`Docs/ENGINEERING_PRINCIPLES.md` tedium).
 - **Execution context is server-derived from the actual station:** identity, type, completed building state, reach, line of sight,
   active/fuel state and configured process-temperature capability. Each entry keeps its station GUID; opening another menu cannot

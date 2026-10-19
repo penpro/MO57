@@ -18,6 +18,9 @@
 | Megascans tree wind far from the world origin | Wes's world (seed 670711536), several km from spawn; any Megascans tree in wind | leaves and branches move smoothly; no ~0.75 s move / 0.25 s freeze / snap cycle | N-166 / N-167 (4e349e37, 6d956730) |
 | Survivor task menu | Recruit a survivor, open its task menu | solid dark panel, readable names / descriptions, clear Queue buttons | BR18-26 (a736a2df) |
 | Bark container in the world | Drop one on the ground next to a stick | about 14 x 13 x 12 cm: a small, real 1 L folded-bark vessel (deliberate) | BR18-29 |
+| Grass cleared on a building site | Place a campfire (or any building) in tall grass, host and joiner | a cleared circle around it on both screens, still clear after a reload; trees and bushes untouched | N-079 (Oct 18) |
+| Build site menu's material sources | Right-click a placed ghost | Inventory / Nearby containers / Surrounding area labels sit left, next to their boxes | N-083 |
+| Item icons with no checkerboard | Inventory with sticks and stones | clean icons on the dark slot, no grey checker pattern | N-075 |
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
@@ -25,7 +28,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -87,13 +90,13 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
 | N-155 | OPEN | Codex / Claude | Permadeath gear: a deceased pawn record is skipped entirely on load (`MOPersistenceSubsystem` full-load loop), so the dead pawn's body and gear vanish after a reload; the design says the gear stays where it fell. Spawn the body as a dead, lootable corpse (or drop its inventory as world items at save). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | `Docs/Persistence.md` §1; CL-0051 | |
-| N-157 | OPEN | Claude | No timed autosave: a crash or a killed process loses everything since the last exit (and killing the process is the one scum route left). Autosave on a game-time interval through the same `SaveThisWorld` step Design + measured save cost in `Docs/Persistence.md` §1 (Oct 17); build after Wes's Steam test (the machine must stay quiet). | `Docs/PAUSE_POLICY.md` "Leaving a world" | |
+| N-157 | DONE-2026-10-18 | Claude | Timed autosave: `UMOAutosaveSubsystem` saves the host's world every `MO.Save.AutosaveMinutes` (10) real minutes through the one save step `MOWorldSave::SaveThisWorld`, with a "Saving the world..." notice; host + joiner: 11-16 ms per save, the joiner writes nothing | `Docs/Persistence.md` §1 | |
 | N-060 | WAITING | Wes | Survival single source (F1); thermal model (F2) | DECISIONS | G10, G11, H10/H11 of the Oct 13 handoff |
 | N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
 | N-062 | OPEN | Claude | Early dressing before cloth exists (MakeBandage needs WovenCloth01) | PROGRESSION_ROADMAP §3 | |
 | N-063 | VERIFY | Claude | Thermal extremes have an enforced failure (orphaned IsCritical / cardiac / respiratory broadcasts were the July finding; DieOf systemic clocks landed Oct 13) | dev_status | M13 |
 | N-064 | OPEN | Claude | Death recap: remote client's respawn RPC not verified | Medical §2 | |
-| N-065 | OPEN | Claude | Villager sleep (fatigue has no recovery) | dev_status leads | |
+| N-065 | WAITING | Wes | Nobody can sleep (players or survivors) while Energy only recovers by sleeping: every pawn runs down for good. How sleep works is fork F29 | DECISIONS F29 | |
 
 ## Crafting, progression, content
 
@@ -104,20 +107,21 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-072 | OPEN | Claude | Agriculture: seeds, crops, fields (hoe and sickle exist) | ROADMAP §3 Era 3 | |
 | N-073 | OPEN | Claude | Lime burning (quicklime) once an updraft kiln exists | ROADMAP Era 3 | |
 | N-074 | OPEN | Claude | Move the player's harvest clock from `UMOHarvestProgressWidget` onto the pawn's `UMOTimedActionComponent` | Crafting §3 | |
-| N-075 | OPEN | Claude | Art: (stone maul DONE Oct 17, its own image-to-3D mesh + grip); copper / flint deposits use boulder meshes (need ore / chalk-flint looks); checker backgrounds baked into some icons (Stick01, Stone01) | progression-pass1, Overnight_Polish | |
+| N-075 | OPEN | Claude | Art: (stone maul DONE Oct 17, its own image-to-3D mesh + grip); copper / flint deposits use boulder meshes (need ore / chalk-flint looks); checker backgrounds baked into some icons (Stick01, Stone01: re-rendered Oct 12-14, the inventory showed clean sticks Oct 18 -- Wes: check by eye) | progression-pass1, Overnight_Polish | |
 | N-076 | OPEN | Claude | Art coverage as a production backlog (135 / 216 items had real meshes + icons on Oct 14; 81 placeholders). Oct 17: +10 via image-to-3D (TRELLIS.2 GLBs, section 8): StoneMaul01, BarkContainer01, Copper/Tin/BronzeIngot01, WroughtIron01, SteelIngot01 (shares the bar, with its own steel tint MI_SteelIngot01), CopperPrill01, Resin01, HideGlue01. (The 3D item preview Wes wanted shipped Oct 14: 44fb4416) | `Docs/Item_Art_Pipeline.md` | G21 |
 | N-077 | VERIFY | Claude | Gameplay effect of x10 fewer sticks / stones / bark (Tutorial_GatherStone wants 10 cobbles; starter flow; pawn gather jobs near the coast spawn) | Handoff Verify | G09 |
 | N-078 | OPEN | Claude | First-ten-minutes pass 2 with ORDINARY input (pass 1 used console verbs): first craft, first fire, first meal / drink, first night | `Docs/Archive/` first-ten-minutes | G09, #71 |
-| N-079 | OPEN | Claude | Fire can sit in tall grass (no wildfire) | first-hours | |
+| N-079 | DONE-2026-10-18 | Claude | A placed building clears the grass on its site (worked-ground zone + sweep, every machine, saved); a campfire no longer sits in tall grass. Host + joiner: 17 instances swept on both | `Docs/Building.md` §2 | |
 
 ## Building and terraform
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
 | N-080 | WAITING | Wes | Excavation stage 6 UI (F8); building cancel / refund (F7) | DECISIONS | G22, G23 |
-| N-081 | VERIFY | Claude | `ServerPlaceBuilding` trusted the client transform: reach / collision / slope / rate recheck | Building §2 | H19 residual |
-| N-082 | VERIFY | Claude | `ServerApplyTerraform`: server-side timer / tool requirement (a rate limit landed Oct 13) | OVERNIGHT_LOG | H17 |
-| N-083 | OPEN | Claude | Site menu nits: right-aligned source labels; the "Rotate and Flip" hint lingers after the first build; "Select Crude Club" + splint / bandage / blanket in the campfire list | first-ten-minutes | |
+| N-081 | DONE-2026-10-18 | Claude | `ServerPlaceBuilding` re-checked: the server holds the transform to the pawn's reach and build requests to `MaxBuildRequestReachCm`; the rest -> N-171 | Building §2 | H19 residual |
+| N-082 | DONE-2026-10-18 | Claude | `ServerApplyTerraform` re-checked: server reach (25 m) and a rate limit (80 % of the action time); the tool requirement is client-side only -> N-171 | OVERNIGHT_LOG | H17 |
+| N-171 | OPEN | Claude | Server re-checks a hostile client could skip (low priority for friends-only co-op): building collision / slope / recipe knowledge in `ServerPlaceBuilding`, the terraform tool requirement in `ServerApplyTerraform` | Building §2 | N-081, N-082 |
+| N-083 | DONE-2026-10-18 | Claude | Site menu nits: the campfire listed hand recipes (fixed: a station lists its own + heat recipes, test StationListsItsOwnRecipes); the "Rotate and Flip" hint lingered after the first build (fixed: Tutorial_BuildControls completes on the first placed ghost); the source labels: left-aligned since the kit spec (`ui_specs/kit_build_context.py`) -- Wes: check by eye | first-ten-minutes | |
 | N-084 | OPEN | Claude | Voxel Nanite material crash after two simultaneous digs (not reproduced): watch | Terraform header | |
 
 ## AI, colony, combat
@@ -146,7 +150,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-111 | OPEN | Claude | Host-a-SAVE over real Steam not exercised (only Null OSS + a real click) | Coop §1 | |
 | N-112 | OPEN | Claude | Residual: 1 of 6 joins sees 17-50 cm ground mismatch for ~10 s | Coop §3 | |
 | N-113 | OPEN | Claude | Bug report form: the Open Discord button after the code move not re-clicked; contact field with a value | OVERNIGHT_LOG | |
-| N-114 | VERIFY | Claude | No build / harvest MO.Test verbs runnable from a client (nettest actions now has `_client_build`): close if covered | OVERNIGHT_LOG | |
+| N-114 | DONE-2026-10-18 | Claude | Covered: `nettest actions` runs client cases for build, harvest, craft, forage, inspect, pickup, eat, drink, carcass, attack and more (`Tools/ue_inst.py` `_client_*`) | OVERNIGHT_LOG | |
 | N-160 | OPEN | Claude | Remote players' pawns read velocity 0 on every other machine: `AMOCharacter::OnUpdateSimulatedPosition` sets `bSimGravityDisabled` on every proxy and the engine zeroes a "stuck" proxy's velocity each tick (no extrapolation between updates). Fix to try: disable sim gravity only when the proxy has no floor under it; control `MO.RemotePawn.SimGravity 1` | Coop §7 | |
 | N-161 | DONE-2026-10-18 | Wes | Rubber band after a joiner hitch: Wes, Oct 18 after the Steam test, "steam seems to be smooth even on low end computer". F25 closed with no change (stock); reopen on a report | Coop §7, DECISIONS 2026-10-18 | |
 | N-162 | DONE-2026-10-18 | Claude | ~2 cm height corrections on 0.8% of a joiner's moves (14% with +100 ms lag), invisible (snap <= 2 cm): find which floor disagrees (per-machine voxel collision? floor hover band). **Measured Oct 18 (nettest actions, `_joiner_long_run`):** the joiner standing still 1 km from the host was corrected ~10x/s by 69 cm for good: the HOST's floor there was voxel collision at z 5865.3, the joiner's own at 5796.2, the generator's ground 5796.6 on both -- the host's terrain collision around a far remote pawn is too high (coarser than the joiner's; the pawn's own invoker is 30 m, LOD unknown). Next: which collision component the host's floor is (invoker chunk or a far render chunk's collision) and its LOD | Coop §7 **Cause and fix (Oct 18):** two voxel collision layers, the pawn on the topmost; the host's render-chunk collision 1 km from its camera was up to ~1 m high. `AMOCharacter::RemotePlayerTerrainDetail` (MinLOD 0, 30 m on every other player's pawn): +93.1 -> +2.8 cm, 0 of 136 moves corrected (Coop section 7). |

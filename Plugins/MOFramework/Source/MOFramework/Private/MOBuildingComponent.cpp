@@ -56,6 +56,7 @@
  */
 
 #include "MOBuildingComponent.h"
+#include "MOTerrainModificationSubsystem.h"
 #include "MOUIManagerComponent.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
@@ -573,6 +574,21 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 
 	Placed->InitializeBuilding(InRecipeId);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawned %s for recipe %s"), *Placed->GetName(), *InRecipeId.ToString());
+
+	// The site is cleared: the decorative ground cover (the AutoSweepTags scatter: grass, never harvestable plants) under and around the
+	// footprint goes, on every machine and in the save, through the same worked-ground zones a dig uses. A campfire used to sit in tall
+	// grass (N-079), and floors had grass growing through them.
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
+	{
+		const FBox Bounds = Placed->GetComponentsBoundingBox(true);
+		const float ClearRadiusCm = Bounds.IsValid
+			? FMath::Clamp(FVector2D(Bounds.GetExtent().X, Bounds.GetExtent().Y).Size() + 30.0f, 100.0f, 800.0f)
+			: 150.0f;
+		TerrainMod->RegisterModifiedZone(PlacementTransform.GetLocation(), ClearRadiusCm);
+		const int32 Swept = TerrainMod->SweepModifiedZones();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Site cleared for %s: radius %.0f cm, %d cover instances swept here"),
+			*InRecipeId.ToString(), ClearRadiusCm, Swept);
+	}
 	OnGhostPlaced.Broadcast(Placed);
 }
 

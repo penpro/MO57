@@ -898,4 +898,32 @@ bool FMOCraftingMissingToolNamed::RunTest(const FString&)
 	TestTrue(FString::Printf(TEXT("Carrying the named item lets the craft through ('%s')"), *With.FailureReason.ToString()), With.bCanCraft);
 	return true;
 }
+// N-083 (first-ten-minutes): the campfire's menu listed hand recipes ("Select Crude Club", a splint, a bandage, a hide blanket). A station
+// lists its own recipes and the station-less ones that need heat; the hand menu lists the station-less ones.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCraftingStationListGate, "MOFramework.Crafting.StationListsItsOwnRecipes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOCraftingStationListGate::RunTest(const FString&)
+{
+	using namespace MOCraftingContextTests;
+	FWorld F;
+	auto Listed = [&F](EMOCraftingStation Station)
+	{
+		TArray<FName> Ids;
+		F.Crafting->GetAvailableRecipes(nullptr, nullptr, Station, Ids);
+		return Ids.Contains(RecipeId);
+	};
+	F.Recipe.RequiredStation = EMOCraftingStation::None;
+	F.Recipe.MinimumProcessTemperatureCelsius = 0.0f;
+	F.PublishRecipe();
+	TestTrue(TEXT("A hand recipe is in the hand crafting menu"), Listed(EMOCraftingStation::None));
+	TestFalse(TEXT("A hand recipe is not in the campfire's menu"), Listed(EMOCraftingStation::Campfire));
+	F.Recipe.MinimumProcessTemperatureCelsius = 100.0f;
+	F.PublishRecipe();
+	TestTrue(TEXT("A station-less recipe that needs heat is in the campfire's menu"), Listed(EMOCraftingStation::Campfire));
+	F.Recipe.RequiredStation = EMOCraftingStation::Campfire;
+	F.Recipe.MinimumProcessTemperatureCelsius = 0.0f;
+	F.PublishRecipe();
+	TestTrue(TEXT("A campfire recipe is in the campfire's menu"), Listed(EMOCraftingStation::Campfire));
+	TestFalse(TEXT("A campfire recipe is not in the hand crafting menu"), Listed(EMOCraftingStation::None));
+	return true;
+}
 #endif

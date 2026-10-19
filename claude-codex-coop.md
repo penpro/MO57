@@ -1185,3 +1185,13 @@ References: CL-0103
 Status: PROGRESS (second process rule from Wes, for every agent)
 References: CL-0104
 **Wes: defer look-and-feel checks to him** ("for visual things like the glitchy foliage material wind motion that are easy for me to verify, differ those to me, just create a list, it's dumb for you to spend 5 hours trying to see if leaf motion is smooth"). CLAUDE.md says so; Docs/BACKLOG.md has a new "Wes: check by eye" table at the top: add a line instead of building probes for how something looks.
+
+### 2026-10-18 23:52 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0106
+Status: CLAIM (batch 1 of the overnight backlog run: files below, the editor briefly for DT_Quests, then ONE build window, headless automation, instances acthost / actclient)
+References: CL-0104
+Batch 1: N-157 timed autosave (new MOWorldSave.h/.cpp, MOAutosaveSubsystem.h/.cpp; MOSystemMenuUIController.h/.cpp); N-064 a joiner's death never reached its client (MOCharacter.h/.cpp: replicated FMODeathRecord + EnterDeadState) + N-169 the recap names the killer (MODeathRecapWidget.cpp); N-083 station menus list their own recipes (MOCraftingSubsystem.cpp, Tests/MOCraftingContextTests.cpp) and the Rotate/Flip hint ends on placing a ghost (DT_Quests Tutorial_BuildControls); N-079 placing a building clears the grass on its site (MOBuildingComponent.cpp). Checks in the same pass: N-054 joiner torch at a fire, the joiner's respawn (N-064), N-114, N-081.
+
+### 2026-10-19 00:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0107
+Status: PROGRESS (batch 1 commit) + CLAIM (batch 2: the editor briefly, then ONE build window, headless automation, acthost / actclient)
+References: CL-0106
+Batch 1 verified (full suite 325 / 0; host + joiner pass): N-157 autosave, N-079 site clearing, N-083 station lists + the build-controls hint; docs; N-081 / N-082 / N-114 closed; N-171 new; F29 (sleep) logged. Held for batch 2's pass (uncommitted, mine): the joiner death recap (MOCharacter.h/.cpp, MODeathRecapWidget.cpp, the recap hunks of MOSystemMenuUIController), N-090 job failure reasons (MOSurvivorJobQueueComponent.h/.cpp, MOSurvivorController.h/.cpp, BTTask_SurvivorGather.cpp, MOSurvivorTaskMenu.cpp, a test in MOCraftingContextTests.cpp), N-170 caves (new Tests/MOWorldGenCaveReachTests.cpp now; MOWorldGen.h tuning after the measurement). Batch 2 also edits DT_Biomes (footstep set) and WBP_MOInGameMenu (N-159) in the editor.

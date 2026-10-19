@@ -162,6 +162,10 @@ if (MyButton)
   ignores F1. Test `MOHUDModeTests`.
 - Tutorial hints: a triggered tutorial outranks a pending one; `GetActiveTutorialHint` orders by `SortOrder` (quest SortOrder default =
   last); the first hint (possession) is gated on the first recruit.
+- A hint that teaches an optional skill must not outlive the moment: `Tutorial_BuildControls` (the "Rotate and Flip" hint) has an OPTIONAL
+  sequential Rotate objective and a required non-sequential PlaceGhost objective, so the quest completes when the first ghost is placed,
+  rotated or not (Oct 18, N-083: the hint used to come back after the first build and stay). Test
+  `MOFramework.Quest.TutorialHint.FreshGameStartsWithMovement` reads the live DT_Quests.
 ### In-game menu: Save, Load and the exits (one save per world, Oct 17)
 - **Save** (`UMOInGameMenu::HandleSaveClicked`) saves this world to its own slot immediately: `OnSaveRequested` with an empty slot name ->
   `UMOSystemMenuUIController::HandleSaveRequested` -> `SaveThisWorld`, plus a toast ("World saved" / "The host saves this world" /
