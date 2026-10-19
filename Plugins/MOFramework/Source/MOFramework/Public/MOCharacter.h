@@ -575,6 +575,9 @@ public:
 	/** Who killed this character ("Wolf", a survivor's name); empty when nothing did (drowning, illness). Replicated with the death. */
 	FText GetDeathKillerName() const { return DeathRecord.KillerName; }
 
+	/** Server, load path (N-155): this pawn's record is deceased -- lie here as the body, with its gear, through the one EnterDeadState. */
+	void RestoreAsCorpse();
+
 	/**
 	 * Every death, broadcast right after the dead character's own OnPawnDied, on the server and on every client. A listener that cares about
 	 * ONE pawn (the local player's death recap) filters here instead of binding to that pawn: a joiner's per-pawn binding was dropped by a

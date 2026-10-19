@@ -416,6 +416,12 @@ void AMOCharacter::UnPossessed()
 		return;
 	}
 
+	// A dead body gets no mind back: EnterDeadState removes the survivor AI, and this handler used to spawn a new one into the corpse (Oct 19).
+	if (bIsDead)
+	{
+		return;
+	}
+
 	// Check if this is a recruited survivor
 	if (!RecruitmentComponent || !RecruitmentComponent->IsPossessable())
 	{
@@ -1877,6 +1883,23 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	EnterDeadState(CausePart);
 }
 
+void AMOCharacter::RestoreAsCorpse()
+{
+	if (!HasAuthority() || bIsDead)
+	{
+		return;
+	}
+	DeathCause = EMODeathCause::BodyPartDestroyed;
+	DeathCausePart = EMOBodyPartType::None;
+	bDeathCauseSet = true;
+	DeathRecord.bDead = true;
+	DeathRecord.Cause = DeathCause;
+	DeathRecord.Part = DeathCausePart;
+	ForceNetUpdate();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s restored as a corpse (its save record is deceased)"), *GetName());
+	EnterDeadState(EMOBodyPartType::None);
+}
+
 void AMOCharacter::OnRep_DeathRecord()
 {
 	if (!DeathRecord.bDead || bIsDead)
@@ -1935,6 +1958,18 @@ void AMOCharacter::EnterDeadState(EMOBodyPartType CausePart)
 	if (HasAuthority())
 	{
 		BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::Death, this));
+
+		// A dead body has no mind: its AI (a survivor's) stops for good and its queued work is dropped. Until Oct 19 a dead survivor's controller kept
+		// working its job queue -- failing jobs it could not move for (and, with the job-failure notices, telling everyone). A player keeps its controller.
+		if (AAIController* Mind = Cast<AAIController>(GetController()))
+		{
+			if (UMOSurvivorJobQueueComponent* Jobs = FindComponentByClass<UMOSurvivorJobQueueComponent>())
+			{
+				Jobs->CancelAllJobs();
+			}
+			Mind->UnPossess();
+			Mind->Destroy();
+		}
 	}
 
 	// Disable input and movement

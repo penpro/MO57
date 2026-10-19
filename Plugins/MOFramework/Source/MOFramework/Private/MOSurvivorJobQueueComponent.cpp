@@ -503,7 +503,7 @@ void UMOSurvivorJobQueueComponent::NotifyPlayersOfFailure()
 	{
 		return;
 	}
-	FText Who = FText::FromString(GetOwner()->GetName());
+	FText Who = NSLOCTEXT("MOSurvivorJobs", "UnnamedSurvivor", "A survivor");   // never an actor name on a player's screen
 	if (const UMOIdentityComponent* Identity = GetOwner()->FindComponentByClass<UMOIdentityComponent>(); Identity && !Identity->DisplayName.IsEmpty())
 	{
 		Who = Identity->DisplayName;

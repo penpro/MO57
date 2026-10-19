@@ -1207,8 +1207,10 @@ void UMOSystemMenuUIController::ContinueAfterDeath(const AMOCharacter* DeadChara
 	{
 		for (APawn* Candidate : Colony->GetColonyRoster())
 		{
+			// A successor is a living pawn nobody drives: another player's pawn is not one (a joiner whose host was the only other pawn got a
+			// Characters list of one "Taken" entry instead of a new survivor, Oct 18). A player's pawn carries a PlayerState on every machine.
 			const AMOCharacter* Character = Cast<AMOCharacter>(Candidate);
-			if (Character && Character != DeadCharacter && !Character->IsDead())
+			if (Character && Character != DeadCharacter && !Character->IsDead() && Character->GetPlayerState() == nullptr)
 			{
 				bHasSuccessor = true;
 				break;

@@ -562,7 +562,11 @@ void AMOGameMode::RegroundAllPawns()
 				UMOIdentityComponent* IdComp = (*It)->FindComponentByClass<UMOIdentityComponent>();
 				if (IdComp && IdComp->GetGuid() == LastGuid)
 				{
-					TargetPawn = *It;
+					// The last-played pawn may be a body now (its record is deceased: N-155 restores bodies). Never possess a corpse: the player
+					// takes the next-life step (HandlePlayerWithoutPawnAfterLoad) instead.
+					FMOPersistedPawnRecord Record;
+					const bool bDeceased = (*It)->IsDead() || (Persistence->GetPawnRecord(LastGuid, Record) && Record.bIsDeceased);
+					TargetPawn = bDeceased ? nullptr : *It;
 					break;
 				}
 			}

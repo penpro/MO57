@@ -53,8 +53,13 @@
     cooked busy world ever exceeds ~50 ms, move the file write async (`UGameplayStatics::AsyncSaveGameToSlot`).
 - **A load that leaves the player without a pawn** (the last-played pawn died before the save) raises `AMOGameMode::OnPlayerNeedsNextLife`
   after the load handoff; the UI runs the live death path's `ContinueAfterDeath` (possession menu, or a respawn ~5 mi from the deceased
-  record's location via `PendingRespawnOrigin`). Before Oct 17 this left a sky camera with nothing to control. Gap: a deceased record is
-  skipped entirely on load, so the dead pawn's body and gear vanish after a reload (N-155).
+  record's location via `PendingRespawnOrigin`). Before Oct 17 this left a sky camera with nothing to control. The post-load
+  auto-possession never takes a pawn whose record is deceased.
+- **The dead stay where they fell, with their gear** (Oct 19, N-155): a deceased PERSON's record is spawned on load like any pawn (inventory
+  and components restored), then `AMOCharacter::RestoreAsCorpse` puts it in the one dead state (ragdoll, no mind, lootable from its menu's
+  Inventory). A dead creature's record is still skipped (its carcass is its own actor). Before, the record was skipped and body and gear
+  vanished on every load. Verified: a survivor killed with a hammerstone, cordage and cobbles was saved, the world reloaded
+  (`MO.Save.LoadFrom`), and the body lay there dead with all of them.
 - **Systemic pattern to check new code against:** live-path side effects must be replayed by restore paths (loaded buildings lost
   collision, woken mobs stayed throttled, possession spawns skipped component restoration): one shared "enter state X" routine called by
   both live and load paths (`code_health` pattern #1).

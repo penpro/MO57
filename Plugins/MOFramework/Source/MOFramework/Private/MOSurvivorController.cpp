@@ -1520,7 +1520,9 @@ void AMOSurvivorController::StartRefuelJobExecution()
 			CraftStationActor.IsValid() ? *CraftStationActor->GetName() : TEXT("null"),
 			Storage ? *Storage->GetName() : TEXT("null"),
 			*RefuelItemId.ToString());
-		CompleteSimpleJob(false);
+		if (!Station) { FailSimpleJob(MOSurvivorJobWhy::StationGone()); }
+		else if (!Storage) { FailSimpleJob(MOSurvivorJobWhy::StorageGone()); }
+		else { CompleteSimpleJob(false); }
 		return;
 	}
 

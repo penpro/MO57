@@ -1210,3 +1210,8 @@ New Tests/MOWorldGenCaveReachTests.cpp (report-only measurement: 24 ordinary 1 k
 Status: PROGRESS (N-170 prototype commit, OFF) + CLAIM (batch 3: MOCharacter.h/.cpp, MOPersistenceSubsystem.cpp, MOGameMode.cpp; then the build window and instances)
 References: CL-0109
 Built cave entrances (F30 A) in MOFrameworkCore MOWorldGen.h/.cpp + MOWorldGenCaves.cpp, behind CaveEntranceChance 0 (out of the params hash while 0): WorldGen suite 47 / 47 incl. both golden checksums. Tests CaveEntranceBuilt + CaveReach. Turning them on waits for Wes (F30).
+
+### 2026-10-19 01:59 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0111
+Status: PROGRESS (batch 3 commit) + RELEASE (build window, instances, the CL-0110 files)
+References: CL-0110
+Batch 3 verified (suite 328 / 0; host + joiner pass; a corrective build for one fix found in the pass): a dead body has no mind (job queue cancelled, AI removed, UnPossessed never re-minds a corpse); N-155 bodies persist with their gear through a load; load possession skips deceased records; Continue's successor excludes other players' pawns (joiner respawns directly); refuel failure reasons; "A survivor" instead of an actor name in notices.

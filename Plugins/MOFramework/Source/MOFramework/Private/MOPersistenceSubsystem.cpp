@@ -1484,15 +1484,15 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             continue;
         }
 
-        if (PawnRecord.bIsDeceased)
+        UClass* LoadedPawnClass = TryLoadPawnClassFromSoftPath(PawnRecord.PawnClassPath);
+
+        // Permadeath (core pillar): a pawn that died stays dead. A dead creature is gone (its carcass is its own actor); a dead person comes back as
+        // the BODY, with its gear where it fell (N-155: until Oct 19 the record was skipped and body and gear vanished on every load). The body is
+        // made dead in the component pass below (RestoreAsCorpse), after its inventory is restored.
+        if (PawnRecord.bIsDeceased && (!LoadedPawnClass || LoadedPawnClass->IsChildOf(AMOCreature::StaticClass())))
         {
-            // Permadeath (core pillar): a pawn that died stays dead. The single-pawn
-            // SpawnPawnFromRecord path already gates on this; this full-load loop did not,
-            // so dead survivors/creatures resurrected as live actors on every load.
             continue;
         }
-
-        UClass* LoadedPawnClass = TryLoadPawnClassFromSoftPath(PawnRecord.PawnClassPath);
         bool bUsedFallback = false;
 
         UClass* PawnClassToSpawn = LoadedPawnClass;
@@ -1832,9 +1832,20 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
             // routine (also used by SpawnPawnFromRecord, so the two paths match).
             for (const FMOPersistedPawnRecord& PawnRecord : LoadedWorldSave->PersistedPawns)
             {
-                if (PawnRecord.PawnGuid == PawnGuid && PawnRecord.bHasComponentData)
+                if (PawnRecord.PawnGuid == PawnGuid)
                 {
-                    ApplyPawnComponentState(Pawn, PawnRecord);
+                    if (PawnRecord.bHasComponentData)
+                    {
+                        ApplyPawnComponentState(Pawn, PawnRecord);
+                    }
+                    // A deceased record is the body (N-155): dead through the one dead state, lootable, never possessed.
+                    if (PawnRecord.bIsDeceased)
+                    {
+                        if (AMOCharacter* Body = Cast<AMOCharacter>(Pawn))
+                        {
+                            Body->RestoreAsCorpse();
+                        }
+                    }
                     break;
                 }
             }

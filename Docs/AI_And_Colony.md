@@ -138,6 +138,9 @@ bool CancelJob(const FGuid& JobId);
 void CancelAllJobs();
 ```
 
+**A dead survivor stops** (Oct 19): `AMOCharacter::EnterDeadState` (server) cancels its job queue and removes its AI controller; `UnPossessed`
+never gives a corpse a new AI. Before, a dead survivor's controller kept working its queue.
+
 **A failed job says why** (Oct 18, N-090): a failed job leaves the queue at once, so it used to vanish with nothing said.
 `CompleteCurrentJobWithReason(bSuccess, Why)` records `LastFailure` (job name + reason, replicated; a success clears it), and every player
 gets one notice ("Harper couldn't gather sticks: found nothing to gather nearby"), at most once a minute per survivor and message. The

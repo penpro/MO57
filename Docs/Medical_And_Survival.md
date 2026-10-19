@@ -60,8 +60,8 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
 - **Death then leaving** (Oct 17): the recap's Return to Main Menu saves the death (every exit saves: `Docs/PAUSE_POLICY.md`). Loading
   that save raises `AMOGameMode::OnPlayerNeedsNextLife`, which runs the same `ContinueAfterDeath` as the recap's Continue. With no living
   colony pawn, the respawn measures its 5 mi from the deceased record's location. Verified in a `-game` instance: the new survivor
-  landed 4.96 mi from the death spot. Before this it was a sky camera with no pawn. Gap: the dead pawn's body and gear don't survive the
-  reload (BACKLOG N-155).
+  landed 4.96 mi from the death spot. Before this it was a sky camera with no pawn. The body and its gear survive the reload (Oct 19,
+  N-155: `Docs/Persistence.md` §1).
 - **A death reaches every machine** (Oct 18, N-064): until then the whole death (cause, ragdoll, input lock, `OnPawnDied` -> the recap)
   ran on the server only, so a joiner who died got no recap and stood upright on every screen. The server writes a replicated
   `FMODeathRecord` (cause, part, killer's name) in `HandleInstantDeath`; every client enters the dead state from it
@@ -70,8 +70,12 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
 - The recap is delivered by `AMOCharacter::OnAnyPawnDied` (every death, every machine) filtered to the local player's pawn
   (`UMOSystemMenuUIController::HandleAnyPawnDied`): a per-pawn `OnPawnDied` binding was dropped on a joiner by a possession settle
   (unpossess + re-possess, no pawn-changed callback on the client).
-- Verified Oct 18 on a host + joiner: the joiner's recap opens with the killer's name; Continue lists the colony (the only pawn was the
-  host's, "Taken"), Create character gives the joiner a new survivor. Not verified: a death during another spawn settle (refused).
+- **Continue's successor is a pawn nobody drives** (Oct 19): another player's pawn (it carries a PlayerState) does not count, so a joiner whose
+  host is the only other pawn gets a new survivor at once instead of a Characters list of one "Taken" entry.
+- **A dead body has no mind** (Oct 19): the server's `EnterDeadState` cancels a survivor's job queue and removes its AI controller, and
+  `UnPossessed` never spawns a new AI into a corpse (it did: a dead survivor kept working its jobs).
+- Verified on a host + joiner: the joiner's recap names the killer; Continue -> the server respawned the joiner 8.8 km away in a new survivor
+  (the remote respawn RPC). Not verified: a death during another spawn settle (refused).
 
 ## 3. Food, water and the meters (two models today)
 

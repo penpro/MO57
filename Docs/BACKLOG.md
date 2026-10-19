@@ -24,6 +24,7 @@
 | A joiner's death screen | Kill the joiner (a wolf, or a host punch) | the joiner's own screen: the body falls, "You have died" names the killer; Continue works | N-064 (Oct 18) |
 | Forest footsteps (by ear) | Walk in a temperate or locust woodland | leaf-litter steps, not sand | BR18-8 |
 | A survivor's failed job | Order a survivor to gather where there is nothing | a notice says why; its task menu says "Idle. Couldn't ..." | N-090 |
+| A body after a reload | Kill a survivor with items, save, load the world | the body lies where it fell (ragdoll), its menu's Inventory has the items | N-155 (Oct 19) |
 
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
@@ -92,7 +93,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
-| N-155 | OPEN | Codex / Claude | Permadeath gear: a deceased pawn record is skipped entirely on load (`MOPersistenceSubsystem` full-load loop), so the dead pawn's body and gear vanish after a reload; the design says the gear stays where it fell. Spawn the body as a dead, lootable corpse (or drop its inventory as world items at save). Source dependency UNBLOCKED by `7f73356b` / CX-0078; feature still unimplemented | `Docs/Persistence.md` §1; CL-0051 | |
+| N-155 | DONE-2026-10-19 | Claude | The dead stay where they fell with their gear: deceased person records spawn on load and `RestoreAsCorpse` (the one dead state); creatures still skipped; load possession never takes a corpse. Verified: killed survivor's hammerstone / cordage / cobbles on its body after save + reload | `Docs/Persistence.md` §1 | |
 | N-157 | DONE-2026-10-18 | Claude | Timed autosave: `UMOAutosaveSubsystem` saves the host's world every `MO.Save.AutosaveMinutes` (10) real minutes through the one save step `MOWorldSave::SaveThisWorld`, with a "Saving the world..." notice; host + joiner: 11-16 ms per save, the joiner writes nothing | `Docs/Persistence.md` §1 | |
 | N-060 | WAITING | Wes | Survival single source (F1); thermal model (F2) | DECISIONS | G10, G11, H10/H11 of the Oct 13 handoff |
 | N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
