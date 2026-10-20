@@ -157,6 +157,14 @@ struct MOFRAMEWORK_API FMOInspectionXPGrant
 	/** True if this grant caused a level up. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
 	bool bLeveledUp = false;
+
+	/** The standing right after the grant, read on the server (XP into LevelAfter, XP that level needs; -1 = unknown). The toast shows these: on a
+	 *  joiner the replicated skills arrive a tick after the result, and the toast read "+2 XP" over "0 / 100" (N-179, Oct 20 2026). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	float CurrentXPAfter = -1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	float XPToNextLevelAfter = -1.0f;
 };
 
 /**

@@ -159,9 +159,11 @@ public:
 	void ShowKnowledgePopup(FName KnowledgeId, float Duration = 3.0f);
 
 	/** The skill toast for one grant: "Woodworking +2 XP", "Woodworking reached level 1", "New knowledge: Wood Properties". XPGained 0 / levels
-	 *  INDEX_NONE when unknown (the toast then shows the standing only). Forwarded to a co-op player's own machine. */
+	 *  INDEX_NONE when unknown (the toast then shows the standing only). CurrentXPAfter / XPToNextAfter: the standing the server read right after
+	 *  the grant (-1 = read this machine's skills; a joiner's arrive a tick late). Forwarded to a co-op player's own machine. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
-	void ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration = 3.0f);
+	void ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration = 3.0f,
+		float CurrentXPAfter = -1.0f, float XPToNextAfter = -1.0f);
 
 	/** Clear all pending notifications and hide current one. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
@@ -211,6 +213,8 @@ private:
 		float XPGained = 0.0f;
 		int32 LevelBefore = INDEX_NONE;
 		int32 LevelAfter = INDEX_NONE;
+		float CurrentXPAfter = -1.0f;
+		float XPToNextAfter = -1.0f;
 	};
 
 	/** Queued notification messages. */
@@ -252,7 +256,8 @@ public:
 	 * called the RPC, the RPC the forward ... and the host died of a stack overflow (nettest actions, Oct 18 2026).
 	 */
 	void ShowNotificationHere(const FText& Message, float Duration, EMONotificationType Type);
-	void ShowSkillPopupHere(FName Id, bool bIsKnowledge, float Duration, float XPGained = 0.0f, int32 LevelBefore = INDEX_NONE, int32 LevelAfter = INDEX_NONE);
+	void ShowSkillPopupHere(FName Id, bool bIsKnowledge, float Duration, float XPGained = 0.0f, int32 LevelBefore = INDEX_NONE, int32 LevelAfter = INDEX_NONE,
+		float CurrentXPAfter = -1.0f, float XPToNextAfter = -1.0f);
 private:
 
 	/** Process the next notification in queue. */

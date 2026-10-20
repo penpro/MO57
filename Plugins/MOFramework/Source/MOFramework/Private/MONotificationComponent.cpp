@@ -353,17 +353,19 @@ void UMONotificationComponent::ShowSkillPopup(FName SkillId, float Duration)
 	ShowSkillToast(SkillId, /*bIsKnowledge=*/false, 0.0f, INDEX_NONE, INDEX_NONE, Duration);
 }
 
-void UMONotificationComponent::ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration)
+void UMONotificationComponent::ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration,
+	float CurrentXPAfter, float XPToNextAfter)
 {
 	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
 	{
-		RemotePC->ClientShowSkillPopup(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter);
+		RemotePC->ClientShowSkillPopup(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter, CurrentXPAfter, XPToNextAfter);
 		return;
 	}
-	ShowSkillPopupHere(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter);
+	ShowSkillPopupHere(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter, CurrentXPAfter, XPToNextAfter);
 }
 
-void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter)
+void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter,
+	float CurrentXPAfter, float XPToNextAfter)
 {
 	// Add to queue
 	FQueuedSkillPopup Popup;
@@ -373,6 +375,8 @@ void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowled
 	Popup.XPGained = XPGained;
 	Popup.LevelBefore = LevelBefore;
 	Popup.LevelAfter = LevelAfter;
+	Popup.CurrentXPAfter = CurrentXPAfter;
+	Popup.XPToNextAfter = XPToNextAfter;
 	SkillPopupQueue.Add(Popup);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued %s popup: %s (%.1fs)"), bIsKnowledge ? TEXT("knowledge") : TEXT("skill"), *SkillId.ToString(), Duration);
@@ -484,6 +488,14 @@ FMOSkillToastData UMONotificationComponent::BuildToastData(const FQueuedSkillPop
 	if (const FMOSkillDefinitionRow* SkillDef = UMOSkillDatabaseSettings::GetSkillDefinition(Popup.Id))
 	{
 		Data.MaxLevel = SkillDef->MaxLevel;
+	}
+	// The standing the server read right after the grant, when it came with one (a joiner's replicated skills arrive a tick after the toast).
+	if (Popup.CurrentXPAfter >= 0.0f && Popup.XPToNextAfter >= 0.0f)
+	{
+		Data.Level = Popup.LevelAfter != INDEX_NONE ? Popup.LevelAfter : Data.Level;
+		Data.CurrentXP = Popup.CurrentXPAfter;
+		Data.XPToNextLevel = Popup.XPToNextAfter;
+		return Data;
 	}
 	// Knowledge rides on the skills component like a skill (its own levels and XP).
 	const APlayerController* PC = Cast<APlayerController>(GetOwner());

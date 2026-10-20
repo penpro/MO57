@@ -854,7 +854,8 @@ void UMOCharacterUIController::ShowInspectionResult(FName ItemDefinitionId, cons
 		if (Grant.XPAmount > 0.0f && NotificationComp)
 		{
 			// One toast per grant, saying what it gave ("Woodworking +2 XP", "New knowledge: Wood Properties"); knowledge as knowledge.
-			NotificationComp->ShowSkillToast(Grant.Id, Grant.bIsKnowledge, Grant.XPAmount, Grant.LevelBefore, Grant.LevelAfter, 3.0f);
+			NotificationComp->ShowSkillToast(Grant.Id, Grant.bIsKnowledge, Grant.XPAmount, Grant.LevelBefore, Grant.LevelAfter, 3.0f, Grant.CurrentXPAfter,
+				Grant.XPToNextLevelAfter);
 
 			UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI]   Showing popup for %s '%s': +%.0f XP, Level %d -> %d"),
 				Grant.bIsKnowledge ? TEXT("knowledge") : TEXT("skill"),

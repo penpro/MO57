@@ -709,7 +709,7 @@ public:
 
 	/** A skill / knowledge popup the server raised for this player (UMONotificationComponent forwards it: the server's copy has no screen). */
 	UFUNCTION(Client, Reliable)
-	void ClientShowSkillPopup(FName Id, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter);
+	void ClientShowSkillPopup(FName Id, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter, float CurrentXPAfter, float XPToNextAfter);
 
 	/**
 	 * Inspect ItemId to learn from it (FMOInspectionActions::Begin): the carried item ItemGuid, or one in the world -- Instance names the stick on the

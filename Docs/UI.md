@@ -203,6 +203,9 @@ if (MyButton)
   change, and knowledge ids raw ("WoodProperties").
 - One id-to-name rule: `UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName` (skill row, else item, else `HumanizeId`); the toast, the
   Skills panel and the notifications use it (four camel-case splitters before). Test `MOFramework.UI.SkillToast.SaysWhatChanged`.
+- The grant carries the standing the server read right after it (`FMOInspectionXPGrant::CurrentXPAfter` / `XPToNextLevelAfter`, the last two
+  arguments of `ShowSkillToast` and `ClientShowSkillPopup`): a joiner's replicated skills arrive a tick after the toast, which read "+2 XP" over
+  "0 / 100" (N-179, Oct 20; now "2 / 80").
 
 ### Resource menu in the kit (Oct 20)
 `WBP_HarvestContextMenu` (trees, bushes, rocks) was the one context menu never rebuilt in the kit: its title sat washed out over the

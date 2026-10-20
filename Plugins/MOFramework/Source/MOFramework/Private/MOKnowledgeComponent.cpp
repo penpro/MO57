@@ -122,6 +122,12 @@ FMOInspectionResult UMOKnowledgeComponent::InspectItem(FName ItemDefinitionId, U
 				XPGrant.LevelBefore = CurrentLevel;
 				XPGrant.LevelAfter = NewLevel;
 				XPGrant.bLeveledUp = (NewLevel > CurrentLevel);
+				FMOSkillProgress After;
+				if (SkillsComponent->GetSkillProgress(Grant.Id, After))
+				{
+					XPGrant.CurrentXPAfter = After.CurrentXP;
+					XPGrant.XPToNextLevelAfter = After.XPToNextLevel;
+				}
 				Result.XPGrants.Add(XPGrant);
 
 				// Track knowledge in AllLearnedKnowledge for quick lookups (if it's knowledge and level > 0)
