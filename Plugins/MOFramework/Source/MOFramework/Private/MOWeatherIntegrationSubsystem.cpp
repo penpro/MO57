@@ -492,8 +492,15 @@ FMOWeatherExposure UMOWeatherIntegrationSubsystem::GetWeatherExposureAtLocation(
 		return FMOWeatherExposure();
 	}
 
-	return IMOWeatherProviderInterface::Execute_GetWeatherExposureAtLocation(
-		WeatherProvider.GetObject(), Location);
+	// The bridge feeds MakeWeatherExposureFromUDWWithShelter UDW's 0-10 numbers too (measured Oct 19 2026 under "Rain" in the open: rain 7.00, wind 2.79 --
+	// a feels-like of -23.9 C at 11.1 C, hidden until N-175 stopped the shelter traces from reading every pawn as indoors). FMOWeatherExposure is 0-1.
+	FMOWeatherExposure Exposure = IMOWeatherProviderInterface::Execute_GetWeatherExposureAtLocation(WeatherProvider.GetObject(), Location);
+	const auto Scale = [this](float V) { return FMath::Clamp(V * ProviderIntensityScale, 0.0f, 1.0f); };
+	Exposure.Rain = Scale(Exposure.Rain);
+	Exposure.Snow = Scale(Exposure.Snow);
+	Exposure.Wind = Scale(Exposure.Wind);
+	Exposure.Dust = Scale(Exposure.Dust);
+	return Exposure;
 }
 
 bool UMOWeatherIntegrationSubsystem::IsLocationSheltered(const FVector& Location) const

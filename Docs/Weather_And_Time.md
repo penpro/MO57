@@ -43,7 +43,18 @@
   Coverage / Fog / Wind / Thunder (Rain 7 = the "Rain" preset) through a plain Make node, while the struct and every reader mean 0-1.
   `UMOWeatherIntegrationSubsystem::GetCurrentWeatherState` scales them once (`ProviderIntensityScale` 0.1, clamped). Before, the heat
   index read cloud 7.5 as 750 % humidity and a pawn in rain soaked 7x faster than `WetnessGainPerSecond` says. `MO.Weather.Info` now
-  prints Rain=0.70 under "Rain". UDW's exposure test (`MakeWeatherExposureFromUDW`) is 0-1 by UDW's docs and was left alone.
+  prints Rain=0.70 under "Rain". The bridge feeds the exposure the same raw numbers (it builds it with
+  `MakeWeatherExposureFromUDWWithShelter`, not UDW's 0-1 exposure test), so `GetWeatherExposureAtLocation` scales them the same way.
+- **Shelter is solid things over you** (N-175, Oct 19 2026): `TestExposureShelter` / `TestOverheadCover` (MOWeatherBlueprintLibrary)
+  trace Visibility, and every ray from a pawn's location hit the pawn's own interaction sphere at 0 cm (a query-only volume that
+  blocks Visibility for the crosshair): a pawn in an open meadow in the rain read covered, wind-sheltered and indoors, so the
+  feels-like wet-cold and wind chill never ran. One rule now, `IsWeatherShelterHit`: a hit counts only if it blocks pawns (terrain,
+  trees, buildings; not interaction spheres or passable plants), does not contain the test point, and is not part of a pawn (a
+  person's groom blocks traces too); the rays trace on past the rest. Test `MOFramework.Weather.ShelterIsSolid`. Measured: open
+  meadow 0/9 overhead (was 9/9) and `exposure rain=0.70 wind=0.28 sheltered=0 feels=7.7C` at 11.2 C under "Rain" (before:
+  rain 7.00 wind 2.79 once unsheltered, -23.9 C); in a cave passage 9.5-19 m under rock 9/9 overhead, `rain=0.00 sheltered=1 feels=10.9C`,
+  and 0/9 on the ground above it. Voxel collision is one-sided: a ray from inside the rock does not see the surface above it (a cave
+  ceiling faces down into the air, so caves read right).
 
 ## 2a. Ground weather: wet ground, puddles, snow cover (BR18-16, Oct 19 2026)
 

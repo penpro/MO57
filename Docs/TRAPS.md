@@ -301,6 +301,9 @@
   changed duration at runtime** (cached at BeginPlay) -> the ground's state is MO's (`FMOGroundWeather`, `Docs/Weather_And_Time.md` §2a).
   **UDW BP variables read through Python (`Rain`, `Material Wetness`) stay at their defaults while the sky rains** -> read the parameter
   collection (`unreal.MaterialLibrary.get_scalar_parameter_value`) or `MO.Weather.Info`. (Oct 19)
+- **Everyone reads as indoors / sheltered** -> a trace from an actor's location starts inside its own query-only interaction sphere
+  (blocks Visibility for the crosshair) and hits it at 0 cm -> weather shelter goes through `IsWeatherShelterHit` (solids only, not the
+  start shape, not pawns). Any new "is X over / around this point" trace: skip query-only volumes and start-penetrating hits. (N-175, Oct 19)
 - **Clouds blocky in a 4K shot** -> `r.VolumetricRenderTarget 0`; the sky only moves FORWARD in game time; `MO.Weather.Director 0` + `SetPreset Clear_Skies` for stable shots. (steam-store-art)
 - **"STREAMING POOL OVER BUDGET"** -> Epic texture pool 1000 MB -> 4000 (Cine 6000) + LimitPoolSizeToVRAM. (overnight-polish)
 - **Trees freeze, then snap, every 0.4-1.6 s, only far from the origin** -> a wind graph adds time to a WORLD-space term (a Pivot Painter

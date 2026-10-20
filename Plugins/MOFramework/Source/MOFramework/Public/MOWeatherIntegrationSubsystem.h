@@ -530,7 +530,8 @@ public:
 
 	/**
 	 * BP_WeatherBridge fills FMOWeatherState with Ultra Dynamic Weather's own numbers, which run 0-10 (Rain 7 = the "Rain" preset); the struct and every
-	 * reader (heat index, the pawn's wetting, the ground) mean 0-1. GetCurrentWeatherState scales them by this, once, at the boundary (Oct 19 2026).
+	 * reader (heat index, the pawn's wetting, the ground) mean 0-1. GetCurrentWeatherState and GetWeatherExposureAtLocation (the bridge feeds the shelter
+	 * modulation the same raw numbers) scale them by this, once, at the boundary (Oct 19 2026).
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|Config", meta=(ClampMin="0.0"))
 	float ProviderIntensityScale = 0.1f;

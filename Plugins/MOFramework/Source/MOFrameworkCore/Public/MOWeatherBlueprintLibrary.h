@@ -62,6 +62,8 @@
 #include "MOWeatherTypes.h"
 #include "MOWeatherBlueprintLibrary.generated.h"
 
+struct FHitResult;
+
 /**
  * Blueprint function library for weather-related helpers.
  * Use these to easily construct weather structs from UDS/UDW values.
@@ -260,4 +262,11 @@ public:
 		const UObject* WorldContextObject,
 		FVector Location,
 		AActor* IgnoreActor = nullptr);
+
+	/**
+	 * Whether a shelter ray's hit is shelter: a solid (it blocks pawns) that does not contain the test point and is not part of a pawn. THE rule for both
+	 * tests above (N-175, Oct 19 2026): traced on Visibility, every ray from a pawn's location hit the pawn's own query-only interaction sphere at 0 cm, so
+	 * a pawn in an open meadow in the rain read covered, wind-sheltered and indoors, and no one ever got the feels-like wet-cold or wind chill.
+	 */
+	static bool IsWeatherShelterHit(const FHitResult& Hit);
 };

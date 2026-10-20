@@ -41,6 +41,10 @@ lowered the pressure (test `MOFramework.Medical.Vitals.BloodPressure.BloodLossBa
 Cross-module inputs arrive through Core contracts (`Docs/TECHNICAL_REFERENCE.md` § Module structure): feels-like temperature and
 local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing warmth (`IMOInsulationSource`), skills -> adrenaline
 (`IMOSkillLevelSource`).
+**Until Oct 19 2026 the feels-like temperature never felt the weather** (N-175): the shelter test read every pawn as indoors (its rays
+started inside the pawn's own interaction sphere), so the wet-cold (-5 C x rain exposure below 20 C) and wind-chill (-20 C x wind
+exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain" at 11.2 C feels 7.7 C; in a cave 10.9 C
+(`Docs/Weather_And_Time.md` §2).
 
 ## 2. Death: one path with a cause (commit 4f948b11)
 

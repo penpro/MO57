@@ -5,6 +5,8 @@
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "Components/PrimitiveComponent.h"
 
 namespace MOShelter
 {
@@ -104,6 +106,29 @@ namespace MOShelter
 		}
 		return Params;
 	}
+
+	/** One shelter ray: the first hit that is shelter (UMOWeatherBlueprintLibrary::IsWeatherShelterHit), tracing on past what is not. */
+	static bool TraceShelter(UWorld* World, const FVector& Start, const FVector& End, FCollisionQueryParams Params, FHitResult& OutHit)
+	{
+		for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+		{
+			if (!World->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params))
+			{
+				return false;
+			}
+			if (UMOWeatherBlueprintLibrary::IsWeatherShelterHit(OutHit))
+			{
+				return true;
+			}
+			UPrimitiveComponent* Component = OutHit.GetComponent();
+			if (!Component)
+			{
+				return false;
+			}
+			Params.AddIgnoredComponent(Component);
+		}
+		return false;
+	}
 }
 
 
@@ -195,6 +220,25 @@ UObject* UMOWeatherBlueprintLibrary::LoadObjectFromSoftPath(const FSoftObjectPat
 	return Path.TryLoad();
 }
 
+bool UMOWeatherBlueprintLibrary::IsWeatherShelterHit(const FHitResult& Hit)
+{
+	const UPrimitiveComponent* Component = Hit.GetComponent();
+	// A shape that contains the test point is not cover over it.
+	if (!Component || Hit.bStartPenetrating)
+	{
+		return false;
+	}
+	// Only a solid stops rain and wind: something a person cannot walk through. The interaction spheres every character (50 cm) and carcass (1 m) carries are
+	// query-only volumes that block Visibility so the crosshair finds them; passable plants block nothing.
+	if (Component->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block)
+	{
+		return false;
+	}
+	// A person is not a roof (their groom -- hair, eyebrows -- blocks Visibility and pawns).
+	const AActor* Owner = Component->GetOwner();
+	return !(Owner && Owner->IsA<APawn>());
+}
+
 FMOWeatherExposure UMOWeatherBlueprintLibrary::MakeWeatherExposureFromUDWWithShelter(
 	float Rain,
 	float Snow,
@@ -252,7 +296,7 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 	{
 		const FVector End = Location + Dir * MOShelter::OverheadRange;
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, Location, End, ECC_Visibility, Params))
+		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
 		{
 			++Result.OverheadHits;
 			if (Hit.Distance <= MOShelter::IndoorCloseRange)
@@ -272,7 +316,7 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 	{
 		const FVector End = Location + Dir * MOShelter::WallRange;
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, Location, End, ECC_Visibility, Params))
+		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
 		{
 			++Result.WallHits;
 		}
@@ -295,7 +339,7 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 		{
 			const FVector End = Location + Dir * MOShelter::WindRange;
 			FHitResult Hit;
-			if (World->LineTraceSingleByChannel(Hit, Location, End, ECC_Visibility, Params))
+			if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
 			{
 				const float DistFrac = FMath::Clamp(Hit.Distance / MOShelter::WindRange, 0.0f, 1.0f);
 				WindScoreSum += (1.0f - DistFrac);
@@ -351,7 +395,7 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestOverheadCover(
 	{
 		const FVector End = Location + Dir * MOShelter::OverheadRange;
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, Location, End, ECC_Visibility, Params))
+		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
 		{
 			++Result.OverheadHits;
 		}

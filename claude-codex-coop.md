@@ -1271,3 +1271,8 @@ References: CL-0121
 Status: PROGRESS (BR18-16 commit) + RELEASE (the CL-0122 files, the editor, build window, instances wxa / gamehost / gameclient)
 References: CL-0122
 Wet ground, puddles and snow cover on the voxel terrain from MO's own ground state (FMOGroundWeather on the game clock, replicated, saved; MPC_MOGroundWeather -> M_QuixelBase MO_Weather); caves sheltered by VFM_MOWeatherShelter; the bridge's 0-10 weather numbers scaled to 0-1 at GetCurrentWeatherState. Suite 332 / 0. Follow-ups N-174 (doline bowls), N-175 (exposure reads sheltered), N-176 (pawn wetting rates).
+
+### 2026-10-19 20:49 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0124
+Status: PROGRESS (N-175 commit: weather shelter traces read every pawn as indoors; exposure's UDW 0-10 numbers scaled) + CLAIM (the next batch, not yet committed: MOVitalsComponent.h/.cpp (N-176 rates, N-177 wetness replicated), Testing/MOUITestSubsystem.h/.cpp (N-128), MOStatusPanel.cpp + MOWeatherIntegrationSubsystem.h/.cpp (N-093 feels-like rows), Tests/MOWorldGenCaveTests.cpp (the slow cave tests); the build window, the editor, instances)
+References: CL-0123
+Suite 333 / 0 (Weather.ShelterIsSolid among them). Open meadow in rain: 0/9 overhead, feels 7.7 C at 11.2 C; a cave passage 9/9, feels 10.9 C.

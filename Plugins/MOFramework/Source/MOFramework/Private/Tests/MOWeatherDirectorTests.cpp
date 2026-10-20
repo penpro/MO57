@@ -3,6 +3,10 @@
 #include "Misc/AutomationTest.h"
 #include "MOWeatherDirector.h"
 #include "MOWeatherTypes.h"
+#include "MOWeatherBlueprintLibrary.h"
+#include "Components/SphereComponent.h"
+#include "Components/BoxComponent.h"
+#include "Engine/HitResult.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -130,6 +134,45 @@ bool FMOWeather_GroundAnswersTheWeather::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("4 h in one step = 240 one-minute steps"), FMath::IsNearlyEqual(A.Wetness, B.Wetness, 0.001f) && FMath::IsNearlyEqual(A.SnowCover, B.SnowCover, 0.001f));
 	TestEqual(TEXT("dry after 4 h of sun"), A.Wetness, 0.0f);
+	return true;
+}
+
+// What a shelter ray counts as cover (UMOWeatherBlueprintLibrary::IsWeatherShelterHit, N-175): solids only, not a volume around the test point.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWeather_ShelterIsSolid,
+	"MOFramework.Weather.ShelterIsSolid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWeather_ShelterIsSolid::RunTest(const FString& Parameters)
+{
+	const auto HitOn = [](UPrimitiveComponent* Component, bool bStartPenetrating)
+	{
+		FHitResult Hit;
+		Hit.Component = Component;
+		Hit.bBlockingHit = true;
+		Hit.bStartPenetrating = bStartPenetrating;
+		return Hit;
+	};
+
+	// A character's interaction sphere, set up as MOCharacter does: query-only, ignores everything but Visibility (the crosshair).
+	USphereComponent* Interaction = NewObject<USphereComponent>(GetTransientPackage());
+	Interaction->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Interaction->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Interaction->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	Interaction->SetCollisionObjectType(ECC_WorldDynamic);
+	TestFalse(TEXT("an interaction sphere is no roof (it read every pawn as indoors)"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(HitOn(Interaction, false)));
+	TestFalse(TEXT("... nor when the ray starts inside it"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(HitOn(Interaction, true)));
+
+	// A passable plant (overlaps, blocks nothing).
+	UBoxComponent* Plant = NewObject<UBoxComponent>(GetTransientPackage());
+	Plant->SetCollisionProfileName(TEXT("OverlapAll"));
+	TestFalse(TEXT("a passable plant is no shelter"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(HitOn(Plant, false)));
+
+	// A solid (a roof, a rock, the terrain).
+	UBoxComponent* Roof = NewObject<UBoxComponent>(GetTransientPackage());
+	Roof->SetCollisionProfileName(TEXT("BlockAll"));
+	TestTrue(TEXT("CONTROL: a solid is shelter"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(HitOn(Roof, false)));
+	TestFalse(TEXT("a solid that contains the test point is not cover over it"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(HitOn(Roof, true)));
+	TestFalse(TEXT("no component, no shelter"), UMOWeatherBlueprintLibrary::IsWeatherShelterHit(FHitResult()));
 	return true;
 }
 
