@@ -2381,6 +2381,25 @@ def _client_eat(rep, host, client):
     rep.step("client eat: ... the berry is eaten when the time is up (one fewer, on the host)", bool(done) and c2 == c0 - 1, f"berries {c1} -> {c2}")
 
 
+def _client_light_fire(rep, host, client):
+    """A joiner lights a fire with a hand drill: the attempt runs on the SERVER (FMOFireActions, timed and chancy), it teaches Firemaking (Wes, F33 A:
+    25 XP a failure, 40 a fire), and the JOINER's own screen shows the skill toast -- the server -> joiner ClientShowSkillPopup path, which nothing
+    else reaches (N-183, Oct 20 2026). The 3-minute drill is shortened by MO.Test.FireAttemptSeconds (test builds only)."""
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                 "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Tinder01', 1); inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Branch01', 2); out('GAVE')")
+    console(host, "MO.Test.FireAttemptSeconds 4")
+    console(host, "MO.Fire.SpawnLit laid 1")
+    time.sleep(2)
+    hoff, coff = log_size(host), log_size(client)
+    console(client, "MO.Fire.Do Light")
+    lit = wait_log(host, r"\[MOFire\] \S+ lighting \S+ \(improvised hand drill[^)]*\): chance \d+ % -> (failed|CAUGHT)", since=hoff, timeout=20)
+    rep.step("client fire: the HOST ran the joiner's hand-drill attempt (timed, chancy)", bool(lit), lit.group(0) if lit else "no [MOFire] lighting line on the host")
+    toast = wait_log(client, r"Skill toast: \"Firemaking \+(25|40) XP\"", since=coff, timeout=10)
+    rep.step("client fire: ... and the JOINER's own screen showed what it taught (the server -> joiner skill toast)", bool(toast),
+             toast.group(0) if toast else "no Firemaking skill toast in the client's log")
+    console(host, "MO.Test.FireAttemptSeconds 0")
+
+
 def _client_gait(rep, host, client):
     """CLIENT jog / sprint (Steam playtest Oct 16 2026: "the second person can't jog or sprint"). The gait is movement input carried by the saved moves
     (UMOCharacterMovementComponent, FLAG_Custom_0 / _1), so the HOST must see the joiner's pawn move at the gait's speed. It used to be set on the
@@ -3089,7 +3108,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_velocity, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_velocity, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

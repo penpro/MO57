@@ -150,7 +150,9 @@ python Tools/ue.py inst list              # the running instances; drive one wit
   Instances are compared across machines by mesh + place (`MO.Test.GroundItems`, `MO.Test.InstanceAt`, `MO.Test.ResourceNodes`,
   `MO.Test.Sweepable`; MOCoopInstanceCheats.cpp). The Oct 18 cases: `_client_e_on_ground_item`, `_client_e_beside_ground_item` (the crosshair 20 cm beside it), `_trust_instance_far`, `_client_harvest`,
   `_client_inspect`, `_host_foliage_reaches_client`, `_client_drink` (E at a river bank: the host logs the draught), `_client_glide` (the dev
-  glider flown by the joiner, measured on the host), `_client_footstep_surface` (the joiner's own ground sound in two biomes)
+  glider flown by the joiner, measured on the host), `_client_footstep_surface` (the joiner's own ground sound in two biomes),
+  `_client_light_fire` (Oct 20: the joiner's hand drill runs on the host, and the joiner's OWN screen shows "Firemaking +25 XP": the server ->
+  joiner skill toast, which the bridge's Python cannot test because it runs RPCs locally; the drill is shortened by `MO.Test.FireAttemptSeconds`)
   (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
 - `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an
   internet session's rubber banding (Wes, Oct 17). Its controls (a 4 KB/s rate cap must saturate, a joiner walking 1.6x faster than the

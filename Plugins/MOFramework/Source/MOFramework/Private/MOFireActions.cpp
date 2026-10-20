@@ -1,4 +1,5 @@
 #include "MOFireActions.h"
+#include "HAL/IConsoleManager.h"
 #include "MOCarriedLightComponent.h"
 #include "MOLightSourceSettings.h"
 #include "MOCraftingStationActor.h"
@@ -66,6 +67,26 @@ namespace
 		}
 		return Method;
 	}
+#if !UE_BUILD_SHIPPING
+	// Test builds only: the co-op harness lights a joiner's fire without drilling for 3 minutes (nettest actions, N-183). 0 = the real length.
+	// Compiled out of Shipping: the attempt is the simulation (Principle 11).
+	TAutoConsoleVariable<float> CVarTestAttemptSeconds(
+		TEXT("MO.Test.FireAttemptSeconds"), 0.0f,
+		TEXT("Test builds only: when > 0, a fire-lighting attempt takes this many seconds instead of the real 3 min (hand drill) / 90 s (bow drill)."),
+		ECVF_Cheat);
+#endif
+
+	float AttemptSeconds(const FLightingMethod& Method)
+	{
+#if !UE_BUILD_SHIPPING
+		if (CVarTestAttemptSeconds.GetValueOnGameThread() > 0.0f)
+		{
+			return CVarTestAttemptSeconds.GetValueOnGameThread();
+		}
+#endif
+		return Method.Seconds();
+	}
+
 	/** Laying fuel on: a few seconds a piece. */
 	constexpr float SecondsPerFuelItem = 2.0f;
 	constexpr float ReachCm = 300.0f;
@@ -304,7 +325,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 		const FLightingMethod Method = FindLightingMethod(Pawn, Inventory);
 		return Timed->Begin(Light, Method.IsImprovised() ? LOCTEXT("Twirling", "Twirling the hand drill")
 				: FText::Format(LOCTEXT("Drilling", "Working the {0}"), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId)),
-			Method.Seconds(),
+			AttemptSeconds(Method),
 			[WeakPawn, WeakStation, Method]()
 			{
 				APawn* P = WeakPawn.Get();
