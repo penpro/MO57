@@ -42,6 +42,11 @@ struct FMOUITestResult
 	UPROPERTY(BlueprintReadOnly)
 	bool bPassed = false;
 
+	/** Neither passed nor failed: the test could not check what it names (a placeholder, or a pass reached only through the UI manager's fallback
+	 *  instead of the key under test). ErrorMessage says why. Counted on its own, never as a pass (N-128, Oct 19 2026). */
+	UPROPERTY(BlueprintReadOnly)
+	bool bUnverified = false;
+
 	UPROPERTY(BlueprintReadOnly)
 	FString ErrorMessage;
 
@@ -68,6 +73,18 @@ struct FMOUITestSummary
 
 	UPROPERTY(BlueprintReadOnly)
 	int32 FailedTests = 0;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 UnverifiedTests = 0;
+
+	/** Count one result (THE tally: every runner adds results through it). */
+	void Tally(const FMOUITestResult& Result)
+	{
+		Results.Add(Result);
+		if (Result.bPassed) { ++PassedTests; }
+		else if (Result.bUnverified) { ++UnverifiedTests; }
+		else { ++FailedTests; }
+	}
 
 	UPROPERTY(BlueprintReadOnly)
 	float TotalDurationMs = 0.0f;
@@ -251,6 +268,8 @@ private:
 		AssertNoActiveMenus,
 		CaptureLayerCount,
 		AssertLayerCountDecreased,
+		AssertReticleShown,
+		AssertReticleHidden,
 		AssertTutorialTextShown,
 		AssertTutorialTextHidden,
 		BroadcastTutorialHintChanged,
@@ -560,6 +579,19 @@ private:
 
 	/** Create a test result. */
 	FMOUITestResult MakeResult(const FString& TestName, bool bPassed, const FString& ErrorMessage = TEXT(""));
+
+	/** A test that cannot check what it names (yet): reported as UNVERIFIED with the reason, never as a pass. */
+	FMOUITestResult MakeUnverified(const FString& TestName, const FString& Why);
+
+	/** Escape / Tab: the real key through Slate where that is safe, else (or, in a synchronous test, if a menu is still open after it) the UI manager
+	 *  closes the menus -- and bKeyFellBack makes the test's pass UNVERIFIED, because the key did not do it. */
+	void SimulateMenuKey(const FKey& Key);
+
+	/** Set when SimulateMenuKey had to close menus itself during the current test; reset at each test's start. */
+	bool bKeyFellBack = false;
+
+	/** Log one result's line ([PASS] / [UNVERIFIED] / [FAIL]). */
+	void LogResultLine(const FMOUITestResult& Result) const;
 
 	// =========================================================================
 	// STATE

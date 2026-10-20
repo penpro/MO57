@@ -392,3 +392,8 @@ Slate.ShowFocusedWidget 1       ; Show focused widget
 owner). Runtime widget queries need a PAINTED PIE viewport (`ue.py ui menu` closes asset tabs first). Frame-stepped UI tests:
 `MO.UI.RunTest <name>`; the whole suite `MO.UI.RunAllTests` (~85 tests) is synchronously invalid against the same-frame debounce: run
 frame-separated.
+**Run it in a `-game` process** (`ue.py inst`): only there are Escape / Tab sent as real keys (an editor PIE batch cannot -- the editor ends PIE
+on an unconsumed Escape -- so there the UI manager closes the menus instead and the test reads UNVERIFIED). Three outcomes since Oct 19 (N-128):
+PASS, FAIL, and UNVERIFIED -- a placeholder, or a pass reached only through the fallback; never counted as a pass. Oct 19 in `-game`: 78 / 86
+passed, 0 failed, 8 unverified (context menu, confirmation dialog, possession -- not implemented yet). A key sent before CommonUI activated the
+menu does nothing: frame-stepped sequences assert `AssertAnyMenuActive` before Escape.

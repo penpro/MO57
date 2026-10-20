@@ -301,6 +301,9 @@
   changed duration at runtime** (cached at BeginPlay) -> the ground's state is MO's (`FMOGroundWeather`, `Docs/Weather_And_Time.md` §2a).
   **UDW BP variables read through Python (`Rain`, `Material Wetness`) stay at their defaults while the sky rains** -> read the parameter
   collection (`unreal.MaterialLibrary.get_scalar_parameter_value`) or `MO.Weather.Info`. (Oct 19)
+- **A UI test passes without the key it names** -> the Escape / Tab helpers closed the menus through the UI manager whatever the key did ->
+  since N-128 such a pass reads UNVERIFIED; run `MO.UI.RunAllTests` in a `-game` process, and wait for `AssertAnyMenuActive` before a key
+  (sent on the open frame it does nothing). (Oct 19)
 - **Everyone reads as indoors / sheltered** -> a trace from an actor's location starts inside its own query-only interaction sphere
   (blocks Visibility for the crosshair) and hits it at 0 cm -> weather shelter goes through `IsWeatherShelterHit` (solids only, not the
   start shape, not pawns). Any new "is X over / around this point" trace: skip query-only volumes and start-penetrating hits. (N-175, Oct 19)

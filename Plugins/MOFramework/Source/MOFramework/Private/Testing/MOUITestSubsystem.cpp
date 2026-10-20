@@ -13,6 +13,10 @@
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
 #include "MOStatusPanel.h"
+#include "MOKnowledgeComponent.h"
+#include "MOCraftingSubsystem.h"
+#include "MOSkillsComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "MOQuestUIController.h"
 #include "MOQuestHUDWidget.h"
 #include "MOTutorialHintWidget.h"
@@ -351,6 +355,30 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 	// The tutorial text yields to menus. Every step that follows an open/close retries (up to 3 s) because CommonUI activates/removes a menu a tick after the push/deactivate.
 	// Opening one menu closes the others (Inventory -> Crafting is a SWITCH, not two stacked menus), and the gap between the old menu leaving and the new one activating must not flash
 	// the text back: the flip counter must read exactly 2 (hidden once, shown once) across open -> switch -> close.
+	// The reticle yields to menus (UMOUIManagerComponent::UpdateReticleVisibility, the menu chokepoint) and comes back when they close.
+	Add(TEXT("Edge.EscapeWithNoMenuOpen"), {
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close before the key")),
+		Basic(ActionType::Escape),
+		FMOUIFrameTestAction(ActionType::WaitSeconds, TEXT("0.5"), TEXT("")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Whatever Escape opened did not close again")),
+		Basic(ActionType::Pass)
+	});
+
+	Add(TEXT("HUD.ReticleHiddenWhenMenuOpen"), {
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close before the baseline")),
+		Named(ActionType::AssertReticleShown, TEXT(""), TEXT("Baseline: the reticle is not shown with no menu open")),
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open Inventory")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate")),
+		Named(ActionType::AssertReticleHidden, TEXT(""), TEXT("Inventory open: the reticle still shows")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close")),
+		Named(ActionType::AssertReticleShown, TEXT(""), TEXT("All menus closed: the reticle did not come back")),
+		Basic(ActionType::Pass)
+	});
+
 	Add(TEXT("HUD.TutorialTextYieldsToMenus"), {
 		Basic(ActionType::CloseAllMenus),
 		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close before the baseline")),
@@ -455,6 +483,7 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 	});
 	Add(TEXT("CommonUI.WidgetDeactivation"), {
 		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate before Escape")),
 		Basic(ActionType::Escape),
 		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Menu remained open after deactivation")),
 		Named(ActionType::AssertMoveRestored, TEXT(""), TEXT("Deactivation did not restore movement")),
@@ -465,6 +494,7 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 	AddInputState(TEXT("Crafting.InputState"), TEXT("Crafting"), true, false);
 	Add(TEXT("Focus.RestoredAfterMenuClose"), {
 		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate before Escape")),
 		Basic(ActionType::Escape),
 		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus still active after close")),
 		Basic(ActionType::Pass)
@@ -499,6 +529,7 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 	AddInputState(TEXT("Inventory.InputState"), TEXT("Inventory"), true, false);
 	Add(TEXT("Inventory.ReopenAfterClose"), {
 		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("First open failed")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate before Escape")),
 		Basic(ActionType::Escape),
 		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Failed to close")),
 		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Reopen failed")),
@@ -690,6 +721,7 @@ void UMOUITestSubsystem::RunNextTestStep()
 	if (const TArray<FMOUIFrameTestAction>* Actions = FrameSteppedTestRegistry.Find(TestName))
 	{
 		CurrentTestLogs.Empty();
+		bKeyFellBack = false;
 		ActiveFrameTestName = TestName;
 		ActiveFrameTestActions = *Actions;
 		NextFrameTestActionIndex = 0;
@@ -947,6 +979,20 @@ UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrame
 			? EMOUIFrameTestActionOutcome::Continue
 			: RetryOrFail(TEXT("Tutorial text (hint banner / quest tracker) is not shown"));
 
+	case EMOUIFrameTestActionType::AssertReticleHidden:
+	case EMOUIFrameTestActionType::AssertReticleShown:
+	{
+		UMOUIManagerComponent* UIManager = GetUIManager();
+		if (!UIManager || !UIManager->GetReticleWidget())
+		{
+			return Fail(TEXT("no reticle widget"));
+		}
+		const bool bWantShown = Action.Type == EMOUIFrameTestActionType::AssertReticleShown;
+		return UIManager->IsReticleVisible() == bWantShown
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(bWantShown ? TEXT("The reticle did not come back after the menus closed") : TEXT("The reticle still shows while a menu is open"));
+	}
+
 	case EMOUIFrameTestActionType::AssertTutorialTextHidden:
 		return TutorialTextIsHidden()
 			? EMOUIFrameTestActionOutcome::Continue
@@ -1034,18 +1080,23 @@ UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrame
 
 void UMOUITestSubsystem::RecordBatchResult(FMOUITestResult Result)
 {
-	const FString TestName = Result.TestName;
-	ActiveTestSummary.Results.Add(Result);
+	ActiveTestSummary.Tally(Result);
+	LogResultLine(Result);
+}
 
+void UMOUITestSubsystem::LogResultLine(const FMOUITestResult& Result) const
+{
 	if (Result.bPassed)
 	{
-		ActiveTestSummary.PassedTests++;
-		UE_LOG(LogMOUITest, Log, TEXT("[PASS] %s (%.1fms)"), *TestName, Result.DurationMs);
+		UE_LOG(LogMOUITest, Log, TEXT("[PASS] %s (%.1fms)"), *Result.TestName, Result.DurationMs);
+	}
+	else if (Result.bUnverified)
+	{
+		UE_LOG(LogMOUITest, Warning, TEXT("[UNVERIFIED] %s: %s"), *Result.TestName, *Result.ErrorMessage);
 	}
 	else
 	{
-		ActiveTestSummary.FailedTests++;
-		UE_LOG(LogMOUITest, Error, TEXT("[FAIL] %s: %s"), *TestName, *Result.ErrorMessage);
+		UE_LOG(LogMOUITest, Error, TEXT("[FAIL] %s: %s"), *Result.TestName, *Result.ErrorMessage);
 	}
 }
 
@@ -1112,8 +1163,8 @@ void UMOUITestSubsystem::FinishFrameSteppedRun()
 	bIsRunningTests = false;
 
 	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
-	UE_LOG(LogMOUITest, Log, TEXT("Frame-stepped Test Suite Complete: %d/%d passed (%.1fms)"),
-		LastTestSummary.PassedTests, LastTestSummary.TotalTests, LastTestSummary.TotalDurationMs);
+	UE_LOG(LogMOUITest, Log, TEXT("Frame-stepped Test Suite Complete: %d/%d passed, %d failed, %d unverified (%.1fms)"),
+		LastTestSummary.PassedTests, LastTestSummary.TotalTests, LastTestSummary.FailedTests, LastTestSummary.UnverifiedTests, LastTestSummary.TotalDurationMs);
 	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
 
 	const FString OutputPath = FPaths::ProjectContentDir() / TEXT("Python/test_output/ui_test_results.txt");
@@ -1155,18 +1206,8 @@ FMOUITestSummary UMOUITestSubsystem::RunAllTests()
 	for (const FString& TestName : TestNames)
 	{
 		FMOUITestResult Result = RunTest(TestName);
-		Summary.Results.Add(Result);
-
-		if (Result.bPassed)
-		{
-			Summary.PassedTests++;
-			UE_LOG(LogMOUITest, Log, TEXT("[PASS] %s (%.1fms)"), *TestName, Result.DurationMs);
-		}
-		else
-		{
-			Summary.FailedTests++;
-			UE_LOG(LogMOUITest, Error, TEXT("[FAIL] %s: %s"), *TestName, *Result.ErrorMessage);
-		}
+		Summary.Tally(Result);
+		LogResultLine(Result);
 
 		// Clean up between tests
 		CloseAllMenus();
@@ -1177,8 +1218,8 @@ FMOUITestSummary UMOUITestSubsystem::RunAllTests()
 	bIsRunningTests = false;
 
 	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
-	UE_LOG(LogMOUITest, Log, TEXT("Test Suite Complete: %d/%d passed (%.1fms)"),
-		Summary.PassedTests, Summary.TotalTests, Summary.TotalDurationMs);
+	UE_LOG(LogMOUITest, Log, TEXT("Test Suite Complete: %d/%d passed, %d failed, %d unverified (%.1fms)"),
+		Summary.PassedTests, Summary.TotalTests, Summary.FailedTests, Summary.UnverifiedTests, Summary.TotalDurationMs);
 	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
 
 	// Write results to file
@@ -1192,6 +1233,7 @@ FMOUITestSummary UMOUITestSubsystem::RunAllTests()
 FMOUITestResult UMOUITestSubsystem::RunTest(const FString& TestName)
 {
 	CurrentTestLogs.Empty();
+	bKeyFellBack = false;
 	double StartTime = FPlatformTime::Seconds();
 
 	TFunction<FMOUITestResult()>* TestFunc = TestRegistry.Find(TestName);
@@ -1226,16 +1268,7 @@ FMOUITestSummary UMOUITestSubsystem::RunTestsMatching(const FString& Pattern)
 	for (const FString& TestName : MatchingTests)
 	{
 		FMOUITestResult Result = RunTest(TestName);
-		Summary.Results.Add(Result);
-
-		if (Result.bPassed)
-		{
-			Summary.PassedTests++;
-		}
-		else
-		{
-			Summary.FailedTests++;
-		}
+		Summary.Tally(Result);
 
 		CloseAllMenus();
 	}
@@ -1254,16 +1287,17 @@ void UMOUITestSubsystem::WriteResultsToFile(const FMOUITestSummary& Summary, con
 	Output += TEXT("================================================================================\n\n");
 
 	// Summary
-	Output += FString::Printf(TEXT("SUMMARY: %d/%d tests passed (%.1f%%)\n"),
+	Output += FString::Printf(TEXT("SUMMARY: %d/%d tests passed (%.1f%%), %d failed, %d unverified (could not check what they name)\n"),
 		Summary.PassedTests, Summary.TotalTests,
-		Summary.TotalTests > 0 ? (float)Summary.PassedTests / Summary.TotalTests * 100.0f : 0.0f);
+		Summary.TotalTests > 0 ? (float)Summary.PassedTests / Summary.TotalTests * 100.0f : 0.0f,
+		Summary.FailedTests, Summary.UnverifiedTests);
 	Output += FString::Printf(TEXT("Total Duration: %.1fms\n\n"), Summary.TotalDurationMs);
 
 	// Failed tests first
 	int32 FailCount = 0;
 	for (const FMOUITestResult& Result : Summary.Results)
 	{
-		if (!Result.bPassed)
+		if (!Result.bPassed && !Result.bUnverified)
 		{
 			if (FailCount == 0)
 			{
@@ -1471,81 +1505,48 @@ void UMOUITestSubsystem::SimulateKeyPress(FKey Key)
 
 void UMOUITestSubsystem::SimulateEscape()
 {
-	LogTest(TEXT("Simulating Escape key press via Slate"));
-
-	// A raw Escape that is not consumed during a frame-stepped editor batch is
-	// interpreted by the editor as "End PIE" on the following frame. Single
-	// interactive tests may still exercise Slate routing; batches use the
-	// deterministic UI-manager fallback below so the harness cannot stop itself.
-	if (FSlateApplication::IsInitialized() && !bIsRunningTests)
-	{
-		FKeyEvent KeyDownEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-		FSlateApplication::Get().ProcessKeyDownEvent(KeyDownEvent);
-
-		FKeyEvent KeyUpEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-		FSlateApplication::Get().ProcessKeyUpEvent(KeyUpEvent);
-
-		LogTest(TEXT("Escape key event sent to Slate"));
-	}
-	else if (bIsRunningTests)
-	{
-		LogTest(TEXT("Batch mode: skipped editor-level Slate Escape injection"));
-	}
-
-	// Slate key simulation is unreliable with CommonUI widgets.
-	// As a fallback, directly call the UIManager to close menus.
-	// This tests that the menu system works, even if Slate routing doesn't.
-	UMOUIManagerComponent* UIManager = GetUIManager();
-	if (UIManager && UIManager->IsAnyMenuOpen())
-	{
-		if (UIManager->IsInGameMenuOpen())
-		{
-			UIManager->CloseInGameMenu();
-			LogTest(TEXT("Fallback: Closed in-game menu via UIManager"));
-		}
-		else
-		{
-			UIManager->CloseAllSwitchableMenus();
-			LogTest(TEXT("Fallback: Closed switchable menus via UIManager"));
-		}
-	}
+	SimulateMenuKey(EKeys::Escape);
 }
 
 void UMOUITestSubsystem::SimulateTab()
 {
-	LogTest(TEXT("Simulating Tab key press via Slate"));
+	SimulateMenuKey(EKeys::Tab);
+}
 
-	// Keep frame-stepped batches out of editor-level focus/key handling. The
-	// direct UI-manager route below is the stable batch contract.
-	if (FSlateApplication::IsInitialized() && !bIsRunningTests)
+void UMOUITestSubsystem::SimulateMenuKey(const FKey& Key)
+{
+	// The real key through Slate, the way a player's reaches the menus -- except in an editor PIE batch, where an unconsumed Escape is the
+	// editor's "End PIE" on the next frame (the harness would stop itself). A -game process has no such hazard.
+	const bool bCanSendKey = FSlateApplication::IsInitialized() && !(GIsEditor && bIsRunningTests);
+	if (bCanSendKey)
 	{
-		FKeyEvent KeyDownEvent(EKeys::Tab, FModifierKeysState(), 0, false, 0, 0);
+		LogTest(FString::Printf(TEXT("Sending %s through Slate"), *Key.ToString()));
+		FKeyEvent KeyDownEvent(Key, FModifierKeysState(), 0, false, 0, 0);
 		FSlateApplication::Get().ProcessKeyDownEvent(KeyDownEvent);
-
-		FKeyEvent KeyUpEvent(EKeys::Tab, FModifierKeysState(), 0, false, 0, 0);
+		FKeyEvent KeyUpEvent(Key, FModifierKeysState(), 0, false, 0, 0);
 		FSlateApplication::Get().ProcessKeyUpEvent(KeyUpEvent);
-
-		LogTest(TEXT("Tab key event sent to Slate"));
 	}
-	else if (bIsRunningTests)
+	else
 	{
-		LogTest(TEXT("Batch mode: skipped editor-level Slate Tab injection"));
+		LogTest(FString::Printf(TEXT("%s not sent: an editor PIE batch cannot send it"), *Key.ToString()));
 	}
 
-	// Slate key simulation is unreliable with CommonUI widgets.
-	// As a fallback, directly call the UIManager to close menus.
+	// A frame-stepped test judges the key on the frames that follow (CommonUI deactivates a menu a tick after the key); a synchronous test
+	// cannot wait, so whatever is still open is closed by the UI manager -- and that test can no longer claim the key closed it (M17).
+	const bool bFrameStepped = !ActiveFrameTestName.IsEmpty();
 	UMOUIManagerComponent* UIManager = GetUIManager();
-	if (UIManager && UIManager->IsAnyMenuOpen())
+	if (UIManager && UIManager->IsAnyMenuOpen() && (!bCanSendKey || !bFrameStepped))
 	{
+		bKeyFellBack = true;
 		if (UIManager->IsInGameMenuOpen())
 		{
 			UIManager->CloseInGameMenu();
-			LogTest(TEXT("Fallback: Closed in-game menu via UIManager"));
+			LogTest(TEXT("Fallback: closed the in-game menu through the UI manager (the test's pass will read UNVERIFIED)"));
 		}
 		else
 		{
 			UIManager->CloseAllSwitchableMenus();
-			LogTest(TEXT("Fallback: Closed switchable menus via UIManager"));
+			LogTest(TEXT("Fallback: closed the switchable menus through the UI manager (the test's pass will read UNVERIFIED)"));
 		}
 	}
 }
@@ -1597,10 +1598,26 @@ void UMOUITestSubsystem::LogTest(const FString& Message)
 
 FMOUITestResult UMOUITestSubsystem::MakeResult(const FString& TestName, bool bPassed, const FString& ErrorMessage)
 {
+	if (bPassed && bKeyFellBack)
+	{
+		// The menus closed because the UI manager closed them, not because of the key the test names (M17: the Escape / Tab tests passed that way).
+		return MakeUnverified(TestName, TEXT("passed only through the UI manager's fallback: the Escape / Tab key itself did not close the menu "
+			"(an editor PIE batch cannot send it -- run the suite in a -game process; a synchronous test cannot wait for CommonUI's deactivation)"));
+	}
 	FMOUITestResult Result;
 	Result.TestName = TestName;
 	Result.bPassed = bPassed;
 	Result.ErrorMessage = ErrorMessage;
+	return Result;
+}
+
+FMOUITestResult UMOUITestSubsystem::MakeUnverified(const FString& TestName, const FString& Why)
+{
+	FMOUITestResult Result;
+	Result.TestName = TestName;
+	Result.bPassed = false;
+	Result.bUnverified = true;
+	Result.ErrorMessage = Why;
 	return Result;
 }
 
@@ -2125,12 +2142,8 @@ FMOUITestResult UMOUITestSubsystem::Test_MenuSwitch_CraftingToBuilding()
 
 FMOUITestResult UMOUITestSubsystem::Test_Nested_ContextMenuEscapeClosesOnlyContext()
 {
-	// Note: This test is more complex and may require actual context menu interaction
-	// For now, we document it as a placeholder that passes
-	LogTest(TEXT("Testing: Escape in context menu closes only context (requires manual verification)"));
-	LogTest(TEXT("PLACEHOLDER: This test requires context menu interaction to fully verify"));
-
-	return MakeResult(TEXT("Nested.ContextMenuEscapeClosesOnlyContext"), true);
+	LogTest(TEXT("Testing: Escape in context menu closes only context"));
+	return MakeUnverified(TEXT("Nested.ContextMenuEscapeClosesOnlyContext"), TEXT("not implemented: needs a right-click on an inventory slot to open a context menu"));
 }
 
 // ============================================================================
@@ -2549,39 +2562,36 @@ FMOUITestResult UMOUITestSubsystem::Test_Possession_Open()
 	{
 		UIManager->TogglePossessionMenu();
 	}
-	// Note: Possession menu may require specific conditions
-	LogTest(TEXT("  Possession menu toggle attempted - manual verification may be needed"));
-	return MakeResult(TEXT("Possession.Open"), true);
+	// The possession menu opens only when there is someone to possess.
+	if (IsMenuOpen(TEXT("Possession")))
+	{
+		return MakeResult(TEXT("Possession.Open"), true);
+	}
+	return MakeUnverified(TEXT("Possession.Open"), TEXT("the possession menu did not open (it needs possessable pawns in the world): nothing checked"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_Possession_CloseEscape()
 {
 	LogTest(TEXT("Testing: Escape closes possession menu"));
-	// Placeholder - possession menu has special requirements
-	return MakeResult(TEXT("Possession.CloseEscape"), true);
+	return MakeUnverified(TEXT("Possession.CloseEscape"), TEXT("not implemented: needs possessable pawns to open the possession menu first"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_Possession_InputState()
 {
 	LogTest(TEXT("Testing: Input state when possession menu is open"));
-	// Placeholder - possession menu has special requirements
-	return MakeResult(TEXT("Possession.InputState"), true);
+	return MakeUnverified(TEXT("Possession.InputState"), TEXT("not implemented: needs possessable pawns to open the possession menu first"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_ContextMenu_ParentMenuStaysOpen()
 {
 	LogTest(TEXT("Testing: Context menu escape closes context but not parent"));
-	// This would require right-click on inventory slot to trigger context menu
-	LogTest(TEXT("  PLACEHOLDER: Requires actual context menu interaction"));
-	return MakeResult(TEXT("ContextMenu.ParentMenuStaysOpen"), true);
+	return MakeUnverified(TEXT("ContextMenu.ParentMenuStaysOpen"), TEXT("not implemented: needs a right-click on an inventory slot to open a context menu"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_Confirmation_ModalBlocking()
 {
 	LogTest(TEXT("Testing: Confirmation dialog blocks input to parent menu"));
-	// Would need to trigger a confirmation dialog
-	LogTest(TEXT("  PLACEHOLDER: Requires confirmation dialog trigger"));
-	return MakeResult(TEXT("Confirmation.ModalBlocking"), true);
+	return MakeUnverified(TEXT("Confirmation.ModalBlocking"), TEXT("not implemented: needs a confirmation dialog to be raised"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_MenuSwitch_BuildingToSkills()
@@ -2616,8 +2626,7 @@ FMOUITestResult UMOUITestSubsystem::Test_MenuSwitch_InGameBlocksSwitch()
 FMOUITestResult UMOUITestSubsystem::Test_Nested_ConfirmationOverMenu()
 {
 	LogTest(TEXT("Testing: Confirmation can appear over menu"));
-	// Placeholder - requires confirmation dialog trigger
-	return MakeResult(TEXT("Nested.ConfirmationOverMenu"), true);
+	return MakeUnverified(TEXT("Nested.ConfirmationOverMenu"), TEXT("not implemented: needs a confirmation dialog to be raised"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_Focus_MenuReceivesFocusOnOpen()
@@ -2628,14 +2637,11 @@ FMOUITestResult UMOUITestSubsystem::Test_Focus_MenuReceivesFocusOnOpen()
 	UWidget* FocusedWidget = GetFocusedWidget();
 	if (!FocusedWidget)
 	{
-		LogTest(TEXT("  WARNING: No widget has focus - may cause input issues"));
-		// Don't fail - focus management is tricky
+		// CommonUI activates (and focuses) a menu a tick after the push: a synchronous probe cannot tell "not yet" from "never".
+		return MakeUnverified(TEXT("Focus.MenuReceivesFocusOnOpen"), TEXT("no widget had focus in the same frame as the open (CommonUI focuses a tick later); "
+			"the frame-stepped CommonUI.FocusRestoration checks focus across frames"));
 	}
-	else
-	{
-		LogTest(FString::Printf(TEXT("  Focused widget: %s"), *FocusedWidget->GetName()));
-	}
-
+	LogTest(FString::Printf(TEXT("  Focused widget: %s"), *FocusedWidget->GetName()));
 	return MakeResult(TEXT("Focus.MenuReceivesFocusOnOpen"), true);
 }
 
@@ -2675,10 +2681,12 @@ FMOUITestResult UMOUITestSubsystem::Test_InputState_LookBlockedWhenMenuOpen()
 FMOUITestResult UMOUITestSubsystem::Test_HUD_ReticleHiddenWhenMenuOpen()
 {
 	LogTest(TEXT("Testing: Reticle hidden when menu open"));
-	// This requires checking the reticle widget visibility - placeholder for now
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (!UIManager || !UIManager->GetReticleWidget()) return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), false, TEXT("no reticle widget"));
 	if (!OpenMenu(TEXT("Inventory"))) return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), false, TEXT("Failed to open"));
-	LogTest(TEXT("  Reticle visibility check requires widget access - manual verification"));
-	return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), true);
+	if (!UIManager->IsReticleVisible()) return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), true);
+	// The menu chokepoint may hide it on the activation tick; the frame-stepped sequence of the same name waits for it.
+	return MakeUnverified(TEXT("HUD.ReticleHiddenWhenMenuOpen"), TEXT("the reticle still showed in the frame of the open; the frame-stepped test waits for the activation"));
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_HUD_TutorialTextYieldsToMenus()
@@ -3352,12 +3360,40 @@ UMOCraftingQueueComponent* UMOUITestSubsystem::SetupCraftingQueueFixture(int32 D
 	}
 
 	const int32 TotalRepeats = 3; // entry 1 = 1x, entry 2 = 2x
+	int32 RejectedLogged = 0;
 	for (const TPair<FName, uint8*>& Pair : RecipeTable->GetRowMap())
 	{
 		const FMORecipeDefinitionRow* Recipe = reinterpret_cast<const FMORecipeDefinitionRow*>(Pair.Value);
 		if (!Recipe || Recipe->RequiredStation != EMOCraftingStation::None)
 		{
 			continue;
+		}
+
+		// A fresh pawn knows nothing (since the progression roadmap every hand recipe asks for knowledge, a skill level or a discovery): give the
+		// fixture pawn what this recipe asks -- the queue renderer is under test here, not the knowledge gate (all five Queue tests failed on it,
+		// N-128, Oct 19 2026). Test worlds only: this is the harness's own pawn.
+		if (UMOKnowledgeComponent* Knowledge = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+		{
+			for (const FName& KnowledgeId : Recipe->RequiredKnowledge)
+			{
+				Knowledge->GrantKnowledge(KnowledgeId);
+			}
+		}
+		if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
+		{
+			if (!Recipe->RequiredSkillId.IsNone() && Skills->GetSkillLevel(Recipe->RequiredSkillId) < Recipe->RequiredSkillLevel)
+			{
+				Skills->SetSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel);
+			}
+			// Discovery reads a knowledge's LEVEL, which lives on the skills component (UMOCraftingSubsystem::IsRecipeAvailable).
+			if (!Recipe->DiscoveryKnowledgeId.IsNone() && Skills->GetSkillLevel(Recipe->DiscoveryKnowledgeId) < Recipe->DiscoveryKnowledgeLevel)
+			{
+				Skills->SetSkillLevel(Recipe->DiscoveryKnowledgeId, Recipe->DiscoveryKnowledgeLevel);
+			}
+		}
+		if (UMORecipeDiscoveryComponent* Discovery = Pawn->FindComponentByClass<UMORecipeDiscoveryComponent>())
+		{
+			Discovery->DiscoverRecipe(Pair.Key);
 		}
 
 		// Grant enough ingredients for every planned repeat (consumed at enqueue).
@@ -3371,6 +3407,15 @@ UMOCraftingQueueComponent* UMOUITestSubsystem::SetupCraftingQueueFixture(int32 D
 
 		if (!Queue->EnqueueCraft(Pair.Key, 1, EMOCraftingStation::None))
 		{
+			// Say why (the validator's own reason), for the first few: a fixture that finds nothing must say what stopped it.
+			if (RejectedLogged < 6)
+			{
+				++RejectedLogged;
+				const UMOCraftingSubsystem* Crafting = GetWorld() ? GetWorld()->GetSubsystem<UMOCraftingSubsystem>() : nullptr;
+				const FMOCraftingValidation Why = Crafting ? Crafting->CanCraftRecipe(Pair.Key, Pawn->FindComponentByClass<UMOKnowledgeComponent>(),
+					Pawn->FindComponentByClass<UMOSkillsComponent>(), Inventory, EMOCraftingStation::None) : FMOCraftingValidation();
+				LogTest(FString::Printf(TEXT("Queue fixture: %s refused: %s"), *Pair.Key.ToString(), *Why.FailureReason.ToString()));
+			}
 			continue; // validation rejected (unknown recipe, skill gate, ...) -- try the next
 		}
 		if (DesiredEntries >= 2)
