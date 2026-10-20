@@ -12,6 +12,7 @@
 #include "GameFramework/Pawn.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
 UMOKeepOnHarvestContextMenu::UMOKeepOnHarvestContextMenu(const FObjectInitializer& ObjectInitializer)
@@ -209,6 +210,10 @@ FText UMOKeepOnHarvestContextMenu::GetTargetDisplayName() const
 void UMOKeepOnHarvestContextMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (StyleButton)
+	{
+		StyleButton->SetVisibility(ESlateVisibility::Collapsed);   // it only lends its look to the runtime buttons
+	}
 }
 
 void UMOKeepOnHarvestContextMenu::NativeDestruct()
@@ -238,7 +243,15 @@ UMOCommonButton* UMOKeepOnHarvestContextMenu::CreateButton(const FText& Label)
 	}
 
 	Button->SetButtonText(Label);
-	ButtonContainer->AddChild(Button);
+	if (StyleButton && StyleButton->GetStyle())
+	{
+		Button->SetStyle(StyleButton->GetStyle()->GetClass());   // the menu's own look
+	}
+	UVerticalBoxSlot* NewSlot = ButtonContainer->AddChildToVerticalBox(Button);
+	if (const UVerticalBoxSlot* From = StyleButton ? Cast<UVerticalBoxSlot>(StyleButton->Slot) : nullptr; NewSlot && From)
+	{
+		NewSlot->SetPadding(From->GetPadding());
+	}
 	CreatedButtons.Add(Button);
 
 	return Button;

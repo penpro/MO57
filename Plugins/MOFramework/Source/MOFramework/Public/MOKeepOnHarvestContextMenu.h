@@ -31,6 +31,10 @@
  * [2024-02] DYNAMIC BUTTONS: Buttons are created at runtime based on HarvestActions
  *   from the resource definition. Must set ButtonClass in Blueprint defaults.
  *
+ * [2026-10] KIT LOOK: the tree is Content/Python/ui_specs/kit_harvest_menu.py (a plate that grows with its buttons, like the ground and
+ *   station menus). The runtime buttons take StyleButton's style and slot padding (StyleButton is collapsed: it only lends its look). The
+ *   old fixed tree drew the title washed out over the plate's top edge with ~80 px of empty plate under the buttons (N-078, Oct 19 2026).
+ *
  * [2026-02] RESOURCE LOOKUP: Uses ResourceNode_{RowName} tag from ISM component
  *   to look up FMOResourceNodeDefinitionRow in DT_Resources via Project Settings.
  *
@@ -195,6 +199,10 @@ protected:
 	/** Container for all buttons - populated programmatically */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
 	TObjectPtr<UVerticalBox> ButtonContainer;
+
+	/** Lends the runtime buttons its style and slot padding (the kit Secondary button); collapsed at runtime. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> StyleButton;
 
 	// ============================================================================
 	// CONFIGURATION

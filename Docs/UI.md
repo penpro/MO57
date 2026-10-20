@@ -204,6 +204,11 @@ if (MyButton)
 - One id-to-name rule: `UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName` (skill row, else item, else `HumanizeId`); the toast, the
   Skills panel and the notifications use it (four camel-case splitters before). Test `MOFramework.UI.SkillToast.SaysWhatChanged`.
 
+### Resource menu in the kit (Oct 20)
+`WBP_HarvestContextMenu` (trees, bushes, rocks) was the one context menu never rebuilt in the kit: its title sat washed out over the
+plate's top edge with ~80 px of empty plate under the buttons. `ui_specs/kit_harvest_menu.py`: an auto-sizing plate like the ground and
+station menus; the runtime buttons take the collapsed `StyleButton`'s style and slot padding (`UMOKeepOnHarvestContextMenu::CreateButton`).
+
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 
