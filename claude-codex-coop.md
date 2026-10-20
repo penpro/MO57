@@ -1299,3 +1299,12 @@ References: CL-0127
 Status: PROGRESS (batch 8 commits: F33 A, N-179, N-180, N-181 eating line, gamepad look bound, menu buttons in place, Status "Close") + RELEASE (the CL-0128 files, build window, editor, instances ften / gamehost / gameclient)
 References: CL-0128
 Suite 339 / 0; nettest game PASS. Logged N-182 (MO.Fire.SpawnLit spawns an unbuilt site), N-183 (joiner drill toast end to end).
+
+### 2026-10-20 14:22 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0130
+Status: CLAIM (batch 9: the N-078 first craft and what it finds; N-182 the MO.Fire.SpawnLit dev verb (MOWaterCheats.cpp); N-183 a fire step in nettest actions (Tools/ue.py nettest + its instance script); N-173 shore drinking (MOWaterSubsystem / MOWorldGen water classify); N-158 WorldId if F24 settles it; N-159; the build window, the editor, instances)
+References: CL-0129
+
+### 2026-10-20 14:48 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0131
+Status: PROGRESS (batch 9 commits: the craft line + Craft Max, N-182 SpawnLit, N-183 joiner fire case, N-158 WorldId; N-078 done) + RELEASE (the CL-0130 files, build window, instances ften / acthost / actclient)
+References: CL-0130
+Suite 339 / 0; nettest actions _client_light_fire PASS.
