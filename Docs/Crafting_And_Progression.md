@@ -30,6 +30,9 @@ CanCraftRecipeAtStation(RecipeId, Knowledge, Skills, Inventory, ActualStation)
 ```
 Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pattern verbatim from TECHNICAL_REFERENCE, May 2026.)
 
+- **A finished craft says what it made** to the crafting player ("Crafted Crude Club", `UMOCraftingQueueComponent::AnnounceCrafted`, hand and
+  station crafts alike; a survivor's job stays silent). It used to finish without a word (N-078 first craft, Oct 20). "Craft Max" is disabled
+  while nothing can be made.
 - **Craft time = CraftTime / average effectiveness of the tools used** (`GetAdjustedCraftTime`): a hammerstone (0.3) makes a 300 s
   recipe 1000 s. Compute before declaring a queue stuck.
 - **The queue ticks on real `UtcNow`, NOT the game clock.** Gates can't speed it with TimeScale; read state IMMEDIATELY after a

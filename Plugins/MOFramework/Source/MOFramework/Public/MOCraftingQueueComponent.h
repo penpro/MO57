@@ -324,6 +324,8 @@ protected:
 	void ServerRequestCancelAllCrafts();
 
 private:
+	/** Server: tell the crafting player what a finished craft made ("Crafted Crude Club"). */
+	void AnnounceCrafted(const TMap<FName, int32>& Produced) const;
 	// --- Internal Methods ---
 	AActor* ResolveEntryStation(const FMOCraftingQueueEntry& Entry) const;
 	bool ValidateEntryContext(const FMOCraftingQueueEntry& Entry, FText& OutReason) const;

@@ -13,6 +13,8 @@
 #include "MOCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
+#include "MOPlayerController.h"
+#include "MONotificationWidget.h"
 
 void FMOCraftingQueueList::PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters)
 {
@@ -1031,7 +1033,29 @@ bool UMOCraftingQueueComponent::CompletCurrentCraft()
 	Crafting->FinalizeReservedCraft(RecipeId, Inventory, GetOwner()->FindComponentByClass<UMOSkillsComponent>(), Result);
 	OnCraftCompleted.Broadcast(EntryId, Result);
 	OnQueueChanged.Broadcast();
+	AnnounceCrafted(Result.ProducedItems);
 	return true;
+}
+
+void UMOCraftingQueueComponent::AnnounceCrafted(const TMap<FName, int32>& Produced) const
+{
+	// The player who crafted hears what was made, like a pickup or a meal: a craft used to finish silently (the N-078 first craft, Oct 20 2026).
+	// A survivor's job has no player controller: its own notices cover it.
+	const APawn* Crafter = Cast<APawn>(GetOwner());
+	AMOPlayerController* PC = Crafter ? Cast<AMOPlayerController>(Crafter->GetController()) : nullptr;
+	if (!PC || Produced.IsEmpty())
+	{
+		return;
+	}
+	TArray<FText> Parts;
+	for (const TPair<FName, int32>& Item : Produced)
+	{
+		const FText Name = UMOItemDatabaseSettings::GetItemDisplayName(Item.Key);
+		const FText Shown = Name.IsEmpty() ? FText::FromName(Item.Key) : Name;
+		Parts.Add(Item.Value > 1 ? FText::Format(NSLOCTEXT("MOCrafting", "CraftedN", "{0} x{1}"), Shown, FText::AsNumber(Item.Value)) : Shown);
+	}
+	PC->ClientShowNotification(FText::Format(NSLOCTEXT("MOCrafting", "Crafted", "Crafted {0}"), FText::Join(NSLOCTEXT("MOCrafting", "CraftedSep", ", "), Parts)),
+		3.0f, EMONotificationType::Success);
 }
 
 bool UMOCraftingQueueComponent::GetCompletionReceipt(const FGuid& EntryId, FMOCraftingCompletionReceipt& OutReceipt) const

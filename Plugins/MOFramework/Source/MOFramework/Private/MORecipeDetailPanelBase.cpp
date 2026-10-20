@@ -312,6 +312,10 @@ void UMORecipeDetailPanelBase::UpdateActionButtonState()
 	{
 		CraftButton->SetIsEnabled(bCanPerform);
 	}
+	if (CraftMaxButton)
+	{
+		CraftMaxButton->SetIsEnabled(GetMaxPerformableAmount() > 0);   // "Craft Max" of nothing did nothing while it looked clickable (N-078 first craft)
+	}
 
 	if (ActionUnavailableText)
 	{
