@@ -1,4 +1,5 @@
 #include "MOItemInfoPanel.h"
+#include "MOUITokens.h"
 
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
@@ -256,13 +257,28 @@ void UMOItemInfoPanel::RefreshPanel()
 	DisplayItemDefinition(ItemDef, FoundEntry.Quantity);
 }
 
+FText UMOItemInfoPanel::FormatWeight(float Kg)
+{
+	if (Kg <= 0.0f)
+	{
+		return NSLOCTEXT("MOItemInfo", "Weightless", "-");
+	}
+	if (Kg < 1.0f)
+	{
+		return FText::Format(NSLOCTEXT("MOItemInfo", "Grams", "{0} g"), FText::AsNumber(FMath::Max(1, FMath::RoundToInt(Kg * 1000.0f))));
+	}
+	FNumberFormattingOptions OneDecimal;
+	OneDecimal.MaximumFractionalDigits = 1;
+	return FText::Format(NSLOCTEXT("MOItemInfo", "Kilograms", "{0} kg"), FText::AsNumber(Kg, &OneDecimal));
+}
+
 void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef, int32 Quantity)
 {
 	// Display Name
 	if (ItemNameText)
 	{
 		ItemNameText->SetText(ItemDef.DisplayName.IsEmpty() ? FText::FromString(TEXT("Unknown Item")) : ItemDef.DisplayName);
-		ItemNameText->SetColorAndOpacity(FSlateColor(GetRarityColor(ItemDef.Rarity)));
+		ItemNameText->SetColorAndOpacity(FSlateColor(UMOUITokens::Color("color.text.primary")));   // a name reads as a name (the rarity grey was unreadable)
 	}
 
 	// Item Type
@@ -305,7 +321,7 @@ void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef
 	// Weight
 	if (WeightText)
 	{
-		WeightText->SetText(FText::Format(NSLOCTEXT("MOItemInfo", "Weight", "Weight: {0}"), FText::AsNumber(ItemDef.Weight)));
+		WeightText->SetText(FormatWeight(ItemDef.Weight));   // the value only: the panel carries the label (it read "Weight: Weight: 1")
 	}
 
 	// Value

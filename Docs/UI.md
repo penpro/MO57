@@ -217,6 +217,11 @@ station menus; the runtime buttons take the collapsed `StyleButton`'s style and 
 still said "Click an item for details" (the old `UMOInventoryMenu` handled it). `HandlePlayerSlotClicked` / `HandleSecondarySlotClicked`
 call `SetSelectedItem` (an empty slot clears it).
 
+### Inventory Details in the kit (Oct 20)
+`WBP_ItemInfoPanel` (`ui_specs/kit_item_info.py`): icon, name (primary text, not the rarity grey), type, "Weight 100 g" (`UMOItemInfoPanel::FormatWeight`:
+grams under a kilogram, else kilograms to a tenth; the panel carries the label) beside the turntable (`WBP_MOItemPreview`), a rule, the description
+wrapping under it. The old grid read "Weight: Weight: 1" and ran the description past the panel (N-180). Test `MOFramework.UI.ItemWeight.ReadsAsAWeight`.
+
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 

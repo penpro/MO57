@@ -60,6 +60,9 @@ class MOFRAMEWORK_API UMOItemInfoPanel : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	/** An item's weight as a person reads it: grams under a kilogram ("100 g"), else kilograms to a tenth ("2.5 kg"). DT_Items Weight is kg a unit. */
+	static FText FormatWeight(float Kg);
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void InitializePanel(UMOInventoryComponent* InInventoryComponent);
 
