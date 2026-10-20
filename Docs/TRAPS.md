@@ -148,6 +148,7 @@
 - **A scripted co-op test step "did nothing" (a hitch on a jogging joiner gave 0 corrections, 12 of 12 trials)** -> every `ue.py inst do` / `console`
   call takes ~1.5 s, so the `MO.Test.MoveFor 0 1 7` had ended before the hitch landed -> make the move outlast the chain of calls and record
   the state the step needs right before it (the pawn's speed); a trial whose precondition is not met does not count. (Oct 17)
+- **`MO.Item.Menu` logs "opened" but no menu is there (a joiner, a background instance)** -> the context menu auto-closes when the REAL cursor is outside it for 0.2 s (`[ContextMenu] Auto-closing - mouse outside`), and the cursor is over another window -> drive the action itself (`MO.Test.Inspect <ItemId>`, `MO.Item.Do`), or keep that instance's window under the cursor. A resource menu needs the CAMERA within ~5 m of the target (the interaction trace starts at the shoulder camera): stand ~3 m away or you get the Forage menu. (Oct 20)
 - **Smoothness measured on two local processes says little about Steam** -> loopback has no internet latency, loss or jitter, and both
   processes share one CPU / GPU (frame times and the round trip are frame-bound: ~35 ms rtt on loopback) -> `nettest netdiag` validates the
   instruments; real numbers come from a Steam session's two logs (`Tools/ue_netdiag.py logs`, `Docs/Coop_And_Networking.md` §7). (Wes, Oct 17)
