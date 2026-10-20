@@ -1,4 +1,5 @@
 #include "MOItemActions.h"
+#include "MOPlayerController.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
@@ -233,7 +234,7 @@ bool FMOItemActions::Perform(APawn* Pawn, const FGuid& ItemGuid, FName ActionId)
 		TWeakObjectPtr<UMOInventoryComponent> WeakFoodInventory(Inventory);
 		const FText Name = FoodDef.DisplayName.IsEmpty() ? FText::FromName(Food.ItemDefinitionId) : FoodDef.DisplayName;
 		return Eating->Begin(Use, FText::Format(LOCTEXT("Eating", "Eating {0}"), Name), EatSeconds(FoodDef),
-			[WeakEater, WeakFoodInventory, ItemGuid]()
+			[WeakEater, WeakFoodInventory, ItemGuid, Name]()
 			{
 				APawn* P = WeakEater.Get();
 				UMOInventoryComponent* Inv = WeakFoodInventory.Get();
@@ -241,6 +242,11 @@ bool FMOItemActions::Perform(APawn* Pawn, const FGuid& ItemGuid, FName ActionId)
 				if (Stats && Inv && Stats->ConsumeItem(Inv, ItemGuid))
 				{
 					UE_LOG(LogMOFramework, Log, TEXT("[MOItemActions] %s finished eating"), *P->GetName());
+					// The meal ends with a line, like a pickup: the moodle alone did not say it was eaten (N-181, Oct 20 2026).
+					if (AMOPlayerController* PC = Cast<AMOPlayerController>(P->GetController()))
+					{
+						PC->ClientShowNotification(FText::Format(LOCTEXT("Ate", "Ate {0}"), Name), 3.0f, EMONotificationType::Info);
+					}
 				}
 			});
 	}

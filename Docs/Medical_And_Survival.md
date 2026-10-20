@@ -95,7 +95,7 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
   `Docs/Survival_Single_Source_Proposal.md`), B = clock-scaled counters, C = arcade pacing. Until decided, the moodles and the Status
   panel's Thirst row (HydrationLevel) disagree.
 - **Eating is a timed action** (Wes, Oct 16): `FMOItemActions::EatSeconds` (mass at 2 g/s, floor 4 s) on `UMOTimedActionComponent`;
-  moving cancels and nothing is eaten (a4207587).
+  moving cancels and nothing is eaten (a4207587). A finished meal says so ("Ate Hazelnuts": N-181, Oct 20; the moodle alone did not).
 - **Drinking** from water bodies (Oct 15): `Docs/Water_And_Illness.md` (salinity, illness per litre, timed drink, containers, boiling).
 - **Meter persistence:** the pawn record captures `FMOSurvivalSaveData` through the shared live-load/possession-spawn restore path.
   Its valid/version marker, six meter values and nutrition restore atomically on authority after finite-data validation, clamped to
