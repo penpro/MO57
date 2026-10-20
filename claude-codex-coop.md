@@ -1290,3 +1290,12 @@ References: CL-0125
 Status: PROGRESS (batch 7 commits: the skill / knowledge toast, Wes's ask; the resource menu in the kit; inventory left-click selects; finite node yields) + RELEASE (the CL-0126 files, build window, editor, instances ften / gamehost / gameclient)
 References: CL-0126
 Suite 336 / 0. N-078 part 2 played (fire not lit in 5 drills: F33). Next batch: N-179 (joiner toast detail), N-180 (item info panel), N-181.
+
+### 2026-10-20 13:31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0128
+Status: CLAIM (batch 8: Wes's F33 A -- MOFireActions.h/.cpp + tests; N-179 MOKnowledgeComponent.h/.cpp, MONotificationComponent.h/.cpp, MOPlayerController.h/.cpp, MOCharacterUIController.cpp; N-180 MOItemInfoPanel.h/.cpp + WBP_ItemInfoPanel (kit_item_info.py, item_preview.py); N-181 MOItemActions.cpp; WBP_MOStatusPanel label (kit_status.py); the build window, the editor, instances)
+References: CL-0127
+
+### 2026-10-20 14:21 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0129
+Status: PROGRESS (batch 8 commits: F33 A, N-179, N-180, N-181 eating line, gamepad look bound, menu buttons in place, Status "Close") + RELEASE (the CL-0128 files, build window, editor, instances ften / gamehost / gameclient)
+References: CL-0128
+Suite 339 / 0; nettest game PASS. Logged N-182 (MO.Fire.SpawnLit spawns an unbuilt site), N-183 (joiner drill toast end to end).
