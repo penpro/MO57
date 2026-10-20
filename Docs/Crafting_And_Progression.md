@@ -70,7 +70,7 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   `AMOCraftingStationActor::AchievableProcessTemperatureCelsius`, recipe `MinimumProcessTemperatureCelsius`. **No values are authored**:
   the proposed ladder is in `Docs/PROGRESSION_ROADMAP.md` §4 and waits on Wes (F10) and Codex's fuel-to-temperature rule.
 - Fire: `FMOFireActions` = AddFuel.<ItemId> / Light / PutOut. Light needs fuel + Tinder01 + FireDrill01 or Branch01 x2 (DRY
-  deadfall; Stick01 = green, refused); 3 min by hand / 90 s bow; `LightChance` 30 / 60 % + 6 % per level, rain x0.3, wet x0.6, cap
+  deadfall; Stick01 = green, refused); 3 min by hand / 90 s bow; `LightChance` 20 % (ImprovisedDrillEffectiveness 0.2) / 60 % + 6 % per level, rain x0.3, wet x0.6, cap
   95 %. Light a torch in the fire / a fire from a torch: `Docs/Light_Sources.md`. Station menu = `kit_station_menu.py`;
   `UMOUIUtils::RebuildActionButtons` builds runtime buttons for both menus.
 

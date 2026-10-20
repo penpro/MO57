@@ -1281,3 +1281,12 @@ Suite 333 / 0 (Weather.ShelterIsSolid among them). Open meadow in rain: 0/9 over
 Status: PROGRESS (batch commits: cave tests on every core; N-128 honest UI tests; N-176 / N-177 wetness; N-178 heat balance, F2 interim per Wes; N-093 why-it-is-cold rows) + RELEASE (the CL-0124 files, build window, editor, instances)
 References: CL-0124
 Suite 334 / 0 in 330 s (was ~22 min). UI suite in -game 78 / 86, 0 failed, 8 unverified.
+
+### 2026-10-19 22:58 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0126
+Status: CLAIM (N-078 first-ten-minutes batch: MONotificationComponent.h/.cpp + a new skill toast widget (Wes: "the ui for the skill-ups/knowledge-ups sucks and is hard to read"), MOCharacterUIController.cpp (inspection popups), MOSkillEntryWidget.h/.cpp, MOResourceDepletionSubsystem.h/.cpp (unlisted yields were unlimited), BP_MOPlayerController + a new WBP_SkillToast; instance ften now, then the editor, build window, instances)
+References: CL-0125
+
+### 2026-10-19 23:57 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0127
+Status: PROGRESS (batch 7 commits: the skill / knowledge toast, Wes's ask; the resource menu in the kit; inventory left-click selects; finite node yields) + RELEASE (the CL-0126 files, build window, editor, instances ften / gamehost / gameclient)
+References: CL-0126
+Suite 336 / 0. N-078 part 2 played (fire not lit in 5 drills: F33). Next batch: N-179 (joiner toast detail), N-180 (item info panel), N-181.

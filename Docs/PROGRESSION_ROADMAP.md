@@ -60,7 +60,7 @@ world with today's gates).
 - **Water:** drink from lakes / rivers / the sea (salt dehydrates; untreated water can make you ill), fill a bark container,
   boil with heated stones (20 min) or in a pot over the fire (12 min). `Docs/Water_And_Illness.md`.
 - **Fire:** campfire (BuildCampfire, T1) on deadwood; friction fire (hand drill: a hazel rod + a dry branch; later the bow drill);
-  carry fire with a torch (MakeTorch, T2). Fuel: Branch01, Firewood01, Charcoal01 (Stick01 is green wood and is refused).
+  carry fire with a torch (MakeTorch, T2). Fuel: Branch01, Firewood01, Charcoal01, Stick01 (green wood burns once laid, 32a87e46; it is refused only as the drill).
 - **Food:** forage roots / mushrooms / berries / nuts; deer carcass parts (RawMeat01 -> CookMeat).
 - **Shelter:** BuildLeanTo, stick walls / floors / roofs (T1).
 - Producers (T0): ground pickups (sticks, bark, stones), cover gathering (dry grass, reeds, fibre, straight hazel rods,
