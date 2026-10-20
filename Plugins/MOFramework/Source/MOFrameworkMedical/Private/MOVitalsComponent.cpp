@@ -77,6 +77,7 @@ void UMOVitalsComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Vitals, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Exertion, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Activity, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UMOVitalsComponent, WetnessLevel, COND_OwnerOnly);
 }
 
 // ============================================================================
@@ -1226,7 +1227,16 @@ void UMOVitalsComponent::SetWetnessLevel(float NewLevel)
 		return;
 	}
 	WetnessLevel = Clamped;
+	BroadcastWetnessStateIfChanged();
+}
 
+void UMOVitalsComponent::OnRep_WetnessLevel()
+{
+	BroadcastWetnessStateIfChanged();
+}
+
+void UMOVitalsComponent::BroadcastWetnessStateIfChanged()
+{
 	const EMOWetnessState NewState = ComputeWetnessState(WetnessLevel);
 	if (NewState != LastWetnessState)
 	{

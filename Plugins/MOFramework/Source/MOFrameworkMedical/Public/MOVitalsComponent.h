@@ -207,34 +207,30 @@ public:
 	FMOWetnessThresholds WetnessThresholds;
 
 	/**
-	 * How fast WetnessLevel rises per second of full exposure to rain
-	 * (intensity 1.0, zero overhead cover). Default 0.10 → fully soaked in 10s
-	 * of standing in a torrential downpour. Modified by rain intensity and
-	 * shelter coverage at evaluation time.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
-		meta=(ClampMin="0.001", ClampMax="1.0"))
-	float WetnessGainPerSecond = 0.10f;
-
-	/**
-	 * How fast WetnessLevel decays per second while sheltered or in clear
-	 * weather. Default 0.005 → fully soaked → dry in ~200s (~3 min). Slow
-	 * enough that the player has to deliberately get under cover, not just
-	 * pass through a doorway.
+	 * How fast WetnessLevel rises per second of full exposure to rain (intensity 1.0, zero overhead cover). Default 1/300: a downpour soaks
+	 * ordinary clothing in 5 min, UDW's "Rain" (0.7) in ~7, a light rain (0.3) in ~17 -- the real phenomenon (Principle 11, N-176, Oct 19 2026;
+	 * was 0.10 = soaked in 10 s). Scaled by rain intensity and shelter coverage. Wading / swimming soaks far faster (MOCharacter's immersion).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
 		meta=(ClampMin="0.0001", ClampMax="1.0"))
-	float WetnessDecayPerSecond = 0.005f;
+	float WetnessGainPerSecond = 1.0f / 300.0f;
 
 	/**
-	 * Drying-rate boost per °C of local heat (F1: fire dries clothes). At the
-	 * default 0.5, a campfire's +20°C dries ~11x faster than open air — soaked
-	 * to dry in ~18s by the fire vs ~200s without. Applied even in rain: a hot
-	 * fire under cover out-dries a drizzle.
+	 * How fast WetnessLevel decays per second while sheltered or in clear weather. Default 1/9000: soaked clothing dries on the body in
+	 * ~2.5 h of mild air (was 0.005 = 3 min, a game rate; N-176). A fire is how you dry out fast (HeatDryingBoostPerCelsius).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.00001", ClampMax="1.0"))
+	float WetnessDecayPerSecond = 1.0f / 9000.0f;
+
+	/**
+	 * Drying-rate boost per °C of local heat (F1: fire dries clothes). At the default 0.14 a campfire's +20 °C dries 3.8x faster than open
+	 * air: soaked to dry in ~40 min by the fire vs ~2.5 h without (was 0.5: 18 s vs 200 s; N-176). Applied even in rain: a hot fire under
+	 * cover out-dries a drizzle.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
 		meta=(ClampMin="0.0", ClampMax="5.0"))
-	float HeatDryingBoostPerCelsius = 0.5f;
+	float HeatDryingBoostPerCelsius = 0.14f;
 
 	/**
 	 * Seconds between weather/shelter polls. Wetness update is cheap once we
@@ -698,9 +694,16 @@ private:
 	 */
 	EMOThermalComfort LastThermalComfort = EMOThermalComfort::Comfortable;
 
-	/** Current wetness 0–1, integrated by UpdateWetness on each weather poll. */
-	UPROPERTY(Transient)
+	/** Current wetness 0–1, integrated by UpdateWetness on each weather poll (server). Replicated to the owner (N-177, Oct 19 2026): the wet
+	 *  moodle on a joiner's screen listens to OnWetnessStateChanged, which fired on the server only, so a joiner in the rain never saw it. */
+	UPROPERTY(Transient, ReplicatedUsing=OnRep_WetnessLevel)
 	float WetnessLevel = 0.0f;
+
+	UFUNCTION()
+	void OnRep_WetnessLevel();
+
+	/** Fire OnWetnessStateChanged if WetnessLevel crossed into another bucket (server set or client OnRep). */
+	void BroadcastWetnessStateIfChanged();
 
 	/** Last wetness bucket — broadcast on transition only. */
 	EMOWetnessState LastWetnessState = EMOWetnessState::Dry;
