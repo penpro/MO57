@@ -15,12 +15,41 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
+#include "Async/ParallelFor.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
 	constexpr int32 CaveTestSeed = 424242;
+
+	/**
+	 * Random trials on every core, with the serial loop's results (Oct 19 2026: three of these tests took 18 of the suite's 22 minutes on one thread).
+	 * Draw(I) takes block slot I's random numbers from the stream IN THE SERIAL ORDER; Eval(I) runs in parallel (the generator is pure and worker-thread
+	 * safe) and writes slot I's own result; Take(I) consumes the results in order and returns false to stop. A search that stops early evaluates at
+	 * most the rest of its block past the stop; nothing it takes differs.
+	 */
+	constexpr int32 TrialBlock = 4096;
+	template <typename TDraw, typename TEval, typename TTake>
+	void RunTrials(int32 Count, TDraw&& Draw, TEval&& Eval, TTake&& Take)
+	{
+		for (int32 Base = 0; Base < Count; Base += TrialBlock)
+		{
+			const int32 N = FMath::Min(TrialBlock, Count - Base);
+			for (int32 I = 0; I < N; ++I)
+			{
+				Draw(I);
+			}
+			ParallelFor(N, [&Eval](int32 I) { Eval(I); });
+			for (int32 I = 0; I < N; ++I)
+			{
+				if (!Take(I))
+				{
+					return;
+				}
+			}
+		}
+	}
 
 	/** Default tuning, no biomes: the cave field needs only heights. */
 	FMOWorldGenParamsRef MakeCaveParams(TFunctionRef<void(FMOWorldGenTuning&)> Modify = [](FMOWorldGenTuning&) {})
@@ -97,37 +126,48 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 	{
 		int32 AboveWrong = 0, CoverWrong = 0, CoverChecked = 0, SteepColumns = 0, SteepOpen = 0, NearEntrance = 0;
 		const float FlatTan = FMath::Tan(FMath::DegreesToRadians(T.CaveEntranceSlopeMinDeg - 2.0f));
-		for (int32 I = 0; I < 6000; ++I)
-		{
-			double X, Y;
-			RandomColumn(X, Y);
-			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-			AboveWrong += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground + R.FRandRange(150.0f, 1500.0f), Ground, CaveTestSeed) != FMOWorldGen::CaveFarCm) ? 1 : 0;
-			// The same slope the field uses: forward differences over 3 m, both ways (a column on a slope's edge counts as steep if either side is).
-			const float Gx = (FMOWorldGen::SampleHeightCm(*P, X + 300.0, Y, CaveTestSeed) - Ground) / 300.0f;
-			const float Gy = (FMOWorldGen::SampleHeightCm(*P, X, Y + 300.0, CaveTestSeed) - Ground) / 300.0f;
-			const float Gx2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X - 300.0, Y, CaveTestSeed)) / 300.0f;
-			const float Gy2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X, Y - 300.0, CaveTestSeed)) / 300.0f;
-			const float Depth = R.FRandRange(0.0f, T.CaveCoverCm - 50.0f);
-			const bool bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) <= 0.0f;
-			// A built entrance (v12, F30 A) is a designed opening on gentle ground: its hollow is walked into and its passage runs a few metres under
-			// the ground nearby. Its own test (WorldGen.CaveEntranceBuilt) holds the top 1-3 m whole out to 60 m; this one judges the rest of the field.
-			if (FMOWorldGen::DistanceToCaveEntranceHollow(*P, X, Y, CaveTestSeed) < 6000.0f)
+		struct FTrial { double X = 0.0, Y = 0.0; float Above = 0.0f, Depth = 0.0f; bool bAboveWrong = false, bNearEntrance = false, bFlat = false, bOpen = false; };
+		TArray<FTrial> Trials;
+		Trials.SetNum(TrialBlock);
+		RunTrials(6000,
+			[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); RandomColumn(Tr.X, Tr.Y); Tr.Above = R.FRandRange(150.0f, 1500.0f); Tr.Depth = R.FRandRange(0.0f, T.CaveCoverCm - 50.0f); },
+			[&](int32 I)
 			{
-				++NearEntrance;
-				continue;
-			}
-			if (FMath::Max(FMath::Sqrt(Gx * Gx + Gy * Gy), FMath::Sqrt(Gx2 * Gx2 + Gy2 * Gy2)) < FlatTan)
+				FTrial& Tr = Trials[I];
+				const double X = Tr.X, Y = Tr.Y;
+				const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+				Tr.bAboveWrong = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground + Tr.Above, Ground, CaveTestSeed) != FMOWorldGen::CaveFarCm;
+				// The same slope the field uses: forward differences over 3 m, both ways (a column on a slope's edge counts as steep if either side is).
+				const float Gx = (FMOWorldGen::SampleHeightCm(*P, X + 300.0, Y, CaveTestSeed) - Ground) / 300.0f;
+				const float Gy = (FMOWorldGen::SampleHeightCm(*P, X, Y + 300.0, CaveTestSeed) - Ground) / 300.0f;
+				const float Gx2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X - 300.0, Y, CaveTestSeed)) / 300.0f;
+				const float Gy2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X, Y - 300.0, CaveTestSeed)) / 300.0f;
+				Tr.bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Tr.Depth, Ground, CaveTestSeed) <= 0.0f;
+				// A built entrance (v12, F30 A) is a designed opening on gentle ground: its hollow is walked into and its passage runs a few metres under
+				// the ground nearby. Its own test (WorldGen.CaveEntranceBuilt) holds the top 1-3 m whole out to 60 m; this one judges the rest of the field.
+				Tr.bNearEntrance = FMOWorldGen::DistanceToCaveEntranceHollow(*P, X, Y, CaveTestSeed) < 6000.0f;
+				Tr.bFlat = FMath::Max(FMath::Sqrt(Gx * Gx + Gy * Gy), FMath::Sqrt(Gx2 * Gx2 + Gy2 * Gy2)) < FlatTan;
+			},
+			[&](int32 I)
 			{
-				++CoverChecked;
-				CoverWrong += bOpen ? 1 : 0;
-			}
-			else
-			{
-				++SteepColumns;
-				SteepOpen += bOpen ? 1 : 0;
-			}
-		}
+				const FTrial& Tr = Trials[I];
+				AboveWrong += Tr.bAboveWrong ? 1 : 0;
+				if (Tr.bNearEntrance)
+				{
+					++NearEntrance;
+				}
+				else if (Tr.bFlat)
+				{
+					++CoverChecked;
+					CoverWrong += Tr.bOpen ? 1 : 0;
+				}
+				else
+				{
+					++SteepColumns;
+					SteepOpen += Tr.bOpen ? 1 : 0;
+				}
+				return true;
+			});
 		AddInfo(FString::Printf(TEXT("steep columns: %d, of which open inside the cover (a gallery entrance): %d; %d column(s) within 60 m of a built entrance left to its own test"), SteepColumns, SteepOpen, NearEntrance));
 		TestEqual(TEXT("no cave above the ground (6000 columns)"), AboveWrong, 0);
 		TestEqual(*FString::Printf(TEXT("under ground flatter than %.0f deg no gallery / cavern breaks the %.0f cm cover (%d columns): no hole to fall into"),
@@ -138,13 +178,18 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 	{
 		int32 Inside = 0;
 		const int32 N = 60000;
-		for (int32 I = 0; I < N; ++I)
-		{
-			double X, Y;
-			RandomColumn(X, Y);
-			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-			Inside += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - R.FRandRange(1000.0f, 12000.0f), Ground, CaveTestSeed) < 0.0f) ? 1 : 0;
-		}
+		struct FTrial { double X = 0.0, Y = 0.0; float Depth = 0.0f; bool bInside = false; };
+		TArray<FTrial> Trials;
+		Trials.SetNum(TrialBlock);
+		RunTrials(N,
+			[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); RandomColumn(Tr.X, Tr.Y); Tr.Depth = R.FRandRange(1000.0f, 12000.0f); },
+			[&](int32 I)
+			{
+				FTrial& Tr = Trials[I];
+				const float Ground = FMOWorldGen::SampleHeightCm(*P, Tr.X, Tr.Y, CaveTestSeed);
+				Tr.bInside = FMOWorldGen::SampleCaveDistanceAtGround(*P, Tr.X, Tr.Y, Ground - Tr.Depth, Ground, CaveTestSeed) < 0.0f;
+			},
+			[&](int32 I) { Inside += Trials[I].bInside ? 1 : 0; return true; });
 		const float Fraction = (float)Inside / N;
 		AddInfo(FString::Printf(TEXT("cave air is %.2f%% of the rock between 10 and 120 m deep"), Fraction * 100.0f));
 		TestTrue(FString::Printf(TEXT("between 0.2%% and 12%% of deep rock is cave air (got %.2f%%)"), Fraction * 100.0f), Fraction > 0.002f && Fraction < 0.12f);
@@ -156,30 +201,41 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		FString WorstText;
 		double GradientSum = 0.0;
 		int32 WallCount = 0;
-		for (int32 I = 0; I < 200000; ++I)   // v9's galleries are half the radius: more samples to find their walls
-		{
-			double X, Y;
-			RandomColumn(X, Y);
-			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-			const double Z = Ground - R.FRandRange(1500.0f, 12000.0f);
-			const float D0 = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed);
-			// Forward differences along the three axes (the column's ground is reused: the gate depends on Z only through Depth, which Z + h changes by h).
-			const float Gx = (FMOWorldGen::SampleCaveDistanceCm(*P, X + 25.0, Y, Z, CaveTestSeed) - D0) / 25.0f;
-			const float Gy = (FMOWorldGen::SampleCaveDistanceCm(*P, X, Y + 25.0, Z, CaveTestSeed) - D0) / 25.0f;
-			const float Gz = (FMOWorldGen::SampleCaveDistanceCm(*P, X, Y, Z + 25.0, CaveTestSeed) - D0) / 25.0f;
-			const float Magnitude = FMath::Sqrt(Gx * Gx + Gy * Gy + Gz * Gz);
-			if (Magnitude > MaxGradient)
+		struct FTrial { double X = 0.0, Y = 0.0, Z = 0.0; float Depth = 0.0f, Ground = 0.0f, D0 = 0.0f, Gx = 0.0f, Gy = 0.0f, Gz = 0.0f, Magnitude = 0.0f; };
+		TArray<FTrial> Trials;
+		Trials.SetNum(TrialBlock);
+		RunTrials(200000,   // v9's galleries are half the radius: more samples to find their walls
+			[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); RandomColumn(Tr.X, Tr.Y); Tr.Depth = R.FRandRange(1500.0f, 12000.0f); },
+			[&](int32 I)
 			{
-				MaxGradient = Magnitude;
-				WorstText = FString::Printf(TEXT("worst: at (%.0f, %.0f, %.0f) depth %.0f cm, d=%.1f, gradient (%.1f, %.1f, %.1f)"), X, Y, Z, Ground - Z, D0, Gx, Gy, Gz);
-			}
-			// At a wall (|d| < 60 cm), away from the shallow / deep taper zones where the penalty ramps steepen the field.
-			if (FMath::Abs(D0) < 60.0f && Ground - Z > T.CavernMinDepthCm + T.CaveFadeCm && Ground - Z < T.CaveMaxDepthCm - 500.0f)
+				FTrial& Tr = Trials[I];
+				const double X = Tr.X, Y = Tr.Y;
+				Tr.Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+				const double Z = Tr.Ground - Tr.Depth;
+				Tr.Z = Z;
+				Tr.D0 = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Tr.Ground, CaveTestSeed);
+				// Forward differences along the three axes (the column's ground is reused: the gate depends on Z only through Depth, which Z + h changes by h).
+				Tr.Gx = (FMOWorldGen::SampleCaveDistanceCm(*P, X + 25.0, Y, Z, CaveTestSeed) - Tr.D0) / 25.0f;
+				Tr.Gy = (FMOWorldGen::SampleCaveDistanceCm(*P, X, Y + 25.0, Z, CaveTestSeed) - Tr.D0) / 25.0f;
+				Tr.Gz = (FMOWorldGen::SampleCaveDistanceCm(*P, X, Y, Z + 25.0, CaveTestSeed) - Tr.D0) / 25.0f;
+				Tr.Magnitude = FMath::Sqrt(Tr.Gx * Tr.Gx + Tr.Gy * Tr.Gy + Tr.Gz * Tr.Gz);
+			},
+			[&](int32 I)
 			{
-				GradientSum += Magnitude;
-				++WallCount;
-			}
-		}
+				const FTrial& Tr = Trials[I];
+				if (Tr.Magnitude > MaxGradient)
+				{
+					MaxGradient = Tr.Magnitude;
+					WorstText = FString::Printf(TEXT("worst: at (%.0f, %.0f, %.0f) depth %.0f cm, d=%.1f, gradient (%.1f, %.1f, %.1f)"), Tr.X, Tr.Y, Tr.Z, Tr.Ground - Tr.Z, Tr.D0, Tr.Gx, Tr.Gy, Tr.Gz);
+				}
+				// At a wall (|d| < 60 cm), away from the shallow / deep taper zones where the penalty ramps steepen the field.
+				if (FMath::Abs(Tr.D0) < 60.0f && Tr.Ground - Tr.Z > T.CavernMinDepthCm + T.CaveFadeCm && Tr.Ground - Tr.Z < T.CaveMaxDepthCm - 500.0f)
+				{
+					GradientSum += Tr.Magnitude;
+					++WallCount;
+				}
+				return true;
+			});
 		const float MeanGradient = WallCount > 0 ? (float)(GradientSum / WallCount) : 0.0f;
 		AddInfo(FString::Printf(TEXT("cave field |gradient|: mean %.2f at cave walls (%d samples), max %.2f anywhere; %s"), MeanGradient, WallCount, MaxGradient, *WorstText));
 		TestTrue(TEXT("there are samples at cave walls to measure"), WallCount > 100);
@@ -192,15 +248,20 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 	// 6. LOD: features smaller than the sample spacing are skipped, so far chunks see solid ground. CONTROL: the same samples at LOD0 do hit caves.
 	{
 		int32 FineInside = 0, CoarseInside = 0;
-		for (int32 I = 0; I < 30000; ++I)
-		{
-			double X, Y;
-			RandomColumn(X, Y);
-			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-			const double Z = Ground - R.FRandRange(1200.0f, 12000.0f);
-			FineInside += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) < 0.0f) ? 1 : 0;
-			CoarseInside += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 3200.0f) < 0.0f) ? 1 : 0;
-		}
+		struct FTrial { double X = 0.0, Y = 0.0; float Depth = 0.0f; bool bFine = false, bCoarse = false; };
+		TArray<FTrial> Trials;
+		Trials.SetNum(TrialBlock);
+		RunTrials(30000,
+			[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); RandomColumn(Tr.X, Tr.Y); Tr.Depth = R.FRandRange(1200.0f, 12000.0f); },
+			[&](int32 I)
+			{
+				FTrial& Tr = Trials[I];
+				const float Ground = FMOWorldGen::SampleHeightCm(*P, Tr.X, Tr.Y, CaveTestSeed);
+				const double Z = Ground - Tr.Depth;
+				Tr.bFine = FMOWorldGen::SampleCaveDistanceAtGround(*P, Tr.X, Tr.Y, Z, Ground, CaveTestSeed, 50.0f) < 0.0f;
+				Tr.bCoarse = FMOWorldGen::SampleCaveDistanceAtGround(*P, Tr.X, Tr.Y, Z, Ground, CaveTestSeed, 3200.0f) < 0.0f;
+			},
+			[&](int32 I) { FineInside += Trials[I].bFine ? 1 : 0; CoarseInside += Trials[I].bCoarse ? 1 : 0; return true; });
 		TestTrue(FString::Printf(TEXT("CONTROL: LOD0 samples hit caves (%d)"), FineInside), FineInside > 0);
 		TestEqual(TEXT("a 32 m sample spacing sees no caves"), CoarseInside, 0);
 	}
@@ -272,53 +333,68 @@ bool FMOWorldGen_GalleriesStayLevel::RunTest(const FString& Parameters)
 	int32 Measured = 0, Level = 0;
 	float Worst = 0.0f;
 	const float MaxTan = FMath::Tan(FMath::DegreesToRadians(15.0f));
-	for (int32 Try = 0; Try < 2000000 && Measured < 250; ++Try)
-	{
-		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
-		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-		const double Z = Ground - R.FRandRange(2200.0f, 3300.0f);
-		if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) > -60.0f)
+	struct FTrial { double X = 0.0, Y = 0.0; float Depth = 0.0f; bool bMeasured = false; float Tan = 0.0f; };
+	TArray<FTrial> Trials;
+	Trials.SetNum(TrialBlock);
+	RunTrials(2000000,
+		[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); Tr.X = R.FRandRange(-2.0e6f, 2.0e6f); Tr.Y = R.FRandRange(-2.0e6f, 2.0e6f); Tr.Depth = R.FRandRange(2200.0f, 3300.0f); },
+		[&](int32 I)
 		{
-			continue;
-		}
-		// The passage's centre at this column first (the deepest point within +-1.5 m): starting from a point near the tube's roof or floor would
-		// count the offset to the next column's centre as slope.
-		double Z0 = Z;
-		float CentreD = FMOWorldGen::CaveFarCm;
-		for (float Dz = -150.0f; Dz <= 150.0f; Dz += 10.0f)
-		{
-			const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z + Dz, Ground, CaveTestSeed, 50.0f);
-			if (D < CentreD)
+			FTrial& Tr = Trials[I];
+			const double X = Tr.X, Y = Tr.Y;
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+			const double Z = Ground - Tr.Depth;
+			if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) > -60.0f)
 			{
-				CentreD = D;
-				Z0 = Z + Dz;
+				return;
 			}
-		}
-		float BestD = FMOWorldGen::CaveFarCm, BestDz = 0.0f;
-		for (int32 K = 0; K < 24; ++K)
-		{
-			const double A = K * 2.0 * UE_DOUBLE_PI / 24.0;
-			const double Qx = X + 300.0 * FMath::Cos(A), Qy = Y + 300.0 * FMath::Sin(A);
-			const float QGround = FMOWorldGen::SampleHeightCm(*P, Qx, Qy, CaveTestSeed);
+			// The passage's centre at this column first (the deepest point within +-1.5 m): starting from a point near the tube's roof or floor would
+			// count the offset to the next column's centre as slope.
+			double Z0 = Z;
+			float CentreD = FMOWorldGen::CaveFarCm;
 			for (float Dz = -150.0f; Dz <= 150.0f; Dz += 10.0f)
 			{
-				const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, Qx, Qy, Z0 + Dz, QGround, CaveTestSeed, 50.0f);
-				if (D < BestD)
+				const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z + Dz, Ground, CaveTestSeed, 50.0f);
+				if (D < CentreD)
 				{
-					BestD = D;
-					BestDz = Dz;
+					CentreD = D;
+					Z0 = Z + Dz;
 				}
 			}
-		}
-		if (BestD >= 0.0f)
+			float BestD = FMOWorldGen::CaveFarCm, BestDz = 0.0f;
+			for (int32 K = 0; K < 24; ++K)
+			{
+				const double A = K * 2.0 * UE_DOUBLE_PI / 24.0;
+				const double Qx = X + 300.0 * FMath::Cos(A), Qy = Y + 300.0 * FMath::Sin(A);
+				const float QGround = FMOWorldGen::SampleHeightCm(*P, Qx, Qy, CaveTestSeed);
+				for (float Dz = -150.0f; Dz <= 150.0f; Dz += 10.0f)
+				{
+					const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, Qx, Qy, Z0 + Dz, QGround, CaveTestSeed, 50.0f);
+					if (D < BestD)
+					{
+						BestD = D;
+						BestDz = Dz;
+					}
+				}
+			}
+			if (BestD >= 0.0f)
+			{
+				return;   // a gallery's tapered end: nowhere to follow it
+			}
+			Tr.bMeasured = true;
+			Tr.Tan = FMath::Abs(BestDz) / 300.0f;
+		},
+		[&](int32 I)
 		{
-			continue;   // a gallery's tapered end: nowhere to follow it
-		}
-		++Measured;
-		const float Tan = FMath::Abs(BestDz) / 300.0f;
-		Level += Tan <= MaxTan ? 1 : 0;
-		Worst = FMath::Max(Worst, Tan);
-	}
+			const FTrial& Tr = Trials[I];
+			if (Tr.bMeasured)
+			{
+				++Measured;
+				Level += Tr.Tan <= MaxTan ? 1 : 0;
+				Worst = FMath::Max(Worst, Tr.Tan);
+			}
+			return Measured < 250;
+		});
 	AddInfo(FString::Printf(TEXT("%d passages followed, %d within 15 deg, steepest %.0f deg"), Measured, Level, FMath::RadiansToDegrees(FMath::Atan(Worst))));
 	TestTrue(TEXT("enough gallery air found to measure (>= 100 passages)"), Measured >= 100);
 	TestTrue(FString::Printf(TEXT("95%% of passages run within 15 deg of level (%d of %d)"), Level, Measured), Measured > 0 && Level >= FMath::CeilToInt(0.95f * Measured));
@@ -458,36 +534,53 @@ bool FMOWorldGen_CavesStayDry::RunTest(const FString& Parameters)
 	float LowestZ = 1.0e9f;
 	FString FirstWet;
 	const float Floor = T.SeaLevelCm + T.CaveWaterClearanceCm;
-	for (int32 Try = 0; Try < 3000000 && Found < 300; ++Try)
-	{
-		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
-		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel);
-		const double Z = Ground - R.FRandRange(150.0f, T.CaveMaxDepthCm);
-		if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) >= 0.0f)
+	struct FTrial { double X = 0.0, Y = 0.0, Z = 0.0; float Depth = 0.0f; bool bFound = false, bNotKarst = false; EMOWaterBodyKind WetKind = EMOWaterBodyKind::None; double WetDist = 0.0; };
+	TArray<FTrial> Trials;
+	Trials.SetNum(TrialBlock);
+	RunTrials(3000000,
+		[&](int32 I) { FTrial& Tr = Trials[I]; Tr = FTrial(); Tr.X = R.FRandRange(-2.0e6f, 2.0e6f); Tr.Y = R.FRandRange(-2.0e6f, 2.0e6f); Tr.Depth = R.FRandRange(150.0f, T.CaveMaxDepthCm); },
+		[&](int32 I)
 		{
-			continue;
-		}
-		++Found;
-		NotKarst += FMOWorldGen::SampleBedrock(*P, X, Y, CaveTestSeed) != EMOBedrock::Limestone ? 1 : 0;
-		LowestZ = FMath::Min(LowestZ, (float)Z);
-		BelowFloor += Z < Floor ? 1 : 0;
-		bool bWet = false;
-		for (int32 K = 0; K < 16 && !bWet; ++K)
-		{
-			const double A = K * UE_DOUBLE_PI / 8.0;
-			for (double Dist = 2500.0; Dist <= 10000.0 && !bWet; Dist += 2500.0)
+			FTrial& Tr = Trials[I];
+			const double X = Tr.X, Y = Tr.Y;
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel);
+			const double Z = Ground - Tr.Depth;
+			if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) >= 0.0f)
 			{
-				const double Qx = X + Dist * FMath::Cos(A), Qy = Y + Dist * FMath::Sin(A);
-				const EMOWaterBodyKind Kind = FMOWorldGen::ClassifyWaterBody(*P, Qx, Qy, CaveTestSeed);   // the generator's own "is there water here"
-				bWet = Kind != EMOWaterBodyKind::None;
-				if (bWet && FirstWet.IsEmpty())
+				return;
+			}
+			Tr.bFound = true;
+			Tr.Z = Z;
+			Tr.bNotKarst = FMOWorldGen::SampleBedrock(*P, X, Y, CaveTestSeed) != EMOBedrock::Limestone;
+			for (int32 K = 0; K < 16 && Tr.WetKind == EMOWaterBodyKind::None; ++K)
+			{
+				const double A = K * UE_DOUBLE_PI / 8.0;
+				for (double Dist = 2500.0; Dist <= 10000.0 && Tr.WetKind == EMOWaterBodyKind::None; Dist += 2500.0)
 				{
-					FirstWet = FString::Printf(TEXT("cave air at (%.0f, %.0f, %.0f) has water (%s) %.0f m away"), X, Y, Z, *UEnum::GetValueAsString(Kind), Dist / 100.0);
+					const double Qx = X + Dist * FMath::Cos(A), Qy = Y + Dist * FMath::Sin(A);
+					Tr.WetKind = FMOWorldGen::ClassifyWaterBody(*P, Qx, Qy, CaveTestSeed);   // the generator's own "is there water here"
+					Tr.WetDist = Dist;
 				}
 			}
-		}
-		NearWater += bWet ? 1 : 0;
-	}
+		},
+		[&](int32 I)
+		{
+			const FTrial& Tr = Trials[I];
+			if (Tr.bFound)
+			{
+				++Found;
+				NotKarst += Tr.bNotKarst ? 1 : 0;
+				LowestZ = FMath::Min(LowestZ, (float)Tr.Z);
+				BelowFloor += Tr.Z < Floor ? 1 : 0;
+				const bool bWet = Tr.WetKind != EMOWaterBodyKind::None;
+				if (bWet && FirstWet.IsEmpty())
+				{
+					FirstWet = FString::Printf(TEXT("cave air at (%.0f, %.0f, %.0f) has water (%s) %.0f m away"), Tr.X, Tr.Y, Tr.Z, *UEnum::GetValueAsString(Tr.WetKind), Tr.WetDist / 100.0);
+				}
+				NearWater += bWet ? 1 : 0;
+			}
+			return Found < 300;
+		});
 	AddInfo(FString::Printf(TEXT("%d cave-air samples: lowest at z = %.0f cm (floor %.0f), %d below the floor, %d with water within 100 m%s%s"), Found, LowestZ, Floor,
 		BelowFloor, NearWater, FirstWet.IsEmpty() ? TEXT("") : TEXT("; first: "), *FirstWet));
 	TestTrue(TEXT("enough cave air found to judge (>= 200 samples)"), Found >= 200);

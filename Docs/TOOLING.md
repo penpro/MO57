@@ -95,7 +95,9 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
 1. **Write the batch first.** Collect about 10 fixes, each in its own files where possible (a header change costs a wide rebuild). Data rows
    (`ue.py rows set`), UI specs (`ue.py ui build`) and Python need no build: do them in one editor session, then close it.
 2. **One build:** `ue.py build` (it names any `-game` instance still holding the DLLs). A compile error is fixed in place: still one build window.
-3. **One automation run:** `ue.py auto --filter MOFramework` (~24 min; it can run in the background while step 4 runs).
+3. **One automation run:** `ue.py auto --filter MOFramework` (~5.5 min since Oct 19: three brute-force cave tests were 18 of the 22 minutes on one
+   thread; they now draw their random trials in order and evaluate them on every core, `RunTrials` in MOWorldGenCaveTests.cpp, with the
+   serial results. Any new random-trial search over the generator: use it). It can run in the background while step 4 runs.
 4. **One co-op pass:** `MO_ACTIONS_ONLY=_none_ python Tools/ue.py nettest actions --keep` pairs a host and a joiner on the real map (~3 min,
    seed of the run); then a written checklist with one check per fix (real clicks through `Tools/win_input.ps1` wherever a player must
    click; give items to a joiner from the HOST's Python so they replicate). Screenshots go in the scratchpad, numbers in the commit.
