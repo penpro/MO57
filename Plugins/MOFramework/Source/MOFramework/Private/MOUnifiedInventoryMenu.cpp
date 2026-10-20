@@ -145,6 +145,9 @@ void UMOUnifiedInventoryMenu::BindButtonEvents()
 	// Grid event handlers
 	if (PlayerInventoryGrid)
 	{
+		PlayerInventoryGrid->OnGridSlotClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotClicked);
+		PlayerInventoryGrid->OnGridSlotClicked.AddDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotClicked);
+
 		PlayerInventoryGrid->OnGridSlotRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotRightClicked);
 		PlayerInventoryGrid->OnGridSlotRightClicked.AddDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotRightClicked);
 
@@ -157,6 +160,9 @@ void UMOUnifiedInventoryMenu::BindButtonEvents()
 
 	if (SecondaryInventoryGrid)
 	{
+		SecondaryInventoryGrid->OnGridSlotClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotClicked);
+		SecondaryInventoryGrid->OnGridSlotClicked.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotClicked);
+
 		SecondaryInventoryGrid->OnGridSlotRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotRightClicked);
 		SecondaryInventoryGrid->OnGridSlotRightClicked.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotRightClicked);
 
@@ -232,12 +238,14 @@ void UMOUnifiedInventoryMenu::UnbindButtonEvents()
 
 	if (PlayerInventoryGrid)
 	{
+		PlayerInventoryGrid->OnGridSlotClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotClicked);
 		PlayerInventoryGrid->OnGridSlotRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotRightClicked);
 		PlayerInventoryGrid->OnGridSlotShiftClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotShiftClicked);
 		PlayerInventoryGrid->OnGridSlotDropReceived.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandlePlayerSlotDropReceived);
 	}
 	if (SecondaryInventoryGrid)
 	{
+		SecondaryInventoryGrid->OnGridSlotClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotClicked);
 		SecondaryInventoryGrid->OnGridSlotRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotRightClicked);
 		SecondaryInventoryGrid->OnGridSlotShiftClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleSecondarySlotShiftClicked);
 	}
@@ -757,6 +765,30 @@ void UMOUnifiedInventoryMenu::HandleCloseClicked()
 {
 	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
 	RequestClose();
+}
+
+void UMOUnifiedInventoryMenu::HandlePlayerSlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
+{
+	if (ItemGuid.IsValid())
+	{
+		SetSelectedItem(ItemGuid, CachedPlayerInventory.Get());
+	}
+	else
+	{
+		ClearSelectedItem();
+	}
+}
+
+void UMOUnifiedInventoryMenu::HandleSecondarySlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
+{
+	if (ItemGuid.IsValid())
+	{
+		SetSelectedItem(ItemGuid, CachedSecondaryInventory.Get());
+	}
+	else
+	{
+		ClearSelectedItem();
+	}
 }
 
 void UMOUnifiedInventoryMenu::HandlePlayerSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)

@@ -426,6 +426,14 @@ private:
 	UFUNCTION()
 	void HandlePlayerSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition);
 
+	/** A left click selects the item: the Details tab shows it ("Click an item for details"). The unified menu bound only right / shift click and drops,
+	 *  so a click highlighted the slot and the Details tab stayed empty (N-078, Oct 20 2026; the old UMOInventoryMenu did this). */
+	UFUNCTION()
+	void HandlePlayerSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+
+	UFUNCTION()
+	void HandleSecondarySlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+
 	UFUNCTION()
 	void HandleSecondarySlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition);
 
