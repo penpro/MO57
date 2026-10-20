@@ -1308,3 +1308,8 @@ References: CL-0129
 Status: PROGRESS (batch 9 commits: the craft line + Craft Max, N-182 SpawnLit, N-183 joiner fire case, N-158 WorldId; N-078 done) + RELEASE (the CL-0130 files, build window, instances ften / acthost / actclient)
 References: CL-0130
 Suite 339 / 0; nettest actions _client_light_fire PASS.
+
+### 2026-10-20 15:57 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0132
+Status: PROGRESS (batch 10: nettest --seed for game / actions, MO.Session.Host seed, three co-op steps fixed; N-173 re-diagnosed and its waterline change reverted) + RELEASE (MOMainMenuPlayerController.h/.cpp, MOCheatSubsystem.cpp, MOWaterSubsystem.cpp (reverted), Tools/ue.py, Tools/ue_inst.py; build window, instances ften / acthost / actclient). This batch was not CLAIMed first: logged here.
+References: CL-0131
+Seeded co-op run 189 pass / 3 explained.
