@@ -1276,3 +1276,8 @@ Wet ground, puddles and snow cover on the voxel terrain from MO's own ground sta
 Status: PROGRESS (N-175 commit: weather shelter traces read every pawn as indoors; exposure's UDW 0-10 numbers scaled) + CLAIM (the next batch, not yet committed: MOVitalsComponent.h/.cpp (N-176 rates, N-177 wetness replicated), Testing/MOUITestSubsystem.h/.cpp (N-128), MOStatusPanel.cpp + MOWeatherIntegrationSubsystem.h/.cpp (N-093 feels-like rows), Tests/MOWorldGenCaveTests.cpp (the slow cave tests); the build window, the editor, instances)
 References: CL-0123
 Suite 333 / 0 (Weather.ShelterIsSolid among them). Open meadow in rain: 0/9 overhead, feels 7.7 C at 11.2 C; a cave passage 9/9, feels 10.9 C.
+
+### 2026-10-19 22:05 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0125
+Status: PROGRESS (batch commits: cave tests on every core; N-128 honest UI tests; N-176 / N-177 wetness; N-178 heat balance, F2 interim per Wes; N-093 why-it-is-cold rows) + RELEASE (the CL-0124 files, build window, editor, instances)
+References: CL-0124
+Suite 334 / 0 in 330 s (was ~22 min). UI suite in -game 78 / 86, 0 failed, 8 unverified.

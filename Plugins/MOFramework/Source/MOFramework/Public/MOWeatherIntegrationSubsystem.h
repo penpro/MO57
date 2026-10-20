@@ -60,6 +60,17 @@
 class IMOWeatherProviderInterface;
 class UMaterialParameterCollection;
 
+/** What the air feels like at a place, and why (N-093): the one computation behind GetFeelsLikeTemperature, so a readout can say what makes it cold. */
+struct FMOFeelsLike
+{
+	float AirC = 0.0f;         // the global air temperature
+	float WindChillC = 0.0f;   // <= 0: wind exposure below 10 C
+	float WetColdC = 0.0f;     // <= 0: rain on you below 20 C
+	float HeatIndexC = 0.0f;   // >= 0: humid air above 25 C
+	float FeelsLikeC = 0.0f;
+	FMOWeatherExposure Exposure;
+};
+
 // ============================================================================
 // DELEGATES
 // ============================================================================
@@ -306,6 +317,9 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Weather")
 	float GetFeelsLikeTemperature(const FVector& Location, EMOTemperatureUnit Unit = EMOTemperatureUnit::Celsius) const;
+
+	/** GetFeelsLikeTemperature's terms (Celsius): the air, the wind chill, the wet cold, the heat index. */
+	FMOFeelsLike GetFeelsLikeBreakdown(const FVector& Location) const;
 
 	/**
 	 * Get a normalized cold stress value (0 = comfortable, 1 = severe cold).

@@ -1,4 +1,5 @@
 #include "MOStatusPanel.h"
+#include "MOWeatherIntegrationSubsystem.h"
 #include "TimerManager.h"
 #include "MOMedicalSubsystem.h"
 #include "MOAnatomyComponent.h"
@@ -509,9 +510,12 @@ void UMOStatusPanel::PopulateFieldConfigs_Implementation()
 	FieldConfigs.Add({ FName("BloodPressureDiastolic"), NSLOCTEXT("MOStatus", "BPDiastolic", "Blood Pressure (Dia)"), EMOStatusCategory::Vitals, TEXT("{0} mmHg"), false, false, -1.0f, -1.0f, 2 });
 	FieldConfigs.Add({ FName("SpO2"), NSLOCTEXT("MOStatus", "SpO2", "Oxygen Saturation"), EMOStatusCategory::Vitals, TEXT("{0}%"), true, false, 0.95f, 0.90f, 3 });
 	FieldConfigs.Add({ FName("BodyTemperature"), NSLOCTEXT("MOStatus", "Temperature", "Body Temperature"), EMOStatusCategory::Vitals, TEXT("{0}\u00B0C"), false, false, -1.0f, -1.0f, 4 });
-	FieldConfigs.Add({ FName("BloodVolume"), NSLOCTEXT("MOStatus", "BloodVolume", "Blood Volume"), EMOStatusCategory::Vitals, TEXT("{0} mL"), true, false, 0.7f, 0.5f, 5 });
-	FieldConfigs.Add({ FName("RespiratoryRate"), NSLOCTEXT("MOStatus", "RespRate", "Respiratory Rate"), EMOStatusCategory::Vitals, TEXT("{0} /min"), true, false, -1.0f, -1.0f, 6 });
-	FieldConfigs.Add({ FName("BloodGlucose"), NSLOCTEXT("MOStatus", "Glucose", "Blood Glucose"), EMOStatusCategory::Vitals, TEXT("{0} mg/dL"), true, false, 0.5f, 0.3f, 7 });
+	// Why the body is cold or warm (N-093): what the weather does to the air at the pawn, and how wet its clothing is.
+	FieldConfigs.Add({ FName("FeelsLike"), NSLOCTEXT("MOStatus", "FeelsLike", "Feels Like"), EMOStatusCategory::Vitals, TEXT("{0}"), false, false, -1.0f, -1.0f, 5 });
+	FieldConfigs.Add({ FName("Clothing"), NSLOCTEXT("MOStatus", "Clothing", "Clothing"), EMOStatusCategory::Vitals, TEXT("{0}"), false, false, -1.0f, -1.0f, 6 });
+	FieldConfigs.Add({ FName("BloodVolume"), NSLOCTEXT("MOStatus", "BloodVolume", "Blood Volume"), EMOStatusCategory::Vitals, TEXT("{0} mL"), true, false, 0.7f, 0.5f, 7 });
+	FieldConfigs.Add({ FName("RespiratoryRate"), NSLOCTEXT("MOStatus", "RespRate", "Respiratory Rate"), EMOStatusCategory::Vitals, TEXT("{0} /min"), true, false, -1.0f, -1.0f, 8 });
+	FieldConfigs.Add({ FName("BloodGlucose"), NSLOCTEXT("MOStatus", "Glucose", "Blood Glucose"), EMOStatusCategory::Vitals, TEXT("{0} mg/dL"), true, false, 0.5f, 0.3f, 9 });
 
 	// ============== NUTRITION ==============
 	FieldConfigs.Add({ FName("Hunger"), NSLOCTEXT("MOStatus", "Hunger", "Hunger"), EMOStatusCategory::Nutrition, TEXT("{0}%"), true, false, 0.5f, 0.25f, 0 });
@@ -851,6 +855,28 @@ void UMOStatusPanel::UpdateVitalsFields()
 	float TempNorm = 1.0f - FMath::Abs(Signs.BodyTemperature - 37.0f) / 5.0f;
 	TempNorm = FMath::Clamp(TempNorm, 0.0f, 1.0f);
 	UpdateFieldValueFloat(FName("BodyTemperature"), Signs.BodyTemperature, TempNorm);
+
+	// What makes it cold: the air at the pawn and the terms the weather adds (the same numbers the body's exposure step uses), then the clothing.
+	const AActor* VitalsOwner = Vitals->GetOwner();
+	UWorld* World = VitalsOwner ? VitalsOwner->GetWorld() : nullptr;
+	if (const UMOWeatherIntegrationSubsystem* Weather = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr)
+	{
+		const FMOFeelsLike Feel = Weather->GetFeelsLikeBreakdown(VitalsOwner->GetActorLocation());
+		FString Why;
+		const auto AddTerm = [&Why](const TCHAR* Label, float C)
+		{
+			if (FMath::Abs(C) >= 0.05f)
+			{
+				Why += FString::Printf(TEXT(", %s %+.1f"), Label, C);
+			}
+		};
+		AddTerm(TEXT("wind"), Feel.WindChillC);
+		AddTerm(TEXT("wet"), Feel.WetColdC);
+		AddTerm(TEXT("humid"), Feel.HeatIndexC);
+		UpdateFieldValue(FName("FeelsLike"), FText::FromString(FString::Printf(TEXT("%.1f\u00B0C (air %.1f%s)"), Feel.FeelsLikeC, Feel.AirC, *Why)), -1.0f);
+	}
+	UpdateFieldValue(FName("Clothing"), FText::Format(NSLOCTEXT("MOStatus", "ClothingWet", "{0} ({1}% wet)"),
+		UEnum::GetDisplayValueAsText(Vitals->GetWetnessState()), FText::AsNumber(FMath::RoundToInt(Vitals->GetWetnessLevel() * 100.0f))), -1.0f);
 
 	// Blood Volume - normalized to max
 	float BloodNorm = Signs.BloodVolume / Signs.MaxBloodVolume;

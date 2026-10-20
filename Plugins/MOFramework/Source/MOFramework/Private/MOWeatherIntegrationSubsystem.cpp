@@ -620,30 +620,37 @@ FVector UMOWeatherIntegrationSubsystem::GetWindVelocityAtLocation(const FVector&
 
 float UMOWeatherIntegrationSubsystem::GetFeelsLikeTemperature(const FVector& Location, EMOTemperatureUnit Unit) const
 {
+	return ConvertTemperature(GetFeelsLikeBreakdown(Location).FeelsLikeC, EMOTemperatureUnit::Celsius, Unit);
+}
+
+FMOFeelsLike UMOWeatherIntegrationSubsystem::GetFeelsLikeBreakdown(const FVector& Location) const
+{
 	// Base on GLOBAL temperature, not the provider's location query. UDS's
 	// location temp blends toward interior warmth under occlusion — tree
 	// canopy reads as "indoors" and a -10C winter night comes back as +17C,
 	// so nobody outdoors ever feels winter (V2.4 probe, July 2026). Local
 	// microclimate is OUR domain: wind/wet exposure below, and roof shelter
 	// via the vitals insulation bonus (CachedOverheadCover).
-	float Temperature = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
-	const FMOWeatherExposure Exposure = GetWeatherExposureAtLocation(Location);
+	FMOFeelsLike Out;
+	Out.AirC = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
+	Out.Exposure = GetWeatherExposureAtLocation(Location);
+	float Temperature = Out.AirC;
 
 	// Wind chill calculation (simplified)
 	// Real wind chill only applies below 10°C with wind
-	if (Temperature < 10.0f && Exposure.Wind > 0.1f)
+	if (Temperature < 10.0f && Out.Exposure.Wind > 0.1f)
 	{
 		// Approximate wind chill: each 10% wind exposure drops feels-like by ~2°C
-		const float WindChillReduction = Exposure.Wind * 20.0f;
-		Temperature -= WindChillReduction;
+		Out.WindChillC = -Out.Exposure.Wind * 20.0f;
+		Temperature += Out.WindChillC;
 	}
 
 	// Wet/rain makes cold feel colder
-	if (Temperature < 20.0f && Exposure.Rain > 0.1f)
+	if (Temperature < 20.0f && Out.Exposure.Rain > 0.1f)
 	{
 		// Being wet in cold weather drops feels-like by up to 5°C
-		const float WetColdReduction = Exposure.Rain * 5.0f;
-		Temperature -= WetColdReduction;
+		Out.WetColdC = -Out.Exposure.Rain * 5.0f;
+		Temperature += Out.WetColdC;
 	}
 
 	// Heat index (simplified) - humidity makes hot feel hotter
@@ -654,11 +661,12 @@ float UMOWeatherIntegrationSubsystem::GetFeelsLikeTemperature(const FVector& Loc
 		const FMOWeatherState Weather = GetCurrentWeatherState();
 		const float Humidity = FMath::Max(Weather.CloudCoverage, Weather.RainIntensity);
 		// Each 10% humidity above 25°C adds ~1°C feels-like
-		const float HeatIndexAddition = Humidity * 10.0f * ((Temperature - 25.0f) / 15.0f);
-		Temperature += HeatIndexAddition;
+		Out.HeatIndexC = Humidity * 10.0f * ((Temperature - 25.0f) / 15.0f);
+		Temperature += Out.HeatIndexC;
 	}
 
-	return ConvertTemperature(Temperature, EMOTemperatureUnit::Celsius, Unit);
+	Out.FeelsLikeC = Temperature;
+	return Out;
 }
 
 float UMOWeatherIntegrationSubsystem::GetColdStress(const FVector& Location) const
