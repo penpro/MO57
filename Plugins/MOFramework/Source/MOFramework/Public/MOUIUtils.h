@@ -244,7 +244,9 @@ public:
 
 	/**
 	 * Runtime action buttons in a menu (an item's drink / fill / boil, a fire's add fuel / put out): one button per option, inserted into Panel right after After,
-	 * styled like StyleFrom; a disabled option shows its reason as the tooltip; a click calls OnClicked(ActionId). The previous set in InOutButtons is removed first.
+	 * styled like StyleFrom; a disabled option shows its reason as the tooltip; a click calls OnClicked(ActionId). When the same actions (ids, in order) are already
+	 * on screen they are updated in place (label, enabled, tooltip); only a changed set is rebuilt -- a menu refreshing every 0.5 s used to destroy the buttons
+	 * under the cursor, eating a click that spanned a rebuild and dropping gamepad focus (N-078, Oct 20 2026).
 	 * Buttons are WBP_MOCommonButton instances (a Widget Blueprint: a native button class would be an empty, click-through spacer). Owner = the menu.
 	 */
 	static void RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<class UMOCommonButton>>& InOutButtons, class UPanelWidget* Panel, class UWidget* After,

@@ -153,6 +153,11 @@ protected:
 	void UpdateButtonText(const FText& NewText);
 	virtual void UpdateButtonText_Implementation(const FText& NewText);
 
+public:
+	/** The action a runtime button stands for (UMOUIUtils::RebuildActionButtons): how a refresh knows the same actions are on screen and updates them in place. */
+	UPROPERTY(Transient)
+	FName ActionId;
+
 protected:
 	/** The text label displayed on the button. Set this per-instance in the designer. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Button", meta=(ExposeOnSpawn=true))

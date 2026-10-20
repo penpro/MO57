@@ -219,6 +219,12 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
 plate's top edge with ~80 px of empty plate under the buttons. `ui_specs/kit_harvest_menu.py`: an auto-sizing plate like the ground and
 station menus; the runtime buttons take the collapsed `StyleButton`'s style and slot padding (`UMOKeepOnHarvestContextMenu::CreateButton`).
 
+### Runtime action buttons update in place (Oct 20)
+`UMOUIUtils::RebuildActionButtons` (the station, item, ground and world-action menus) destroyed and recreated its buttons on every call, and the
+station menu calls it twice a second: a click spanning a rebuild was lost, hover flickered, gamepad focus dropped. The buttons carry their
+action (`UMOCommonButton::ActionId`); the same actions in the same order are updated in place (label, enabled, tooltip), and only a changed set
+is rebuilt. Measured: the campfire menu's buttons kept their widgets over three samples in 6 s (before: new ones every 0.5 s).
+
 ### Inventory: a left click selects (Oct 20)
 `UMOUnifiedInventoryMenu` bound only right / shift click and drops on its grids, so a left click highlighted a slot and the Details tab
 still said "Click an item for details" (the old `UMOInventoryMenu` handled it). `HandlePlayerSlotClicked` / `HandleSecondarySlotClicked`

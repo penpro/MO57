@@ -302,6 +302,24 @@ UTexture2D* UMOUIUtils::LoadItemIconSmall(FName ItemDefId)
 void UMOUIUtils::RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<UMOCommonButton>>& InOutButtons, UPanelWidget* Panel, UWidget* After,
 	const TArray<FMOItemActionOption>& Options, UMOCommonButton* StyleFrom, TFunction<void(FName)> OnClicked)
 {
+	// The same actions already on screen: update them in place, never pull a button out from under the cursor or the gamepad's focus.
+	bool bSameActions = InOutButtons.Num() == Options.Num();
+	for (int32 i = 0; bSameActions && i < Options.Num(); ++i)
+	{
+		const UMOCommonButton* Existing = InOutButtons[i];
+		bSameActions = Existing && Existing->GetParent() == Panel && Existing->ActionId == Options[i].Id;
+	}
+	if (bSameActions)
+	{
+		for (int32 i = 0; i < Options.Num(); ++i)
+		{
+			UMOCommonButton* Button = InOutButtons[i];
+			Button->SetButtonText(Options[i].Label);
+			Button->SetIsEnabled(Options[i].bEnabled);
+			Button->SetToolTipText(Options[i].bEnabled ? FText::GetEmpty() : Options[i].DisabledReason);
+		}
+		return;
+	}
 	for (UMOCommonButton* Button : InOutButtons)
 	{
 		if (Button)
@@ -335,6 +353,7 @@ void UMOUIUtils::RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<UMOC
 		{
 			Button->SetToolTipText(Option.DisabledReason);
 		}
+		Button->ActionId = Option.Id;
 		const FName Id = Option.Id;
 		Button->OnClicked().AddWeakLambda(Owner, [OnClicked, Id]() { OnClicked(Id); });
 		UPanelSlot* NewSlot = Panel->InsertChildAt(FMath::Clamp(InsertAt++, 0, Panel->GetChildrenCount()), Button);
