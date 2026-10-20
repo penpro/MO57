@@ -174,9 +174,16 @@ public:
 	// REPLICATED STATE
 	// ============================================================================
 
-	/** Current vital signs. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Vitals")
+	/** Current vital signs. Replicated to the owner; OnRep_Vitals gives a joiner the same OnVitalsChanged / OnThermalComfortChanged the host's
+	 *  tick fires (N-178, Oct 19 2026: they fired on the server only, so a joiner's thermal moodle and status panel never changed). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_Vitals, Category="MO|Vitals")
 	FMOVitalSigns Vitals;
+
+	UFUNCTION()
+	void OnRep_Vitals();
+
+	/** Fire OnThermalComfortChanged if the comfort bucket changed (server tick or client OnRep). */
+	void BroadcastThermalComfortIfChanged();
 
 	/** Current exertion and stress state. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Vitals")
@@ -598,6 +605,36 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Temperature")
 	void ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor, float DeltaTimeOverride = -1.0f);
+
+	/**
+	 * (N-178, Oct 19 2026) The core's heat balance over GameSeconds, pure: the body holds 37 C while its heat production (resting + shivering) covers
+	 * what it loses through its insulation to AmbientC, or sweating sheds what it gains; only the deficit or excess moves the core, through the body's
+	 * heat capacity -- hours, not seconds (the old drift settled ~10 C above the felt air within a minute: 31 C after 4 min of 10 C rain).
+	 * Returns the new core temperature.
+	 */
+	static float AdvanceCoreTemperature(float CoreC, float AmbientC, float Insulation01, float GameSeconds,
+		float HeatCapacityJPerK, float RestingWatts, float MaxShiverWatts, float MaxSweatWatts, float NakedConductanceWPerK);
+
+	/** (N-178) The body's heat capacity (J/K): ~70 kg x 3.5 kJ/(kg K). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature", meta=(ClampMin="1000.0"))
+	float BodyHeatCapacityJPerK = 245000.0f;
+
+	/** (N-178) Heat the body makes at rest (W): basal metabolism. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature", meta=(ClampMin="0.0"))
+	float RestingHeatWatts = 100.0f;
+
+	/** (N-178) Extra heat shivering can make (W) when the body loses more than it makes at rest. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature", meta=(ClampMin="0.0"))
+	float MaxShiveringWatts = 200.0f;
+
+	/** (N-178) Heat sweating can shed (W) when the body gains more than it can lose otherwise. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature", meta=(ClampMin="0.0"))
+	float MaxSweatCoolingWatts = 400.0f;
+
+	/** (N-178) Heat flow from the core to the air per degree (W/K) with no insulation at all (skin, vasoconstricted); insulation scales it by
+	 *  (1 - insulation). The felt temperature already carries the wind and the wet. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature", meta=(ClampMin="0.0"))
+	float NakedConductanceWPerK = 20.0f;
 
 	/**
 	 * Map current Vitals.BodyTemperature to a thermal-comfort bucket via the

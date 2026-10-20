@@ -102,14 +102,28 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
   the owning class's limits. Missing legacy data leaves defaults alone. It neither changes the approved clock pacing nor advances
   an extra offline interval. Tests: `MOFramework.Survival.Persistence` and the existing pacing gates. The F1 model choice stays open.
 
-## 4. Body temperature (open fork F2)
+## 4. Body temperature (F2: single node shipped as the interim, Oct 19)
 
-`UMOVitalsComponent::ApplyEnvironmentalTemperature`: `dT/dt = 0.01 x E x (Ambient - T) + 0.1 C/s toward 37` (E = 1 - Insulation;
-insulation = 0.55 base + clothing Warmth (max 0.40) + 0.35 x cover). No thermal mass: naked at 0 C is "very cold" in 32 s, while
-light clothes never cool at all; a 13 C lake takes the core 36.6 -> 33.4 in 36 s (real: ~1 C per 15-20 min). The proposal (heat
-balance over a thermal mass, core + shell, clo values, shivering burns glucose) and the decisions it needs are in
-`Docs/Thermal_Model_Reproduction.md`. Do not paper over it with a constant.
+**Since Oct 19 (N-178; Wes, F2: "Ship single node now")** the core runs a heat balance over a real thermal mass:
+`UMOVitalsComponent::AdvanceCoreTemperature` (pure) -- the body holds 37 C while its heat production (100 W resting + up to 200 W
+shivering) covers what it loses through its insulation to the felt temperature (20 W/K unclothed x (1 - insulation)), or sweating sheds
+what it gains (up to 400 W); only the deficit / excess moves the core, through 245 kJ/K (70 kg). One-minute steps on game time; a
+recovering core stops at 37. Insulation as before: 0.55 base + clothing Warmth (max 0.40) + 0.35 x cover; water: `ApplyWaterToExposure`.
+Measured / tested (`MOFramework.Medical.Vitals.Temperature.HeatBalanceRealRates`): underclothes in "Rain" at 11 C (felt 0.9 C) hold
+37.0 for the first minutes (the old drift read 31 C after four) and lose ~0.4 C an hour; -20 C felt: ~-2.6 C an hour; a roof holds it;
+winter clothes (0.9) hold at -30 C; 10 C water: 35 C in ~45 min; 35 C rewarms in 20 C air and stops at 37.
+`FMOVitalSigns::ThermalLoad` = how hard the body works for it (> 0 shivering, 1 = flat out; < 0 sweating): the comfort moodle reads Cold
+while the load is >= 0.5 (people feel cold while they shiver, long before the core drops) and Hot at <= -0.6, besides the core thresholds.
+Still open in F2 (`Docs/Thermal_Model_Reproduction.md`): core + shell (vasoconstriction, cold-water shock), clo values per item (+ a wet
+multiplier), shivering burning glucose, exertion heat.
 Water coupling: `ApplyWaterToExposure` (Ambient -> water temperature 0.7 x air + 3 C; insulation x (1 - 0.85 x immersion)).
+**Clothing wetness (N-176, Oct 19):** a downpour soaks it in 5 min (`WetnessGainPerSecond` 1/300 x rain intensity x exposure; "Rain"
+~7 min), it dries on the body in ~2.5 h (1/9000) and by a campfire's +20 C in ~40 min (`HeatDryingBoostPerCelsius` 0.14); was 10 s /
+3 min / 18 s. Measured: 0.0022 per s in "Rain" in the open (expected 0.0023).
+**A joiner's own state (N-177 / N-178, Oct 19):** `WetnessLevel` replicates to its owner (it was server-only: a joiner never saw the wet
+moodle), and `Vitals` has `OnRep_Vitals`, which fires the same `OnVitalsChanged` / `OnThermalComfortChanged` the host's tick fires (they
+fired on the server only: a joiner's thermal moodle and status panel never changed). Verified on a joiner in rain: its own wetness
+0.12 -> 0.40, thermal load 1.2, comfort Cold, both moodles on its screen.
 
 ## 5. Breath and drowning
 

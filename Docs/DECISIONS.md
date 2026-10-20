@@ -14,7 +14,7 @@
 | # | Fork | Options (recommendation first) | Brief | Logged |
 |---|---|---|---|---|
 | F1 | Survival meters: one source of truth | **A** derive Hunger / Thirst / Energy from the metabolism (one realistic source); B clock-scaled counters; C keep arcade counters. Also: whether Energy models sleep debt. Pacing itself was decided Oct 15 | `Docs/Survival_Single_Source_Proposal.md` | Oct 12-13 |
-| F2 | Body temperature model | **core + shell heat balance** over a thermal mass (clo values, wet clothing, shivering burns glucose) vs single node vs keep. Today a 13 C lake gives hypothermia in ~40 s and light clothes never cool | `Docs/Thermal_Model_Reproduction.md` | Oct 11-13 |
+| F2 | Body temperature model, the rest | Single node SHIPPED Oct 19 as the interim (Wes). Still to decide: **core + shell** (vasoconstriction, cold-water shock), clo values per item (+ wet multiplier, a DT_Items migration), shivering burns glucose | `Docs/Thermal_Model_Reproduction.md` | Oct 11-19 |
 | F3 | Do removed things regrow? | slow regrowth on game time (litterfall weeks, saplings years) vs permanent (today) | `Docs/PCG.md` §7 | Oct 13 |
 | F4 | Performance target | choose the reference resolution / quality and the target hardware tier before tuning scalability (the 4090 floor is ~11 ms at Epic) | `Docs/Performance.md` §1 | Oct 11-13 |
 | F5 | Shore reeds | a Fab / Megascans download vs Electric Dreams plants (Taro, ferns; no reed asset there) | `Docs/Water.md` §5 | Oct 11 |
@@ -66,6 +66,13 @@
     material along the way (a quarter with none), linearly in the shortfall (`FMOBuildSkillPenalty`); a spoiled unit is replaced from the
     builder's sources or the build pauses for it. The menu shows the time at your skill and "(slower, wastes some material)". `Docs/Building.md` §2.
   - **F32 A, Fab:** Wes buys Animal Pelts Vol. 1 now; one rigged bow pack later, when bows animate; everything else goes to the TRELLIS.2 queue.
+- **F2 interim, Wes:** "Ship single node now" -- the core runs a heat balance over a real thermal mass (`AdvanceCoreTemperature`, N-178):
+  hours of cold, not minutes; core + shell, clo values and shivering glucose stay open in F2. `Docs/Medical_And_Survival.md` §4.
+- Claude, under Principle 11 (small calls, noted): **the weather reaches the body at real rates.** Ground: soaked by 10 min of rain, dry
+  after ~2 h of sun, snow-covered by 45 min of snowfall, melting only above freezing (BR18-16; UDW's own 20 s / 90 s demo rates are not
+  used). Clothing (N-176): a downpour soaks it in 5 min, "Rain" in ~7, it dries on the body in ~2.5 h and by a fire in ~40 min (was
+  10 s / 3 min / 18 s). The feels-like temperature's wet-cold and wind-chill terms now actually run (N-175: every pawn read as indoors), so
+  rain and wind make a pawn cold: in the open in "Rain" at 11 C it feels 7.7 C. Shelter and fire matter more; that is the design.
 
 ### 2026-10-18
 - Evening, Wes's answers to the waiting list:

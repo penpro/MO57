@@ -799,6 +799,46 @@ bool FMOVitals_Temperature_InitialValues::RunTest(const FString& Parameters)
 	return true;
 }
 
+// (N-178) The core's heat balance at real rates: hours of cold, not minutes; clothing and shelter decide it; a recovering core stops at 37.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_Temperature_HeatBalanceRealRates,
+	"MOFramework.Medical.Vitals.Temperature.HeatBalanceRealRates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOVitals_Temperature_HeatBalanceRealRates::RunTest(const FString& Parameters)
+{
+	const UMOVitalsComponent* D = GetDefault<UMOVitalsComponent>();
+	const auto Advance = [D](float Core, float Ambient, float Insulation, float Hours)
+	{
+		return UMOVitalsComponent::AdvanceCoreTemperature(Core, Ambient, Insulation, Hours * 3600.0f, D->BodyHeatCapacityJPerK, D->RestingHeatWatts,
+			D->MaxShiveringWatts, D->MaxSweatCoolingWatts, D->NakedConductanceWPerK);
+	};
+	const float Under = D->BaseInsulationFactor;   // underclothes only
+
+	// The Oct 19 measurement: underclothes in "Rain" at 11 C (feels 0.9 C) -- the old drift read 31 C after four minutes.
+	const float FourMinutes = Advance(37.0f, 0.9f, Under, 4.0f / 60.0f);
+	TestTrue(FString::Printf(TEXT("4 min of cold rain in underclothes: still ~37 C (got %.2f)"), FourMinutes), FourMinutes > 36.9f);
+	const float SixHours = Advance(37.0f, 0.9f, Under, 6.0f);
+	TestTrue(FString::Printf(TEXT("6 h of it: mild hypothermia, not death (got %.2f C)"), SixHours), SixHours < 36.0f && SixHours > 33.0f);
+
+	// A mild day holds; real clothing holds a hard frost; shelter (more insulation) slows the loss.
+	TestEqual(TEXT("15 C in underclothes: 37 C after 8 h"), Advance(37.0f, 15.0f, Under, 8.0f), 37.0f);
+	TestEqual(TEXT("-30 C in winter clothes (0.9): 37 C after 8 h"), Advance(37.0f, -30.0f, 0.9f, 8.0f), 37.0f);
+	const float BitterOpen = Advance(37.0f, -20.0f, Under, 1.0f);
+	const float BitterRoof = Advance(37.0f, -20.0f, Under + D->ShelterInsulationBonus, 1.0f);
+	TestTrue(FString::Printf(TEXT("-20 C in underclothes: dangerous within the hour (got %.2f)"), BitterOpen), BitterOpen < 35.5f && BitterOpen > 32.0f);
+	TestTrue(TEXT("a roof slows it"), BitterRoof > BitterOpen);
+
+	// Recovery: a cold core rewarms in mild air and stops at 37; a hot one cools.
+	const float Rewarm = Advance(35.0f, 20.0f, Under, 0.5f);
+	TestTrue(FString::Printf(TEXT("35 C in 20 C air rewarms (got %.2f after 30 min)"), Rewarm), Rewarm > 35.3f && Rewarm <= 37.0f);
+	TestEqual(TEXT("... and stops at 37"), Advance(35.0f, 20.0f, Under, 12.0f), 37.0f);
+	// Dry heat a body can sweat away holds; past what sweat sheds the core rises (unclothed in a 60 C felt heat: ~+2.3 C an hour).
+	TestEqual(TEXT("50 C air in underclothes: sweat holds 37 for the hour"), Advance(37.0f, 50.0f, Under, 1.0f), 37.0f);
+	const float Heat = Advance(37.0f, 60.0f, 0.0f, 1.0f);
+	TestTrue(FString::Printf(TEXT("60 C felt, unclothed: the core rises (got %.2f after 1 h)"), Heat), Heat > 38.5f && Heat < 40.5f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_IsHyperthermic_DetectsHighTemp,
 	"MOFramework.Medical.Vitals.IsHyperthermic.DetectsHighTemp",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

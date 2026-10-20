@@ -252,6 +252,49 @@ float UMOVitalsComponent::WaterTemperatureForAir(float AirFeelsLikeC)
 	return FMath::Clamp(0.7f * AirFeelsLikeC + 3.0f, 1.0f, 26.0f);
 }
 
+float UMOVitalsComponent::AdvanceCoreTemperature(float CoreC, float AmbientC, float Insulation01, float GameSeconds,
+	float HeatCapacityJPerK, float RestingWatts, float MaxShiverWatts, float MaxSweatWatts, float NakedConductanceWPerK)
+{
+	constexpr float Normal = 37.0f;
+	const float Conductance = NakedConductanceWPerK * (1.0f - FMath::Clamp(Insulation01, 0.0f, 0.98f));
+	double Core = CoreC;
+	// One-minute steps: the loss depends on the core, and a recovering core must stop at 37 rather than overshoot it.
+	double Left = FMath::Max(GameSeconds, 0.0f);
+	while (Left > 0.0)
+	{
+		const double Dt = FMath::Min(Left, 60.0);
+		Left -= Dt;
+		const double LossW = Conductance * (Core - AmbientC);   // > 0: heat flowing out to the air
+		const double MakeMin = RestingWatts - MaxSweatWatts;    // the most the body can shed (resting heat minus all the sweat it can evaporate)
+		const double MakeMax = RestingWatts + MaxShiverWatts;   // the most it can make (resting + full shivering)
+		double NetW;
+		if (Core < Normal - 0.005)
+		{
+			NetW = MakeMax - LossW;        // cold: shivering at whatever is left over rewarms (or the deficit keeps cooling)
+		}
+		else if (Core > Normal + 0.005)
+		{
+			NetW = MakeMin - LossW;        // hot: sweating at whatever is left over cools (or the excess keeps heating)
+		}
+		else
+		{
+			// At 37 the body holds it while the load is within what it can make or shed.
+			NetW = LossW > MakeMax ? MakeMax - LossW : (LossW < MakeMin ? MakeMin - LossW : 0.0);
+		}
+		const double Next = Core + NetW * Dt / FMath::Max(HeatCapacityJPerK, 1.0f);
+		// Recovering toward 37 stops there.
+		if ((Core < Normal && Next > Normal) || (Core > Normal && Next < Normal))
+		{
+			Core = Normal;
+		}
+		else
+		{
+			Core = Next;
+		}
+	}
+	return (float)Core;
+}
+
 void UMOVitalsComponent::ApplyWaterToExposure(float Immersion01, float AirFeelsLikeC, float& InOutAmbientC, float& InOutInsulation)
 {
 	const float W = FMath::Clamp(Immersion01, 0.0f, 1.0f);
@@ -358,36 +401,16 @@ void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float 
 	// override falls back to the legacy per-tick assumption.
 	const float StepSeconds = (DeltaTimeOverride > 0.0f) ? DeltaTimeOverride : TickInterval;
 
-	// Normal body temp target
-	const float TargetTemp = 37.0f;
-
-	// Calculate heat exchange based on insulation
-	float ExposureFactor = 1.0f - FMath::Clamp(InsulationFactor, 0.0f, 1.0f);
-	float TempDifference = AmbientTemp - Vitals.BodyTemperature;
-
-	// Body naturally regulates temperature
-	float RegulationRate = 0.1f;  // degrees per second back toward normal
-
-	// Environmental effect
-	float EnvironmentalRate = TempDifference * ExposureFactor * 0.01f;
-
-	// Calculate new temperature
+	// (N-178) The heat balance on game time (was a drift in degrees per SECOND: 31 C after four minutes of 10 C rain).
 	float OldTemp = Vitals.BodyTemperature;
-
-	// Move toward ambient if exposed
-	Vitals.BodyTemperature += EnvironmentalRate * StepSeconds * TimeScaleMultiplier;
-
-	// Body regulation toward normal
-	if (Vitals.BodyTemperature > TargetTemp)
 	{
-		Vitals.BodyTemperature -= FMath::Min(RegulationRate * StepSeconds * TimeScaleMultiplier,
-											  Vitals.BodyTemperature - TargetTemp);
+		// How hard the body works for its core right now (what the comfort moodle reads while the core still holds).
+		const float LossW = NakedConductanceWPerK * (1.0f - FMath::Clamp(InsulationFactor, 0.0f, 0.98f)) * (Vitals.BodyTemperature - AmbientTemp);
+		const float RequiredW = LossW - RestingHeatWatts;
+		Vitals.ThermalLoad = RequiredW >= 0.0f ? RequiredW / FMath::Max(MaxShiveringWatts, 1.0f) : RequiredW / FMath::Max(MaxSweatCoolingWatts, 1.0f);
 	}
-	else if (Vitals.BodyTemperature < TargetTemp)
-	{
-		Vitals.BodyTemperature += FMath::Min(RegulationRate * StepSeconds * TimeScaleMultiplier,
-											  TargetTemp - Vitals.BodyTemperature);
-	}
+	Vitals.BodyTemperature = AdvanceCoreTemperature(Vitals.BodyTemperature, AmbientTemp, InsulationFactor, StepSeconds * TimeScaleMultiplier,
+		BodyHeatCapacityJPerK, RestingHeatWatts, MaxShiveringWatts, MaxSweatCoolingWatts, NakedConductanceWPerK);
 
 	// Clamp to survivable range
 	Vitals.BodyTemperature = FMath::Clamp(Vitals.BodyTemperature, 25.0f, 45.0f);
@@ -561,13 +584,7 @@ void UMOVitalsComponent::TickVitals()
 
 	// Thermal-comfort bucket transition — broadcast only on bucket change so
 	// HUD widgets re-render at human-perceivable thresholds, not every tick.
-	const EMOThermalComfort NewThermalComfort = GetThermalComfort();
-	if (NewThermalComfort != LastThermalComfort)
-	{
-		const EMOThermalComfort OldThermalComfort = LastThermalComfort;
-		LastThermalComfort = NewThermalComfort;
-		OnThermalComfortChanged.Broadcast(OldThermalComfort, NewThermalComfort);
-	}
+	BroadcastThermalComfortIfChanged();
 
 	// Wetness integrates against the rain pipeline. Cheap accumulator that
 	// gates the expensive 9-ray shelter trace to once every WetnessPollInterval
@@ -605,7 +622,27 @@ EMOThermalComfort UMOVitalsComponent::GetThermalComfort() const
 	if (Temp < ThermalThresholds.ColdBelow)     return EMOThermalComfort::Cold;
 	if (Temp >= ThermalThresholds.VeryHotAbove) return EMOThermalComfort::VeryHot;
 	if (Temp >= ThermalThresholds.HotAbove)     return EMOThermalComfort::Hot;
+	// (N-178) The core still holds, but the body is working for it: shivering hard is cold, sweating hard is hot.
+	if (Vitals.ThermalLoad >= 0.5f)  return EMOThermalComfort::Cold;
+	if (Vitals.ThermalLoad <= -0.6f) return EMOThermalComfort::Hot;
 	return EMOThermalComfort::Comfortable;
+}
+
+void UMOVitalsComponent::BroadcastThermalComfortIfChanged()
+{
+	const EMOThermalComfort NewThermalComfort = GetThermalComfort();
+	if (NewThermalComfort != LastThermalComfort)
+	{
+		const EMOThermalComfort OldThermalComfort = LastThermalComfort;
+		LastThermalComfort = NewThermalComfort;
+		OnThermalComfortChanged.Broadcast(OldThermalComfort, NewThermalComfort);
+	}
+}
+
+void UMOVitalsComponent::OnRep_Vitals()
+{
+	BroadcastThermalComfortIfChanged();
+	OnVitalsChanged.Broadcast();
 }
 
 UMOAdrenalineComponent* UMOVitalsComponent::GetAdrenalineComponent()

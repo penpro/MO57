@@ -48,6 +48,12 @@ Orders of magnitude this should land near (to be checked against primary sources
 - warm winter clothing (~2.5-3 clo) at 0 C: indefinite at rest, cooling when wet or still for long;
 - exertion produces heat (a working pawn stays warm in cold air -- the existing activity level feeds M_activity).
 
+## Built Oct 19 2026: the single node (F2 interim; Wes: "Ship single node now")
+`UMOVitalsComponent::AdvanceCoreTemperature`: `C dTcore/dt = M - Q_loss`, C 245 kJ/K, Q_loss = 20 W/K x (1 - insulation) x (Tcore - Tfelt),
+M = 100 W resting + shivering up to 200 W when the loss needs it (sweating sheds up to 400 W the other way); the core moves only by what
+the body cannot answer. Numbers in `Docs/Medical_And_Survival.md` §4. Not built yet: the shell node, clo values, glucose for shivering,
+exertion heat -- the decisions below still stand for those.
+
 ## Decisions for Wes
 1. **Fidelity:** single node with real thermal mass (simplest, fixes the time scale) vs core + shell (needed for believable cold water and vasoconstriction). Recommendation: core + shell -- cold water is a headline hazard in this world (lakes, swimming, drowning already exist).
 2. **Clothing data:** move items from a 0..1 "Warmth" scalar to clo values (+ a wet multiplier). DataTable migration through `Tools/ue_csv_utils.py`.

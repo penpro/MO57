@@ -210,6 +210,11 @@ struct MOFRAMEWORKCORE_API FMOVitalSigns
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Metabolic")
 	float BodyTemperature = 37.0f;
 
+	/** (N-178) How hard the body works to hold its core, as a share of what it can do: > 0 cold (shivering; 1 = flat out, more = losing heat it
+	 *  cannot make up), < 0 hot (sweating; -1 = flat out). People feel cold while they shiver, long before the core drops. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Metabolic")
+	float ThermalLoad = 0.0f;
+
 	/** Blood glucose in mg/dL (fasting normal: 70-110). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Metabolic")
 	float BloodGlucose = 90.0f;
