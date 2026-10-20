@@ -59,7 +59,7 @@ PANEL = {
         K.panel("StatusPanel", 1, [{"type": "CanvasPanel", "name": "StatusCanvas", "slot": FILL, "children": [
             tab("InfoTabButton", "Info", 32, 104), tab("VitalsTabButton", "Vitals", 146, 112), tab("NutritionTabButton", "Nutrition", 268, 132), tab("NutrientsTabButton", "Nutrients", 410, 132),
             tab("FitnessTabButton", "Fitness", 552, 116), tab("MentalTabButton", "Mental", 678, 116), tab("WoundsTabButton", "Wounds", 804, 116), tab("ConditionsTabButton", "Conditions", 930, 144),
-            K.button("BackButton", "Back", "Secondary", slot=R(1328, 26, 120, 44)),
+            K.button("BackButton", "Close", "Secondary", slot=R(1328, 26, 120, 44)),   # "Close" like the other in-game panels (Inventory, Journal); Back is for sub-menus
             K.divider("StatusRule", slot=R(32, 88, 1416, 1)),
             {"type": "WidgetSwitcher", "name": "CategorySwitcher", "var": True, "slot": R(32, 108, 1416, 700), "children": [
                 K.scroll_box(s + "ScrollBox", slot=None) for s in SCROLLS]}]}],
