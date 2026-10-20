@@ -275,9 +275,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
 	TObjectPtr<UInputAction> MoveAction;
 
-	/** Look action (mouse/gamepad). */
+	/** Look action (the mouse: IA_MOMouseLook, a per-frame delta). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
 	TObjectPtr<UInputAction> LookAction;
+
+	/** Gamepad look (the right stick: IA_MOLook, a held deflection; loaded by path when unset). IMC_MODefault mapped the stick to IA_MOLook but nothing
+	 *  bound it, so a gamepad could not turn the camera at all (N-078, Oct 20 2026: "gamepad look does not complete the Look tutorial"). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
+	TObjectPtr<UInputAction> GamepadLookAction;
+
+	/** How fast a fully deflected right stick turns the view, in look-input units a second -- the mouse's units, so the sensitivity setting applies to both.
+	 *  This project keeps the engine's legacy input scale (2.5 deg a unit): 64 = 160 deg/s. Measured Oct 20 2026: 180 turned 450 deg/s and pinned the pitch. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement", meta=(ClampMin="1"))
+	float GamepadLookRate = 64.0f;
+
+	/** A held stick deflection over a frame as a mouse-style look delta: X turns right, pushing up looks up (the mouse mapping negates Y; so does this). Pure. */
+	static FVector2D GamepadLookToLookInput(const FVector2D& Stick, float DeltaSeconds, float Rate);
 
 	/** Jump action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
@@ -784,6 +797,9 @@ protected:
 
 	/** Handle look input. */
 	void HandleLook(const FInputActionValue& Value);
+	void HandleGamepadLook(const FInputActionValue& Value);
+	/** Both looks end here: the pawn turns, the Look tutorial hears it. */
+	void ApplyLookInput(const FVector2D& LookVector);
 
 	/** Handle jump pressed. */
 	void HandleJumpStart(const FInputActionValue& Value);

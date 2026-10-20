@@ -221,6 +221,19 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: LookAction is NOT set!"));
 	}
 
+	if (!GamepadLookAction)
+	{
+		GamepadLookAction = LoadObject<UInputAction>(nullptr, TEXT("/MOFramework/Input/IA_MOLook.IA_MOLook"));
+	}
+	if (GamepadLookAction)
+	{
+		EnhancedInput->BindAction(GamepadLookAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleGamepadLook);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: GamepadLookAction is NOT set (IA_MOLook missing): the right stick cannot look"));
+	}
+
 	if (JumpAction)
 	{
 		EnhancedInput->BindAction(JumpAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleJumpStart);
@@ -1080,9 +1093,25 @@ void AMOPlayerController::HandleMove(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleLook(const FInputActionValue& Value)
 {
+	ApplyLookInput(Value.Get<FVector2D>());
+}
+
+FVector2D AMOPlayerController::GamepadLookToLookInput(const FVector2D& Stick, float DeltaSeconds, float Rate)
+{
+	const float Step = Rate * FMath::Max(0.0f, DeltaSeconds);
+	return FVector2D(Stick.X * Step, -Stick.Y * Step);
+}
+
+void AMOPlayerController::HandleGamepadLook(const FInputActionValue& Value)
+{
+	const UWorld* World = GetWorld();
+	ApplyLookInput(GamepadLookToLookInput(Value.Get<FVector2D>(), World ? World->GetDeltaSeconds() : 0.0f, GamepadLookRate));
+}
+
+void AMOPlayerController::ApplyLookInput(const FVector2D& LookVector)
+{
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
-		const FVector2D LookVector = Value.Get<FVector2D>();
 		IMOControllableInterface::Execute_RequestLook(ControllablePawn, LookVector);
 
 		// Same reasoning as HandleMove — fire every tick, let the quest

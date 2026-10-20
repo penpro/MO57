@@ -150,6 +150,13 @@ if (MyButton)
 - **The forage (ground) menu closes when the player walks away** (Oct 19): movement keys still move the pawn under a Game-and-UI popup, and the
   hidden cursor stays on it, so it never timed out; it now closes once the pawn is 3 m from where it opened (`UMOGroundContextMenu::CheckMousePosition`).
 
+### Gamepad look (Oct 20)
+`IMC_MODefault` maps the right stick to `IA_MOLook` and the mouse to `IA_MOMouseLook` (Negate Y); the controller bound only the mouse, so a gamepad
+could not turn the camera (nor finish the Look tutorial). `AMOPlayerController::GamepadLookAction` (IA_MOLook, loaded by path when unset) ->
+`HandleGamepadLook`: the held deflection x `GamepadLookRate` x the frame time, Y flipped like the mouse's, into the same `ApplyLookInput`.
+The rate is in the mouse's look units (this project keeps the engine's legacy 2.5 deg a unit): 64 = 160 deg/s, measured 161 yaw / 162 pitch.
+Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
+
 ## 3. Activation, stacks and the HUD
 
 - **Pushes activate synchronously:** `UMOPrimaryGameLayout::LayerTransitionSeconds` = 0 (the engine default 0.4 s left a pushed widget
