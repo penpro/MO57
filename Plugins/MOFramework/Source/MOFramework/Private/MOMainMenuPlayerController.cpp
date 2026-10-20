@@ -581,9 +581,9 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 	);
 }
 
-void AMOMainMenuPlayerController::HostSession(const FString& SessionDisplayName, int32 MaxPlayers)
+void AMOMainMenuPlayerController::HostSession(const FString& SessionDisplayName, int32 MaxPlayers, int32 WorldSeed)
 {
-	StartHosting(SessionDisplayName, MaxPlayers, FString());
+	StartHosting(SessionDisplayName, MaxPlayers, FString(), WorldSeed);
 }
 
 void AMOMainMenuPlayerController::HostSavedGame(const FString& SlotName)
@@ -615,7 +615,7 @@ void AMOMainMenuPlayerController::HostSavedGame(const FString& SlotName)
 	StartHosting(DisplayName, UMOSessionSubsystem::DefaultMaxPlayers, SlotName);
 }
 
-void AMOMainMenuPlayerController::StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume)
+void AMOMainMenuPlayerController::StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume, int32 WorldSeed)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Hosting requested: '%s' (max %d) %s"),
 		*SessionDisplayName, MaxPlayers,
@@ -654,7 +654,7 @@ void AMOMainMenuPlayerController::StartHosting(const FString& SessionDisplayName
 			// Fresh world = fresh seed. PendingWorldSeed is never cleared, so without this a hosted world reused whatever
 			// seed the last New Game panel / loaded save / hosted game left behind (every hosted world had the same
 			// terrain). 0 = "pick a random seed" in AMOGameMode::HandlePendingNewGame.
-			Settings->PendingWorldSeed = 0;
+			Settings->PendingWorldSeed = WorldSeed;   // 0 unless a test asks for a known world (MO.Session.Host ... <Seed>, nettest --seed)
 		}
 		else
 		{

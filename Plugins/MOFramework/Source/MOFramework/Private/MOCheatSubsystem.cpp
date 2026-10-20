@@ -6720,7 +6720,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Session.Host <DisplayName> [MaxPlayers=4] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Session.Host"),
-		TEXT("Dev: host a co-op session (must be at the main menu). Usage: MO.Session.Host <DisplayName> [MaxPlayers=4]"),
+		TEXT("Dev: host a co-op session in a fresh world (must be at the main menu); a seed picks a known world (tests), else a random one. Usage: MO.Session.Host <DisplayName> [MaxPlayers=4] [Seed=random]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (Args.Num() < 1)
@@ -6737,8 +6737,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			const FString DisplayName = Args[0];
 			const int32 MaxPlayers = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 4;
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Host '%s' (max %d) — watch for [MOSession] log lines"), *DisplayName, MaxPlayers);
-			MenuPC->HostSession(DisplayName, MaxPlayers);
+			const int32 Seed = Args.Num() > 2 ? FCString::Atoi(*Args[2]) : 0;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Host '%s' (max %d, seed %s) — watch for [MOSession] log lines"), *DisplayName, MaxPlayers,
+				Seed != 0 ? *FString::FromInt(Seed) : TEXT("random"));
+			MenuPC->HostSession(DisplayName, MaxPlayers, Seed);
 		}),
 		ECVF_Default));
 

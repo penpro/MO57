@@ -1069,7 +1069,7 @@ def _joiner_long_run(rep, host, client):
              f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}")
 
 
-def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False):
+def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False, seed=None):
     """The REAL gameplay map, the way a player hits it: the Host button's own path, a late join by a second process,
     pawn counts, the joiner's control setup, fall-through sampling, then leave and rejoin (pawn reuse).
 
@@ -1094,7 +1094,7 @@ def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=
             console(host, "MO.WorldSeed.Skew 1")  # TEST ONLY: the client gets a valid but DIFFERENT seed (different terrain)
         # the exact call the Host button makes (AMOMainMenuPlayerController::HostSession -> real GameplayLevelPath)
         off = log_size(host)
-        console(host, "MO.Session.Host GameTest 4")
+        console(host, "MO.Session.Host GameTest 4" + (f" {seed}" if seed else ""))
         created = wait_log(host, r"CreateSession succeeded|Already in a session|FAILED", since=off, timeout=45)
         if not rep.step("host: Host path creates the session", bool(created) and "succeeded" in created.group(0),
                         created.group(0) if created else "no result"):
@@ -1372,7 +1372,7 @@ def hostsave_test(uproject, editor_exe, keep=False, boot_timeout=300):
             print(f"[nettest] --keep: instances left running (ue.py inst stop savehost / saveclient); test save {HOSTSAVE_SLOT} deleted")
 
 
-def _host_and_join(rep, host, client, display, boot_timeout=300):
+def _host_and_join(rep, host, client, display, boot_timeout=300, seed=None):
     """Host a FRESH world on the real map and join `client` into it (the Host button's path, then the Join path). Returns
     True when both are in the world with a pawn each. Used by the modes that need a joined pair and nothing else."""
     if not rep.step("both instances boot and expose a world", all(wait_ready(n, boot_timeout) for n in (host, client))):
@@ -1381,7 +1381,7 @@ def _host_and_join(rep, host, client, display, boot_timeout=300):
         call(n, ["py", "-c", "import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=30)
     time.sleep(2)
     off = log_size(host)
-    console(host, f"MO.Session.Host {display} 4")
+    console(host, f"MO.Session.Host {display} 4" + (f" {seed}" if seed else ""))   # a seed = a known world (nettest --seed); else random
     created = wait_log(host, r"CreateSession succeeded|Already in a session|FAILED", since=off, timeout=60)
     if not rep.step("host: creates the session", bool(created) and "succeeded" in created.group(0), created.group(0) if created else "no result"):
         return False
@@ -2389,6 +2389,11 @@ def _client_light_fire(rep, host, client):
                  "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Tinder01', 1); inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Branch01', 2); out('GAVE')")
     console(host, "MO.Test.FireAttemptSeconds 4")
     console(host, "MO.Fire.SpawnLit laid 1")
+    # MO.Fire.Do lights the fire NEAREST the joiner, which may be one an earlier case built (_client_build): fuel every finished fire within 5 m.
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "fs = [f for f in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCraftingStationActor) "
+                 "if f.get_editor_property('requires_fuel') and (f.get_actor_location() - p.get_actor_location()).length() < 500]; "
+                 "[f.set_editor_property('current_fuel', f.get_editor_property('max_fuel')) for f in fs]; out('FUELLED %d' % len(fs))")
     time.sleep(2)
     hoff, coff = log_size(host), log_size(client)
     console(client, "MO.Fire.Do Light")
@@ -2489,8 +2494,8 @@ def _client_carcass(rep, host, client):
              bool(head) and int(head.group(2)) > 0 and head.group(3) == "0" and head.group(1) != "Carcass", head.group(0) if head else "no WORLDACTION line")
     lines = read_log_from(client, coff)
     bones = re.search(r"WORLDACTION   Bones \| [^|]+\| enabled", lines)
-    rep.step("the joiner may cut the bones (no tool needed) and is told why a knife part is greyed", bool(bones) and "disabled: Needs a tool: Knife." in lines,
-             (bones.group(0) if bones else "Bones not enabled") + (" + knife reason" if "Needs a tool: Knife." in lines else " -- no knife reason"))
+    rep.step("the joiner may cut the bones (no tool needed) and is told why a knife part is greyed", bool(bones) and re.search(r"disabled: Needs a tool: Knife", lines) is not None,   # "... Knife (Sharp Stone Flake or better)." since tools are named
+             (bones.group(0) if bones else "Bones not enabled") + (" + knife reason" if "Needs a tool: Knife" in lines else " -- no knife reason"))
     count = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
              "out('BONES %d' % inv.count_ingredient('Bone01'))")
     m = re.search(r"BONES (\d+)", _probe(host, count))
@@ -3095,7 +3100,7 @@ def _trust_terraform(rep, host, client):
              rejected[0] if rejected else "no rate rejection on the host")
 
 
-def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
+def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
     """Gameplay verbs from a real CLIENT process against a real host (the PIE-era MO.Test.* suite never left one editor): pickup
     identity, crafting, attack. Each one's proof is read on the HOST -- what the authority ended up with -- not from the client's
     optimistic 'PASS'."""
@@ -3105,10 +3110,10 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         print("[nettest] actions: host + client on the REAL gameplay map; verbs run on the CLIENT ...", flush=True)
         for n, pos in zip(names, ((0, 0), (680, 0))):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
-        if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
+        if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout, seed=seed):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_velocity, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

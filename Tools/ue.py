@@ -1419,7 +1419,7 @@ _NETTEST_MAP = "/Game/Penumbra/Maps/TestMap"  # keep in sync with ue_inst.DEFAUL
 def cmd_nettest(a):
     ui = _inst_mod()
     if a.mode == "game":
-        sys.exit(0 if ui.game_test(UPROJECT, EDITOR_EXE, keep=a.keep, withhold_seed=a.withhold_seed, skew_seed=a.skew_seed, withhold_sync=a.withhold_sync) else 1)
+        sys.exit(0 if ui.game_test(UPROJECT, EDITOR_EXE, keep=a.keep, withhold_seed=a.withhold_seed, skew_seed=a.skew_seed, withhold_sync=a.withhold_sync, seed=a.seed) else 1)
     if a.mode == "hostsave":
         sys.exit(0 if ui.hostsave_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "features":
@@ -1427,15 +1427,15 @@ def cmd_nettest(a):
     if a.mode == "packaged":
         sys.exit(0 if ui.packaged_test(package=a.package, withhold_sync=a.withhold_sync) else 1)
     if a.mode == "packaged-suite":
-        sys.exit(0 if ui.packaged_suite_test(package=a.package, seed=a.seed) else 1)
+        sys.exit(0 if ui.packaged_suite_test(package=a.package, seed=a.seed or 1029024224) else 1)
     if a.mode == "packaged-removal":
         sys.exit(0 if ui.packaged_removal_test(package=a.package) else 1)
     if a.mode == "packaged-death":
-        sys.exit(0 if ui.packaged_deathflow_test(package=a.package, seed=a.seed) else 1)
+        sys.exit(0 if ui.packaged_deathflow_test(package=a.package, seed=a.seed or 1029024224) else 1)
     if a.mode == "bugreport":
         sys.exit(0 if ui.bugreport_test(package=a.package) else 1)
     if a.mode == "actions":
-        sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+        sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep, seed=a.seed) else 1)
     if a.mode == "churn":
         sys.exit(0 if ui.churn_test(UPROJECT, EDITOR_EXE, rounds=a.rounds if a.rounds != 6 else 3, keep=a.keep) else 1)
     if a.mode == "soak":
@@ -1747,7 +1747,7 @@ def main():
     s.add_argument("--phases", default="", help="netdiag mode: comma list of phases to run (clean,lag50,loss1,ctl_ratecap,ctl_speedhack); default all")
     s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")
     s.add_argument("--keep", action="store_true", help="leave the instances running afterwards")
-    s.add_argument("--seed", type=int, default=1029024224, help="packaged-death mode: the new-game world seed (default: the one whose spawn used to end underground)")
+    s.add_argument("--seed", type=int, default=None, help="the world seed: game / actions host a known world with it (default: random); packaged-suite / packaged-death default to 1029024224 (the spawn that used to end underground)")
     s.add_argument("--package", action="store_true", help="packaged mode only: re-package the Development build first (~90 s; the editor must be closed)")
     s.add_argument("--withhold-sync", action="store_true",
                    help="game / packaged mode: NEGATIVE CONTROL -- the host does not publish its clock/weather; the client must NOT match it")

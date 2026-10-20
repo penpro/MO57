@@ -99,7 +99,9 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
    thread; they now draw their random trials in order and evaluate them on every core, `RunTrials` in MOWorldGenCaveTests.cpp, with the
    serial results. Any new random-trial search over the generator: use it). It can run in the background while step 4 runs.
 4. **One co-op pass:** `MO_ACTIONS_ONLY=_none_ python Tools/ue.py nettest actions --keep` pairs a host and a joiner on the real map (~3 min,
-   seed of the run); then a written checklist with one check per fix (real clicks through `Tools/win_input.ps1` wherever a player must
+   a random world unless `--seed N`: `nettest game` / `actions` host that world through `MO.Session.Host <Name> 4 <Seed>`; until Oct 20 the
+   flag was silently ignored. A random world can spawn on a bare shore, and every "CONTROL: none found" PCG step then fails: use a vegetated
+   seed such as 670711536 when comparing runs); then a written checklist with one check per fix (real clicks through `Tools/win_input.ps1` wherever a player must
    click; give items to a joiner from the HOST's Python so they replicate). Screenshots go in the scratchpad, numbers in the commit.
 5. **Package once** only if a fix depends on cooked / Shipping behaviour (`Docs/Packaging.md`).
 6. **Commit each verified fix on its own** with its docs; a fix that failed waits for the next batch (no rebuild for one fix).

@@ -151,7 +151,7 @@ public:
 	 * server. See MOSessionSubsystem.h for the Host/Find/Join contract.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
-	void HostSession(const FString& SessionDisplayName, int32 MaxPlayers);
+	void HostSession(const FString& SessionDisplayName, int32 MaxPlayers, int32 WorldSeed = 0);
 
 	/**
 	 * Host a SAVED world: the same session flow as HostSession, but the listen server resumes `SlotName` (its pawns,
@@ -250,7 +250,7 @@ protected:
 	 * (HostSavedGame). Everything else -- level check, session subsystem, loading overlay, the CreateSession round trip
 	 * and the travel -- is shared, so a fix to one is a fix to both.
 	 */
-	void StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume);
+	void StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume, int32 WorldSeed = 0);
 
 private:
 	// ============================================================================
