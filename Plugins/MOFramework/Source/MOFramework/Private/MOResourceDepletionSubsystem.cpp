@@ -13,8 +13,7 @@ void UMOResourceDepletionSubsystem::Initialize(FSubsystemCollectionBase& Collect
 
 	// Hardcoded defaults if nothing's configured. These match the actual ItemIds in
 	// DT_Resources (Stick01, Bark01, RiverCobble01, Stone01, FlintNodule01) — verified
-	// from the harvest debug log + Resources_JSON.json. Anything in this map gets
-	// counted; anything not in it is treated as unlimited.
+	// from the harvest debug log + Resources_JSON.json. Anything not in this map takes DefaultYieldRange: no yield is unlimited.
 	//
 	// Add more ItemIds either by extending this default block or via DefaultGame.ini
 	// under [/Script/MOFramework.MOResourceDepletionSubsystem] (Config = Game).
@@ -102,7 +101,7 @@ bool UMOResourceDepletionSubsystem::CanYield(const FString& NodeKey, FName ItemI
 	const int32* Remaining = State->RemainingByItem.Find(ItemId);
 	if (!Remaining)
 	{
-		// Item not in the per-node map — config didn't set a range, so unlimited.
+		// Not yet taken from this node: its count is rolled on the first take.
 		return true;
 	}
 	return *Remaining > 0;
@@ -112,33 +111,13 @@ bool UMOResourceDepletionSubsystem::ConsumeYield(const FString& NodeKey, FName I
 {
 	FMOResourceNodeDepletion& State = DepletionMap.FindOrAdd(NodeKey);
 
-	const bool bWasFresh = (State.RemainingByItem.Num() == 0);
-
-	// Lazy init: if this node hasn't been touched, roll initial counts for every
-	// configured ItemId. Unconfigured items aren't tracked (= unlimited).
-	if (bWasFresh)
-	{
-		FString RollSummary;
-		for (const TPair<FName, FMOResourceYieldRange>& Pair : InitialCountByItem)
-		{
-			const int32 Rolled = RollInitialCount(Pair.Key);
-			State.RemainingByItem.Add(Pair.Key, Rolled);
-			RollSummary += FString::Printf(TEXT("%s=%d "), *Pair.Key.ToString(), Rolled);
-		}
-		MOHARVEST_LOG(this, "Depletion", "Initialized node '%s' with: %s",
-			*NodeKey, *RollSummary);
-	}
-
+	// Lazy, per item: the node's count of this yield is rolled the first time it is taken, so a node tracks only what it really gives
+	// (a tree no longer holds cobble counts it never yields, which kept it from ever reading as fully depleted).
 	int32* Remaining = State.RemainingByItem.Find(ItemId);
 	if (!Remaining)
 	{
-		// No config entry for this item — treat as unlimited, do nothing.
-		MOHARVEST_LOG(this, "Depletion",
-			"  ConsumeYield('%s') node '%s' -> UNCONFIGURED ItemId (unlimited). Map keys: %s",
-			*ItemId.ToString(), *NodeKey,
-			*FString::JoinBy(InitialCountByItem, TEXT(", "),
-				[](const TPair<FName, FMOResourceYieldRange>& P) { return P.Key.ToString(); }));
-		return true;
+		Remaining = &State.RemainingByItem.Add(ItemId, RollInitialCount(ItemId));
+		MOHARVEST_LOG(this, "Depletion", "Node '%s' rolled %s=%d", *NodeKey, *ItemId.ToString(), *Remaining);
 	}
 
 	if (*Remaining <= 0)
@@ -195,9 +174,9 @@ int32 UMOResourceDepletionSubsystem::RollInitialCount(FName ItemId) const
 	const FMOResourceYieldRange* Range = InitialCountByItem.Find(ItemId);
 	if (!Range)
 	{
-		return 0;
+		Range = &DefaultYieldRange;
 	}
-	return FMath::RandRange(Range->MinCount, Range->MaxCount);
+	return FMath::RandRange(Range->MinCount, FMath::Max(Range->MinCount, Range->MaxCount));
 }
 
 // ============================================================================

@@ -12,8 +12,10 @@
  * DESIGN NOTES:
  * - Keyed by a position-based string so the key stays stable across game
  *   sessions even though HISM instance indices can shift.
- * - Initial counts are rolled the first time a node is interacted with (lazy
- *   initialization) using ranges configured in InitialCountByItem.
+ * - A yield's count is rolled the first time that yield is taken from the node (lazy, per item): InitialCountByItem's range, else
+ *   DefaultYieldRange. Every yield of a standing node is finite -- until Oct 20 2026 an item missing from the map was unlimited (one
+ *   40 cm dead tuft gave tinder forever, a sapling deadwood forever), and a node rolled counts for every configured item, so a tree
+ *   held cobble / stone / flint counts it never yields, never read as fully depleted and never stamped its respawn.
  * - "Game closed -> reopened" handling: when persistence integration is wired
  *   in later, expired entries are pruned on load — nodes that aged past
  *   RespawnHoursReal naturally come back as "not tracked", i.e. fresh.
@@ -40,6 +42,9 @@ struct MOFRAMEWORK_API FMOResourceYieldRange
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resource", meta = (ClampMin = "0"))
 	int32 MaxCount = 5;
+
+	FMOResourceYieldRange() = default;
+	FMOResourceYieldRange(int32 InMinCount, int32 InMaxCount) : MinCount(InMinCount), MaxCount(InMaxCount) {}
 };
 
 /**
@@ -141,9 +146,8 @@ public:
 	bool CanYield(const FString& NodeKey, FName ItemId) const;
 
 	/**
-	 * Attempt to consume one of ItemId from the node. On first call for this
-	 * node, initializes the per-yield counts from InitialCountByItem. Returns
-	 * true if successfully consumed, false if no remaining or no config.
+	 * Attempt to consume one of ItemId from the node. The first time this item is taken from this node its count is rolled
+	 * (InitialCountByItem, else DefaultYieldRange). Returns true if consumed, false when the node has none left.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Resource Depletion")
 	bool ConsumeYield(const FString& NodeKey, FName ItemId);
@@ -192,6 +196,14 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Resource Depletion")
 	TMap<FName, FMOResourceYieldRange> InitialCountByItem;
 
+	/** Every other yield of a standing node (tinder from a dead shrub, deadwood and catkins from a tree, fibre): how many units it holds.
+	 *  One harvest action takes one unit per entry in its YieldsItems, so 2-6 is one to six actions. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Resource Depletion")
+	FMOResourceYieldRange DefaultYieldRange = FMOResourceYieldRange(2, 6);
+
+	/** The count a fresh node holds of ItemId: InitialCountByItem's range, else DefaultYieldRange. */
+	int32 RollInitialCount(FName ItemId) const;
+
 private:
 	UPROPERTY(Transient)
 	TMap<FString, FMOResourceNodeDepletion> DepletionMap;
@@ -200,7 +212,4 @@ private:
 
 	/** Periodic sweep: prune entries whose FullyDepletedAt is older than RespawnHoursReal. */
 	void CheckRespawns();
-
-	/** Roll an initial count for an item id; 0 if not configured. */
-	int32 RollInitialCount(FName ItemId) const;
 };

@@ -56,6 +56,11 @@
 
 ## Decisions, newest first
 
+### 2026-10-20
+- Claude, under Principle 11 / 7 (small call, noted): **every yield of a standing resource node is finite.** An item not listed in
+  `InitialCountByItem` takes `DefaultYieldRange` 2-6 units per node (it was unlimited: a dead tuft gave tinder forever); counts roll per item
+  on first take. Respawn timing stays F3's. `Docs/Crafting_And_Progression.md` §3.
+
 ### 2026-10-19
 - Morning, Wes's answers to the overnight forks ("Yes: F30 A (turn on built cave entrances in limestone), F31 A (building skill slows the work
   and wastes material, never gates), F32 A (I'll buy only Animal Pelts Vol. 1 now; a rigged bow pack later). Build F30 and F31."):

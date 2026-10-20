@@ -86,6 +86,12 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   `UMOTimedActionComponent`.
 - **E on a resource node** (KeepOnHarvest / ResourceNode_* / MOResource_*) opens the harvest menu (it used to take the item-pickup
   RPC and log "No item mapping").
+- **A standing node's yields are finite** (`UMOResourceDepletionSubsystem`): each yield's count is rolled the first time it is taken from
+  that node -- `InitialCountByItem` (sticks / cobbles / stones / flint 0-5, bark 10-20), else `DefaultYieldRange` (2-6 units; one harvest
+  action takes one unit per `YieldsItems` entry). Until Oct 20 2026 an item missing from the map was unlimited (one 40 cm dead tuft gave
+  tinder forever, a sapling deadwood forever) and a node rolled every configured item, so a tree held cobble counts it never yields and
+  never read as fully depleted (its respawn never stamped). Respawn is still `RespawnHoursReal` real hours (DECISIONS F3).
+  Test `MOFramework.Resource.EveryYieldIsFinite`.
 - **Ground cover is gatherable by mesh** (`UMOCoverForageSettings`, Project Settings > MO57 > Cover Foraging): grass -> dry grass
   (reeds in the water-edge band), bracken -> fibre, stone scatters, hazel shoots -> straight rods, seedlings -> sticks, old logs ->
   deadwood / firewood / punk-wood tinder; entries may need a tool (sandstone + hammer). `FindGatherableCoverKinds` offers every kind
