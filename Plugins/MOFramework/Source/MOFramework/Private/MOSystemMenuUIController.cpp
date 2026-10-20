@@ -371,7 +371,7 @@ void UMOSystemMenuUIController::HandleLoadRequested(const FString& SlotName)
 	if (UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this))
 	{
 		const UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-		if (Persistence && !SlotName.IsEmpty() && SlotName == Persistence->GetCurrentSlotName())
+		if (Persistence && Persistence->IsSlotOfCurrentWorld(SlotName))
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Load refused: '%s' is the world you are in (one save per world)"), *SlotName);
 			return;

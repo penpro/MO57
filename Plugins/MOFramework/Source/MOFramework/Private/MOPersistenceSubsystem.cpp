@@ -253,6 +253,7 @@ void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
     // later save/loads. Every new-world/load path funnels through here, so reset it (audit).
     bSuppressDestroyedGuidRecording = false;
     CurrentSlotName = NewSlotName;
+    CurrentWorldId = FGuid::NewGuid();   // a new world's id; a load adopts the save's (LoadWorldFromSlotWithResult)
 
     UE_LOG(LogMOFramework, Log,
         TEXT("[MOPersistence] ResetForNewWorld: session state cleared, slot is now '%s'"),
@@ -372,6 +373,13 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
             }
         }
     }
+
+    // The world's identity (N-158): every save of a world carries it; a world loaded from an older save gets one now.
+    if (!CurrentWorldId.IsValid())
+    {
+        CurrentWorldId = FGuid::NewGuid();
+    }
+    SaveObject->WorldId = CurrentWorldId;
 
     // World seed (for voxel terrain regeneration)
     SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
@@ -595,6 +603,10 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     }
 
     LoadedWorldSave = LoadedTyped;
+    if (LoadedTyped->WorldId.IsValid())
+    {
+        CurrentWorldId = LoadedTyped->WorldId;   // this world's identity (a save from before world ids keeps the one ResetForNewWorld minted)
+    }
 
     // Reset session play time - we're starting a new play session
     // The loaded save's TotalPlayTimeSeconds will be used as base for next save
@@ -2217,6 +2229,20 @@ bool UMOPersistenceSubsystem::DoesSaveSlotExist(const FString& SlotName) const
     return UGameplayStatics::DoesSaveGameExist(SlotName, 0);
 }
 
+bool UMOPersistenceSubsystem::IsSlotOfCurrentWorld(const FString& SlotName) const
+{
+    if (SlotName.IsEmpty())
+    {
+        return false;
+    }
+    if (SlotName == CurrentSlotName)
+    {
+        return true;
+    }
+    FMOSaveMetadata Meta;
+    return CurrentWorldId.IsValid() && GetSaveSlotMetadata(SlotName, Meta) && Meta.WorldId == CurrentWorldId;
+}
+
 bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSaveMetadata& OutMetadata) const
 {
     // Load the save game to extract metadata
@@ -2234,6 +2260,7 @@ bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSa
     OutMetadata.Timestamp = LoadedTyped->SaveTimestamp;
     OutMetadata.PlayTime = FTimespan::FromSeconds(LoadedTyped->TotalPlayTimeSeconds);
     OutMetadata.WorldName = LoadedTyped->WorldName;
+    OutMetadata.WorldId = LoadedTyped->WorldId;
     OutMetadata.bIsAutosave = LoadedTyped->bIsAutosave;
 
     // Screenshot data (inline PNG bytes)

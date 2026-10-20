@@ -35,7 +35,9 @@
 - **One save per world (Wes, F24, 2026-10-17):** a world's identity is its one slot: a new game's `World_<time>`
   (`ResetForNewWorld(PendingNewGameSlot)`), the slot a loaded world came from, or `AutoSave_<map>_<time>` when a world started without
   one. No UI path writes a second slot of a world (no Save As) or loads the world you are in. The main menu therefore lists one entry
-  per world (old saves are not kept: Oct 13). The save itself records no world ID yet (N-158). `GetCurrentWorldIdentifier` /
+  per world (old saves are not kept: Oct 13). Every save also records the world's id (`UMOWorldSaveGame::WorldId`, N-158, Oct 20): minted by `ResetForNewWorld`, adopted from the
+  save on load (a save from before keeps the minted one and writes it at its next save), carried by every save; `FMOSaveMetadata::WorldId`.
+  "The world you are in" (the in-game Load list, the load refusal) matches the id as well as the slot (`IsSlotOfCurrentWorld`). `GetCurrentWorldIdentifier` /
   `WorldName` is the MAP name, which every world shares; it is not a world identity.
 - **When the world is saved:** the in-game Save button and every way out (Exit to Main Menu, Exit Game, loading another world, the
   death recap's Return, the window close), all through `UMOSystemMenuUIController::SaveThisWorld` -> `SaveToCurrentSlot`;

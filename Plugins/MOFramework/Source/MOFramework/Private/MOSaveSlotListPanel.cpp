@@ -167,6 +167,11 @@ TArray<FMOSaveMetadata> UMOSaveSlotListPanel::QuerySaveMetadata() const
 		FMOSaveMetadata Meta;
 		if (Persistence->GetSaveSlotMetadata(SlotName, Meta))
 		{
+			// The world you are in, by its id too (N-158): its slot is hidden above by name.
+			if (!HiddenSlotName.IsEmpty() && Meta.WorldId.IsValid() && Meta.WorldId == Persistence->GetCurrentWorldId())
+			{
+				continue;
+			}
 			// Filter by world identifier if both sides have one available
 			// (legacy saves without a stored WorldName are kept; we only
 			// filter when we can confidently determine mismatch).

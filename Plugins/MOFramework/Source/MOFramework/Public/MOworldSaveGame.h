@@ -368,6 +368,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     int32 WorldSeed = 0;
 
+    /** This world's identity, made at its new game and carried by every save of it (N-158, F24: one save per world). The slot name was the only
+     *  identity before. Invalid = a save from before Oct 20 2026: the world gets an id at its next save. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    FGuid WorldId;
+
     /**
      * The terrain generator that made this world: FMOWorldGenParams::GeneratorVersion and its parameter hash (tuning + biomes). The seed alone does not
      * pin the land -- a newer generator (v7 took the caves out from under high ground) regenerates different ground under the saved buildings and

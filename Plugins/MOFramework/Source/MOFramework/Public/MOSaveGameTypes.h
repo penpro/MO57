@@ -77,6 +77,10 @@ struct MOFRAMEWORK_API FMOSaveMetadata
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	FString WorldName;
 
+	/** The world this save belongs to (UMOWorldSaveGame::WorldId; invalid for a save from before Oct 20 2026). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
+	FGuid WorldId;
+
 	/** Player character name or description. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	FString CharacterInfo;

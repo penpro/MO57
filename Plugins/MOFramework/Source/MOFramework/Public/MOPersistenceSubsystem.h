@@ -278,6 +278,13 @@ public:
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     FString GetCurrentSlotName() const { return CurrentSlotName; }
 
+    /** The world being played: minted for a new world (ResetForNewWorld), adopted from the save on load, written by every save (N-158). */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    FGuid GetCurrentWorldId() const { return CurrentWorldId; }
+
+    /** Whether a save slot belongs to the world being played: the same world id, or (a save from before world ids) the same slot. */
+    bool IsSlotOfCurrentWorld(const FString& SlotName) const;
+
     /** Save to the current slot (must have loaded or saved previously). */
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool SaveToCurrentSlot();
@@ -438,6 +445,10 @@ private:
     // Current save slot name (set on load or save)
     UPROPERTY()
     FString CurrentSlotName;
+
+    // The world being played (see GetCurrentWorldId)
+    UPROPERTY()
+    FGuid CurrentWorldId;
 
 	/** Registered save domains (weak — owners control lifetime). */
 	TArray<TWeakInterfacePtr<IMOSaveDomain>> SaveDomains;
