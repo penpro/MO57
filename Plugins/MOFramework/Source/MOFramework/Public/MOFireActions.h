@@ -38,6 +38,12 @@ struct MOFRAMEWORK_API FMOFireActions
 	/** An improvised hand drill (two dry branches, no kit): the base chance it brings. */
 	static constexpr float ImprovisedDrillEffectiveness = 0.2f;
 
+	/** Firemaking XP one attempt teaches: a fire that dies 25, one that takes 40. Wes, F33 A (Oct 20 2026): keep the 20 % odds, make practice count sooner
+	 *  -- it was 8 / 20, so a novice failed eight 3-minute attempts before the first level (+6 %); now the 4th try is the better one (Firemaking's
+	 *  first level is 60 XP). The drilling player sees each gain (the skill toast). */
+	static constexpr float FailedAttemptXP = 25.0f;
+	static constexpr float LitAttemptXP = 40.0f;
+
 	/**
 	 * The chance one lighting attempt catches (0-1): the tool's Firestarter effectiveness (improvised 0.2, a bow drill 0.7), +0.06 per Firemaking level, x0.3 in
 	 * rain, x0.6 with wet hands (wetness over half). Capped at 0.95: friction fire always can fail. Pure, for the tests.

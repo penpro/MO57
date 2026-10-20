@@ -10,6 +10,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOCraftingSubsystem.h"
 #include "MOPlayerController.h"
+#include "MONotificationComponent.h"
 #include "MONotificationWidget.h"
 #include "MOFramework.h"
 #include "GameFramework/Pawn.h"
@@ -79,6 +80,18 @@ namespace
 		if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
 		{
 			PC->ClientShowNotification(Message, 4.0f, Type);
+		}
+	}
+
+	/** The drilling player sees what the attempt taught ("Firemaking +25 XP"): practice that never shows does not feel like it counts (F33). */
+	void ShowPracticeToast(APawn* Pawn, const UMOSkillsComponent* Skills, float XP, int32 LevelBefore)
+	{
+		AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr;
+		UMONotificationComponent* Notes = PC ? PC->GetNotificationComponent() : nullptr;
+		FMOSkillProgress After;
+		if (Notes && Skills && Skills->GetSkillProgress(FiremakingSkill, After))
+		{
+			Notes->ShowSkillToast(FiremakingSkill, /*bIsKnowledge=*/false, XP, LevelBefore, After.Level, 3.0f, After.CurrentXP, After.XPToNextLevel);
 		}
 	}
 }
@@ -325,7 +338,10 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				}
 				if (Skills)
 				{
-					Skills->AddExperience(FiremakingSkill, bCaught ? 20.0f : 8.0f);   // a failed fire teaches too
+					const int32 LevelBefore = Skills->GetSkillLevel(FiremakingSkill);
+					const float XP = bCaught ? LitAttemptXP : FailedAttemptXP;   // a failed fire teaches too
+					Skills->AddExperience(FiremakingSkill, XP);
+					ShowPracticeToast(P, Skills, XP, LevelBefore);
 				}
 				if (bCaught && S->CurrentFuel > 0.0f)
 				{
