@@ -193,6 +193,17 @@ if (MyButton)
   doesn't show (BR18-27: ">>" on Gear emptied the pack into a basket off screen).
 - The menu is pooled: `InitializeMenu` with no container calls `ClearSecondaryInventorySource()`, and `UMOInventoryUIController` drops its
   `CurrentContainerActor` whenever the menu deactivates uncovered (Escape included), not only in `CloseInventoryMenu`.
+### HUD: skill / knowledge toast (Oct 20)
+- Skill and knowledge changes show `UMOSkillToastWidget` (`WBP_SkillToast`, spec `ui_specs/kit_skill_toast.py`), the text notification's
+  look in the same right-hand column (plate at 1480,196 under the notification's 40, clear of the quest tracker's 392): headline
+  "Woodworking +2 XP" / "Woodworking reached level 1" / "New knowledge: Wood Properties", detail "Level 0 · 2 / 100 XP to level 1", a bar,
+  a skill or book glyph. `UMONotificationComponent::ShowSkillToast(Id, bIsKnowledge, XP, LevelBefore, LevelAfter)` carries the grant
+  (`ClientShowSkillPopup` forwards it to a joiner). Before (Wes: "the ui for the skill-ups/knowledge-ups sucks and is hard to read"): the
+  Skills panel's row widget floated at 20% / 80% behind the pawn with no plate, faint grey text, a 2%-filled black bar, no XP or level
+  change, and knowledge ids raw ("WoodProperties").
+- One id-to-name rule: `UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName` (skill row, else item, else `HumanizeId`); the toast, the
+  Skills panel and the notifications use it (four camel-case splitters before). Test `MOFramework.UI.SkillToast.SaysWhatChanged`.
+
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 

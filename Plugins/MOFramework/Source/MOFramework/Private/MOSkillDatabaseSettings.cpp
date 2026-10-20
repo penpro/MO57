@@ -1,4 +1,5 @@
 #include "MOSkillDatabaseSettings.h"
+#include "MOItemDatabaseSettings.h"
 #include "MOFramework.h"
 
 #include "Engine/DataTable.h"
@@ -150,6 +151,46 @@ FText UMOSkillDatabaseSettings::GetSkillDisplayName(FName SkillId)
 	}
 
 	return Definition->DisplayName;
+}
+
+FText UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName(FName Id)
+{
+	if (Id.IsNone())
+	{
+		return FText::GetEmpty();
+	}
+	const FText SkillName = GetSkillDisplayName(Id);
+	if (!SkillName.IsEmpty())
+	{
+		return SkillName;
+	}
+	const FText ItemName = UMOItemDatabaseSettings::GetItemDisplayName(Id);
+	return ItemName.IsEmpty() ? HumanizeId(Id) : ItemName;
+}
+
+FText UMOSkillDatabaseSettings::HumanizeId(FName Id)
+{
+	FString Raw = Id.IsNone() ? FString() : Id.ToString();
+	while (Raw.Len() > 1 && FChar::IsDigit(Raw[Raw.Len() - 1]))
+	{
+		Raw.LeftChopInline(1);   // a variant number ("Hide02") is not part of a name
+	}
+	FString Words;
+	for (int32 i = 0; i < Raw.Len(); ++i)
+	{
+		const TCHAR C = Raw[i];
+		if (C == TEXT('_'))
+		{
+			Words.AppendChar(TEXT(' '));
+			continue;
+		}
+		if (i > 0 && FChar::IsUpper(C) && !FChar::IsUpper(Raw[i - 1]) && Raw[i - 1] != TEXT('_'))
+		{
+			Words.AppendChar(TEXT(' '));
+		}
+		Words.AppendChar(i == 0 ? FChar::ToUpper(C) : C);
+	}
+	return FText::FromString(Words);
 }
 
 void UMOSkillDatabaseSettings::GetAllSkillIds(TArray<FName>& OutSkillIds)

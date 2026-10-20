@@ -95,6 +95,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
 	static FText GetSkillDisplayName(FName SkillId);
 
+	/** A skill's name (DT_Skills), else an item's (knowledge named for an item: "Tinder01" -> "Dry Tinder"), else HumanizeId. The one place a
+	 *  skill or knowledge id becomes a name (the skill toast, the Skills panel, the notifications: four copies of a camel-case splitter until Oct 20 2026,
+	 *  and the skill popup showed knowledge raw, "WoodProperties"). */
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
+	static FText GetSkillOrKnowledgeDisplayName(FName Id);
+
+	/** An id as words when no table names it: "WoodProperties" -> "Wood Properties", "Hide02" -> "Hide". */
+	static FText HumanizeId(FName Id);
+
 	/** Get all skill IDs from the database. */
 	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
 	static void GetAllSkillIds(TArray<FName>& OutSkillIds);

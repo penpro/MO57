@@ -56,8 +56,9 @@
  * 3. WIDGET REUSE: Widgets may be reused or recreated per notification
  *
  * KNOWN PITFALLS:
- * 1. WIDGET CLASS REQUIRED: SkillNotificationWidgetClass must be set for
- *    ShowSkillPopup/ShowKnowledgePopup to work.
+ * 1. SKILL TOAST: skill / knowledge changes show UMOSkillToastWidget (WBP_SkillToast, SkillToastWidgetClass), which places itself under the
+ *    text notification and says what changed (ShowSkillToast carries the XP and the levels). Until Oct 20 2026 the popup was the Skills
+ *    panel's row widget floated over the world at 20% / 80% -- unreadable (Wes) -- and the XP / level change never reached it.
  * 2. Z-ORDER OVERLAP: Skill popup Z-order (260) higher than text (250)
  * 3. CLEAR ALL: ClearAllNotifications clears queues AND hides current
  *
@@ -88,8 +89,8 @@
 #include "MONotificationComponent.generated.h"
 
 class UMONotificationWidget;
-class UMOSkillEntryWidget;
-struct FMOSkillDisplayData;
+class UMOSkillToastWidget;
+struct FMOSkillToastData;
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMONotificationComponent : public UActorComponent
 {
@@ -157,6 +158,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
 	void ShowKnowledgePopup(FName KnowledgeId, float Duration = 3.0f);
 
+	/** The skill toast for one grant: "Woodworking +2 XP", "Woodworking reached level 1", "New knowledge: Wood Properties". XPGained 0 / levels
+	 *  INDEX_NONE when unknown (the toast then shows the standing only). Forwarded to a co-op player's own machine. */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration = 3.0f);
+
 	/** Clear all pending notifications and hide current one. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
 	void ClearAllNotifications();
@@ -176,9 +182,9 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", DisplayName="Text Notification Blueprint"))
 	TSubclassOf<UMONotificationWidget> NotificationWidgetClass;
 
-	/** Widget class for skill/knowledge popup notifications. Uses a SkillEntry widget. Required for ShowSkillPopup/ShowKnowledgePopup to work. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", DisplayName="Skill Notification Blueprint"))
-	TSubclassOf<UMOSkillEntryWidget> SkillNotificationWidgetClass;
+	/** The skill / knowledge toast (WBP_SkillToast: it places itself, under the text notification). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", DisplayName="Skill Toast Blueprint"))
+	TSoftClassPtr<UMOSkillToastWidget> SkillToastWidgetClass;
 
 	/** Z-order for notification widgets. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", ClampMin="0"))
@@ -187,27 +193,6 @@ private:
 	/** Z-order for skill popup widgets (above notifications). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", ClampMin="0"))
 	int32 SkillPopupZOrder = 260;
-
-	/**
-	 * Normalized viewport position (0-1) for skill / level-up popups.
-	 * (0.2, 0.8) = 20% from the left, 80% from the top — i.e. lower-left of screen
-	 * but offset inward so it doesn't hug the corner.
-	 *
-	 * X: 0 = left edge, 1 = right edge.
-	 * Y: 0 = top edge, 1 = bottom edge.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications",
-		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
-	FVector2D SkillPopupViewportPosition = FVector2D(0.2f, 0.8f);
-
-	/**
-	 * Alignment for the popup widget at SkillPopupViewportPosition.
-	 * (0, 0) = top-left of widget at position; (0.5, 0.5) = centered on position;
-	 * (0, 1) = bottom-left of widget at position (good for bottom-anchored toasts).
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications",
-		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
-	FVector2D SkillPopupAlignment = FVector2D(0.0f, 1.0f);
 
 	// --- Internal State ---
 
@@ -221,8 +206,11 @@ private:
 	struct FQueuedSkillPopup
 	{
 		FName Id;
-		bool bIsKnowledge;
-		float Duration;
+		bool bIsKnowledge = false;
+		float Duration = 3.0f;
+		float XPGained = 0.0f;
+		int32 LevelBefore = INDEX_NONE;
+		int32 LevelAfter = INDEX_NONE;
 	};
 
 	/** Queued notification messages. */
@@ -237,7 +225,7 @@ private:
 
 	/** Current skill popup widget. */
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOSkillEntryWidget> CurrentSkillPopupWidget;
+	TWeakObjectPtr<UMOSkillToastWidget> CurrentSkillPopupWidget;
 
 	/** Container widget for skill popup (handles positioning). */
 	UPROPERTY(Transient)
@@ -264,7 +252,7 @@ public:
 	 * called the RPC, the RPC the forward ... and the host died of a stack overflow (nettest actions, Oct 18 2026).
 	 */
 	void ShowNotificationHere(const FText& Message, float Duration, EMONotificationType Type);
-	void ShowSkillPopupHere(FName Id, bool bIsKnowledge, float Duration);
+	void ShowSkillPopupHere(FName Id, bool bIsKnowledge, float Duration, float XPGained = 0.0f, int32 LevelBefore = INDEX_NONE, int32 LevelAfter = INDEX_NONE);
 private:
 
 	/** Process the next notification in queue. */
@@ -284,11 +272,8 @@ private:
 	void ProcessNextSkillPopup();
 
 	/** Internal method to actually show a skill popup (called by ProcessNextSkillPopup). */
-	void ShowSkillPopupInternal(FName SkillId, bool bIsKnowledge, float Duration);
+	void ShowSkillPopupInternal(const FQueuedSkillPopup& Popup);
 
-	/** Build skill display data for a skill ID. */
-	FMOSkillDisplayData BuildSkillDisplayData(FName SkillId) const;
-
-	/** Build skill display data for knowledge (reuses skill display data structure). */
-	FMOSkillDisplayData BuildKnowledgeDisplayData(FName KnowledgeId) const;
+	/** The toast's data: the grant plus this player's standing in that skill / knowledge now. */
+	FMOSkillToastData BuildToastData(const FQueuedSkillPopup& Popup) const;
 };

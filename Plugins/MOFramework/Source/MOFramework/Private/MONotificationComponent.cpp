@@ -9,7 +9,7 @@
 #include "Components/CanvasPanel.h"
 
 #include "MONotificationWidget.h"
-#include "MOSkillEntryWidget.h"
+#include "MOSkillToastWidget.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillsComponent.h"
@@ -18,6 +18,7 @@
 UMONotificationComponent::UMONotificationComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SkillToastWidgetClass = TSoftClassPtr<UMOSkillToastWidget>(FSoftObjectPath(TEXT("/MOFramework/UI/WBP_SkillToast.WBP_SkillToast_C")));
 }
 
 void UMONotificationComponent::BeginPlay()
@@ -44,7 +45,7 @@ void UMONotificationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	CurrentNotificationWidget.Reset();
 
 	// Remove skill popup widget
-	UMOSkillEntryWidget* SkillWidget = CurrentSkillPopupWidget.Get();
+	UMOSkillToastWidget* SkillWidget = CurrentSkillPopupWidget.Get();
 	if (IsValid(SkillWidget))
 	{
 		SkillWidget->RemoveFromParent();
@@ -158,16 +159,7 @@ void UMONotificationComponent::ShowInventoryFullNotification()
 
 void UMONotificationComponent::ShowSkillIncreaseNotification(FName SkillId, float XPAmount)
 {
-	// Get skill display name
-	FText SkillName = FText::FromName(SkillId);
-
-	// Capitalize the skill ID for display
-	FString SkillString = SkillId.ToString();
-	if (SkillString.Len() > 0)
-	{
-		SkillString[0] = FChar::ToUpper(SkillString[0]);
-		SkillName = FText::FromString(SkillString);
-	}
+	const FText SkillName = UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName(SkillId);
 
 	FText Message = FText::Format(
 		NSLOCTEXT("MO", "SkillIncrease", "Your skill in {0} increased (+{1} XP)"),
@@ -186,32 +178,7 @@ void UMONotificationComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 		// Log warning - this shouldn't happen with valid recipe IDs
 		UE_LOG(LogMOFramework, Warning, TEXT("[MONotification] ShowRecipeUnlockedNotification called with invalid RecipeId: %s"), *RecipeId.ToString());
 
-		// Fallback: format the recipe ID nicely (insert spaces before capitals)
-		FString RecipeString = RecipeId.ToString();
-		if (RecipeString.Len() > 0)
-		{
-			FString FormattedString;
-			for (int32 i = 0; i < RecipeString.Len(); i++)
-			{
-				TCHAR Char = RecipeString[i];
-
-				// Insert space before capitals (except first char)
-				if (i > 0 && FChar::IsUpper(Char))
-				{
-					FormattedString.AppendChar(TEXT(' '));
-				}
-
-				// Capitalize first character
-				if (i == 0)
-				{
-					Char = FChar::ToUpper(Char);
-				}
-
-				FormattedString.AppendChar(Char);
-			}
-			RecipeString = FormattedString;
-		}
-		RecipeName = FText::FromString(RecipeString);
+		RecipeName = UMOSkillDatabaseSettings::HumanizeId(RecipeId);
 	}
 
 	// A harvest recipe (Harvest Bark: "strip bark from a tree") never appears in the crafting menu -- it is an action on the source in the world. Saying "you can
@@ -226,38 +193,9 @@ void UMONotificationComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 
 void UMONotificationComponent::ShowKnowledgeLearnedNotification(FName KnowledgeId)
 {
-	// Format the knowledge ID nicely for display
-	// Convert camelCase/PascalCase to "Title Case With Spaces"
-	FString KnowledgeString = KnowledgeId.ToString();
-
-	if (KnowledgeString.Len() > 0)
-	{
-		// Insert spaces before capital letters and capitalize first letter
-		FString FormattedString;
-		for (int32 i = 0; i < KnowledgeString.Len(); i++)
-		{
-			TCHAR Char = KnowledgeString[i];
-
-			// Insert space before capitals (except first char)
-			if (i > 0 && FChar::IsUpper(Char))
-			{
-				FormattedString.AppendChar(TEXT(' '));
-			}
-
-			// Capitalize first character
-			if (i == 0)
-			{
-				Char = FChar::ToUpper(Char);
-			}
-
-			FormattedString.AppendChar(Char);
-		}
-		KnowledgeString = FormattedString;
-	}
-
 	FText Message = FText::Format(
 		NSLOCTEXT("MO", "KnowledgeLearned", "You gained some knowledge of {0}"),
-		FText::FromString(KnowledgeString));
+		UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName(KnowledgeId));
 
 	ShowNotification(Message, 3.5f, EMONotificationType::SkillGain);
 }
@@ -279,7 +217,7 @@ void UMONotificationComponent::ClearAllNotifications()
 	}
 
 	// Remove current skill popup widget
-	UMOSkillEntryWidget* SkillWidget = CurrentSkillPopupWidget.Get();
+	UMOSkillToastWidget* SkillWidget = CurrentSkillPopupWidget.Get();
 	if (IsValid(SkillWidget) && SkillWidget->IsInViewport())
 	{
 		SkillWidget->RemoveFromParent();
@@ -412,27 +350,35 @@ void UMONotificationComponent::OnNotificationHideComplete()
 
 void UMONotificationComponent::ShowSkillPopup(FName SkillId, float Duration)
 {
-	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
-	{
-		RemotePC->ClientShowSkillPopup(SkillId, /*bIsKnowledge=*/false, Duration);
-		return;
-	}
-	ShowSkillPopupHere(SkillId, /*bIsKnowledge=*/false, Duration);
+	ShowSkillToast(SkillId, /*bIsKnowledge=*/false, 0.0f, INDEX_NONE, INDEX_NONE, Duration);
 }
 
-void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowledge, float Duration)
+void UMONotificationComponent::ShowSkillToast(FName Id, bool bIsKnowledge, float XPGained, int32 LevelBefore, int32 LevelAfter, float Duration)
+{
+	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
+	{
+		RemotePC->ClientShowSkillPopup(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter);
+		return;
+	}
+	ShowSkillPopupHere(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter);
+}
+
+void UMONotificationComponent::ShowSkillPopupHere(FName SkillId, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter)
 {
 	// Add to queue
 	FQueuedSkillPopup Popup;
 	Popup.Id = SkillId;
 	Popup.bIsKnowledge = bIsKnowledge;
 	Popup.Duration = Duration;
+	Popup.XPGained = XPGained;
+	Popup.LevelBefore = LevelBefore;
+	Popup.LevelAfter = LevelAfter;
 	SkillPopupQueue.Add(Popup);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued %s popup: %s (%.1fs)"), bIsKnowledge ? TEXT("knowledge") : TEXT("skill"), *SkillId.ToString(), Duration);
 
 	// If no popup currently showing, process immediately
-	UMOSkillEntryWidget* CurrentWidget = CurrentSkillPopupWidget.Get();
+	UMOSkillToastWidget* CurrentWidget = CurrentSkillPopupWidget.Get();
 	if (!IsValid(CurrentWidget) || !CurrentWidget->IsInViewport())
 	{
 		ProcessNextSkillPopup();
@@ -449,10 +395,10 @@ void UMONotificationComponent::ProcessNextSkillPopup()
 	FQueuedSkillPopup Next = SkillPopupQueue[0];
 	SkillPopupQueue.RemoveAt(0);
 
-	ShowSkillPopupInternal(Next.Id, Next.bIsKnowledge, Next.Duration);
+	ShowSkillPopupInternal(Next);
 }
 
-void UMONotificationComponent::ShowSkillPopupInternal(FName SkillId, bool bIsKnowledge, float Duration)
+void UMONotificationComponent::ShowSkillPopupInternal(const FQueuedSkillPopup& Popup)
 {
 	APlayerController* PlayerController = GetOwningPlayerController();
 	if (!IsValid(PlayerController) || !PlayerController->IsLocalController())
@@ -460,101 +406,57 @@ void UMONotificationComponent::ShowSkillPopupInternal(FName SkillId, bool bIsKno
 		return;
 	}
 
-	if (!SkillNotificationWidgetClass)
+	UClass* ToastClass = SkillToastWidgetClass.LoadSynchronous();
+	if (!ToastClass)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MONotification] ShowSkillPopup called but SkillNotificationWidgetClass is not set"));
-		// Try to process next in queue
+		UE_LOG(LogMOFramework, Warning, TEXT("[MONotification] No skill toast class (%s): the %s toast for %s is not shown"),
+			*SkillToastWidgetClass.ToString(), Popup.bIsKnowledge ? TEXT("knowledge") : TEXT("skill"), *Popup.Id.ToString());
 		ProcessNextSkillPopup();
 		return;
 	}
 
-	// Remove any existing popup widget
-	UMOSkillEntryWidget* OldWidget = CurrentSkillPopupWidget.Get();
+	UMOSkillToastWidget* OldWidget = CurrentSkillPopupWidget.Get();
 	if (IsValid(OldWidget) && OldWidget->IsInViewport())
 	{
 		OldWidget->RemoveFromParent();
 	}
 	CurrentSkillPopupWidget.Reset();
 
-	// Create skill entry widget
-	UMOSkillEntryWidget* SkillWidget = CreateWidget<UMOSkillEntryWidget>(PlayerController, SkillNotificationWidgetClass);
-	if (!IsValid(SkillWidget))
+	UMOSkillToastWidget* Toast = CreateWidget<UMOSkillToastWidget>(PlayerController, ToastClass);
+	if (!IsValid(Toast))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MONotification] Failed to create skill popup widget"));
-		// Try to process next in queue
+		UE_LOG(LogMOFramework, Warning, TEXT("[MONotification] Failed to create the skill toast"));
 		ProcessNextSkillPopup();
 		return;
 	}
 
-	// Ensure popup doesn't steal focus or block mouse clicks
-	SkillWidget->SetIsFocusable(false);
-	SkillWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	// Never steals focus or a click; the tree places its plate (under the text notification), so it goes on as a full-screen layer.
+	Toast->SetIsFocusable(false);
+	Toast->SetVisibility(ESlateVisibility::HitTestInvisible);
+	const FMOSkillToastData Data = BuildToastData(Popup);
+	Toast->SetupToast(Data);
+	Toast->AddToViewport(SkillPopupZOrder);
+	UMOUIManagerComponent::RegisterHUDElement(Toast, EMOHUDElementKind::Info);
+	CurrentSkillPopupWidget = Toast;
 
-	// Build and set skill data (use appropriate builder for skill vs knowledge)
-	FMOSkillDisplayData Data;
-	if (bIsKnowledge)
-	{
-		Data = BuildKnowledgeDisplayData(SkillId);
-	}
-	else
-	{
-		Data = BuildSkillDisplayData(SkillId);
-	}
-	SkillWidget->SetupEntry(Data);
+	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Skill toast: \"%s\" / \"%s\""), *UMOSkillToastWidget::Headline(Data).ToString(),
+		*UMOSkillToastWidget::Detail(Data).ToString());
 
-	// Add to viewport
-	SkillWidget->AddToViewport(SkillPopupZOrder);
-	UMOUIManagerComponent::RegisterHUDElement(SkillWidget, EMOHUDElementKind::Info);
-
-	// Position the popup at a normalized viewport position (configurable —
-	// default 20% from left, 80% down = lower-left). SetPositionInViewport works
-	// in absolute viewport pixels, so multiply by the current viewport size.
-	if (UGameViewportClient* VC = PlayerController->GetWorld()->GetGameViewport())
-	{
-		FVector2D ViewportSize;
-		VC->GetViewportSize(ViewportSize);
-		const FVector2D PixelPos(
-			SkillPopupViewportPosition.X * ViewportSize.X,
-			SkillPopupViewportPosition.Y * ViewportSize.Y);
-		SkillWidget->SetAlignmentInViewport(SkillPopupAlignment);
-		SkillWidget->SetPositionInViewport(PixelPos, /*bRemoveDPIScale=*/false);
-	}
-	CurrentSkillPopupWidget = SkillWidget;
-
-	// Play flash animation
-	SkillWidget->PlayFlashAnimation(Duration);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Showing %s popup for: %s"),
-		bIsKnowledge ? TEXT("knowledge") : TEXT("skill"),
-		*SkillId.ToString());
-
-	// Set timer to hide and show next
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(SkillPopupTimerHandle);
-		World->GetTimerManager().SetTimer(
-			SkillPopupTimerHandle,
-			this,
-			&UMONotificationComponent::HideSkillPopup,
-			Duration,
-			false
-		);
+		World->GetTimerManager().SetTimer(SkillPopupTimerHandle, this, &UMONotificationComponent::HideSkillPopup, Popup.Duration, false);
 	}
 }
 
 void UMONotificationComponent::ShowKnowledgePopup(FName KnowledgeId, float Duration)
 {
-	if (AMOPlayerController* RemotePC = GetRemoteOwningPlayerController())
-	{
-		RemotePC->ClientShowSkillPopup(KnowledgeId, /*bIsKnowledge=*/true, Duration);
-		return;
-	}
-	ShowSkillPopupHere(KnowledgeId, /*bIsKnowledge=*/true, Duration);
+	ShowSkillToast(KnowledgeId, /*bIsKnowledge=*/true, 0.0f, INDEX_NONE, INDEX_NONE, Duration);
 }
 
 void UMONotificationComponent::HideSkillPopup()
 {
-	UMOSkillEntryWidget* SkillWidget = CurrentSkillPopupWidget.Get();
+	UMOSkillToastWidget* SkillWidget = CurrentSkillPopupWidget.Get();
 	if (IsValid(SkillWidget) && SkillWidget->IsInViewport())
 	{
 		SkillWidget->RemoveFromParent();
@@ -570,113 +472,33 @@ void UMONotificationComponent::HideSkillPopup()
 	ProcessNextSkillPopup();
 }
 
-FMOSkillDisplayData UMONotificationComponent::BuildSkillDisplayData(FName SkillId) const
+FMOSkillToastData UMONotificationComponent::BuildToastData(const FQueuedSkillPopup& Popup) const
 {
-	FMOSkillDisplayData Data;
-	Data.SkillId = SkillId;
-
-	// Get skill definition
-	const FMOSkillDefinitionRow* SkillDef = UMOSkillDatabaseSettings::GetSkillDefinition(SkillId);
-	if (SkillDef)
+	FMOSkillToastData Data;
+	Data.Id = Popup.Id;
+	Data.bIsKnowledge = Popup.bIsKnowledge;
+	Data.DisplayName = UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName(Popup.Id);
+	Data.XPGained = Popup.XPGained;
+	Data.LevelBefore = Popup.LevelBefore;
+	Data.LevelAfter = Popup.LevelAfter;
+	if (const FMOSkillDefinitionRow* SkillDef = UMOSkillDatabaseSettings::GetSkillDefinition(Popup.Id))
 	{
-		Data.DisplayName = SkillDef->DisplayName;
-		Data.Description = SkillDef->Description;
-		Data.HowToIncrease = SkillDef->HowToIncrease;
-		Data.Category = SkillDef->Category;
 		Data.MaxLevel = SkillDef->MaxLevel;
-		Data.Icon = SkillDef->Icon;
 	}
-	else
+	// Knowledge rides on the skills component like a skill (its own levels and XP).
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	const UMOSkillsComponent* Skills = Pawn ? Pawn->FindComponentByClass<UMOSkillsComponent>() : nullptr;
+	FMOSkillProgress Progress;
+	if (Skills && Skills->GetSkillProgress(Popup.Id, Progress))
 	{
-		Data.DisplayName = FText::FromName(SkillId);
+		Data.Level = Progress.Level;
+		Data.CurrentXP = Progress.CurrentXP;
+		Data.XPToNextLevel = Progress.XPToNextLevel;
 	}
-
-	// Try to get player progress from their skills component
-	AActor* OwnerActor = GetOwner();
-	if (APlayerController* PC = Cast<APlayerController>(OwnerActor))
+	else if (Popup.LevelAfter != INDEX_NONE)
 	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
-			{
-				FMOSkillProgress Progress;
-				if (Skills->GetSkillProgress(SkillId, Progress))
-				{
-					Data.Level = Progress.Level;
-					Data.CurrentXP = Progress.CurrentXP;
-					Data.XPToNextLevel = Progress.XPToNextLevel;
-					Data.LevelProgress = Progress.GetLevelProgress();
-				}
-			}
-		}
+		Data.Level = Popup.LevelAfter;
 	}
-
-	return Data;
-}
-
-FMOSkillDisplayData UMONotificationComponent::BuildKnowledgeDisplayData(FName KnowledgeId) const
-{
-	FMOSkillDisplayData Data;
-	Data.SkillId = KnowledgeId; // Reuse SkillId field
-
-	// Format knowledge ID into readable name
-	FString KnowledgeString = KnowledgeId.ToString();
-	if (KnowledgeString.Len() > 0)
-	{
-		FString FormattedString;
-		for (int32 i = 0; i < KnowledgeString.Len(); i++)
-		{
-			TCHAR Char = KnowledgeString[i];
-			if (i > 0 && FChar::IsUpper(Char))
-			{
-				FormattedString.AppendChar(TEXT(' '));
-			}
-			if (i == 0)
-			{
-				Char = FChar::ToUpper(Char);
-			}
-			FormattedString.AppendChar(Char);
-		}
-		Data.DisplayName = FText::FromString(FormattedString);
-	}
-	else
-	{
-		Data.DisplayName = FText::FromName(KnowledgeId);
-	}
-
-	Data.Description = NSLOCTEXT("MO", "KnowledgeDesc", "Knowledge gained through study and inspection.");
-	Data.HowToIncrease = NSLOCTEXT("MO", "KnowledgeHowTo", "Inspect items related to this topic.");
-	Data.Category = EMOSkillCategory::Knowledge;
-	Data.MaxLevel = 100; // Default, could be looked up from a knowledge database
-
-	// Knowledge now uses the same XP/level system as skills
-	// Try to get player progress from their skills component
-	AActor* OwnerActor = GetOwner();
-	if (APlayerController* PC = Cast<APlayerController>(OwnerActor))
-	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
-			{
-				FMOSkillProgress Progress;
-				if (Skills->GetSkillProgress(KnowledgeId, Progress))
-				{
-					Data.Level = Progress.Level;
-					Data.CurrentXP = Progress.CurrentXP;
-					Data.XPToNextLevel = Progress.XPToNextLevel;
-					Data.LevelProgress = Progress.GetLevelProgress();
-				}
-				else
-				{
-					// Knowledge not yet tracked, show level 0
-					Data.Level = 0;
-					Data.CurrentXP = 0.0f;
-					Data.XPToNextLevel = 100.0f;
-					Data.LevelProgress = 0.0f;
-				}
-			}
-		}
-	}
-
 	return Data;
 }

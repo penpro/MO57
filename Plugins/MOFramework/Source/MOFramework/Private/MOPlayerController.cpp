@@ -631,11 +631,11 @@ void AMOPlayerController::ServerSurvivorCommand_Implementation(APawn* Survivor, 
 	FMOSurvivorCommands::Execute(this, Survivor, Command);
 }
 
-void AMOPlayerController::ClientShowSkillPopup_Implementation(FName Id, bool bIsKnowledge, float Duration)
+void AMOPlayerController::ClientShowSkillPopup_Implementation(FName Id, bool bIsKnowledge, float Duration, float XPGained, int32 LevelBefore, int32 LevelAfter)
 {
 	if (NotificationComponent)
 	{
-		NotificationComponent->ShowSkillPopupHere(Id, bIsKnowledge, Duration);   // never the forwarding entries: see ShowNotificationHere
+		NotificationComponent->ShowSkillPopupHere(Id, bIsKnowledge, Duration, XPGained, LevelBefore, LevelAfter);   // never the forwarding entries: see ShowNotificationHere
 	}
 }
 

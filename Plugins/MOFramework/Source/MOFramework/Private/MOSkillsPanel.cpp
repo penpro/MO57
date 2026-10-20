@@ -428,34 +428,7 @@ FMOSkillDisplayData UMOSkillsPanel::BuildKnowledgeDisplayData(FName KnowledgeId)
 
 FText UMOSkillsPanel::FormatKnowledgeName(FName KnowledgeId) const
 {
-	// Convert camelCase/PascalCase to "Title Case With Spaces"
-	FString KnowledgeString = KnowledgeId.ToString();
-
-	if (KnowledgeString.Len() > 0)
-	{
-		FString FormattedString;
-		for (int32 i = 0; i < KnowledgeString.Len(); i++)
-		{
-			TCHAR Char = KnowledgeString[i];
-
-			// Insert space before capitals (except first char)
-			if (i > 0 && FChar::IsUpper(Char))
-			{
-				FormattedString.AppendChar(TEXT(' '));
-			}
-
-			// Capitalize first character
-			if (i == 0)
-			{
-				Char = FChar::ToUpper(Char);
-			}
-
-			FormattedString.AppendChar(Char);
-		}
-		KnowledgeString = FormattedString;
-	}
-
-	return FText::FromString(KnowledgeString);
+	return UMOSkillDatabaseSettings::GetSkillOrKnowledgeDisplayName(KnowledgeId);
 }
 
 void UMOSkillsPanel::PopulateSkillContainer()
