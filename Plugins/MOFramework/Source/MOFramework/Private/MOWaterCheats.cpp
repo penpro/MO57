@@ -19,6 +19,8 @@
 //   MO.Fire.Actions / MO.Fire.Do <Action> the nearest fire's actions (add fuel, light, put out), through the real server RPC
 
 #include "CoreMinimal.h"
+#include "Kismet/GameplayStatics.h"
+#include "MOBuildProgressComponent.h"
 
 #if !UE_BUILD_SHIPPING
 
@@ -464,10 +466,24 @@ namespace
 
 	FAutoConsoleCommandWithWorldAndArgs GFireSpawnLitCmd(
 		TEXT("MO.Fire.SpawnLit"),
-		TEXT("Dev (server): a finished, fuelled, burning campfire (the BuildCampfire recipe's actor) 1.5 m in front of the local pawn -- for testing what needs a fire (boiling). Usage: MO.Fire.SpawnLit [unlit]"),
+		TEXT("Dev (server): a finished campfire (the BuildCampfire recipe's actor) 1.5 m in front of a player's pawn -- for testing what needs a fire (boiling, lighting). lit = fuelled and burning (default), laid = fuelled and cold (ready to light), unlit = empty and cold. Usage: MO.Fire.SpawnLit [lit|laid|unlit] [PlayerIndex=0]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			AMOCharacter* Pawn = LocalMOPawn(World);
+			// [lit|laid|unlit] [PlayerIndex]: a co-op test lays a fire beside the joiner's pawn (player 1 on the host).
+			FString State = TEXT("lit");
+			int32 PlayerIndex = 0;
+			for (const FString& Arg : Args)
+			{
+				if (Arg.IsNumeric())
+				{
+					PlayerIndex = FCString::Atoi(*Arg);
+				}
+				else
+				{
+					State = Arg.ToLower();
+				}
+			}
+			APawn* Pawn = PlayerIndex == 0 ? static_cast<APawn*>(LocalMOPawn(World)) : UGameplayStatics::GetPlayerPawn(World, PlayerIndex);
 			const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(FName(TEXT("BuildCampfire")));
 			UClass* FireClass = Recipe ? Recipe->PlacementData.BuildableActorClass.Get() : nullptr;
 			if (!Pawn || !FireClass || !Pawn->HasAuthority())
@@ -491,10 +507,24 @@ namespace
 				return;
 			}
 			static_cast<AMOBuildableActor*>(Fire)->InitializeBuilding(FName(TEXT("BuildCampfire")));   // public on the base, the station overrides it protected
-			// "unlit": an empty, cold campfire, to light the real way (MO.Fire.Do Light).
-			if (!(Args.Num() > 0 && Args[0].Equals(TEXT("unlit"), ESearchCase::IgnoreCase)))
+			// Finished, as promised: since the build-progress work a spawned station started as an unbuilt site (its menu was Build / Add Materials,
+			// N-182). Same route as a save restore: the progress record says Complete, then the completed state (visuals, collision).
+			if (UMOBuildProgressComponent* Progress = Fire->FindComponentByClass<UMOBuildProgressComponent>())
+			{
+				FMOBuildProgress Done;
+				Progress->BuildSaveData(Done);
+				Done.State = EMOBuildState::Complete;
+				Done.ElapsedTime = Done.TotalBuildTime;
+				Progress->ApplySaveData(Done);
+			}
+			static_cast<AMOBuildableActor*>(Fire)->EnterCompletedState();
+			// "laid": fuel on, cold -- to light the real way (MO.Fire.Do Light); "unlit": empty and cold.
+			if (State != TEXT("unlit"))
 			{
 				Fire->CurrentFuel = Fire->MaxFuel;
+			}
+			if (State == TEXT("lit"))
+			{
 				Fire->SetStationActive(true);
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit: %s at (%.0f, %.0f, %.0f), fuel %.0f, active %d, heat %.1f C over %.0f cm"), *Fire->GetName(), Spot.X, Spot.Y, Spot.Z,

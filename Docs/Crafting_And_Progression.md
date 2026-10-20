@@ -17,7 +17,8 @@
 > **DataTables:** DT_Items, Recipes (`FMORecipeDefinitionRow`), DT_Resources, DT_Carcasses, DT_Skills, DT_Biomes (`DigYields`,
 > species `ResourceNodeId`), DT_CaveScatter. **Dev verbs:** `MO.Test.Craft <Recipe>`, `MO.Test.GrantRecipe [PlayerIndex] [Recipe]`,
 > `MO.Harvest.Do <ActionId|list> [r]`, `MO.Harvest.Enable 1`, `MO.Test.Forage dig`, `MO.Cover.Gather [r] [go]`, `MO.Item.*`,
-> `MO.Fire.SpawnLit|Actions|Do|Menu`, `MO.Test.ValidateData`, `MO.Test.ProgressionMap`, `MO.Test.WorldAction list|<Id>`.
+> `MO.Fire.SpawnLit [lit|laid|unlit] [PlayerIndex]` (a FINISHED campfire: lit = burning, laid = fuelled and cold, unlit = empty), `MO.Fire.Actions|Do|Menu`,
+> `MO.Test.FireAttemptSeconds <s>` (test builds only: a short drill for the co-op harness), `MO.Test.ValidateData`, `MO.Test.ProgressionMap`, `MO.Test.WorldAction list|<Id>`.
 > **Open items:** `Docs/BACKLOG.md` § Crafting, progression, content. **Decisions:** DECISIONS (Oct 15 every world thing gets an action,
 > starting kit; Oct 17 inspect discovery; F10 heat values).
 
