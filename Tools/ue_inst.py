@@ -2708,14 +2708,14 @@ def _host_wolf_holds_off_fire(rep, host, client):
     time.sleep(2)
 
 
-def _clear_around_host(host, keep=""):
+def _clear_around_host(host, keep="", within=600):
     """Earlier cases leave people where the next one works: the joiner and a survivor both stood 1.5 m in front of the host, so a medic
-    stalled 2 m short and a joiner's line hit the survivor (Oct 20). The joiner goes 20 m aside, any other person (not `keep`) within 6 m of
-    the host 12 m away."""
+    stalled 2 m short and a joiner's line hit the survivor (Oct 20). The joiner goes 20 m aside, any other person (not `keep`) within
+    `within` cm of the host 12 m away."""
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); hl = h.get_actor_location(); "
                  "j.set_actor_location(hl + h.get_actor_right_vector() * 2000.0 + unreal.Vector(0.0, 0.0, 200.0), False, True); "
                  f"o = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a not in (h, j) and a.get_name() != '{keep}' "
-                 "and (a.get_actor_location() - hl).length() < 600]; "
+                 f"and (a.get_actor_location() - hl).length() < {within}]; "
                  "[a.set_actor_location(hl - h.get_actor_right_vector() * 1200.0 + unreal.Vector(0.0, 0.0, 200.0), False, True) for a in o]; out('CLEARED %d' % len(o))")
 
 
@@ -2948,7 +2948,9 @@ def _host_colony_medic(rep, host, client):
     nearest idle villager that has the skill and the supplies -- here a bandage in its own pack -- to the bleeding host; it walks over and runs
     the same server treatment a player would (FMOMedicalTreatmentActions::Begin). Founds a settlement, so it runs last. Host-side."""
     off = log_size(host)
-    console(host, "MO.Colony.Found MedicTest 20000")
+    # A 10 m settlement, everyone else moved out of it below: the medic treats the worst bleeder in the settlement, and an earlier case left
+    # the host's previous pawn bleeding from a wolf's bite (Oct 21: the medic went to it, and the host was never treated)
+    console(host, "MO.Colony.Found MedicTest 1000")
     m = wait_log(host, r"\[MOQUERY\] COLONY Found (\S+)", since=off, timeout=10)
     if not rep.step("CONTROL: the host founded a settlement", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no Found line"):
         return
@@ -2964,7 +2966,8 @@ def _host_colony_medic(rep, host, client):
     bleed = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); "
              "ws = [w for w in h.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; "
              "out('HBLEED %.3f' % (max(w.bleed_rate for w in ws) if ws else -1))")
-    _clear_around_host(host, keep=name)
+    _clear_around_host(host, keep=name, within=1100)
+    me = (re.search(r"HOSTPAWN=(\S+)", _probe(host, "out('HOSTPAWN=' + unreal.GameplayStatics.get_player_pawn(world, 0).get_name())")) or [None, "?"])[1]
     off = log_size(host)
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
                  "h.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_LEFT, 30.0, unreal.MOWoundType.LACERATION, h); out('CUT')")
@@ -2972,7 +2975,7 @@ def _host_colony_medic(rep, host, client):
     if not rep.step("CONTROL: the host's forearm is cut and bleeds at least 0.2 mL/s (the medic threshold)", bool(before) and float(before.group(1)) >= 0.2,
                     before.group(0) if before else "no wound"):
         return
-    sent = wait_log(host, rf"\[MOColony\] Medic {re.escape(name)} goes to treat [^\r\n]*", since=off, timeout=25)
+    sent = wait_log(host, rf"\[MOColony\] Medic {re.escape(name)} goes to treat {re.escape(me)}\b[^\r\n]*", since=off, timeout=25)
     rep.step("the colony's upkeep sends the villager with the bandage to the bleeding host", bool(sent), sent.group(0) if sent else "no Medic line for " + name)
     if not sent:
         return
@@ -3599,7 +3602,15 @@ def _trust_pickup_far(rep, host, client):
     if not rep.step("host: dropped an item 45 m from the joiner (out of the server's 30 m reach)", bool(m) and m.group(1) == "True" and m.group(2) != "none",
                     m.group(0) if m else setup.strip()[-160:]):
         return
-    time.sleep(8)  # replicates to the client
+    # Wait until the JOINER's world has it (up to 30 s): a fixed 8 s missed it when the host was stalled loading (Oct 21: the joiner received
+    # ~260 B/s with a 637 ms round trip for those seconds, and the step blamed an empty world).
+    far_code = ("p = unreal.GameplayStatics.get_player_pawn(world, 0); pl = p.get_actor_location(); "
+                "out('FARITEM %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) "
+                "if 3500 <= (a.get_actor_location() - pl).length() <= 12000]))")
+    for _ in range(15):
+        if re.search(r"FARITEM [1-9]", _probe(client, far_code)):
+            break
+        time.sleep(2)
     off = log_size(host)
     coff = log_size(client)   # the client's log segment since the command: a fixed "last 4000 chars" tail was flooded out by [MOBiomeSpawner] lines while the client's PCG ran, and the verdict flipped
     console(client, "MO.Test.PickupNearest 12000 3500")
