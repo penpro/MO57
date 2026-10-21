@@ -163,6 +163,7 @@
 #include "MOIdentifiableInterface.h"
 #include "MOCraftingCapableInterface.h"
 #include "MOMedicalProviderInterface.h"
+#include "MOWorldActionProvider.h"
 #include "MOCraftingTypes.h"
 #include "MOBodyPartTypes.h"
 #include "MOInterruptTypes.h"
@@ -293,7 +294,8 @@ class MOFRAMEWORK_API AMOCharacter : public ACharacter,
 	public IMOMaterialSourceInterface,
 	public IMOIdentifiableInterface,
 	public IMOCraftingCapableInterface,
-	public IMOMedicalProviderInterface
+	public IMOMedicalProviderInterface,
+	public IMOWorldActionProvider
 {
 	GENERATED_BODY()
 
@@ -452,6 +454,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
+
+	//~ IMOWorldActionProvider: what another pawn can do to this one (a right-click on it): treat its wounds (N-061 co-op, Oct 20; one option per
+	//~ wound and treatment for it, FMOMedicalTreatmentActions::GetOptions, the server's own checks; self-treatment is Status > Wounds) and
+	//~ light a torch from the one it carries burning (FMOFireActions::GetBearerActions, N-056).
+	virtual FText GetWorldActionTitle() const override;
+	virtual void GetWorldActions(const APawn* Pawn, TArray<FMOItemActionOption>& Out) const override;
+	virtual bool PerformWorldAction(APawn* Pawn, FName ActionId) override;
 
 	// ============================================================================
 	// APPEARANCE

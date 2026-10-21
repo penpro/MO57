@@ -23,6 +23,7 @@ const FName FMOFireActions::Light(TEXT("Light"));
 const FName FMOFireActions::PutOut(TEXT("PutOut"));
 const FName FMOFireActions::LightCarried(TEXT("LightCarried"));
 const FName FMOFireActions::LightFromCarried(TEXT("LightFromCarried"));
+const FName FMOFireActions::LightFromBearer(TEXT("LightFromBearer"));
 
 namespace
 {
@@ -212,6 +213,68 @@ void FMOFireActions::GetActions(const APawn* Pawn, const AMOCraftingStationActor
 	LightOpt.DisabledReason = Station->CurrentFuel <= 0.0f ? LOCTEXT("LayFuel", "Lay some fuel first.")
 		: !bTinder ? LOCTEXT("NeedTinder", "Needs tinder (dry fibre from dead shrubs or shredded bark).")
 		: LOCTEXT("NeedDrill", "Needs two dry branches (deadfall) for a hand drill: green wood is too wet to make an ember.");
+}
+
+void FMOFireActions::GetBearerActions(const APawn* Pawn, const APawn* Bearer, TArray<FMOItemActionOption>& Out)
+{
+	const UMOCarriedLightComponent* Mine = Pawn ? Pawn->FindComponentByClass<UMOCarriedLightComponent>() : nullptr;
+	const UMOCarriedLightComponent* Theirs = Bearer && Bearer != Pawn ? Bearer->FindComponentByClass<UMOCarriedLightComponent>() : nullptr;
+	EMOEquipmentSlot HeldSlot = EMOEquipmentSlot::RightHand;
+	FMOEquippedItem Held;
+	if (!Mine || !Theirs || !Theirs->IsLit() || !Mine->FindUnlitHeld(HeldSlot, Held))
+	{
+		return;
+	}
+	FMOItemActionOption& Option = Out.AddDefaulted_GetRef();
+	Option.Id = LightFromBearer;
+	Option.Label = FText::Format(LOCTEXT("LightFromBearer", "Light your {0} from their {1}"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId),
+		UMOItemDatabaseSettings::GetItemDisplayName(Theirs->GetLitItemId()));
+	Option.bEnabled = FVector::DistSquared(Pawn->GetActorLocation(), Bearer->GetActorLocation()) <= FMath::Square(LightFromBearerReachCm);
+	Option.DisabledReason = LOCTEXT("BearerTooFar", "Get closer to their flame.");
+}
+
+bool FMOFireActions::PerformBearerAction(APawn* Pawn, APawn* Bearer, FName ActionId)
+{
+	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	UMOCarriedLightComponent* Carried = Pawn ? Pawn->FindComponentByClass<UMOCarriedLightComponent>() : nullptr;
+	if (!Pawn || !Pawn->HasAuthority() || !Timed || !Carried || ActionId != LightFromBearer)
+	{
+		return false;
+	}
+	TArray<FMOItemActionOption> Options;
+	GetBearerActions(Pawn, Bearer, Options);
+	EMOEquipmentSlot HeldSlot = EMOEquipmentSlot::RightHand;
+	FMOEquippedItem Held;
+	const FMOLightSourceProfile* Profile = Carried->FindUnlitHeld(HeldSlot, Held) ? UMOLightSourceSettings::Find(Held.ItemDefinitionId) : nullptr;
+	if (Options.Num() == 0 || !Options[0].bEnabled || !Profile)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOFire] %s: light from %s refused (%s)"), *Pawn->GetName(), *GetNameSafe(Bearer),
+			Options.Num() > 0 ? *Options[0].DisabledReason.ToString() : TEXT("not on offer"));
+		return false;
+	}
+	TWeakObjectPtr<APawn> WeakPawn(Pawn);
+	TWeakObjectPtr<APawn> WeakBearer(Bearer);
+	TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Carried);
+	return Timed->Begin(LightFromBearer, FText::Format(LOCTEXT("LightingFromBearer", "Holding the {0} to their flame"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId)),
+		Profile->LightSeconds,
+		[WeakPawn, WeakBearer, WeakCarried]()
+		{
+			APawn* P = WeakPawn.Get();
+			const APawn* Source = WeakBearer.Get();
+			UMOCarriedLightComponent* C = WeakCarried.Get();
+			const UMOCarriedLightComponent* Flame = Source ? Source->FindComponentByClass<UMOCarriedLightComponent>() : nullptr;
+			if (!P || !C)
+			{
+				return;
+			}
+			if (!Flame || !Flame->IsLit() || FVector::DistSquared(P->GetActorLocation(), Source->GetActorLocation()) > FMath::Square(LightFromBearerReachCm))
+			{
+				Notify(P, LOCTEXT("BearerGone", "Their flame was no longer there to light from."), EMONotificationType::Warning);
+				return;
+			}
+			C->LightHeld();   // re-finds the held light: if it was put away meanwhile there is nothing to light
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOFire] %s lit its %s from %s's flame"), *P->GetName(), *C->GetLitItemId().ToString(), *Source->GetName());
+		}, nullptr, 75.0f);
 }
 
 bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FName ActionId)

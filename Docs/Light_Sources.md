@@ -59,6 +59,10 @@ complement each other. A candle is ~1 cd (~12.6 lm). Wood and fat flames burn at
   - the visible flame is the profile's Niagara effect, kept upright in the world.
 - **Carrying fire:** a laid fire is lit from a lit torch (`FMOFireActions::LightFromCarried`): 20 s, no drill and no tinder. It catches 95 %
   of the time dry, 60 % in rain. That is why people carried fire rather than drill a new one at every camp.
+- **Torch from torch** (N-056, Oct 20): holding an unlit torch, a right-click on another pawn carrying a burning one offers "Light your
+  Torch from their Torch" (`FMOFireActions::GetBearerActions`, in the pawn's world actions next to its wounds' treatments; greyed past
+  2.5 m). It is the healer's timed action of the torch's `LightSeconds`, and it catches if the other flame still burns within reach. A
+  recruited survivor's command menu lists it too. Co-op: the joiner's menu is built from the replicated flame; the pick runs on the host.
 - **Co-op:** the lit item's GUID, id and hand replicate. Every machine with a renderer builds its own light and flame from them. Verified on real
   host + client processes (`nettest game --keep`):
   - the client sees the host's torch lit, and it light-adapts the client's eye;
@@ -153,7 +157,7 @@ cannot change at runtime and `SetVisibility` is overwritten by the sky blueprint
 ## Not modelled yet
 
 - Smoke (a torch in a dead-end gallery fills it).
-- Lighting one torch from another, and survivors carrying torches at night.
+- Survivors carrying torches at night (one torch lights from another since Oct 20).
 - Fuel for lamps: an oil lamp's durability stands in for its oil; refilling with fat or oil is not a recipe yet.
-- A key to snuff the flame without putting it away.
+- A key to snuff the flame without putting it away (an equipped torch is not in the pack's item menu, and a key needs choosing).
 - A lit torch as fire for other uses beyond lighting a campfire (scaring animals, fire-setting a rock face).

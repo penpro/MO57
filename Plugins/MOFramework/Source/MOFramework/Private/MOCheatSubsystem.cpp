@@ -3753,15 +3753,27 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			{
 				APlayerController* PC = W->GetFirstPlayerController();
 				APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+				// The nearest target that offers this pawn something, else the nearest at all. Pawns are providers too (another pawn's wounds,
+				// its flame; Oct 20), so the local pawn itself -- 0 cm away -- is skipped, and a bystander with nothing to offer does not shadow a carcass.
 				AActor* Best = nullptr;
 				float BestDist = 400.0f;
+				bool bBestOffers = false;
 				for (TActorIterator<AActor> It(W); It && Pawn; ++It)
 				{
+					IMOWorldActionProvider* Candidate = Cast<IMOWorldActionProvider>(*It);
 					const float Dist = FVector::Dist(It->GetActorLocation(), Pawn->GetActorLocation());
-					if (Dist < BestDist && Cast<IMOWorldActionProvider>(*It))
+					if (!Candidate || *It == Pawn || Dist >= 400.0f)
+					{
+						continue;
+					}
+					TArray<FMOItemActionOption> Offered;
+					Candidate->GetWorldActions(Pawn, Offered);
+					const bool bOffers = Offered.Num() > 0;
+					if ((bOffers && !bBestOffers) || (bOffers == bBestOffers && Dist < BestDist))
 					{
 						Best = *It;
 						BestDist = Dist;
+						bBestOffers = bOffers;
 					}
 				}
 				IMOWorldActionProvider* Provider = Cast<IMOWorldActionProvider>(Best);

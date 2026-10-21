@@ -6,6 +6,10 @@
 #include "MOIdentityComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOCharacter.h"
+#include "MOCommonButton.h"
+#include "MOUIUtils.h"
+#include "MOWorldActionProvider.h"
+#include "Components/PanelWidget.h"
 #include "AIController.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
@@ -82,9 +86,37 @@ void UMOSurvivorContextMenu::InitializeForSurvivor(APawn* Survivor, FVector2D Sc
 	// Update UI
 	UpdateDisplayTexts();
 	UpdateButtonStates();
+	RefreshTreatmentButtons();
 
 	// Position the menu
 	SetPopupPosition(ScreenPosition);
+}
+
+void UMOSurvivorContextMenu::RefreshTreatmentButtons()
+{
+	APawn* Survivor = TargetSurvivor.Get();
+	TArray<FMOItemActionOption> Treatments;
+	if (const IMOWorldActionProvider* Provider = Cast<IMOWorldActionProvider>(Survivor); Provider && !bSurvivorIsDead)
+	{
+		Provider->GetWorldActions(GetOwningPlayerPawn(), Treatments);
+	}
+	UMOCommonButton* After = InventoryButton ? InventoryButton.Get() : OpenTasksButton.Get();
+	UPanelWidget* Panel = After ? After->GetParent() : nullptr;
+	if (!Panel)
+	{
+		return;
+	}
+	const TWeakObjectPtr<UMOSurvivorContextMenu> WeakThis(this);
+	UMOUIUtils::RebuildActionButtons(this, TreatmentButtons, Panel, After, Treatments, OpenTasksButton, [WeakThis](FName ActionId)
+	{
+		UMOSurvivorContextMenu* Menu = WeakThis.Get();
+		APawn* Patient = Menu ? Menu->TargetSurvivor.Get() : nullptr;
+		if (Patient)
+		{
+			FMOWorldActions::Submit(Menu->GetOwningPlayer(), Patient, ActionId);   // the server checks it all again and runs it as the player's timed action
+			Menu->RequestClose();
+		}
+	});
 }
 
 void UMOSurvivorContextMenu::HandleFollowMeClicked()

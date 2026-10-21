@@ -162,6 +162,12 @@ private:
 	/** Whether the target survivor is dead. */
 	bool bSurvivorIsDead = false;
 
+	/** Its wounds' treatments, after the orders (N-061): the options a right-click on a wounded stranger lists (AMOCharacter's world actions). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOCommonButton>> TreatmentButtons;
+
+	void RefreshTreatmentButtons();
+
 	// Button handlers
 	void HandleFollowMeClicked();
 	void HandleStayHereClicked();

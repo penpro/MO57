@@ -166,14 +166,17 @@ applied to the body through the survival stats. Chances per litre and the resear
 - **Healing and pain effects** (Oct 20): a treatment's `HealingSpeedBonus` and `PainReduction` (x the treatment quality) are kept on the
   wound (`TreatmentHealingBonus` / `TreatmentPainReduction`, the best so far, saved): it heals (1 + bonus) times as fast and hurts
   (1 - relief) as much. Bandage / suture / splint flags are still not set by treatments (no name mapping invented).
-- **Wounds replicate to every machine** (Oct 20, for treating each other): `UMOAnatomyComponent::Wounds` (body parts and
-  conditions stay owner-only); host + joiner: the joiner's copy shows the host's wound.
+- **Treating someone else** (N-061 co-op, Oct 20): wounds replicate to every machine (`UMOAnatomyComponent::Wounds`, body parts and
+  conditions stay owner-only), and a right-click on a wounded pawn -- another player, an unrecruited person -- opens its menu under its
+  name (`AMOCharacter` is an `IMOWorldActionProvider`), one option per wound and treatment, "Forearm Left Laceration: Apply
+  Bandage (15 s)", from the same `GetOptions`. A pick runs `FMOMedicalTreatmentActions::Begin(healer, patient, ...)` on the server as the
+  healer's timed action. A recruited survivor's right-click is its command menu, which lists the same treatment options after its orders
+  (`UMOSurvivorContextMenu::RefreshTreatmentButtons`, Oct 20).
 - **The colony medic** (N-061, Oct 20): the colony's upkeep sends an idle villager with the skill and the supplies (its pack, else a
   settlement store it fetches from) to anyone in the settlement bleeding 0.2 mL/s or more; it walks over and runs the same `Begin`
   (`PickForMedic` chooses the wound and treatment). `Docs/AI_And_Colony.md` section 2.
-- **Not built:** treating another pawn from a right-click on it, treating a recruited survivor from its command menu, condition-only
-  rows (infection, hypothermia, shock), CPR, and a medic that cleans or sutures a wound that has stopped bleeding (the medic treats
-  bleeding only).
+- **Not built:** condition-only rows (infection, hypothermia, shock), CPR, and a medic that cleans or sutures a wound that has stopped
+  bleeding (the medic treats bleeding only).
   Detail and acceptance steps: `Docs/agent/audit/MEDICAL_HANDOFF.md`.
 
 ## 8. Rules

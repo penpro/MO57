@@ -23,6 +23,18 @@ struct MOFRAMEWORK_API FMOFireActions
 	static const FName LightCarried;
 	/** Lighting the laid fire from the flame the pawn carries: fire carried from the last camp -- no drill, no tinder, only rain gets in the way. */
 	static const FName LightFromCarried;
+	/** Lighting the torch (or lamp) in the pawn's hand from the one another pawn carries burning (N-056, Oct 20): flame to head until it catches. */
+	static const FName LightFromBearer;
+
+	/** How close the two flames must be (cm between the pawns): each holds its light out at arm's length. */
+	static constexpr float LightFromBearerReachCm = 250.0f;
+
+	/** What Pawn can do with Bearer's carried flame: one option when Pawn holds an unlit light source and Bearer's burns (greyed when too far).
+	 *  Another pawn's right-click menu lists it (AMOCharacter's IMOWorldActionProvider), next to its wounds' treatments. */
+	static void GetBearerActions(const APawn* Pawn, const APawn* Bearer, TArray<FMOItemActionOption>& Out);
+
+	/** Server: re-checks, then Pawn's timed action of its light's LightSeconds; it catches if the other flame still burns within reach. */
+	static bool PerformBearerAction(APawn* Pawn, APawn* Bearer, FName ActionId);
 
 	/** Lighting a laid fire from a carried flame: the chance it takes (a flame to dry kindling nearly always does; rain is the enemy). Pure, for the tests. */
 	static float LightFromFlameChance(bool bRaining);

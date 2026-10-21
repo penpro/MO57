@@ -41,6 +41,9 @@
 #include "MOCharacterHistoryComponent.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOInteractableComponent.h"
+#include "MOUIContractInterface.h"
+#include "MOMedicalTreatmentActions.h"
+#include "MOFireActions.h"
 #include "MONotificationComponent.h"
 #include "MOCraftingTypes.h"
 #include "MOTerraformingComponent.h"
@@ -346,6 +349,28 @@ void AMOCharacter::BeginPlay()
 	if (InteractableComponent && RecruitmentComponent)
 	{
 		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOCharacter::HandleRecruitmentInteraction);
+	}
+	// A right-click on a pawn (another player, an unrecruited person) opens what can be done to it -- treat its wounds, light a torch from its
+	// flame -- when there is anything (IMOWorldActionProvider below). A recruited survivor's right-click is its command menu first
+	// (AMOPlayerController::HandleSecondaryAction), which lists the same options after its orders.
+	if (InteractableComponent && !InteractableComponent->OnHandleSecondaryInteract.IsBound())
+	{
+		InteractableComponent->OnHandleSecondaryInteract.BindWeakLambda(this, [this](AController* InteractorController)
+		{
+			const APawn* Healer = InteractorController ? InteractorController->GetPawn() : nullptr;
+			if (!Healer || Healer == this || bIsDead || !InteractorController->Implements<UMOUIContractInterface>())
+			{
+				return false;
+			}
+			TArray<FMOItemActionOption> Options;
+			GetWorldActions(Healer, Options);
+			if (Options.Num() == 0)
+			{
+				return false;
+			}
+			IMOUIContractInterface::Execute_RequestShowWorldActionMenu(InteractorController, this, GetActorLocation());
+			return true;
+		});
 	}
 
 	// Bind to death events from anatomy
@@ -3015,4 +3040,61 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 	}
 
 	LastZPosition = CurrentZ;
+}
+
+// ============================================================================
+// TREATED BY ANOTHER PAWN (IMOWorldActionProvider, N-061 co-op, Oct 20 2026)
+// ============================================================================
+
+FText AMOCharacter::GetWorldActionTitle() const
+{
+	const FText Name = IdentityComponent && !IdentityComponent->DisplayName.IsEmpty() ? IdentityComponent->DisplayName : FText::FromString(GetName());
+	return Name;
+}
+
+void AMOCharacter::GetWorldActions(const APawn* Pawn, TArray<FMOItemActionOption>& Out) const
+{
+	// Wounds replicate to every machine (UMOAnatomyComponent), and so does a carried flame: the menu is built where it shows, from the same
+	// checks the server runs again
+	if (!Pawn || Pawn == this || bIsDead)
+	{
+		return;
+	}
+	FMOFireActions::GetBearerActions(Pawn, this, Out);
+	if (!AnatomyComponent)
+	{
+		return;
+	}
+	for (const FMOWound& Wound : AnatomyComponent->GetAllWounds())
+	{
+		TArray<FMOItemActionOption> Options;
+		FMOMedicalTreatmentActions::GetOptions(const_cast<APawn*>(Pawn), const_cast<AMOCharacter*>(this), Wound, Options);
+		for (FMOItemActionOption& Option : Options)
+		{
+			Option.Label = FText::Format(NSLOCTEXT("MOCharacter", "TreatOption", "{0} {1}: {2}"), UEnum::GetDisplayValueAsText(Wound.BodyPart),
+				UEnum::GetDisplayValueAsText(Wound.WoundType), Option.Label);
+			Option.Id = FName(*FString::Printf(TEXT("%s|%s"), *Wound.WoundId.ToString(EGuidFormats::Digits), *Option.Id.ToString()));
+			Out.Add(MoveTemp(Option));
+		}
+	}
+}
+
+bool AMOCharacter::PerformWorldAction(APawn* Pawn, FName ActionId)
+{
+	if (ActionId == FMOFireActions::LightFromBearer)
+	{
+		return FMOFireActions::PerformBearerAction(Pawn, this, ActionId);
+	}
+	FString WoundText, TreatmentText;
+	FGuid WoundId;
+	if (!ActionId.ToString().Split(TEXT("|"), &WoundText, &TreatmentText) || !FGuid::Parse(WoundText, WoundId))
+	{
+		return false;
+	}
+	const FMOMedicalActionResult Result = FMOMedicalTreatmentActions::Begin(Pawn, this, WoundId, FName(*TreatmentText));
+	if (!Result.IsAccepted())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTreatment] %s treating %s: %s refused: %s"), *GetNameSafe(Pawn), *GetName(), *TreatmentText, *Result.Describe().ToString());
+	}
+	return Result.IsAccepted();
 }
