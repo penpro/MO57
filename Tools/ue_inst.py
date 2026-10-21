@@ -1491,7 +1491,8 @@ def _client_press_e(rep, host, client):
         "key=lambda a: (a.get_actor_location() - pl).length()); l = items[0].get_actor_location() if items else None; "
         "out('E_REST d=%.0f dz=%.0f at=%.1f,%.1f,%.1f' % (((l - pl).length(), l.z - pl.z, l.x, l.y, l.z) if l else (-1, 0, 0, 0, 0)))")
     rm = re.search(r"E_REST d=(-?\d+) dz=(-?\d+) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)", rest)
-    if not rep.step("host: the dropped stick rests by the joiner (it did not fall through the ground)", bool(rm) and 0 <= int(rm.group(1)) < 400,
+    # On a slope it rolls (Oct 20: 5.5 m and 2 m down, twice): the claim is that it did not fall through, which ends it far away or far below.
+    if not rep.step("host: the dropped stick rests near the joiner (it did not fall through the ground)", bool(rm) and 0 <= int(rm.group(1)) < 1200 and int(rm.group(2)) > -600,
                     rm.group(0) if rm else rest.strip()[-160:]):
         return
     # On a slope the bark rolls on (3.6 m downhill, 545 cm from the camera: out of the 515 cm reach -- a run that tested nothing). Stand the
@@ -2500,8 +2501,12 @@ def _client_sees_creature_flinch(rep, host, client):
                               "unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor) if (c.get_actor_location() - p.get_actor_location()).length() < 15000))")
         if "'Wolf'" in rows:
             break
+    where = "" if "'Wolf'" in rows else _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+        "out('HOSTCARCASS %s' % [(c.get_name(), round((c.get_actor_location() - p.get_actor_location()).length()), round(c.get_actor_location().z)) "
+        "for c in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor)])")
     rep.step("client: ... and the joiner's copy of it knows its parts (the Wolf carcass row)", "'Wolf'" in rows,
-             (re.search(r"CARCASSES [^\r\n]*", rows) or re.search(r"[\s\S]{0,160}$", rows)).group(0))
+             (re.search(r"CARCASSES [^\r\n]*", rows) or re.search(r"[\s\S]{0,160}$", rows)).group(0)
+             + ((" | host: " + (re.search(r"HOSTCARCASS[^\r\n]*", where) or re.search(r"[\s\S]{0,120}$", where)).group(0)) if where else ""))
     _probe(host, "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature, unreal.MOCarcassActor) "
                  "for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 3000]; out('TIDY')")
@@ -2692,6 +2697,71 @@ def _client_aim_at_host(client):
     return m.group(0) if m else "no H_AIM line"
 
 
+def _host_wolf_pack(rep, host, client):
+    """Wolves hunt and fight as a pack (N-096, Oct 20 2026): a wolf that is hurt, or takes a new quarry, calls the wolves within 15 m
+    (AMOPredatorCreature::AlertPack -> AMOCreatureController::NotifyPackThreat). AlertPack existed but nothing called it, and it wrote
+    blackboard keys the controller overwrote the next frame. Two wolves 8 m from the host, 4 m apart; the host hurts one; the OTHER turns on
+    the host. Host-side; the host is bitten."""
+    hoff = log_size(host)
+    console(host, "MO.AI.StressSpawn 2 600 900")
+    if not rep.step("CONTROL: the host spawned two wolves", bool(wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=hoff, timeout=20)), "StressSpawn 2"):
+        return
+    soff = log_size(host)   # a wolf that sees the host when it is placed calls the other right away (Oct 20): count calls from here
+    setup = _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
+                         "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPreyCreature) if (a.get_actor_location() - hl).length() < 5000]; "
+                         "ws = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - hl).length())[:2]; "
+                         "[w.set_actor_location(hl + unreal.Vector(800.0, -200.0 + 400.0 * i, 120.0), False, True) for i, w in enumerate(ws)]; "
+                         "out('PACK %s' % ' '.join(w.get_name() for w in ws))")
+    pack = (re.search(r"PACK (\S+) (\S+)", setup) or [None])
+    if not rep.step("CONTROL: two wolves stand together 8 m from the host", pack[0] is not None, setup.strip()[-160:]):
+        return
+    first, second = pack.group(1), pack.group(2)
+    time.sleep(2.0)
+    hoff = log_size(host)
+    _probe(host, f"h = unreal.GameplayStatics.get_player_pawn(world, 0); w = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_name() == '{first}'][0]; "
+                 "out('HURT %s' % w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, h))")
+    pair = f"(?:{re.escape(first)}|{re.escape(second)})"
+    answered = wait_log(host, rf"\[MOCreatureController\] {pair} answers {pair}'s call: turns on \S+", since=soff, timeout=10)
+    rep.step("one wolf calls the other against the host (it saw the host, or the host hurt it) and the packmate answers", bool(answered),
+             answered.group(0) if answered else f"no answer between {first} and {second}")
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
+                 "if (a.get_actor_location() - h.get_actor_location()).length() < 5000]; out('PACK_TIDY')")
+
+
+def _host_colony_alerts(rep, host, client):
+    """Colony alerts, tier 1 (N-095, Oct 20 2026): every player is told when a colonist nobody is playing is attacked by an animal, bleeds
+    badly or is dying (UMOColonyManagerSubsystem::RunAlertPass, each upkeep tick; once a minute per colonist and kind). A recruited colonist
+    is bitten by a wolf (a deep forearm cut with the wolf as its cause). Needs the settlement _host_colony_medic founds, so it runs after it."""
+    off = log_size(host)
+    console(host, "MO.Colony.SpawnSurvivor 900")
+    m = wait_log(host, r"\[MOQUERY\] COLONY SpawnSurvivor (\S+)", since=off, timeout=15)
+    if not rep.step("CONTROL: the host spawned a survivor", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no SpawnSurvivor line"):
+        return
+    name = m.group(1)
+    console(host, f"MO.Colony.Recruit {name}")
+    wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=(\d)", since=off, timeout=15)
+    console(host, "MO.AI.StressSpawn 1 2000 2500")
+    wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=off, timeout=20)
+    time.sleep(12.0)   # one upkeep tick sees the colonist unhurt (the wound count it compares with)
+    aoff = log_size(host)
+    bit = _probe(host, f"c = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
+                       "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - c.get_actor_location()).length()); "
+                       "out('BITTEN %s by %s' % (c.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_LEFT, 60.0, unreal.MOWoundType.LACERATION, w), w.get_name()))")
+    if not rep.step("CONTROL: a wolf's bite cuts the colonist's forearm", "BITTEN True" in bit, (re.search(r"BITTEN[^\r\n]*", bit) or re.search(r"[\s\S]{0,120}$", bit)).group(0)):
+        return
+    attacked = wait_log(host, r"\[MOColony\] Alert \(Attacked\): [^\r\n]*", since=aoff, timeout=25)
+    rep.step("every player is told the colonist is being attacked by a wolf", bool(attacked) and "wolf" in attacked.group(0).lower(),
+             attacked.group(0) if attacked else "no Attacked alert")
+    bleeding = wait_log(host, r"\[MOColony\] Alert \((?:Bleeding|Dying)\): [^\r\n]*", since=aoff, timeout=25)
+    rep.step("... and that it is bleeding badly", bool(bleeding), bleeding.group(0) if bleeding else "no Bleeding alert")
+    shown = wait_log(host, r"\[MONotification\] Queued: [^\r\n]*being attacked by a [^\r\n]*", since=aoff, timeout=5)
+    rep.step("... on the host's screen (the notification)", bool(shown), shown.group(0) if shown else "no notification line")
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
+                 "if (a.get_actor_location() - h.get_actor_location()).length() < 6000]; out('ALERT_TIDY')")
+
+
 def _client_treats_host(rep, host, client):
     """A joiner dresses the HOST's wound (N-061 co-op, Oct 20 2026): wounds replicate to every machine, and a right-click on a wounded pawn opens
     its treatment menu (AMOCharacter: IMOWorldActionProvider, the same GetOptions as Status > Wounds). The joiner faces the host, right-clicks,
@@ -2864,6 +2934,8 @@ def _host_colony_medic(rep, host, client):
     rep.step("the colony's upkeep sends the villager with the bandage to the bleeding host", bool(sent), sent.group(0) if sent else "no Medic line for " + name)
     if not sent:
         return
+    told = wait_log(host, r"\[MONotification\] Queued: [^\r\n]*is coming to dress your wound[^\r\n]*", since=off, timeout=5)
+    rep.step("... and the bleeding host is told help is coming", bool(told), told.group(0) if told else "no notification line")
     done = wait_log(host, r"\[MOSurvivorController\] Treat job (?:done|FAILED|refused|WEDGED)[^\r\n]*", since=off, timeout=90)
     rep.step("... the villager walks over and finishes the treatment", bool(done) and " done:" in done.group(0), done.group(0) if done else "no Treat job outcome")
     after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
@@ -3044,7 +3116,18 @@ def _client_building_look(rep, host, client):
 def _client_lake_clock(rep, host, client):
     """Steam playtest Oct 16 2026 (#12): "(joiner) lake water frozen in place". Every machine spawns its own upland lakes, and Oceanology never
     registered a spawned lake's wave solver, so the lake wave clock (MPC_Waves.GameTimeInSeconds_Lake) stood at 0. The host walks to a lake and
-    brings the joiner; the JOINER's clock must advance."""
+    brings the joiner; the JOINER's clock must advance. Both go back where they were afterwards: the cases after it put a wolf 5 m from the
+    joiner and a medic beside the host, which at the lake landed in the water (Oct 20: no bite, a medic stalled 7 m short)."""
+    _probe(host, "import builtins; builtins.MO_LAKE_HOME = [unreal.GameplayStatics.get_player_pawn(world, i).get_actor_location() for i in (0, 1)]; out('LAKE_HOME')")
+    try:
+        _client_lake_clock_at_lake(rep, host, client)
+    finally:
+        _probe(host, "import builtins; hs = getattr(builtins, 'MO_LAKE_HOME', None); "
+                     "hs and [unreal.GameplayStatics.get_player_pawn(world, i).set_actor_location(hs[i] + unreal.Vector(0.0, 0.0, 60.0), False, True) for i in (0, 1)]; out('LAKE_BACK')")
+        time.sleep(8)   # the ground there is built already; let both machines settle the pawns on it
+
+
+def _client_lake_clock_at_lake(rep, host, client):
     off = log_size(host)
     console(host, "MO.Water.GoToLake 0 dry")
     lake = wait_log(host, r"GoToLake rank \d+: lake at \((-?\d+), (-?\d+)\)[^\n]*", since=off, timeout=10)
@@ -3627,7 +3710,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
                 console(n, cmd)
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
             if only and fn.__name__ not in only:
                 continue
             try:
