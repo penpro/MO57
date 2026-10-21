@@ -24,6 +24,7 @@ So every patch below is **staged, not applied**. Applying one needs a real sourc
 | # | Patch | Status | Upstream |
 |---|-------|--------|----------|
 | 1 | Hair strands keep their scene depth when Single Layer Water is in view | Staged (no source engine) | Draft ready: `EnginePatches/0001-upstream-report.md`; not yet posted |
+| 2 | Nanite shading pipelines outlive a material's shader map swap (uncooked game / editor; N-185) | Design only (no source engine); project workaround `MOMaterialKeepAlive.cpp` in place | Not reported |
 
 ---
 
@@ -107,3 +108,69 @@ Nobody online has identified this (searched Oct 16: forum threads report "DOF do
 issue, no 5.8.x hotfix note). Report text: `EnginePatches/0001-upstream-report.md`. Post it in the forum category *Issues and Bug Reporting
 (Unreal Engine)* <https://forums.unrealengine.com/c/general/issues-and-bug-reporting-unreal-engine/243> and file it through the Bug Submission Form
 linked from <https://www.unrealengine.com/support/report-a-bug>. Record the thread / issue number here when filed.
+
+---
+
+## #2 — Nanite shading pipelines outlive a material's shader map swap (uncooked game and editor)
+
+**Files:** none yet: a staged design, no diff (no source engine to build or test it). The workaround that runs today is project code:
+`Plugins/MOFramework/Source/MOFramework/Private/MOMaterialKeepAlive.cpp` (`mo.Debug.MaterialKeepAlive`, BACKLOG N-185).
+
+### What we see
+
+Only in UNCOOKED game processes (the harness instances: `UnrealEditor.exe MO57.uproject -game`): the joiner or the host dies in
+`Nanite::BasePass` within about a second of new content spawning for the first time in that process (rock spires 9 km out, a cliff
+assembly 3 km out). Three signatures, one cause: an access violation EXECUTING a heap address (ending a24e00 / 224e00) with D3D12RHI frames
+(the parallel translate); with `r.RHICmd.ParallelTranslate.Enable 0` the ensure "Invalid uniform buffer <FLocalVertexFactoryUniformShaderParameters
+or FViewUniformShaderParameters> bound on ComputeShader at index 3" (D3D12Commands.cpp:52, the bound buffer's memory reused by a newer
+buffer of any type) then a fatal in RHIUniformBufferUtilities.h:167; once an access violation reading 0x4 in a Renderer task. About 60 % of
+the 20-minute repro runs crashed (Oct 20-21). A cooked build (Wes's Shipping playtests) has never shown it.
+
+### Cause (UE 5.8.3 source)
+
+1. `r.ShaderCompiler.JobCacheDDC` (default on, read-only) makes an uncooked game skip shader compilation on material PostLoad and compile
+   on demand (`ShaderCompilerJobCache.cpp` `IsShaderJobCacheDDCEnabled`, true for `IsRunningGame()`). Materials first rendered late in the
+   session (the spires' foliage and rock instances, the voxel terrain's layer materials) get their shaders in pieces over the next seconds.
+2. Each arrival: `FShaderCompilingManager::ProcessCompiledShaderMaps` -> `FMaterial::SetShaderMapsOnMaterialResources` ->
+   `SetShaderMapsOnMaterialResources_RenderThread` (MaterialShared.cpp ~5730): the material's rendering-thread shader map is replaced (the
+   old one is released) and every proxy using it runs `CacheUniformExpressions(RHICmdList, true)`, which drops the old uniform buffer
+   (`InvalidateUniformExpressionCache(true)`: "only ... if the calling code is using FMaterialUpdateContext to recreate the rendering state
+   of primitives using this material ... cached mesh commands also cache uniform buffer pointers").
+3. The game thread then marks the primitives it finds for re-creation (`PropagateMaterialChangesToPrimitives` ->
+   `FObjectCacheContext::GetPrimitivesAffectedByMaterials`, which skips a component whose render state is not created at that moment).
+4. Nanite builds a primitive's shading pipeline once, when the primitive is added (`NaniteDrawList.cpp` ~360,
+   `ShadingPipelines.Register(MaterialSectionData.TriangleShadingPipeline)`), with RAW pointers: the compute shader of the shader map of
+   that moment, its shader bindings, `FNaniteShadingPipeline::MaterialUB` (NaniteShading.cpp ~1188). A primitive missed in step 3 keeps a
+   pipeline whose shaders and uniform buffer were freed in step 2, and the next base pass binds / executes them.
+
+Evidence that such pipelines exist: the Voxel plugin's material selection found two registered Nanite shading pipelines with different
+compute shaders for ONE material proxy (Oct 21, its ensure in `VoxelNaniteMaterialRendererImpl.cpp`). The engine already has a validator for
+the uniform-buffer half: `r.Nanite.Debug.ValidateShadingBinUB` ("stale MaterialUB"), bindless shading only.
+
+### The fix (design)
+
+In `SetShaderMapsOnMaterialResources_RenderThread`, after the proxies are updated, re-cache the Nanite shading pipelines of EVERY scene
+primitive that uses an updated material, on the render thread, instead of relying on the game thread finding them: for each `FScene`, for
+each `FPrimitiveSceneInfo` whose Nanite material sections reference a proxy whose `GetMaterialNoFallback()` is in `MaterialsToUpdate`,
+remove and re-add its Nanite draw commands (the path `FScene::UpdateCachedRenderStates` takes). Cheaper alternative: keep the old shader
+map and uniform buffer referenced by the pipeline (a `TRefCountPtr<FMaterialShaderMap>` and an `FUniformBufferRHIRef` in
+`FNaniteShadingPipeline`) so a stale pipeline renders with the old shaders until its primitive is re-created; that is what the project
+workaround does from outside.
+
+### Workaround in place (project code)
+
+`MOMaterialKeepAlive.cpp`: in an uncooked game process only (never the editor or PIE, never cooked), a render-thread scan every frame holds
+a reference to every material proxy's uniform buffers and every FMaterial's rendering-thread shader map, and keeps each replaced one alive
+for the rest of the session (released at engine pre-exit). Cost measured on the 20-minute repro: ~1 500 shader maps and ~5 000 buffers
+kept, instance memory unchanged (~14-15 GB either way), scan worst 1.9 ms. Evidence (interleaved A/B on one binary, Oct 21, the Voxel
+plugin's selection pass already fixed in both arms): keep-alive ON 4 of 4 runs clean, OFF 1 of 4 crashed with the original signature; before either fix ~60 % of runs crashed (10 of 16).
+
+### How to verify once applied
+
+`-ini:Engine:[ConsoleVariables]:mo.Debug.MaterialKeepAlive=0` on both harness instances (the workaround off), then the N-185 repro (the
+`nettest actions` cases up to `_far_remote_pawn_9km`, seed 670711536) 8 times: no crash folder. With the engine fixed, delete the workaround.
+
+### Upstream
+
+Not reported yet. The report needs: uncooked `-game`, Nanite content first rendered late, on-demand shader compile; the voxel ensure as the
+direct evidence of two pipelines per material.

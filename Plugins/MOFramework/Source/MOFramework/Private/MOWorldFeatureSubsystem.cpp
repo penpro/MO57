@@ -18,6 +18,8 @@
 namespace
 {
 	TAutoConsoleVariable<int32> CVarWorldFeaturesEnabled(TEXT("mo.WorldFeatures.Enabled"), 1, TEXT("0 = place no world features (POIs)."), ECVF_Default);
+	TAutoConsoleVariable<FString> CVarWorldFeaturesSkip(TEXT("mo.WorldFeatures.Skip"), TEXT(""),
+		TEXT("Dev / A-B: comma-separated feature ids that are not spawned (e.g. ED_RockSpire)."), ECVF_Default);
 	TAutoConsoleVariable<int32> CVarWorldFeaturesGround(TEXT("mo.WorldFeatures.Ground"), 0,
 		TEXT("1 = ground every composition on the terrain it landed on when it finishes generating (FMOCompositionGrounding); 0 = leave the authored heights."), ECVF_Default);
 	TAutoConsoleVariable<int32> CVarWorldFeaturesSpawnsPerTick(TEXT("mo.WorldFeatures.SpawnsPerTick"), 1, TEXT("World feature actors spawned per update (0.5 s), nearest first: each one builds its whole composition."), ECVF_Default);
@@ -510,6 +512,14 @@ bool UMOWorldFeatureSubsystem::FindNearestSite(FName FeatureId, const FVector2D&
 AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site, int32 MemberIndex)
 {
 	UWorld* World = GetWorld();
+	{
+		TArray<FString> Skipped;
+		CVarWorldFeaturesSkip.GetValueOnGameThread().ParseIntoArray(Skipped, TEXT(","));
+		if (Skipped.Contains(Feature.Id.ToString()))
+		{
+			return nullptr;   // recorded as spawned-nothing: no retry each tick
+		}
+	}
 	UClass* Class = Feature.Row.ActorClass.LoadSynchronous();
 	if (!World || !Class || !Site.Members.IsValidIndex(MemberIndex))
 	{
