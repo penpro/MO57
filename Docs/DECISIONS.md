@@ -60,6 +60,10 @@
 ## Decisions, newest first
 
 ### 2026-10-20
+- Claude, small call (noted): **a wolf calls its pack when it starts a hunt, not only when hurt** (N-096): a predator that perceives a new
+  quarry -- a deer, a person -- brings the wolves of its kind within 15 m. Wolves do hunt together, but it makes a pack converge on a
+  player it sees; if that is too harsh before players have spears and fire, keep only the call when a wolf is hurt
+  (`AMOCreatureController` perception path, one `if`).
 - Claude, small call (noted): **the colony medic** (N-061) treats bleeding at 0.2 mL/s or more (`MedicBleedThresholdMlPerSecond`), runs first
   in the upkeep tick (a bleeding colonist before standing orders; it takes idle villagers only, nobody is pulled off a job), and picks the
   doable treatment of most total benefit (bleed + infection + healing reductions) so a dressing beats a tourniquet ("last resort" in its

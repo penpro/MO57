@@ -1336,6 +1336,25 @@ void UMOColonyManagerSubsystem::AlertPlayers(const APawn* Colonist, FName Kind, 
 
 void UMOColonyManagerSubsystem::RunAlertPass(const TArray<APawn*>& Roster)
 {
+	// Forget colonists that are gone and alerts that may go out again
+	for (auto It = AlertWoundCounts.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	if (const UWorld* World = GetWorld())
+	{
+		const double Now = World->GetTimeSeconds();
+		for (auto It = AlertLastSent.CreateIterator(); It; ++It)
+		{
+			if (Now - It.Value() >= AlertRepeatSeconds)
+			{
+				It.RemoveCurrent();
+			}
+		}
+	}
 	for (APawn* Villager : Roster)
 	{
 		const AMOCharacter* Character = Cast<AMOCharacter>(Villager);

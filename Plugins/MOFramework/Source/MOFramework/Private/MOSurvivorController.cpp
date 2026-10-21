@@ -1807,6 +1807,7 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job WEDGED in state %d after %.0fs - failing"),
 			SimpleJobState, SimpleJobTotalSeconds);
+		NoteFailed();
 		CompleteSimpleJob(false);
 		return;
 	}
@@ -1826,7 +1827,13 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 		{
 			if (!CurrentJob.StorageActor.IsValid()) { FailSimpleJob(MOSurvivorJobWhy::StorageGone()); return; }
 			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
-			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
+			if (Arrive < 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job FAILED: can't reach the store %s"), *GetNameSafe(CurrentJob.StorageActor.Get()));
+				NoteFailed();   // the colony would otherwise send it to the same store every tick
+				FailSimpleJob(MOSurvivorJobWhy::CantReach());
+				return;
+			}
 			if (Arrive > 0)
 			{
 				SimpleJobState = 43;
