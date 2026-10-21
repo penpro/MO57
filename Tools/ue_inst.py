@@ -116,6 +116,11 @@ def start(name, uproject, editor_exe, **kw):
             os.remove(os.path.join(d, f))
         except OSError:
             pass
+    # MO_INST_EXTRA_<NAME> adds launch flags to one instance of any harness run, e.g. MO_INST_EXTRA_ACTCLIENT=-rhivalidation for the joiner's
+    # render crash after far teleports (N-185) without touching the host.
+    extra = os.environ.get(f"MO_INST_EXTRA_{name.upper()}", "").split()
+    if extra:
+        kw["extra"] = tuple(kw.get("extra", ())) + tuple(extra)
     cmd = [editor_exe] + build_launch_args(uproject, game_log(name), **kw)
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     p = subprocess.Popen(cmd, env=env_for(name), creationflags=flags, stdin=subprocess.DEVNULL,
@@ -1586,6 +1591,13 @@ def _worlds_built(rep, host, client, timeout=300):
         wait_log(client, r"preview \| WorldBuild\.NearInstances", since=off, timeout=15)
         wb = re.findall(r"preview \| WorldBuild\.(PcgComponents|PcgExecuting|NearInstances|LastReady): ([^\r\n]*)", read_log_from(client, off))
         detail += " | " + "; ".join(f"{k}: {v}" for k, v in wb)
+        # Which components never finished (Oct 20: 16 of 17 "generating" for 5 min, nothing placed): owner, graph, trigger, by graph.
+        stuck = _probe(client, "import collections; cs = [c for c in unreal.ObjectIterator(unreal.PCGComponent) if c.get_owner() and c.get_world() == world]; "
+                               "bad = [c for c in cs if not c.get_editor_property('generated')]; "
+                               "out('PCGSTUCK %d of %d: %s' % (len(bad), len(cs), dict(collections.Counter('%s/%s/%s' % (c.get_owner().get_class().get_name(), "
+                               "c.get_graph().get_name() if c.get_graph() else '?', c.get_editor_property('generation_trigger')) for c in bad))))")
+        sm = re.search(r"PCGSTUCK [^\r\n]*", stuck)
+        detail += " | " + (sm.group(0) if sm else "PCGSTUCK probe: " + stuck.strip()[-160:])
     return rep.step(f"{client}: its PCG has generated ground items around its pawn", n >= 5, detail)
 
 
@@ -2001,25 +2013,31 @@ def _client_footstep_surface(rep, host, client):
             if m and float(m.group(1)) > 300.0 and m.group(2) not in seen:   # dry land, a biome not seen yet
                 seen.add(m.group(2))
                 spots.append((x, y, float(m.group(1)), m.group(2)))
-            if len(spots) >= 2:
+            if len(spots) >= 4:
                 break
-        if len(spots) >= 2:
+        if len(spots) >= 4:
             break
     if not rep.step("CONTROL: two dry spots of different biomes near the joiner (generator)", len(spots) >= 2, str([(round(a), round(b), c) for a, b, _z, c in spots])):
         return
+    # Up to four spots, stopping once two sound different: two biomes may share a footstep set (two woodlands: LeafCrunch, on seed 670711536), and
+    # a probe only counts once the joiner's pawn stands at the spot (one taken before the teleport landed read the previous spot's biome).
     heard = []
-    for x, y, z, biome in spots[:2]:
+    for x, y, z, biome in spots[:4]:
         _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({x:.0f}, {y:.0f}, {z + 200.0:.0f}), False, True); out('F_STAND')")
         m = None
         for _ in range(8):   # the ground there comes up on the joiner and the pawn lands
             time.sleep(3)
             m = _motest(client, "MO.Footstep.Probe", probe_re)
-            if m and "grounded=1" in m.group(0):
+            at = re.search(r"pos=\((-?[\d.]+), (-?[\d.]+),", m.group(0)) if m else None
+            if m and "grounded=1" in m.group(0) and at and math.hypot(float(at.group(1)) - x, float(at.group(2)) - y) < 500.0:
                 break
-        heard.append((biome, m.group(1) if m else None, m.group(2) if m else "no probe line"))
-    rep.step("client: its own ground's footstep set comes from the generator's biome on both spots (not the fallback)",
+            m = None
+        heard.append((biome, m.group(1) if m else None, m.group(2) if m else "no probe line at the spot"))
+        if len({s_ for _b, s_, _w in heard if s_}) >= 2:
+            break
+    rep.step("client: its own ground's footstep set comes from the generator's biome on every spot (not the fallback)",
              all(w.startswith("biome") for _b, _s, w in heard), str(heard))
-    rep.step("client: the two biomes sound different on the joiner's own machine", len({s_ for _b, s_, _w in heard}) == 2, str(heard))
+    rep.step("client: two biomes sound different on the joiner's own machine", len({s_ for _b, s_, _w in heard if s_}) >= 2, str(heard))
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_F_HOME', None); "
                  "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('F_HOME')")
     time.sleep(3)
@@ -2417,7 +2435,7 @@ def _client_gait(rep, host, client):
     def run_and_measure(setup):
         for cmd in setup:
             console(client, cmd)
-        console(client, "MO.Test.MoveFor 0 1 5.0")
+        console(client, "MO.Test.MoveFor 0 1 9.0")   # each host probe takes ~1.5 s: 9 s keeps all four samples inside the move (5 s caught only the first, N-184)
         time.sleep(1.5)
         samples = []
         for _ in range(4):
@@ -2425,6 +2443,15 @@ def _client_gait(rep, host, client):
         time.sleep(3.0)  # the move input ends; the pawn stops before the next run
         return max(samples), samples
 
+    # Right after the join the joiner's pawn may still be landing: the walk control read 0 four times when this ran first (N-184). Wait until the
+    # host sees it move at all (a short nudge, up to five tries), then measure.
+    for _ in range(5):
+        console(client, "MO.Test.MoveFor 0 1 1.0")
+        time.sleep(0.8)
+        if host_speed() > 50:
+            break
+        time.sleep(1.5)
+    time.sleep(2.0)
     walk, ws = run_and_measure([])
     rep.step("CONTROL: the HOST sees the joiner walk at about the walk speed (400)", 250 <= walk <= 460, f"host samples {ws}")
     jog, js = run_and_measure(["MO.Test.Input ToggleJog"])
