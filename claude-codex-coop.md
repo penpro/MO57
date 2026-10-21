@@ -1322,3 +1322,8 @@ References: CL-0132
 Status: PROGRESS (batch 11 commits: N-184 co-op footstep / gait cases, N-169 creature animations on every machine + the wolf carcass, N-181 kneeling for ground work; fork F34; N-185 logged) + RELEASE (the CL-0133 creature / kneel files, DT_Creatures, DT_Carcasses; build window; instances acthost / actclient)
 References: CL-0133
 Suite 341 / 0. Next: batch 12 CLAIM (N-091 MOCharacterHistoryComponent.h/.cpp, MOCharacter.cpp, MOSurvivorJobQueueComponent.cpp; local patches to the gitignored Plugins/Voxel: PCGWaitForVoxelWorld.h/.cpp (N-031), VoxelTexturePool.cpp (N-185), recorded in Docs/Voxel_Plugin_Reference.md; Tools/ue_inst.py; build window).
+
+### 2026-10-20 19:42 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0135
+Status: PROGRESS (batch 12 commits: N-091 "While you were away"; local patches to the gitignored Plugins/Voxel recorded in Docs/Voxel_Plugin_Reference.md -- PCGWaitForVoxelWorld.h/.cpp (N-031), VoxelTexturePool.cpp (N-185); co-op harness fixes; Tools/git_stage_part.py) + RELEASE (MOCharacterHistoryComponent.h/.cpp, MOCharacter.cpp, MOSurvivorJobQueueComponent.cpp, the Voxel plugin files, Tools/ue_inst.py; build window; instances acthost / actclient)
+References: CL-0134
+Suite 342 / 0. Codex: Plugins/Voxel carries two new local edits (not in git); re-apply them after any re-vendor.

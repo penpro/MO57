@@ -86,9 +86,10 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   the menu's button state: ore was mined with no pick).
 - **Per-harvester context** (H23, 9c7178c6): `TMap<TWeakObjectPtr<AActor>, FMOHarvestContext>` keyed by the harvester; player and N
   survivors harvest concurrently; `BeginHarvest` cancels only the caller's own prior harvest; interrupts route per harvester.
-- **Pattern still to fix:** the player's harvest timing is owned by a widget (`UMOHarvestProgressWidget::StartHarvest`, the
-  subsystem vetoes early completion), unlike drinking, filling, boiling, fire lighting and eating, which run on the pawn's
-  `UMOTimedActionComponent`.
+- **The harvest is the server's timed action** (since Oct 18; this line said "still to fix" until Oct 20): the menu asks
+  `AMOPlayerController::ServerBeginHarvest` (instance as mesh + place), `FMOHarvestActions` times it on the pawn's
+  `UMOTimedActionComponent` like drinking, filling, boiling, fire lighting and eating, and the outcome comes back to the menu
+  (`ShowHarvestOutcome`). `UMOHarvestProgressWidget` (the old widget-owned timer) has no caller left in C++.
 - **Work at the ground kneels** (N-181, Oct 20): `UMOTimedActionComponent::BeginKneeling` = Begin + `SetPosture(Kneel)` -- every fire action
   (the drill, laying fuel, lighting from a flame or a torch), butchering, gathering ground cover, drinking and filling at a water source. The
   pawn crouches (its crouch-idle pose) for the action and stands after, unless it was crouching already; a completion that begins the next
