@@ -14,6 +14,8 @@
 #include "MOIdentityComponent.h"
 #include "MOPlayerController.h"
 #include "MOUIUtils.h"
+#include "MOItemActions.h"
+#include "MOMedicalTreatmentActions.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
@@ -809,7 +811,59 @@ void UMOStatusPanel::RefreshAnatomyFields()
 	{
 		RemoveField(Id);
 	}
+	RefreshTreatmentButtons(Anatomy);
 	UpdateEmptyPlaceholders();
+}
+
+void UMOStatusPanel::RefreshTreatmentButtons(const UMOAnatomyComponent* Anatomy)
+{
+	APlayerController* PC = GetOwningPlayer();
+	APawn* Healer = PC ? PC->GetPawn() : nullptr;
+	AActor* Patient = Anatomy ? Anatomy->GetOwner() : nullptr;
+	TSet<FGuid> Shown;
+	if (Healer && Patient && WoundsContainer)
+	{
+		for (const FMOWound& Wound : Anatomy->GetAllWounds())
+		{
+			UMOStatusField* Row = FieldWidgets.FindRef(FName(*FString::Printf(TEXT("Wound_%s"), *Wound.WoundId.ToString())));
+			if (!Row || Row->GetParent() != WoundsContainer)
+			{
+				continue;
+			}
+			TArray<FMOItemActionOption> Options;
+			FMOMedicalTreatmentActions::GetOptions(Healer, Patient, Wound, Options);
+			const FGuid WoundId = Wound.WoundId;
+			const TWeakObjectPtr<AActor> WeakPatient(Patient);
+			const TWeakObjectPtr<UMOStatusPanel> WeakThis(this);
+			UMOUIUtils::RebuildActionButtons(this, TreatmentButtons.FindOrAdd(WoundId), WoundsContainer, Row, Options, WoundsTabButton,
+				[WeakThis, WeakPatient, WoundId](FName TreatmentId)
+				{
+					// The server decides (ServerTreatWound runs FMOMedicalTreatmentActions::Begin): the button only asks.
+					AMOPlayerController* Owner = WeakThis.IsValid() ? Cast<AMOPlayerController>(WeakThis->GetOwningPlayer()) : nullptr;
+					if (Owner && WeakPatient.IsValid())
+					{
+						Owner->ServerTreatWound(WeakPatient.Get(), WoundId, TreatmentId);
+						UE_LOG(LogMOFramework, Log, TEXT("[MOStatusUI] Asked to treat wound %s with %s"), *WoundId.ToString(), *TreatmentId.ToString());
+					}
+				});
+			Shown.Add(WoundId);
+		}
+	}
+	for (auto It = TreatmentButtons.CreateIterator(); It; ++It)
+	{
+		if (!Shown.Contains(It.Key()))
+		{
+			for (UMOCommonButton* Button : It.Value())
+			{
+				if (Button)
+				{
+					Button->OnClicked().Clear();
+					Button->RemoveFromParent();
+				}
+			}
+			It.RemoveCurrent();
+		}
+	}
 }
 
 void UMOStatusPanel::HandleVitalsChanged()

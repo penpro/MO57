@@ -7,6 +7,7 @@
 class APawn;
 struct FMOInventoryEntry;
 struct FMOMedicalTreatmentRow;
+struct FMOItemActionOption;
 
 enum class EMOMedicalActionFailure : uint8
 {
@@ -31,6 +32,14 @@ struct MOFRAMEWORK_API FMOMedicalTreatmentActions
 {
 	static FMOMedicalActionResult Begin(APawn* Healer, AActor* Patient, const FGuid& WoundId, FName TreatmentId);
 
+	/** What Begin would answer, starting nothing: the treatment menu's verdict on any machine that sees the patient's wounds (the server, or a
+	 *  player's own pawn on its client -- wounds replicate owner-only). Begin's checks, the authority ones aside, plus "busy". */
+	static FMOMedicalActionResult Preview(APawn* Healer, AActor* Patient, const FGuid& WoundId, FName TreatmentId);
+
+	/** The menu's buttons for one wound (N-061): every treatment row for its wound type, "<name> (<seconds> s)", greyed with Preview's reason
+	 *  when it cannot be done now. A click sends AMOPlayerController::ServerTreatWound; the server checks it all again. */
+	static void GetOptions(APawn* Healer, AActor* Patient, const FMOWound& Wound, TArray<FMOItemActionOption>& Out);
+
 	/** RequiredItemIds means one unit per occurrence. Defined tools are reusable presence requirements;
 	 * broken tools fail. Consumables and liquid measures use the same joint planner as crafting.
 	 * Pure and atomic: refusal leaves OutPlan untouched. Unknown requirements fail closed. */
@@ -38,5 +47,5 @@ struct MOFRAMEWORK_API FMOMedicalTreatmentActions
 		TArray<FMOInventoryEntry>& OutPlan, MOIngredientPlans::FDefinitionLookup Definition);
 private:
 	static FMOMedicalActionResult CheckContext(APawn* Healer, AActor* Patient, const FGuid& WoundId,
-		const FMOMedicalTreatmentRow& Treatment, int32& OutSkill, TArray<FMOInventoryEntry>& OutPlan);
+		const FMOMedicalTreatmentRow& Treatment, int32& OutSkill, TArray<FMOInventoryEntry>& OutPlan, bool bPreview = false);
 };

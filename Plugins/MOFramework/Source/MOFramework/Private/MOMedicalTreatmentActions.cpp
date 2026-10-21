@@ -3,6 +3,7 @@
 #include "MOCharacter.h"
 #include "MOFramework.h"
 #include "MOInventoryComponent.h"
+#include "MOItemActions.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOMedicalSubsystem.h"
@@ -30,8 +31,8 @@ FText FMOMedicalActionResult::Describe() const
 	case EMOMedicalActionFailure::NoLineOfSight: return LOCTEXT("Sight", "The patient is obstructed.");
 	case EMOMedicalActionFailure::PatientMoved: return LOCTEXT("Moved", "Treatment stopped because the patient moved.");
 	case EMOMedicalActionFailure::UnknownSupply: return FText::Format(LOCTEXT("UnknownSupply", "Treatment requires an undefined supply: {0}."), FText::FromName(SupplyId));
-	case EMOMedicalActionFailure::MissingSupplies: return FText::Format(LOCTEXT("Supplies", "Missing treatment supply: {0}."), FText::FromName(SupplyId));
-	case EMOMedicalActionFailure::BrokenTool: return FText::Format(LOCTEXT("Tool", "Treatment tool is broken: {0}."), FText::FromName(SupplyId));
+	case EMOMedicalActionFailure::MissingSupplies: return FText::Format(LOCTEXT("Supplies", "Needs {0}."), UMOItemDatabaseSettings::GetItemDisplayName(SupplyId));
+	case EMOMedicalActionFailure::BrokenTool: return FText::Format(LOCTEXT("Tool", "The {0} is broken."), UMOItemDatabaseSettings::GetItemDisplayName(SupplyId));
 	case EMOMedicalActionFailure::InvalidSupplyState: return LOCTEXT("InvalidSupplies", "Treatment supplies have invalid inventory state.");
 	case EMOMedicalActionFailure::Clinical:
 		switch (ClinicalFailure)
@@ -87,10 +88,10 @@ FMOMedicalActionResult FMOMedicalTreatmentActions::PlanSupplies(const FMOMedical
 }
 
 FMOMedicalActionResult FMOMedicalTreatmentActions::CheckContext(APawn* Healer, AActor* Patient, const FGuid& WoundId,
-	const FMOMedicalTreatmentRow& Treatment, int32& OutSkill, TArray<FMOInventoryEntry>& OutPlan)
+	const FMOMedicalTreatmentRow& Treatment, int32& OutSkill, TArray<FMOInventoryEntry>& OutPlan, bool bPreview)
 {
-	if (!IsValid(Healer) || !Healer->HasAuthority()) return {EMOMedicalActionFailure::NotAuthority};
-	if (!IsValid(Patient) || !Patient->HasAuthority() || Patient->GetWorld() != Healer->GetWorld() || !Healer->GetWorld())
+	if (!IsValid(Healer) || (!bPreview && !Healer->HasAuthority())) return {EMOMedicalActionFailure::NotAuthority};
+	if (!IsValid(Patient) || (!bPreview && !Patient->HasAuthority()) || Patient->GetWorld() != Healer->GetWorld() || !Healer->GetWorld())
 		return {EMOMedicalActionFailure::InvalidPatient};
 	const auto* HealerCharacter = Cast<AMOCharacter>(Healer);
 	const auto* PatientCharacter = Cast<AMOCharacter>(Patient);
@@ -120,6 +121,47 @@ FMOMedicalActionResult FMOMedicalTreatmentActions::CheckContext(APawn* Healer, A
 	TArray<FMOInventoryEntry> Entries;
 	if (Inventory) Inventory->GetInventoryEntries(Entries);
 	return PlanSupplies(Treatment, Entries, OutPlan, UMOItemDatabaseSettings::GetItemDefinition);
+}
+
+FMOMedicalActionResult FMOMedicalTreatmentActions::Preview(APawn* Healer, AActor* Patient, const FGuid& WoundId, FName TreatmentId)
+{
+	const UGameInstance* GI = Healer && Healer->GetWorld() ? Healer->GetWorld()->GetGameInstance() : nullptr;
+	const auto* Medical = GI ? GI->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	FMOMedicalTreatmentRow Treatment;
+	if (!Medical || !Medical->GetTreatmentDefinition(TreatmentId, Treatment)) return {EMOMedicalActionFailure::Clinical, EMOWoundTreatmentFailure::UnknownTreatment};
+	int32 Skill = 0;
+	TArray<FMOInventoryEntry> Plan;
+	const auto Result = CheckContext(Healer, Patient, WoundId, Treatment, Skill, Plan, /*bPreview=*/true);
+	if (!Result.IsAccepted()) return Result;
+	const auto* Timed = Healer->FindComponentByClass<UMOTimedActionComponent>();
+	if (!Timed) return {EMOMedicalActionFailure::NoActionComponent};
+	if (Timed->IsActive()) return {EMOMedicalActionFailure::Busy};
+	return Result;
+}
+
+void FMOMedicalTreatmentActions::GetOptions(APawn* Healer, AActor* Patient, const FMOWound& Wound, TArray<FMOItemActionOption>& Out)
+{
+	const UGameInstance* GI = Healer && Healer->GetWorld() ? Healer->GetWorld()->GetGameInstance() : nullptr;
+	const auto* Medical = GI ? GI->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	if (!Medical)
+	{
+		return;
+	}
+	for (const FMOMedicalTreatmentRow& Row : Medical->GetTreatmentsForWoundType(Wound.WoundType))
+	{
+		const FMOMedicalActionResult Result = Preview(Healer, Patient, Wound.WoundId, Row.TreatmentId);
+		if (Result.Failure == EMOMedicalActionFailure::Clinical && (Result.ClinicalFailure == EMOWoundTreatmentFailure::WrongWoundType ||
+			Result.ClinicalFailure == EMOWoundTreatmentFailure::MissingWound || Result.ClinicalFailure == EMOWoundTreatmentFailure::UnknownTreatment))
+		{
+			continue;   // not a treatment for this wound at all
+		}
+		FMOItemActionOption& Option = Out.AddDefaulted_GetRef();
+		Option.Id = Row.TreatmentId;
+		Option.Label = FText::Format(LOCTEXT("TreatOption", "{0} ({1} s)"), Row.DisplayName.IsEmpty() ? FText::FromName(Row.TreatmentId) : Row.DisplayName,
+			FText::AsNumber(FMath::RoundToInt(Row.TreatmentDuration)));
+		Option.bEnabled = Result.IsAccepted();
+		Option.DisabledReason = Result.Describe();
+	}
 }
 
 FMOMedicalActionResult FMOMedicalTreatmentActions::Begin(APawn* Healer, AActor* Patient, const FGuid& WoundId, FName TreatmentId)

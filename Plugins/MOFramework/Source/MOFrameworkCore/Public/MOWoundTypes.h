@@ -127,6 +127,14 @@ struct MOFRAMEWORKCORE_API FMOWound : public FFastArraySerializerItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Wound")
 	float TimeSinceInflicted = 0.0f;
 
+	/** The best treatment's healing bonus so far (its row's HealingSpeedBonus x the treatment quality): heals (1 + this) times as fast. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Wound", meta=(ClampMin="0"))
+	float TreatmentHealingBonus = 0.0f;
+
+	/** The best treatment's pain relief so far (its row's PainReduction x the quality, 0-1): this wound hurts (1 - this) as much. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Wound", meta=(ClampMin="0", ClampMax="1"))
+	float TreatmentPainReduction = 0.0f;
+
 	FMOWound()
 	{
 		WoundId = FGuid::NewGuid();

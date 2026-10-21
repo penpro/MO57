@@ -79,7 +79,8 @@ void UMOAnatomyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(UMOAnatomyComponent, BodyParts, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(UMOAnatomyComponent, Wounds, COND_OwnerOnly);
+	// Wounds are visible to everyone (N-061 co-op, Oct 20): a friend sees the cut and can dress it (AMOCharacter's treatment menu).
+	DOREPLIFETIME(UMOAnatomyComponent, Wounds);
 	DOREPLIFETIME_CONDITION(UMOAnatomyComponent, Conditions, COND_OwnerOnly);
 }
 
@@ -332,6 +333,10 @@ void UMOAnatomyComponent::ApplyResolvedTreatment(const FGuid& WoundId, const FMO
 	Quality = FMath::Clamp(Quality, 0.1f, 1.5f);
 	Wound->BleedRate *= 1.0f - FMath::Clamp(TreatmentDef.BleedReduction * Quality, 0.0f, 1.0f);
 	Wound->InfectionRisk *= 1.0f - FMath::Clamp(TreatmentDef.InfectionReduction * Quality, 0.0f, 1.0f);
+	// The authored healing and pain effects (N-061, Oct 20: they were fields nothing read). The best treatment so far counts; a second
+	// dressing does not stack with the first.
+	Wound->TreatmentHealingBonus = FMath::Max(Wound->TreatmentHealingBonus, FMath::Max(0.0f, TreatmentDef.HealingSpeedBonus * Quality));
+	Wound->TreatmentPainReduction = FMath::Max(Wound->TreatmentPainReduction, FMath::Clamp(TreatmentDef.PainReduction * Quality, 0.0f, 1.0f));
 	Wounds.MarkItemDirty(*Wound);
 }
 
@@ -518,20 +523,15 @@ float UMOAnatomyComponent::GetTotalPainLevel() const
 	for (const FMOWound& Wound : Wounds.Wounds)
 	{
 		FMOWoundTypeDefinitionRow WoundDef;
-		if (GetWoundTypeDefinition(Wound.WoundType, WoundDef))
-		{
-			TotalPain += Wound.Severity * WoundDef.PainMultiplier * 0.3f;
-		}
-		else
-		{
-			TotalPain += Wound.Severity * 0.3f;
-		}
+		float WoundPain = GetWoundTypeDefinition(Wound.WoundType, WoundDef) ? Wound.Severity * WoundDef.PainMultiplier * 0.3f : Wound.Severity * 0.3f;
 
 		// Infected wounds hurt more
 		if (Wound.bIsInfected)
 		{
-			TotalPain += Wound.InfectionSeverity * 0.2f;
+			WoundPain += Wound.InfectionSeverity * 0.2f;
 		}
+		// A treatment's pain relief (ApplyResolvedTreatment: a poultice, a dressing) eases this wound
+		TotalPain += WoundPain * (1.0f - FMath::Clamp(Wound.TreatmentPainReduction, 0.0f, 1.0f));
 	}
 
 	return FMath::Clamp(TotalPain, 0.0f, 100.0f);
@@ -672,6 +672,8 @@ void UMOAnatomyComponent::BuildSaveData(FMOAnatomySaveData& OutSaveData) const
 		Entry.bIsInfected = Wound.bIsInfected;
 		Entry.InfectionSeverity = Wound.InfectionSeverity;
 		Entry.TimeSinceInflicted = Wound.TimeSinceInflicted;
+		Entry.TreatmentHealingBonus = Wound.TreatmentHealingBonus;
+		Entry.TreatmentPainReduction = Wound.TreatmentPainReduction;
 		OutSaveData.Wounds.Add(Entry);
 	}
 
@@ -738,6 +740,8 @@ bool UMOAnatomyComponent::ApplySaveDataAuthority(const FMOAnatomySaveData& InSav
 		Wound.bIsInfected = Entry.bIsInfected;
 		Wound.InfectionSeverity = Entry.InfectionSeverity;
 		Wound.TimeSinceInflicted = Entry.TimeSinceInflicted;
+		Wound.TreatmentHealingBonus = Entry.TreatmentHealingBonus;
+		Wound.TreatmentPainReduction = Entry.TreatmentPainReduction;
 		Wounds.AddWound(Wound);
 	}
 
@@ -907,6 +911,7 @@ float UMOAnatomyComponent::ProcessWound(FMOWound& Wound, float DeltaTime)
 	{
 		HealRate *= 0.1f;  // Infections prevent healing
 	}
+	HealRate *= 1.0f + FMath::Max(0.0f, Wound.TreatmentHealingBonus);   // the treatment's own healing effect (ApplyResolvedTreatment)
 
 	// Check if wound requires special treatment
 	FMOWoundTypeDefinitionRow WoundDef;

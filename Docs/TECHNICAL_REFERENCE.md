@@ -333,7 +333,7 @@ MOInventoryComponent → MOPersistenceSubsystem (GI) [circular dep — M11]   [S
 
 - **7 Server RPCs** (all Reliable) — interaction, possession, spawning
 - **50+ authority checks** — consistent throughout
-- **COND_OwnerOnly** for private data (inventory, vitals, anatomy, skills, metabolism)
+- **COND_OwnerOnly** for private data (inventory, vitals, anatomy, skills, metabolism) -- except an anatomy's WOUNDS, which every machine sees (Oct 20: a friend can dress them; `Docs/Medical_And_Survival.md` section 7)
 - **COND_None** for public state (adrenaline, recruitment, carcass progress)
 - **FastArraySerializer** for replicated arrays (inventory, wounds, jobs, nutrients)
 

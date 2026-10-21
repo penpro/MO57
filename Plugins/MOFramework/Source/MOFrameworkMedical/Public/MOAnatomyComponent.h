@@ -173,6 +173,12 @@ struct MOFRAMEWORKMEDICAL_API FMOWoundSaveEntry
 
 	UPROPERTY()
 	float TimeSinceInflicted = 0.0f;
+
+	UPROPERTY()
+	float TreatmentHealingBonus = 0.0f;
+
+	UPROPERTY()
+	float TreatmentPainReduction = 0.0f;
 };
 
 USTRUCT(BlueprintType)

@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 #include "MOMedicalTreatmentActions.h"
+#include "MOItemActions.h"
 #include "MOMedicalActionTestClock.h"
 #include "MOBodyPartDefinitionRow.h"
 #include "MOInventoryComponent.h"
@@ -419,4 +420,63 @@ bool FMOMedicalAuthoredRequirements::RunTest(const FString&)
 	TestTrue(TEXT("Configured table contains wound treatment definitions"), WoundRows > 0);
 	return true;
 }
+// The treatment menu (N-061, Oct 20 2026): the Status panel's Wounds tab shows, under each wound, a button per treatment for it -- the
+// server's own verdict (Preview = Begin's checks), greyed with the reason. Before, no UI could treat a wound at all.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedicalMenuOptions, "MOFramework.Medical.Treatment.MenuOptions", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOMedicalMenuOptions::RunTest(const FString&)
+{
+	using namespace MOMedicalActionTests;
+	FWorld F;
+	TArray<FMOItemActionOption> Options;
+	const auto Find = [&Options](const TCHAR* Id) { return Options.FindByPredicate([Id](const FMOItemActionOption& O) { return O.Id == FName(Id); }); };
+	FMOMedicalTreatmentActions::GetOptions(F.Healer, F.Patient, F.Current(), Options);
+	const FMOItemActionOption* Good = Find(TEXT("AuditWoundTreatment"));
+	TestTrue(TEXT("the wound's treatment is offered, ready"), Good && Good->bEnabled);
+	TestTrue(TEXT("its label says how long it takes"), Good && Good->Label.ToString().Contains(TEXT("(20 s)")));
+	TestNull(TEXT("a treatment for other wounds is not offered"), Find(TEXT("AuditWrongWound")));
+	const FMOItemActionOption* Skilled = Find(TEXT("AuditSkilledTreatment"));
+	TestTrue(TEXT("too little skill: offered, greyed, and says why"), Skilled && !Skilled->bEnabled && Skilled->DisabledReason.ToString().Contains(TEXT("skill")));
+	TestTrue(TEXT("Preview agrees with Begin on a doable treatment"), FMOMedicalTreatmentActions::Preview(F.Healer, F.Patient, F.Injury.WoundId, TEXT("AuditWoundTreatment")).IsAccepted());
+
+	F.Inventory->RemoveItemByDefinitionId(TEXT("Stick01"), 2);
+	Options.Reset();
+	FMOMedicalTreatmentActions::GetOptions(F.Healer, F.Patient, F.Current(), Options);
+	Good = Find(TEXT("AuditWoundTreatment"));
+	TestTrue(TEXT("without its supplies: greyed, naming what is missing"), Good && !Good->bEnabled && Good->DisabledReason.ToString().StartsWith(TEXT("Needs ")));
+	TestEqual(TEXT("... and Begin refuses for the same reason"), F.Begin().Failure, EMOMedicalActionFailure::MissingSupplies);
+
+	F.Inventory->AddItemByGuid(FGuid::NewGuid(), TEXT("Stick01"), 2);
+	TestTrue(TEXT("supplies back: Begin starts it"), F.Begin().IsAccepted());
+	TestEqual(TEXT("while it runs, the menu says the pawn is busy"), FMOMedicalTreatmentActions::Preview(F.Healer, F.Patient, F.Injury.WoundId, TEXT("AuditStrongTreatment")).Failure,
+		EMOMedicalActionFailure::Busy);
+	return true;
+}
+
+// A treatment's authored healing and pain effects reach the wound (N-061, Oct 20 2026): HealingSpeedBonus / PainReduction were fields nothing read.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedicalHealingAndPain, "MOFramework.Medical.Treatment.HealingAndPainEffects", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOMedicalHealingAndPain::RunTest(const FString&)
+{
+	using namespace MOMedicalActionTests;
+	FWorld F;
+	FMOWound Painful = Wound();   // the fixture's own wound has no severity, so no pain: a second one that hurts
+	Painful.Severity = 40.0f;
+	F.Anatomy->InflictWound(Painful);
+	const auto Find = [&F](const FGuid& Id) { const auto All = F.Anatomy->GetAllWounds(); const FMOWound* W = All.FindByPredicate([&Id](const FMOWound& E) { return E.WoundId == Id; }); return W ? *W : FMOWound(); };
+	const float PainBefore = F.Anatomy->GetTotalPainLevel();
+	TestEqual(TEXT("CONTROL: an untreated wound has no treatment effects"), Find(Painful.WoundId).TreatmentHealingBonus, 0.0f);
+	TestTrue(TEXT("CONTROL: the wound hurts"), PainBefore > 0.0f);
+	TestTrue(TEXT("the treatment starts"), FMOMedicalTreatmentActions::Begin(F.Healer, F.Patient, Painful.WoundId, TEXT("AuditWoundTreatment")).IsAccepted());
+	F.Advance(F.Timed->GetState().RealSeconds + 0.01);
+	const FMOWound Treated = Find(Painful.WoundId);
+	TestTrue(TEXT("its healing bonus is on the wound (heals 1 + bonus times as fast)"), Treated.TreatmentHealingBonus > 0.0f);
+	TestTrue(TEXT("its pain relief is on the wound"), Treated.TreatmentPainReduction > 0.0f && Treated.TreatmentPainReduction <= 1.0f);
+	TestTrue(TEXT("the wound hurts less"), F.Anatomy->GetTotalPainLevel() < PainBefore);
+	FMOAnatomySaveData Saved;
+	F.Anatomy->BuildSaveData(Saved);
+	const FMOWoundSaveEntry* SavedWound = Saved.Wounds.FindByPredicate([&Treated](const FMOWoundSaveEntry& E) { return E.WoundId == Treated.WoundId; });
+	TestTrue(TEXT("both are saved with the wound"), SavedWound && SavedWound->TreatmentHealingBonus == Treated.TreatmentHealingBonus
+		&& SavedWound->TreatmentPainReduction == Treated.TreatmentPainReduction);
+	return true;
+}
+
 #endif

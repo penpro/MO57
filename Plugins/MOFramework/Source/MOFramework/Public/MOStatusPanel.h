@@ -416,6 +416,12 @@ protected:
 
 	/** The same pawn's anatomy: its wounds and illnesses fill the Wounds / Conditions tabs (they were documented as "dynamic" and never filled). */
 	TWeakObjectPtr<class UMOAnatomyComponent> BoundAnatomy;
+
+	/** Under each wound's row, a button per treatment for it (N-061: FMOMedicalTreatmentActions::GetOptions), greyed with the reason. */
+	void RefreshTreatmentButtons(const class UMOAnatomyComponent* Anatomy);
+
+	/** The treatment buttons, by wound. */
+	TMap<FGuid, TArray<TObjectPtr<UMOCommonButton>>> TreatmentButtons;
 	FDelegateHandle AnatomyConditionsHandle;
 	FTimerHandle AnatomyRefreshTimer;
 

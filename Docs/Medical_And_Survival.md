@@ -150,8 +150,20 @@ applied to the body through the survival stats. Chances per litre and the resear
 - The clinical primitive refuses unknown IDs and inapplicable wounds; authored bleed/infection reductions preserve the existing quality
   scaling with safe bounds. The common timer guards reentrant replacement and derives remaining time from bounded progress, including
   a freshly joined client's initial server-clock skew. No treatment duration or physiology policy is changed.
-- **Not built:** a treatment-picker UI, an assigned medic job, treating ANOTHER patient from a client (anatomy wounds replicate
-  owner-only: needs a deliberate inspection request), `HealingSpeedBonus` / `PainReduction` effects, condition-only rows and CPR.
+- **The treatment menu** (N-061, Oct 20): Status > Wounds lists, under each wound, a button per treatment for its type
+  (`FMOMedicalTreatmentActions::GetOptions`: "Apply Bandage (15 s)"), greyed with the reason ("Needs Bandage", "Insufficient treatment
+  skill.", "Finish or cancel the current action first."). The verdict is `Preview`: Begin's own checks minus the authority ones, so it runs
+  on a joiner's machine for its own pawn. A click sends `ServerTreatWound`; the server checks it all again.
+  Before, no UI could treat a wound at all (only `MO.Medical.Treat`). A wolf's bite is a laceration (live DT_MedicalTreatment, Oct 20):
+  Apply Bandage (Bandage01, 15 s), Clean Wound (clean water, 20 s), Apply Tourniquet (Tourniquet01, Medicine 1, 8 s), Suture Laceration
+  (SutureKit01, Medicine 3, 60 s).
+- **Healing and pain effects** (Oct 20): a treatment's `HealingSpeedBonus` and `PainReduction` (x the treatment quality) are kept on the
+  wound (`TreatmentHealingBonus` / `TreatmentPainReduction`, the best so far, saved): it heals (1 + bonus) times as fast and hurts
+  (1 - relief) as much. Bandage / suture / splint flags are still not set by treatments (no name mapping invented).
+- **Wounds replicate to every machine** (Oct 20, for treating each other): `UMOAnatomyComponent::Wounds` (body parts and
+  conditions stay owner-only); host + joiner: the joiner's copy shows the host's wound.
+- **Not built:** treating another pawn from a right-click on it, an assigned medic job, treating a recruited survivor from its command menu,
+  condition-only rows and CPR.
   Detail and acceptance steps: `Docs/agent/audit/MEDICAL_HANDOFF.md`.
 
 ## 8. Rules
