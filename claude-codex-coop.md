@@ -1313,3 +1313,12 @@ Suite 339 / 0; nettest actions _client_light_fire PASS.
 Status: PROGRESS (batch 10: nettest --seed for game / actions, MO.Session.Host seed, three co-op steps fixed; N-173 re-diagnosed and its waterline change reverted) + RELEASE (MOMainMenuPlayerController.h/.cpp, MOCheatSubsystem.cpp, MOWaterSubsystem.cpp (reverted), Tools/ue.py, Tools/ue_inst.py; build window, instances ften / acthost / actclient). This batch was not CLAIMed first: logged here.
 References: CL-0131
 Seeded co-op run 189 pass / 3 explained.
+
+### 2026-10-20 16:31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0133
+Status: CLAIM (batch 11: N-184 Tools/ue_inst.py footstep + gait cases; N-169 creature animation on every machine -- MOCreature.h/.cpp, MOCreatureDefinitionRow.h, BTTask_CreatureAttack.cpp, a new Tests/MOCreatureAnimTests.cpp, DT_Creatures rows HitReact*; N-092 fork note in DECISIONS; build window, instances acthost / actclient)
+References: CL-0132
+
+### 2026-10-20 18:14 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0134
+Status: PROGRESS (batch 11 commits: N-184 co-op footstep / gait cases, N-169 creature animations on every machine + the wolf carcass, N-181 kneeling for ground work; fork F34; N-185 logged) + RELEASE (the CL-0133 creature / kneel files, DT_Creatures, DT_Carcasses; build window; instances acthost / actclient)
+References: CL-0133
+Suite 341 / 0. Next: batch 12 CLAIM (N-091 MOCharacterHistoryComponent.h/.cpp, MOCharacter.cpp, MOSurvivorJobQueueComponent.cpp; local patches to the gitignored Plugins/Voxel: PCGWaitForVoxelWorld.h/.cpp (N-031), VoxelTexturePool.cpp (N-185), recorded in Docs/Voxel_Plugin_Reference.md; Tools/ue_inst.py; build window).
