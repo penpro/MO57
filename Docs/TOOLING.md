@@ -106,6 +106,8 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
    flag was silently ignored. A random world can spawn on a bare shore, and every "CONTROL: none found" PCG step then fails: use a vegetated
    seed such as 670711536 when comparing runs); then a written checklist with one check per fix (real clicks through `Tools/win_input.ps1` wherever a player must
    click; give items to a joiner from the HOST's Python so they replicate). Screenshots go in the scratchpad, numbers in the commit.
+   `MO_INST_EXTRA_<NAME>` adds launch flags to one instance of any harness run (`MO_INST_EXTRA_ACTCLIENT=-rhivalidation` on the joiner
+   only: N-185). A case that needs a built world must call `_worlds_built` itself: `MO_ACTIONS_ONLY` may run it first after the join.
 5. **Package once** only if a fix depends on cooked / Shipping behaviour (`Docs/Packaging.md`).
 6. **Commit each verified fix on its own** with its docs; a fix that failed waits for the next batch (no rebuild for one fix).
 

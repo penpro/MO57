@@ -1018,6 +1018,8 @@ def _joiner_long_run(rep, host, client):
     """#9 as it was played (Steam playtest Oct 16 2026: "client character will fall through world if i get far enough away"): not a teleport -- the
     joiner SPRINTS away from the host for 150 s over land, while the server's ground has to be built around it as it goes. Every 10 s: the joiner's
     height on the server and on the client (they must agree), how far it got, and any fall-through rescue on the host."""
+    if not _worlds_built(rep, host, client):   # run first after the join (MO_ACTIONS_ONLY), the joiner stopped at 51 m on its unbuilt world
+        return
     pxy = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location() if p else unreal.Vector(0, 0, 0); "
            "out('JX=%.0f JY=%.0f JZ=%.0f' % (l.x, l.y, l.z))")
     m = re.search(r"JX=(-?\d+) JY=(-?\d+) JZ=(-?\d+)", _probe(host, pxy))
@@ -2033,11 +2035,11 @@ def _client_footstep_surface(rep, host, client):
                 break
             m = None
         heard.append((biome, m.group(1) if m else None, m.group(2) if m else "no probe line at the spot"))
-        if len({s_ for _b, s_, _w in heard if s_}) >= 2:
+        if len({s_ for _b, s_, w in heard if s_ and w.startswith("biome")}) >= 2:   # a spot on a log / rock ("structure") says nothing about biomes
             break
-    rep.step("client: its own ground's footstep set comes from the generator's biome on every spot (not the fallback)",
-             all(w.startswith("biome") for _b, _s, w in heard), str(heard))
-    rep.step("client: two biomes sound different on the joiner's own machine", len({s_ for _b, s_, _w in heard if s_}) >= 2, str(heard))
+    rep.step("client: its own ground's footstep set comes from the world on every spot -- the biome, or the log / rock it stands on (not the fallback)",
+             all(w.startswith(("biome", "structure", "underground", "actor")) for _b, _s, w in heard), str(heard))   # the host CONTROL's reasons
+    rep.step("client: two biomes sound different on the joiner's own machine", len({s_ for _b, s_, w in heard if s_ and w.startswith("biome")}) >= 2, str(heard))
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_F_HOME', None); "
                  "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('F_HOME')")
     time.sleep(3)
@@ -2607,8 +2609,18 @@ def _client_carcass(rep, host, client):
     coff = log_size(client)
     console(client, "MO.Test.Input SecondaryInteract")
     shown = wait_log(client, r"\[MOCraftUI\] Showing world action menu for [^\n]*", since=coff, timeout=10)
+    # The carcass lies wherever the joiner stands: a bush in the line takes the click first (Oct 20: "Common Hazel" -- its own harvest menu,
+    # correctly). That is the spot, not the carcass path: say so as a CONTROL failure, naming what the click reached.
+    other = None if shown else re.search(r"\[MOKeepOnHarvestContextMenu\] Found resource definition: ([^(\r\n]+)", read_log_from(client, coff))
+    if not rep.step("CONTROL: the right-click reached the carcass (nothing harvestable in the line)", other is None,
+                    f"it reached {other.group(1).strip()} and opened that menu" if other else "nothing else opened"):
+        console(client, "MO.UI.Close")
+        _probe(host, "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor)]")
+        return
     rep.step("the joiner's right-click opens the parts menu ON THE JOINER", bool(shown), shown.group(0) if shown else "no menu line on the client")
-    console(client, "MO.Test.PressKey Escape")
+    # MO.UI.Close, not Escape: a context menu closes itself when the real cursor is outside the window, and Escape then opened the in-game
+    # menu, which held the joiner's input for the next case (the long sprint went 0 m, Oct 20)
+    console(client, "MO.UI.Close")
     # Tidy: a carcass left by the joiner would catch the next steps' interaction traces (the host's E on the joiner hit it).
     _probe(host, "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor)]")
 
@@ -2767,7 +2779,7 @@ def _host_e_on_joiner(rep, host, client):
     off = log_size(host)
     console(host, "MO.Test.Input RightClick")
     time.sleep(4)
-    console(host, "MO.Test.PressKey Escape")
+    console(host, "MO.UI.Close")   # not Escape: the context menu may have closed itself, and Escape would open the in-game menu
     after_rc = re.search(r"JOINER pawn=(\S+)", _probe(host, who))
     client_rc = _probe(client, "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); out('MINE pawn=%s' % (p.get_name() if p else 'none'))")
     host_log = read_log_from(host, off)
