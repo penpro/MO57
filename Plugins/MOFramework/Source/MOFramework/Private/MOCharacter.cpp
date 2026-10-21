@@ -1406,8 +1406,12 @@ void AMOCharacter::HandleSystemicDeath(EMOSystemicFailure Cause)
 	switch (Cause)
 	{
 	case EMOSystemicFailure::Exsanguination:     DieOf(EMODeathCause::BledOut, EMOBodyPartType::Heart); break;
-	case EMOSystemicFailure::CardiacArrest:      DieOf(EMODeathCause::CardiacArrest, EMOBodyPartType::Heart); break;
+	case EMOSystemicFailure::CardiacArrest:
+		// Deep hypothermia stops the heart (the rate falls ~10 / min per degree under 32 C): a death by cold, and the recap says so.
+		DieOf(VitalsComponent && VitalsComponent->Vitals.BodyTemperature < 30.0f ? EMODeathCause::Hypothermia : EMODeathCause::CardiacArrest, EMOBodyPartType::Heart);
+		break;
 	case EMOSystemicFailure::RespiratoryFailure: DieOf(EMODeathCause::RespiratoryFailure, EMOBodyPartType::LungLeft); break;
+	case EMOSystemicFailure::HeatStroke:         DieOf(EMODeathCause::HeatStroke, EMOBodyPartType::Brain); break;
 	default: break;
 	}
 }

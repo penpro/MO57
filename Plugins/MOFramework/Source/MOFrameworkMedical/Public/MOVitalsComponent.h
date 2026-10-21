@@ -119,6 +119,8 @@ enum class EMOSystemicFailure : uint8
 	CardiacArrest,
 	/** Oxygen saturation under 50 % or breathing under 4 / min: hypoxic cardiac arrest follows. */
 	RespiratoryFailure,
+	/** A core of 42 C or more for long enough (a thermal dose): the proteins denature and the organs fail. */
+	HeatStroke,
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSystemicDeath, EMOSystemicFailure, Cause);
@@ -349,6 +351,12 @@ public:
 	/** Seconds the current circulatory / respiratory failure has lasted (0 = none). */
 	float GetCirculatoryFailureSeconds() const { return CirculatoryFailureSeconds; }
 	float GetRespiratoryFailureSeconds() const { return RespiratoryFailureSeconds; }
+	/** The heat dose taken so far, in minutes-at-42-C (0 = none; N-063). */
+	float GetHeatStrokeDoseMinutes() const { return HeatStrokeDoseMinutes; }
+
+	/** How fast a core of CoreC builds the heat-stroke dose (minutes-at-42-C per minute): 0 under 42 C, doubling each degree above (the
+	 *  CEM43 thermal-dose rule). Pure, for the tests. */
+	static float HeatDoseRatePerMinute(float CoreC);
 	/** The failure that killed (None while alive). */
 	EMOSystemicFailure GetFatalSystemicFailure() const { return FatalSystemicFailure; }
 
@@ -833,6 +841,8 @@ private:
 	/** How long the current circulatory / respiratory failure has lasted (game-scaled seconds; 0 = none). */
 	float CirculatoryFailureSeconds = 0.0f;
 	float RespiratoryFailureSeconds = 0.0f;
+	/** The heat dose of the current overheating (minutes-at-42-C; reset once the core is back under 41 C). */
+	float HeatStrokeDoseMinutes = 0.0f;
 	/** Set once a failure became fatal: OnSystemicDeath never fires twice. */
 	EMOSystemicFailure FatalSystemicFailure = EMOSystemicFailure::None;
 

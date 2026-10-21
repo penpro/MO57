@@ -74,6 +74,22 @@ bool FMOVitals_SystemicFailure_SustainedAndReversible::RunTest(const FString& Pa
 	Lungs->Vitals.SpO2 = 42.0f;
 	TestEqual(TEXT("hypoxaemia: alive just short of its limit"), Lungs->StepSystemicFailure(L.Resp - 1.0f), EMOSystemicFailure::None);
 	TestEqual(TEXT("hypoxaemia sustained past its limit is a respiratory failure"), Lungs->StepSystemicFailure(2.0f), EMOSystemicFailure::RespiratoryFailure);
+
+	// Heat stroke (N-063, Oct 20 2026): a dose of minutes at 42 C, each degree above doubling it; cooling under 41 C resets it.
+	float HeatLimitMin = 60.0f;
+	if (IConsoleVariable* H = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.Medical.HeatStrokeDeathMinutesAt42"))) { HeatLimitMin = H->GetFloat(); }
+	TestEqual(TEXT("no heat dose under 42 C"), UMOVitalsComponent::HeatDoseRatePerMinute(41.9f), 0.0f);
+	TestEqual(TEXT("42 C: one minute's dose a minute"), UMOVitalsComponent::HeatDoseRatePerMinute(42.0f), 1.0f);
+	TestEqual(TEXT("43 C: twice as fast"), UMOVitalsComponent::HeatDoseRatePerMinute(43.0f), 2.0f);
+	UMOVitalsComponent* Hot = HealthyVitals();
+	Hot->Vitals.BodyTemperature = 42.0f;
+	TestEqual(TEXT("42 C: alive just short of the dose"), Hot->StepSystemicFailure((HeatLimitMin - 1.0f) * 60.0f), EMOSystemicFailure::None);
+	Hot->Vitals.BodyTemperature = 40.5f;   // cooled
+	TestEqual(TEXT("cooled under 41 C: alive"), Hot->StepSystemicFailure(60.0f), EMOSystemicFailure::None);
+	TestEqual(TEXT("... and the dose is reset"), Hot->GetHeatStrokeDoseMinutes(), 0.0f);
+	Hot->Vitals.BodyTemperature = 43.0f;
+	TestEqual(TEXT("43 C: alive just short of half the time"), Hot->StepSystemicFailure((HeatLimitMin * 0.5f - 1.0f) * 60.0f), EMOSystemicFailure::None);
+	TestEqual(TEXT("43 C for half the time is fatal heat stroke"), Hot->StepSystemicFailure(120.0f), EMOSystemicFailure::HeatStroke);
 	return true;
 }
 

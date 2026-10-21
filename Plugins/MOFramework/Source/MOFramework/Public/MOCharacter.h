@@ -201,6 +201,10 @@ enum class EMODeathCause : uint8
 	CardiacArrest,
 	/** Breathing / oxygenation failed until the heart followed. */
 	RespiratoryFailure,
+	/** The core overheated for too long (EMOSystemicFailure::HeatStroke). */
+	HeatStroke,
+	/** The heart stopped with the core in deep hypothermia (under 30 C): froze to death. */
+	Hypothermia,
 };
 
 /**

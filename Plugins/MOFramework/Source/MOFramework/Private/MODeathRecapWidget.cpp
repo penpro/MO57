@@ -125,6 +125,12 @@ FMODeathRecapData UMODeathRecapWidget::BuildRecapData(AMOCharacter* DeadCharacte
 	case EMODeathCause::RespiratoryFailure:
 		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.RespiratoryFailure", "Could not breathe");
 		break;
+	case EMODeathCause::HeatStroke:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.HeatStroke", "Heat stroke");
+		break;
+	case EMODeathCause::Hypothermia:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.Hypothermia", "Froze to death");
+		break;
 	default:
 	{
 		const UEnum* BodyPartEnum = StaticEnum<EMOBodyPartType>();

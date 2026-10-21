@@ -21,6 +21,8 @@ namespace
 	// respiratory failure: severe hypoxaemia brings the heart to arrest within minutes. Short values exist for tests (MO.Test.SystemicDeath).
 	TAutoConsoleVariable<float> CVarCardiacArrestDeathSeconds(TEXT("mo.Medical.CardiacArrestDeathSeconds"), 300.0f,
 		TEXT("Seconds a circulatory failure (heart under 10 / min, or blood under 30 %) may last before it is fatal."));
+	TAutoConsoleVariable<float> CVarHeatStrokeDeathMinutes(TEXT("mo.Medical.HeatStrokeDeathMinutesAt42"), 60.0f,
+		TEXT("Heat stroke: the thermal dose (minutes at a 42 C core; each degree above doubles the rate) that kills. Humans tolerate 42 C for 45 min to 8 h (Bynum et al. 1978)."));
 	TAutoConsoleVariable<float> CVarRespiratoryFailureDeathSeconds(TEXT("mo.Medical.RespiratoryFailureDeathSeconds"), 240.0f,
 		TEXT("Seconds a respiratory failure (SpO2 under 50 %, or under 4 breaths / min) may last before it is fatal."));
 }
@@ -978,6 +980,11 @@ void UMOVitalsComponent::CheckCriticalConditions(float DeltaSeconds)
 	}
 }
 
+float UMOVitalsComponent::HeatDoseRatePerMinute(float CoreC)
+{
+	return CoreC >= 42.0f ? FMath::Pow(2.0f, FMath::Min(CoreC - 42.0f, 10.0f)) : 0.0f;
+}
+
 EMOSystemicFailure UMOVitalsComponent::StepSystemicFailure(float DeltaSeconds)
 {
 	// These conditions used to be broadcast every tick to no listener at all (Oct 2026): a stopped heart, an SpO2 under 50 % or 20-30 % of the blood left
@@ -1013,6 +1020,25 @@ EMOSystemicFailure UMOVitalsComponent::StepSystemicFailure(float DeltaSeconds)
 	CirculatoryFailureSeconds = bCirculatoryFailure ? CirculatoryFailureSeconds + DeltaSeconds : 0.0f;
 	RespiratoryFailureSeconds = bRespiratoryFailure ? RespiratoryFailureSeconds + DeltaSeconds : 0.0f;
 
+	// Heat stroke (N-063, Oct 20 2026: cold killed through the heart's collapse, heat never did). From a 42 C core the damage is a thermal
+	// DOSE -- minutes at 42 C, each degree above doubling the rate -- fatal at HeatStrokeDeathMinutesAt42; cooled back under 41 C it resets.
+	const float HeatLimit = FMath::Max(1.0f, CVarHeatStrokeDeathMinutes.GetValueOnAnyThread());
+	const float HeatRate = HeatDoseRatePerMinute(Vitals.BodyTemperature);
+	if (HeatRate > 0.0f)
+	{
+		if (HeatStrokeDoseMinutes <= 0.0f)
+		{
+			UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: heat stroke (core %.1f C) -- fatal after %.0f min at 42 C unless it is cooled"),
+				*GetNameSafe(GetOwner()), Vitals.BodyTemperature, HeatLimit);
+		}
+		HeatStrokeDoseMinutes += HeatRate * DeltaSeconds / 60.0f;
+	}
+	else if (Vitals.BodyTemperature < 41.0f && HeatStrokeDoseMinutes > 0.0f && FatalSystemicFailure == EMOSystemicFailure::None)
+	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: cooled from heat stroke after a dose of %.0f min at 42 C"), *GetNameSafe(GetOwner()), HeatStrokeDoseMinutes);
+		HeatStrokeDoseMinutes = 0.0f;
+	}
+
 	if (FatalSystemicFailure != EMOSystemicFailure::None)
 	{
 		return EMOSystemicFailure::None;   // already fatal: never twice
@@ -1024,6 +1050,10 @@ EMOSystemicFailure UMOVitalsComponent::StepSystemicFailure(float DeltaSeconds)
 	else if (RespiratoryFailureSeconds >= RespLimit)
 	{
 		FatalSystemicFailure = EMOSystemicFailure::RespiratoryFailure;
+	}
+	else if (HeatStrokeDoseMinutes >= HeatLimit)
+	{
+		FatalSystemicFailure = EMOSystemicFailure::HeatStroke;
 	}
 	if (FatalSystemicFailure != EMOSystemicFailure::None)
 	{

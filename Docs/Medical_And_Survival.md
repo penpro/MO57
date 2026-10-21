@@ -49,10 +49,16 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
 ## 2. Death: one path with a cause (commit 4f948b11)
 
 - Every death goes through `AMOCharacter::DieOf(EMODeathCause, Part)` -> virtual `HandleInstantDeath` (creatures override it).
-  Causes: BodyPartDestroyed (anatomy `OnInstantDeath`), Drowned (respiration), BledOut / CardiacArrest / RespiratoryFailure (vitals
-  `OnSystemicDeath`). The recap prints the cause. **Never broadcast anatomy `OnInstantDeath` for a non-organ death.**
+  Causes: BodyPartDestroyed (anatomy `OnInstantDeath`), Drowned (respiration), BledOut / CardiacArrest / RespiratoryFailure / HeatStroke
+  (vitals `OnSystemicDeath`), Hypothermia (a cardiac arrest with the core under 30 C: "Froze to death"). The recap prints the cause.
+  **Never broadcast anatomy `OnInstantDeath` for a non-organ death.**
 - **Systemic clocks** (`UMOVitalsComponent::StepSystemicFailure`): circulatory (HR < 10 or blood < 30 %) 300 s, respiratory
   (SpO2 < 50 or RR < 4) 240 s; game-scaled, reset on recovery, single-fire. Instant bleed-out still at <= 20 % blood.
+- **Thermal extremes kill** (N-063, checked Oct 20): cold through the heart -- under a 32 C core the rate falls 10 / min per degree, so near
+  26 C it is under 10 and the circulatory clock runs (Hypothermia). Heat had no failure at all; now a core of 42 C or more builds a thermal
+  dose (minutes at 42 C, each degree above doubling the rate, the CEM43 rule), fatal at `mo.Medical.HeatStrokeDeathMinutesAt42` (60:
+  humans tolerate 42 C for 45 min to 8 h, Bynum et al. 1978); back under 41 C it resets. Test
+  `MOFramework.Medical.Vitals.SystemicFailure.SustainedAndReversible`.
 - HR ~92 at 25 % blood is deliberate (tachycardia +60, then pre-terminal bradycardia x0.7 below 40 % volume): not a bug.
 - **Death recap + respawn** (4d58ed3b): `UMOSystemMenuUIController::ResolveDeathRecapClass()` defaults `DeathRecapWidgetClass` to
   `/MOFramework/UI/WBP_DeathRecap` (it was never assigned: a dead last pawn was a silent soft-lock). Continue -> another living colony
