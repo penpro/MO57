@@ -185,6 +185,14 @@ public:
 	 */
 	void NotifyDamaged(AActor* DamageInstigator);
 
+	/** Server: a packmate called (AMOPredatorCreature::AlertPack): a predator turns on Threat as if it had seen it, and holds it for
+	 *  PackCallMemorySeconds (its own senses take over once it sees it). Prey and the dead ignore it; never re-calls the pack. */
+	void NotifyPackThreat(AActor* Threat, const APawn* Caller);
+
+	/** How long a pack call holds the threat for a wolf that has not seen it yet (s): long enough to run to the fight. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Perception")
+	float PackCallMemorySeconds = 20.f;
+
 	/** True while a wound's flight lasts (NotifyDamaged): the threat is held regardless of perception. */
 	UFUNCTION(BlueprintPure, Category="MO|Creature|AI")
 	bool IsPanicked() const;

@@ -1,5 +1,6 @@
 #include "MOCreatureController.h"
 #include "MOBlackboardKeys.h"
+#include "MOPredatorCreature.h"
 #include "MOFramework.h"
 #include "MOCreatureDefinitionRow.h"
 #include "MOAnatomyComponent.h"
@@ -310,6 +311,7 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		}
 
 		// New threat detected or switching to closer threat
+		const bool bNewQuarry = CurrentThreatActor.Get() != Actor;
 		CurrentThreatActor = Actor;
 		RememberedThreatActor = Actor;
 		LastKnownThreatLocation = Actor->GetActorLocation();
@@ -323,6 +325,14 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 
 		// Update blackboard immediately
 		UpdateBlackboardThreatInfo();
+		// A predator that takes a new quarry calls its pack: wolves hunt together (N-096, Oct 20).
+		if (bNewQuarry && bPursuesThreats)
+		{
+			if (AMOPredatorCreature* Predator = Cast<AMOPredatorCreature>(ControlledPawn))
+			{
+				Predator->AlertPack(Actor);
+			}
+		}
 	}
 	else
 	{
@@ -629,6 +639,35 @@ void AMOCreatureController::NotifyDamaged(AActor* DamageInstigator)
 	StartThreatForgetTimer(DamageInstigator, WoundedPanicSeconds);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s hurt by %s: %s it for %.0f s"), *ControlledPawn->GetName(), *DamageInstigator->GetName(),
 		bPursuesThreats ? TEXT("turns on") : TEXT("flees"), WoundedPanicSeconds);
+	UpdateBlackboardThreatInfo();
+	// A hurt wolf calls its pack (N-096 pack behaviour, Oct 20: AlertPack existed, nothing called it).
+	if (bPursuesThreats)
+	{
+		if (AMOPredatorCreature* Predator = Cast<AMOPredatorCreature>(ControlledPawn))
+		{
+			Predator->AlertPack(DamageInstigator);
+		}
+	}
+}
+
+void AMOCreatureController::NotifyPackThreat(AActor* Threat, const APawn* Caller)
+{
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn || !IsValid(Threat) || Threat == ControlledPawn || !bPursuesThreats || IsDead() || CurrentThreatActor.Get() == Threat)
+	{
+		return;
+	}
+	if (const APawn* ThreatPawn = Cast<APawn>(Threat); ThreatPawn && ThreatPawn->GetClass() == ControlledPawn->GetClass())
+	{
+		return;   // never against its own kind
+	}
+	GivenUpUntil.Remove(Threat);   // the pack's quarry is fair game again
+	CurrentThreatActor = Threat;
+	RememberedThreatActor = Threat;
+	LastKnownThreatLocation = Threat->GetActorLocation();
+	StartThreatForgetTimer(Threat, PackCallMemorySeconds);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCreatureController] %s answers %s's call: turns on %s"), *ControlledPawn->GetName(), *GetNameSafe(Caller),
+		*Threat->GetName());
 	UpdateBlackboardThreatInfo();
 }
 

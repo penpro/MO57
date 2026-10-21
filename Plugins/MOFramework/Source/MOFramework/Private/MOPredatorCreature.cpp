@@ -5,6 +5,7 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 AMOPredatorCreature::AMOPredatorCreature(const FObjectInitializer& ObjectInitializer)
@@ -46,30 +47,25 @@ void AMOPredatorCreature::AlertPack(AActor* Threat)
 		return;
 	}
 
-	TArray<AMOPredatorCreature*> PackMembers = FindPackMembers();
-
-	for (AMOPredatorCreature* Member : PackMembers)
+	// Through each member's controller (NotifyPackThreat), not its blackboard: the controller rewrites the blackboard's threat keys from
+	// its own state every update, so a written key was gone the next frame (and nothing called this before Oct 20).
+	int32 Answered = 0;
+	for (AMOPredatorCreature* Member : FindPackMembers())
 	{
-		if (Member == this)
+		if (Member == this || FVector::DistSquared(Member->GetActorLocation(), GetActorLocation()) > FMath::Square(PackAlertRange))
 		{
 			continue;
 		}
-
-		// Alert each pack member through their controller
 		if (AMOCreatureController* MemberAI = Member->GetCreatureController())
 		{
-			// Set threat on blackboard (this will trigger their behavior tree)
-			if (UBlackboardComponent* BB = MemberAI->GetBlackboardComponent())
-			{
-				BB->SetValueAsObject(MOBlackboardKeys::TargetActor, Threat);
-				BB->SetValueAsVector(MOBlackboardKeys::TargetLocation, Threat->GetActorLocation());
-				BB->SetValueAsBool(MOBlackboardKeys::HasTarget, true);
-			}
+			MemberAI->NotifyPackThreat(Threat, this);
+			++Answered;
 		}
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPredatorCreature: %s alerted %d pack members of threat %s"),
-		*GetName(), PackMembers.Num() - 1, *Threat->GetName());
+	if (Answered > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s called %d packmate(s) against %s"), *GetName(), Answered, *Threat->GetName());
+	}
 }
 
 bool AMOPredatorCreature::IsInPack() const
@@ -117,16 +113,13 @@ TArray<AMOPredatorCreature*> AMOPredatorCreature::FindPackMembers() const
 	// Include self
 	PackMembers.Add(const_cast<AMOPredatorCreature*>(this));
 
-	// Find other predators of the same type within range
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), GetClass(), FoundActors);
-
+	// Find other living predators of the same type within range (an actor iterator: no array of every actor of the class each call)
 	FVector MyLocation = GetActorLocation();
 
-	for (AActor* Actor : FoundActors)
+	for (TActorIterator<AMOPredatorCreature> It(GetWorld()); It; ++It)
 	{
-		AMOPredatorCreature* OtherPredator = Cast<AMOPredatorCreature>(Actor);
-		if (!OtherPredator || OtherPredator == this)
+		AMOPredatorCreature* OtherPredator = *It;
+		if (!IsValid(OtherPredator) || OtherPredator == this || OtherPredator->GetClass() != GetClass() || OtherPredator->IsDead())
 		{
 			continue;
 		}

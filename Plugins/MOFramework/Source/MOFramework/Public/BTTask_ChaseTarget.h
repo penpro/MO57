@@ -69,6 +69,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Chase|StuckRecovery")
 	float RecoveryDuration = 0.8f;
 
+	/** Fire: the chase stops this far beyond the flame's distance from the target (cm): it circles at about the fear radius plus this. */
+	UPROPERTY(EditAnywhere, Category="Chase|Fire", meta=(ClampMin="0"))
+	float FireHoldOffMarginCm = 600.f;
+
 private:
 	/** Restore original movement speed. */
 	void RestoreMovementSpeed(APawn* Pawn, FBTChaseMemory* Memory) const;

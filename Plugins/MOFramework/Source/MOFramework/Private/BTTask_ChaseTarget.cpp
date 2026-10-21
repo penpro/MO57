@@ -143,7 +143,7 @@ void UBTTask_ChaseTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Nod
 	// and fails; the tree wanders the creature and tries again -- it circles the fire. Measured from the target, so the creature stops about
 	// one fear radius out.
 	if (const AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); Creature && Creature->IsWaryOfFireAt(TargetActor->GetActorLocation())
-		&& DistanceToTarget < AMOCreature::NearestFlameDistanceCm(OwnerPawn->GetWorld(), TargetActor->GetActorLocation()) + 600.0f)
+		&& DistanceToTarget < AMOCreature::NearestFlameDistanceCm(OwnerPawn->GetWorld(), TargetActor->GetActorLocation()) + FireHoldOffMarginCm)
 	{
 		FBTChaseMemory* Memory = reinterpret_cast<FBTChaseMemory*>(NodeMemory);
 		RestoreMovementSpeed(OwnerPawn, Memory);

@@ -76,6 +76,11 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   `ChaseGiveUpCooldownSeconds` (120 s) unless it is hurt by it; wander then walks it home. Wolf and deer both run 750 cm/s, so a healthy
   deer that hears the wolf in time escapes.
 - The four numbers are `FMOCreatureDefinitionRow` fields (defaults apply to rows that do not set them; `bIsPredator` turns the leash on).
+- **A pack hunts and fights together** (Oct 20, N-096): a predator that is hurt, or takes a new quarry it perceives, calls the wolves of
+  its kind within `PackAlertRange` (15 m): `AMOPredatorCreature::AlertPack` -> each one's `AMOCreatureController::NotifyPackThreat`,
+  which turns it on the threat for `PackCallMemorySeconds` (20 s; its own senses take over once it sees it). It never re-calls, and
+  never turns on its own kind. AlertPack existed but nothing called it, and it wrote blackboard keys the controller rewrote the next
+  frame. Host-side test `_host_wolf_pack`.
 
 ### Melee damage (Oct 18 2026)
 
