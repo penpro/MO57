@@ -1336,3 +1336,13 @@ References: CL-0135
 Status: PROGRESS (batches 13-15 committed: a43e0d17 rain on a torch, aac87064 rock / log steps, f09790eb Voxel local patch (NeverParallel, recorded in Docs/Voxel_Plugin_Reference.md), 4350570d ClickWidget defer, 426f75fb Wounds-tab treatment, ebeef608 fire-fear, 33ad4d7b creature footsteps, 43f3b6c7 heat stroke, 1ac5f22d server building check, c1ac76de colony medic, db4cd99e pawn right-click menu, cde84dc1 co-op harness) + RELEASE (every CL-0136 source file, DT_Creatures and the docs; the build window). Still mine: instances acthost / actclient (the full co-op run).
 References: CL-0136
 Suite 348 / 0. Forks for Wes: F35 (a novice's treatment strength), F36 (a dressing before cloth).
+
+### 2026-10-20 23:28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0138
+Status: CLAIM (batch 16: wolf pack calls -- MOCreatureController.h/.cpp, MOPredatorCreature.cpp, BTTask_ChaseTarget.h/.cpp; medic follow-ups + colony alerts -- MOColonyManagerSubsystem.h/.cpp, MOSurvivorController.cpp; per-species footsteps -- MOCreatureDefinitionRow.h, MOCreature.cpp, DT_Creatures rows Wolf01 / Deer_Doe; Tools/ue_inst.py; Docs AI_And_Colony / Audio / BACKLOG; the build window, the editor (rows set), instances acthost / actclient)
+References: CL-0137
+Batch 15 full run: 235 pass, no crash (N-185 third clean full run); the 5 failures are harness layout (fixed in batch 16's harness).
+
+### 2026-10-20 23:49 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0139
+Status: PROGRESS (batch 16 committed: 0ac379c8 footsteps per species + DT_Creatures Wolf01 / Deer_Doe, 3308f14b wolf packs, 9ed2bf77 colony alerts + medic follow-ups, d70af92f co-op cases) + RELEASE (every CL-0138 file, DT_Creatures, the build window, the editor, instances acthost / actclient)
+References: CL-0138
+Suite 348 / 0. New: N-186 (a wolf carcass sometimes missing on the joiner).
