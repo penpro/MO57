@@ -2476,14 +2476,28 @@ def _client_light_fire(rep, host, client):
 def _client_sees_creature_flinch(rep, host, client):
     """A wolf hit by the joiner flinches away from it, and bites, ON THE JOINER'S SCREEN (N-169, Oct 20 2026): creature animations went to the
     server's AnimInstance only (the bite was a BT task's Montage_Play), so a joiner saw wolves glide in and hurt it with no bite. Both now go
-    through AMOCreature::PlayAnimationEverywhere (a replicated cue). The host spawns a wolf beside the joiner, turns it so the joiner is on its
-    LEFT and hurts it in the joiner's name: the host picks the left flinch, and the joiner's own log shows it played there; then the angry wolf
-    bites someone, and the joiner's log shows the bite. Runs late (the bite wounds the joiner), before the cases that end the joiner."""
+    through AMOCreature::PlayAnimationEverywhere (a reliable cue event). The host spawns a wolf beside the joiner and hurts it in the joiner's
+    name a tick later (MO.Test.HitCreature: from editor Python the flinch cue never left the host): the host plays the flinch for the side the
+    blow came from, and the joiner's own log shows it played there; then the angry wolf bites someone, and the joiner's log shows the bite.
+    Runs late (the bite wounds the joiner), before the cases that end the joiner."""
     hoff = log_size(host)
     console(host, "MO.AI.StressSpawn 1 500 800")
     spawned = wait_log(host, r"\[MO.AI.StressSpawn\] Done[^\r\n]*", since=hoff, timeout=20)
     if not rep.step("CONTROL: the host spawned a wolf", bool(spawned), spawned.group(0) if spawned else "no StressSpawn Done line"):
         return
+    # Stand the wolf by the joiner and wait until the JOINER's world has it: a cue sent before the client has the creature is dropped (Oct 21:
+    # the wolf was teleported and hit in one step; the joiner logged the bite but never the flinch).
+    _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); "
+                 "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - jl).length()); "
+                 "w.set_actor_location(jl + unreal.Vector(500.0, 0.0, 120.0), False, True); out('WOLF_PLACED')")
+    seen_code = ("p = unreal.GameplayStatics.get_player_pawn(world, 0); pl = p.get_actor_location(); "
+                 "out('CLIENTWOLF %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) "
+                 "if (a.get_actor_location() - pl).length() < 1500]))")
+    for _ in range(10):
+        if re.search(r"CLIENTWOLF [1-9]", _probe(client, seen_code)):
+            break
+        time.sleep(1.0)
+    time.sleep(1.0)
     hit = None
     coff = log_size(client)
     for _ in range(4):   # a wolf mid-bite does not flinch (its bite's damage lands anyway): try again after it
@@ -2493,16 +2507,19 @@ def _client_sees_creature_flinch(rep, host, client):
                      "w = min(ws, key=lambda a: (a.get_actor_location() - jl).length()); "
                      "w.set_actor_location(jl + unreal.Vector(500.0, 0.0, 120.0), False, True); "
                      # the joiner lies at -X from the wolf: facing yaw 270 (-Y) puts it on the wolf's left
-                     "w.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=270.0), False); "
-                     "a = w.get_component_by_class(unreal.MOAnatomyComponent); "
-                     "out('WOLF %s DMG=%s' % (w.get_name(), a.inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, j)))")
+                     "w.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=270.0), False); out('WOLF %s' % w.get_name())")
+        # The blow from a console verb that runs a tick later, outside script execution: an inflict_damage from editor Python ran the blow's
+        # own RPCs (the flinch cue) on the host only (Oct 21: "GetFunctionCallspace ScriptExecutionInEditor: MulticastAnimCue").
+        console(host, "MO.Test.HitCreature 1 2 Wolf")
         hit = wait_log(host, r"\[MOCreature\] \S+ hit from the (\w+) by \S+: (\S+) \(([\d.]+) s\)", since=hoff, timeout=4)
         if hit:
             break
         time.sleep(1.5)
-    rep.step("host: the wolf flinches from the side the joiner stands on (its left: ANIM_Wolf_GetHitLeft)",
-             bool(hit) and hit.group(1) == "Left" and hit.group(2) == "ANIM_Wolf_GetHitLeft" and float(hit.group(3)) > 0.0,
-             hit.group(0) if hit else "no hit-reaction line on the host")
+    # The reaction for the side the game computed at the blow (the wolf turns in the tick before the deferred blow lands, so not always the
+    # left it was set up with); the side's geometry is unit-tested (MOFramework.Creature.HitSide). Back falls back to Front without its own clip.
+    side_ok = bool(hit) and (hit.group(2) == "ANIM_Wolf_GetHit" + hit.group(1) or (hit.group(1) == "Back" and hit.group(2) == "ANIM_Wolf_GetHitFront"))
+    rep.step("host: the wolf flinches with the reaction for the side the blow came from (ANIM_Wolf_GetHit<side>)",
+             side_ok and float(hit.group(3)) > 0.0, hit.group(0) if hit else "no hit-reaction line on the host")
     seen = wait_log(client, r"\[MOCreature\] \S+: anim cue \d+ on this client: ANIM_Wolf_GetHit\w+ \(([\d.]+) s\)", since=coff, timeout=10)
     rep.step("client: ... and the flinch plays on the JOINER's copy of the wolf", bool(seen) and float(seen.group(1)) > 0.0,
              seen.group(0) if seen else "no anim cue line on the client")

@@ -20,10 +20,11 @@
 #include "Engine/DataTable.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
-#include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 #include "MOAmbientEnvironmentProvider.h"
 #include "MOFootstepComponent.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 
 AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -76,6 +77,18 @@ void AMOCreature::BeginPlay()
 
 	// Apply creature definition settings
 	ApplyCreatureDefinition();
+
+	if (!HasAuthority())
+	{
+		TArray<FSoftObjectPath> ClientAssets;
+		GatherClientAssets(ClientAssets);
+		if (ClientAssets.Num() > 0)
+		{
+			// High priority: ahead of the world streaming in, which is what the replicated reference would otherwise wait behind
+			ClientAssetsLoad = UAssetManager::GetStreamableManager().RequestAsyncLoad(ClientAssets, FStreamableDelegate(), FStreamableManager::AsyncLoadHighPriority);
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: loading %d asset(s) a cue or its carcass can name"), *GetName(), ClientAssets.Num());
+	}
 
 	// Note: OnInstantDeath binding handled by AMOCharacter base class
 	// We override HandleInstantDeath to add creature-specific death behavior
@@ -134,16 +147,26 @@ void AMOCreature::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 		{
 			Out.AddUnique(Definition->BehaviorTree.ToSoftObjectPath());
 		}
-		if (!Definition->CarcassDataTable.IsNull())
+	}
+	GatherClientAssets(Out);
+}
+
+void AMOCreature::GatherClientAssets(TArray<FSoftObjectPath>& Out) const
+{
+	const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow();
+	if (!Definition)
+	{
+		return;
+	}
+	if (!Definition->CarcassDataTable.IsNull())
+	{
+		Out.AddUnique(Definition->CarcassDataTable.ToSoftObjectPath());
+	}
+	for (const TSoftObjectPtr<UAnimSequenceBase>* HitReact : { &Definition->HitReactFront, &Definition->HitReactLeft, &Definition->HitReactRight, &Definition->HitReactBack })
+	{
+		if (!HitReact->IsNull())
 		{
-			Out.AddUnique(Definition->CarcassDataTable.ToSoftObjectPath());
-		}
-		for (const TSoftObjectPtr<UAnimSequenceBase>* HitReact : { &Definition->HitReactFront, &Definition->HitReactLeft, &Definition->HitReactRight, &Definition->HitReactBack })
-		{
-			if (!HitReact->IsNull())
-			{
-				Out.AddUnique(HitReact->ToSoftObjectPath());
-			}
+			Out.AddUnique(HitReact->ToSoftObjectPath());
 		}
 	}
 }
@@ -151,7 +174,6 @@ void AMOCreature::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 void AMOCreature::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AMOCreature, AnimCue);
 }
 
 AMOCreatureController* AMOCreature::GetCreatureController() const
@@ -420,23 +442,72 @@ float AMOCreature::PlayAnimationEverywhere(UAnimSequenceBase* Animation, float P
 	}
 	AnimCue.Animation = Animation;
 	AnimCue.PlayRate = PlayRate;
-	AnimCue.ServerTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	AnimCue.bStop = false;
 	++AnimCue.Serial;
-	ForceNetUpdate();   // a flinch or a bite that reaches the joiner a net update late reads as lag
+	MulticastAnimCue(FSoftObjectPath(Animation), PlayRate, AnimCue.Serial, false);   // the clients, each cue in order
 	return PlayAnimCueLocally(AnimCue);
 }
 
-void AMOCreature::OnRep_AnimCue()
+void AMOCreature::StopAnimationEverywhere(UAnimSequenceBase* Animation)
 {
-	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
-	const double Late = GameState ? GameState->GetServerWorldTimeSeconds() - AnimCue.ServerTime : 0.0;
-	if (Late > 1.0)
+	const USkeletalMeshComponent* MeshComp = GetMesh();
+	const UAnimInstance* AnimInstance = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+	const UAnimMontage* Montage = Cast<UAnimMontage>(Animation);
+	if (!HasAuthority() || !AnimInstance || !Montage || !AnimInstance->Montage_IsPlaying(Montage))
 	{
-		return;   // a cue from before this machine saw the creature (a join, the creature coming into relevance): the moment has passed
+		return;   // not playing here: nothing to stop anywhere
 	}
-	const float Played = PlayAnimCueLocally(AnimCue);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: anim cue %d on this client: %s (%.2f s)"), *GetName(), AnimCue.Serial,
-		*GetNameSafe(AnimCue.Animation), Played);
+	AnimCue.Animation = Animation;
+	AnimCue.PlayRate = 1.0f;
+	AnimCue.bStop = true;
+	++AnimCue.Serial;
+	MulticastAnimCue(FSoftObjectPath(Animation), 1.0f, AnimCue.Serial, true);
+	PlayAnimCueLocally(AnimCue);
+}
+
+void AMOCreature::MulticastAnimCue_Implementation(const FSoftObjectPath& Animation, float PlayRate, int32 Serial, bool bStop)
+{
+	if (HasAuthority())
+	{
+		return;   // the server played it in PlayAnimationEverywhere / StopAnimationEverywhere
+	}
+	LastCueSerial = Serial;
+	PlayArrivedCue(Animation, PlayRate, Serial, bStop, false);
+}
+
+void AMOCreature::PlayArrivedCue(const FSoftObjectPath& Animation, float PlayRate, int32 Serial, bool bStop, bool bAfterLoad)
+{
+	if (bAfterLoad && Serial != LastCueSerial)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: anim cue %d loaded after cue %d arrived, skipped: %s"), *GetName(), Serial, LastCueSerial,
+			*Animation.GetAssetName());
+		return;
+	}
+	UAnimSequenceBase* Loaded = Cast<UAnimSequenceBase>(Animation.ResolveObject());
+	if (!Loaded && !Animation.IsNull())
+	{
+		if (bStop)
+		{
+			return;   // never loaded here, so not playing
+		}
+		if (!bAfterLoad)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: anim cue %d: loading %s first"), *GetName(), Serial, *Animation.GetAssetName());
+			UAssetManager::GetStreamableManager().RequestAsyncLoad(Animation, FStreamableDelegate::CreateWeakLambda(this, [this, Animation, PlayRate, Serial]()
+			{
+				PlayArrivedCue(Animation, PlayRate, Serial, false, true);
+			}), FStreamableManager::AsyncLoadHighPriority);
+			return;
+		}
+	}
+	FMOCreatureAnimCue Cue;
+	Cue.Animation = Loaded;   // null (no path) stops every montage
+	Cue.PlayRate = PlayRate;
+	Cue.Serial = static_cast<uint8>(Serial);
+	Cue.bStop = bStop;
+	const float Played = PlayAnimCueLocally(Cue);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: anim cue %d on this client: %s%s (%.2f s)"), *GetName(), Serial, bStop ? TEXT("stop ") : TEXT(""),
+		Animation.IsNull() ? TEXT("None") : *Animation.GetAssetName(), Played);
 }
 
 float AMOCreature::PlayAnimCueLocally(const FMOCreatureAnimCue& Cue)
@@ -454,7 +525,16 @@ float AMOCreature::PlayAnimCueLocally(const FMOCreatureAnimCue& Cue)
 	}
 	if (UAnimMontage* Montage = Cast<UAnimMontage>(Cue.Animation))
 	{
+		if (Cue.bStop)
+		{
+			AnimInstance->Montage_Stop(0.2f, Montage);   // this one only
+			return 0.0f;
+		}
 		return AnimInstance->Montage_Play(Montage, Cue.PlayRate);
+	}
+	if (Cue.bStop)
+	{
+		return 0.0f;   // a sequence plays as a dynamic montage that ends on its own
 	}
 	const UAnimMontage* Dynamic = AnimInstance->PlaySlotAnimationAsDynamicMontage(Cue.Animation, TEXT("DefaultSlot"), 0.1f, 0.2f, Cue.PlayRate);
 	return Dynamic ? Dynamic->GetPlayLength() / FMath::Max(Cue.PlayRate, UE_KINDA_SMALL_NUMBER) : 0.0f;

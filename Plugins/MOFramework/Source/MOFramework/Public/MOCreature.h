@@ -75,7 +75,7 @@ enum class EMOCreatureHitSide : uint8
 	Right
 };
 
-/** A creature animation for every machine (AMOCreature::PlayAnimationEverywhere): the server sets it, each client plays it in OnRep_AnimCue. */
+/** A creature animation for every machine (AMOCreature::PlayAnimationEverywhere): the server plays it, each client when MulticastAnimCue arrives. */
 USTRUCT()
 struct FMOCreatureAnimCue
 {
@@ -88,13 +88,13 @@ struct FMOCreatureAnimCue
 	UPROPERTY()
 	float PlayRate = 1.0f;
 
-	/** The server's game time when it played: a client that receives the cue late (joining, or the creature coming into relevance) skips it. */
-	UPROPERTY()
-	float ServerTime = 0.0f;
-
-	/** Bumped on every cue, so the same animation twice still replicates. */
+	/** Bumped on every cue: a client tells a newer cue from the one it is still loading. */
 	UPROPERTY()
 	uint8 Serial = 0;
+
+	/** Stop Animation (StopAnimationEverywhere) instead of playing it. */
+	UPROPERTY()
+	bool bStop = false;
 };
 
 /**
@@ -109,8 +109,16 @@ class MOFRAMEWORK_API AMOCreature : public AMOCharacter
 public:
 	AMOCreature(const FObjectInitializer& ObjectInitializer);
 
-	/** + the behavior tree (override or the definition's), the carcass table, and the creature controller class's own. */
+	/** + the behavior tree (override or the definition's), the creature controller class's own, and GatherClientAssets. */
 	virtual void GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const override;
+
+	/**
+	 * The soft assets that what the server replicates about this creature names, appended to Out: the hit reactions a cue plays
+	 * (MulticastAnimCue) and the carcass table its carcass points at. A client loads them when the creature arrives (BeginPlay): a replicated
+	 * reference to an asset the client has not loaded waits on that load, behind everything else streaming in, and the flinch landed past its
+	 * moment / the carcass came late (Oct 21, N-169 / N-186). The server loads them with the rest (GatherRuntimeAssets).
+	 */
+	void GatherClientAssets(TArray<FSoftObjectPath>& Out) const;
 
 	// ============================================================================
 	// DEFINITION
@@ -166,11 +174,15 @@ public:
 
 	/**
 	 * Play a creature animation on every machine (server only): a montage plays as itself, a sequence in the ABP's DefaultSlot (an ABP
-	 * without a DefaultSlot node shows nothing: ABP_DeerDoe, N-096). The server plays it now, each client when AnimCue arrives; null stops
+	 * without a DefaultSlot node shows nothing: ABP_DeerDoe, N-096). The server plays it now, each client when the cue arrives (MulticastAnimCue); null stops
 	 * the current one. A montage played straight on the AnimInstance shows on the server only: the bite (BTTask_CreatureAttack) and the hit
 	 * reactions go through here. Returns the length played on the server (0 = nothing played).
 	 */
 	float PlayAnimationEverywhere(UAnimSequenceBase* Animation, float PlayRate = 1.0f);
+
+	/** Stop one animation on every machine (server only), if it is still playing here; anything else playing (a flinch) carries on. The bite's
+	 *  abort used to stop EVERY montage, and it came a frame after the flinch a blow had just started (Oct 21). */
+	void StopAnimationEverywhere(UAnimSequenceBase* Animation);
 
 	/** Which side of the creature a blow came from: its forward against the flat direction to the attacker (Front / Back within 45 deg). */
 	static EMOCreatureHitSide ClassifyHitSide(const FVector& CreatureForward, const FVector& ToAttacker);
@@ -208,14 +220,27 @@ protected:
 	void PlayHitReactionFrom(const AActor* Attacker);
 
 	/** The last cue the server played (PlayAnimationEverywhere). */
-	UPROPERTY(ReplicatedUsing=OnRep_AnimCue)
+	UPROPERTY(Transient)
 	FMOCreatureAnimCue AnimCue;
 
-	UFUNCTION()
-	void OnRep_AnimCue();
+	/** Each client applies the cues in the order the server played them (N-169). An event, not a state: it was one replicated cue, and a
+	 *  flinch then a bite in the same net update reached a joiner as the bite alone (and a bite then its stop as the stop alone). Reliable:
+	 *  the order matters (a stop, then a play) and the engine drops an unreliable multicast past net.MaxRPCPerNetUpdate (2) calls in one net
+	 *  update. The animation travels as its PATH: as an object reference, one the joiner had not loaded arrived as None. No clock
+	 *  comparison: a client's estimate of the server's game time was 1.5-1.9 s off and skipped every bite (Oct 21). */
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastAnimCue(const FSoftObjectPath& Animation, float PlayRate, int32 Serial, bool bStop);
+
+	/** A client: applies a cue whose animation is loaded; otherwise loads it (high priority) and applies it then, unless a newer cue came. */
+	void PlayArrivedCue(const FSoftObjectPath& Animation, float PlayRate, int32 Serial, bool bStop, bool bAfterLoad);
+
+	int32 LastCueSerial = INDEX_NONE;   // a client: the newest cue received
 
 	/** Plays Cue on this machine; returns its length (0 = nothing played). */
 	float PlayAnimCueLocally(const FMOCreatureAnimCue& Cue);
+
+	/** GatherClientAssets, loading on a client from BeginPlay (held so they stay loaded while the creature lives). */
+	TSharedPtr<struct FStreamableHandle> ClientAssetsLoad;
 
 	/** Server game time of the last hit reaction: one blow can damage several parts, and it flinches once. */
 	float LastHitReactionTime = -100.0f;

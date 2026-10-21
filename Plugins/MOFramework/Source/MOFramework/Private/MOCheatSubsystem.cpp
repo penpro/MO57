@@ -68,6 +68,7 @@
 #include "MOIdentityComponent.h"
 #include "MOCharacter.h"
 #include "MOAnatomyComponent.h"
+#include "MOCreature.h"
 #include "MODeathRecapWidget.h"
 #include "MOCommonButton.h"
 #include "MOWorldReadinessSubsystem.h"
@@ -1714,6 +1715,45 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		{
 			// Deferred so client-world RPCs really transport (see RunOnNextTick).
 			RunOnNextTick(World, [](UWorld* W) { RunAttackTest(W); });
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.HitCreature [PlayerIndex=1] [Damage=2] [ClassNamePart] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.HitCreature"),
+		TEXT("Server: the living creature nearest player PlayerIndex's pawn (within 20 m; whose class name contains ClassNamePart, if given) takes a blunt blow ")
+		TEXT("to the torso from that pawn, a tick later. ")
+		TEXT("The blow's own RPCs (the flinch) leave this machine only outside script execution: an inflict_damage from editor Python ran them locally (N-169). ")
+		TEXT("Usage: MO.Test.HitCreature [PlayerIndex=1] [Damage=2] [ClassNamePart]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 PlayerIndex = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1;
+			const float Damage = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 2.0f;
+			const FString ClassNamePart = Args.Num() > 2 ? Args[2] : FString();
+			RunOnNextTick(World, [PlayerIndex, Damage, ClassNamePart](UWorld* W)
+			{
+				APawn* Attacker = UGameplayStatics::GetPlayerPawn(W, PlayerIndex);
+				if (!Attacker || W->GetNetMode() == NM_Client)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] HitCreature: no pawn for player %d, or not the server"), PlayerIndex);
+					return;
+				}
+				AMOCreature* Nearest = nullptr;
+				double NearestDist = 2000.0;
+				for (TActorIterator<AMOCreature> It(W); It; ++It)
+				{
+					const double Dist = FVector::Dist(It->GetActorLocation(), Attacker->GetActorLocation());
+					if (!It->IsDead() && Dist < NearestDist && (ClassNamePart.IsEmpty() || It->GetClass()->GetName().Contains(ClassNamePart)))
+					{
+						Nearest = *It;
+						NearestDist = Dist;
+					}
+				}
+				UMOAnatomyComponent* Anatomy = Nearest ? Nearest->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+				const bool bHit = Anatomy && Anatomy->InflictDamage(EMOBodyPartType::Torso, Damage, EMOWoundType::Blunt, Attacker);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] HitCreature: %s hit by %s for %.1f: %s"), *GetNameSafe(Nearest), *Attacker->GetName(), Damage,
+					bHit ? TEXT("landed") : TEXT("no creature within 20 m / not damaged"));
+			});
 		}),
 		ECVF_Default));
 

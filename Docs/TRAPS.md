@@ -69,6 +69,9 @@
   names before import (`Tools/glb_item_prep_blender.py` does it for GLBs; `Docs/Item_Art_Pipeline.md` section 8). (Oct 17)
 - **A "Server" RPC called in a test runs on the client** -> editor Python (and any console command it dispatches synchronously) runs EVERY RPC
   LOCAL (`GAllowActorScriptExecutionInEditor`) -> test verbs that send RPCs defer a tick (RunOnNextTick); assert on the logs the GAME writes. (coop-pawn-lifecycle, dev_status)
+  It includes RPCs fired as a SIDE EFFECT on the host: an `inflict_damage` from `_probe(host, ...)` played the wolf's flinch on the host
+  and never sent its multicast (Oct 21, three rounds blamed on the network; the proof is `log LogNet VeryVerbose`: "GetFunctionCallspace
+  ScriptExecutionInEditor: MulticastAnimCue" where a sent one says "Multicast" then LogNetTraffic "Sent RPC") -> `MO.Test.HitCreature`.
 - **Editor stops answering after an asset delete / rename from Python** -> `ForceDeleteObjects` ensure -> CrashReportClientEditor -> never
   delete or rename assets in editor Python; delete files on disk with the editor CLOSED. (animation-retarget, swimming)
 - **The bridge never comes up after a crash** -> the editor sits on the package-restore dialog -> `ue.py editor stop`, move `Saved/Autosaves`

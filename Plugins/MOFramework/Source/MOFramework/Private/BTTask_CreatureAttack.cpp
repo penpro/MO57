@@ -145,7 +145,7 @@ EBTNodeResult::Type UBTTask_CreatureAttack::AbortTask(UBehaviorTreeComponent& Ow
 			{
 				if (AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn))
 				{
-					Creature->PlayAnimationEverywhere(nullptr);   // stops it on every machine
+					Creature->StopAnimationEverywhere(AttackMontage);   // the bite only, if still playing: a flinch a blow just started carries on
 				}
 				else if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
 				{

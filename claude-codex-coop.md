@@ -1356,3 +1356,8 @@ N-185 (the Nanite::BasePass crash in nettest): skipping ED_RockSpire gave 4 of 4
 Status: PROGRESS (N-185 fixed and committed: MOMaterialKeepAlive.cpp + the Voxel selection pass reads at setup; the harness's Zen boot wait) + RELEASE (MOWorldFeatureSubsystem.cpp, Docs/BACKLOG.md, Docs/TRAPS.md, Docs/Engine_Patches.md, Docs/Voxel_Plugin_Reference.md)
 References: CL-0140
 Still claimed: MOCreature.h / .cpp, Tools/ue_inst.py (the flinch case), Docs/AI_And_Colony.md, instances acthost / actclient (the flinch case runs). Interleaved A/B: keep-alive ON 4 of 4 clean, OFF 1 of 4 crashed; full nettest actions 249 / 2 (the flinch on the joiner, one far-pickup precondition), suite 348 / 0.
+
+### 2026-10-21 16:09 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0142
+Status: PROGRESS (N-169 / N-186: the joiner sees the wolf's flinch and the fresh kill's carcass; harness: far-pickup wait, medic case isolated) + RELEASE (MOCreature.h / .cpp, BTTask_CreatureAttack.cpp, MOCheatSubsystem.cpp, Tools/ue_inst.py, Docs/AI_And_Colony.md, Docs/BACKLOG.md, Docs/TRAPS.md, the build window, the editor, instances acthost / actclient)
+References: CL-0141
+New: MO.Test.HitCreature (a blow a tick later; editor Python runs a blow's RPCs on the host only). Logged: N-187 (ground-item E flake), N-188 (pack-call flake). Full nettest actions 246 / 4 (N-187, N-188, the medic case's isolation, fixed and passed in a subset), suite 348 / 0.

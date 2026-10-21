@@ -41,9 +41,15 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 ### Animation on every machine (Oct 20 2026, N-169)
 
-- **A creature animation is a replicated cue:** `AMOCreature::PlayAnimationEverywhere(Anim, Rate)` (server) plays it there and sets `AnimCue`
-  (animation, rate, server time, serial); each client plays it in `OnRep_AnimCue`, skipping a cue more than 1 s old (a join, the creature
-  coming into relevance). A montage plays as itself, a sequence in the ABP's `DefaultSlot`. Before, the bite (`BTTask_CreatureAttack`) was a
+- **A creature animation is a cue event:** `AMOCreature::PlayAnimationEverywhere(Anim, Rate)` (server) plays it there and sends
+  `MulticastAnimCue` (the animation's PATH, rate, serial, stop; RELIABLE); each client applies the cues in the server's order.
+  `StopAnimationEverywhere(Anim)` stops that one montage, only if it is still playing on the server: the bite's abort used to stop
+  EVERY montage, a frame after the flinch a blow had just started. It was a replicated property until Oct 21 (a flinch then a bite in
+  one net update reached a joiner as the bite alone). The path, not an object reference: a reference to an animation the joiner had
+  not loaded arrived as None; a client loads it (high priority) and applies it then unless a newer cue came ("loading X first"), and
+  loads what a cue or the carcass can name when the creature arrives (`AMOCreature::GatherClientAssets`: the hit reactions and the
+  carcass table). No clock comparison: a client's estimate of the server's game time was 1.5-1.9 s off. Test a blow with
+  `MO.Test.HitCreature [player] [damage] [class]` (a tick later): an `inflict_damage` from editor Python runs the flinch cue on the host only. A montage plays as itself, a sequence in the ABP's `DefaultSlot`. Before, the bite (`BTTask_CreatureAttack`) was a
   `Montage_Play` on the server's AnimInstance: a joiner saw a wolf glide up and hurt it with no bite. Any new creature animation goes through here.
 - **Hit reactions:** a blow with an attacker (`UMOAnatomyComponent`'s instigator; none = the environment, no flinch) plays the definition's
   `HitReactFront / Left / Right / Back` for the side it came from (`AMOCreature::ClassifyHitSide`: Front / Back within 45 deg of the nose, flat;
