@@ -75,6 +75,9 @@ git status
 git add -A && git commit -m "message" && git push
 git log --oneline -10
 ```
+To commit PART of a file (two fixes in one file, one verified): `python Tools/git_stage_part.py <path> --func a,b` (Python functions) or
+`--text <regex>` (changes whose new text matches), `--dry` first, then read `git show :<path>`. Not `git apply --unidiff-zero` of some hunks:
+it misplaces insertions (TRAPS section 1).
 
 Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe" MO57Editor Win64 Development
 -Project="D:/UEProjects/MO57/MO57.uproject" -NoHotReload` (~20-40 s for one .cpp). A clean `UE_5.7` path fails in ~5 s (`CS0117 ... V7`).

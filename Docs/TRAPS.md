@@ -13,6 +13,7 @@
   but the index is case-sensitive, and one bad pathspec in `git add a b c` stages NOTHING -> before EVERY commit run `git status --short` and
   check the staged column; never pipe `git add` stderr to /dev/null; copy paths from `git status`; after a push `git show HEAD --stat`. (memory git-staging-verification)
 - **Codex's work lands in your commit** -> `git add -A` in the shared tree -> stage your exact paths only. (multi-agent-coop)
+- **A partly staged file lands with a block in the wrong function** -> `git diff -U0` + `git apply --cached --unidiff-zero` of SOME hunks places a pure insertion by its new-side line number, which counts the hunks you left out (Oct 20: the gait warm-up landed inside `_client_carcass`; caught before the push, amended) -> to commit part of a file, build its blob from the base with the chosen changes (difflib on lines, anchored to the base) and `git hash-object -w` + `git update-index --cacheinfo`; then read the staged file (`git show :path`) where the change should be.
 - **Stray assets / MegaMaterialCache in the staged list** -> the editor's source control auto-stages every asset it saves and rewrites
   `Content/Developers/penum/MegaMaterialCache.uasset` -> `git rm --cached` strays; never stage MegaMaterialCache or `.claude/settings.local.json`. (animation-retarget)
 - **"2 insertions" on a binary asset** -> that is the git-lfs POINTER (oid + size) -> `git lfs status`, not a red flag. (dev_status)
