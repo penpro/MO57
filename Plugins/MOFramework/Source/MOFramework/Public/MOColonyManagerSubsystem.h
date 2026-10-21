@@ -39,6 +39,7 @@
 #include "MOSurvivorJobTypes.h"
 
 #include "MOSaveDomainInterface.h"
+#include "MONotificationWidget.h"   // EMONotificationType (AlertPlayers)
 #include "MOColonyManagerSubsystem.generated.h"
 
 class AMOContainerActor;
@@ -308,6 +309,25 @@ public:
 	UPROPERTY(EditAnywhere, Category="MO|Colony", meta=(ClampMin="0.0"))
 	float MedicBleedThresholdMlPerSecond = 0.2f;
 
+	/** After a medic could not treat a patient (could not reach it, refused at the bedside, the wound got no better), nobody is sent to that
+	 *  patient again for this long (s). Before, a blocked medic was re-sent every 10 s upkeep tick. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony", meta=(ClampMin="0.0"))
+	float MedicRetryAfterFailureSeconds = 60.0f;
+
+	/** The treat job reports a failed attempt (AMOSurvivorController): the medic pass leaves this patient for MedicRetryAfterFailureSeconds. */
+	void NoteMedicCouldNotTreat(const AActor* Patient);
+
+	/** Colony alerts (N-095 tier 1, Oct 20): a colonist nobody plays bleeding at least this many mL/s is reported to every player. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony", meta=(ClampMin="0.0"))
+	float AlertBleedMlPerSecond = 1.0f;
+
+	/** The same alert about the same colonist is repeated at most this often (s). */
+	UPROPERTY(EditAnywhere, Category="MO|Colony", meta=(ClampMin="0.0"))
+	float AlertRepeatSeconds = 60.0f;
+
+	/** Server: tell every player Message about Colonist, at most once per AlertRepeatSeconds per colonist and Kind. */
+	void AlertPlayers(const APawn* Colonist, FName Kind, const FText& Message, EMONotificationType Type);
+
 	/** Fuel items a refueling villager withdraws per trip. */
 	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="1"))
 	int32 HearthFuelWithdrawCount = 5;
@@ -340,6 +360,7 @@ private:
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunHearthPass(const TArray<APawn*>& Roster);
 	void RunMedicPass(const TArray<APawn*>& Roster);
+	void RunAlertPass(const TArray<APawn*>& Roster);
 	void RunExcavationPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
@@ -349,6 +370,13 @@ private:
 	static FGuid GetPawnGuid(const APawn* Pawn);
 
 	UPROPERTY() FMOSettlementRecord Settlement;
+
+	/** Patients a medic failed to treat, and the world time a medic may be sent again (NoteMedicCouldNotTreat). */
+	TMap<TWeakObjectPtr<const AActor>, double> MedicRetryAfter;
+
+	/** Alerts: each colonist's wound count at the last pass (a new wound from an animal = an attack), and when each alert last went out. */
+	TMap<TWeakObjectPtr<const APawn>, int32> AlertWoundCounts;
+	TMap<FString, double> AlertLastSent;
 	UPROPERTY() TArray<FMOColonyQuota> Quotas;
 	UPROPERTY() TMap<FGuid, FGuid> Residency;
 	UPROPERTY() TMap<FGuid, float> VillagerMood;

@@ -20,6 +20,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOMedicalTreatmentActions.h"
+#include "MOColonyManagerSubsystem.h"
 #include "MOMedicalSubsystem.h"
 #include "MOTimedActionComponent.h"
 #include "MOCharacter.h"
@@ -1785,6 +1786,14 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	APawn* Medic = GetPawn();
 	AActor* Patient = CurrentJob.TargetActor.Get();
+	// A failed attempt is told to the colony, which leaves this patient a while before sending anyone again.
+	const auto NoteFailed = [this, Patient]()
+	{
+		if (UMOColonyManagerSubsystem* Colony = GetWorld() ? GetWorld()->GetSubsystem<UMOColonyManagerSubsystem>() : nullptr)
+		{
+			Colony->NoteMedicCouldNotTreat(Patient);
+		}
+	};
 	const AMOCharacter* PatientCharacter = Cast<AMOCharacter>(Patient);
 	if (!Medic || !IsValid(Patient) || (PatientCharacter && PatientCharacter->IsDead()))
 	{
@@ -1878,6 +1887,7 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 					break;
 				}
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job FAILED: can't reach %s (%.0f cm off)"), *Patient->GetName(), Short);
+				NoteFailed();
 				FailSimpleJob(MOSurvivorJobWhy::CantReach());
 				return;
 			}
@@ -1892,6 +1902,7 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job refused at %s: %s"),
 					*Patient->GetName(), *Result.Describe().ToString());
+				NoteFailed();
 				FailSimpleJob(Result.Describe());
 				return;
 			}
@@ -1916,6 +1927,10 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job %s: %s on %s, bleed %.2f -> %.2f mL/s after %.0fs"),
 				bWorked ? TEXT("done") : TEXT("FAILED"), *CurrentJob.TreatmentId.ToString(), *Patient->GetName(),
 				TreatStartBleedRate, Wound ? Wound->BleedRate : 0.0f, SimpleJobTimer);
+			if (!bWorked)
+			{
+				NoteFailed();   // interrupted (the patient moved) or no better
+			}
 			CompleteSimpleJob(bWorked);
 			break;
 		}

@@ -155,7 +155,9 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   them: the `TreatWound` job then fetches them first (states 42-43: walk to the store, take the shortfall; a tool is carried whole with its
   durability), walks to the patient (40, following it if it moves), and runs `FMOMedicalTreatmentActions::Begin` on its own timed action
   (41) -- the same server treatment, checks and duration a player's is. Done when the wound bleeds less. Test
-  `MOFramework.Medical.Treatment.MedicPick`; host: `_host_colony_medic`.
+  `MOFramework.Medical.Treatment.MedicPick`; host: `_host_colony_medic`. A bleeding player is told "<medic> is coming to dress your
+  wound. Stay still." (the treatment needs the patient still); a failed attempt (can't reach, refused at the bedside, no better)
+  leaves that patient for `MedicRetryAfterFailureSeconds` (60 s; it was re-sent every 10 s tick).
 - **A pawn's age** (Oct 19): `FMOPersistedPawnRecord::DefaultAgeInDays(Guid)` (18-40 years, fixed by the GUID) wherever a record is made without
   one -- the save capture, the possession list's live-world rows, the game mode's spawn registration. Before, only game-mode spawns got an age;
   the player's own pawn, recruits and wild survivors read "0 years" in the Characters list. Gender stays "Unknown" until F15.
@@ -272,6 +274,11 @@ Three axes, float -1.0 to 1.0:
 | 2 | Urgent | Health <40%, idle >30min | Persistent orange dot |
 | 3 | Notable | Task complete, skill gained | Colony log only |
 | 4 | Log | Routine activities | History only |
+
+**Built (Oct 20, N-095):** tier 1 as notifications to every player. `UMOColonyManagerSubsystem::RunAlertPass` (each upkeep tick) looks at
+colonists nobody is playing: a new wound dealt by an animal ("Harper is being attacked by a wolf!"), a running failure clock ("... is
+dying."), or bleeding at least `AlertBleedMlPerSecond` (1 mL/s: "... is bleeding badly."); `AlertPlayers` sends each at most once per
+`AlertRepeatSeconds` (60) per colonist and kind. Not built: the persistent dot, the sound, tiers 2-4. Host-side test `_host_colony_alerts`.
 
 ## 5. Gotchas that bit (keep)
 

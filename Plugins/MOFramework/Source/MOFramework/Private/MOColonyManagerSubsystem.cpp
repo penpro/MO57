@@ -27,8 +27,10 @@
 #include "MOSkillsComponent.h"
 #include "MOBuildProgressComponent.h"
 #include "MODesignationSubsystem.h"
+#include "MOPlayerController.h"
 #include "MOAnatomyComponent.h"
 #include "MOCreature.h"
+#include "MOCreatureDefinitionRow.h"
 #include "MOMedicalTreatmentActions.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
@@ -748,6 +750,9 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 	// The bleeding first (N-061): an idle hand dresses a wound before taking standing orders.
 	RunMedicPass(Roster);
 
+	// Tell the players what happens to colonists nobody is playing: attacked, bleeding badly, dying (N-095 tier 1).
+	RunAlertPass(Roster);
+
 	// Standing orders next: idle hands pick up quota work this same pass.
 	RunQuotaPass(Roster);
 
@@ -1305,6 +1310,80 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 	}
 }
 
+void UMOColonyManagerSubsystem::AlertPlayers(const APawn* Colonist, FName Kind, const FText& Message, EMONotificationType Type)
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsValid(Colonist))
+	{
+		return;
+	}
+	const FString Key = FString::Printf(TEXT("%s|%s"), *GetPawnGuid(Colonist).ToString(), *Kind.ToString());
+	const double Now = World->GetTimeSeconds();
+	if (const double* Last = AlertLastSent.Find(Key); Last && Now - *Last < AlertRepeatSeconds)
+	{
+		return;
+	}
+	AlertLastSent.Add(Key, Now);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Alert (%s): %s"), *Kind.ToString(), *Message.ToString());
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (AMOPlayerController* PC = Cast<AMOPlayerController>(It->Get()))
+		{
+			PC->ClientShowNotification(Message, 6.0f, Type);
+		}
+	}
+}
+
+void UMOColonyManagerSubsystem::RunAlertPass(const TArray<APawn*>& Roster)
+{
+	for (APawn* Villager : Roster)
+	{
+		const AMOCharacter* Character = Cast<AMOCharacter>(Villager);
+		if (!Character || Character->IsDead() || Villager->IsPlayerControlled())
+		{
+			continue;   // a colonist a player is playing: that player sees it
+		}
+		const UMOIdentityComponent* Identity = Villager->FindComponentByClass<UMOIdentityComponent>();
+		const FText Who = Identity && !Identity->DisplayName.IsEmpty() ? Identity->DisplayName : NSLOCTEXT("MOColony", "AColonist", "A colonist");
+		const UMOAnatomyComponent* Anatomy = Villager->FindComponentByClass<UMOAnatomyComponent>();
+		const UMOVitalsComponent* Vitals = Villager->FindComponentByClass<UMOVitalsComponent>();
+
+		// Attacked: a wound since the last pass, dealt by an animal.
+		const int32 Wounds = Anatomy ? Anatomy->GetAllWounds().Num() : 0;
+		int32& Seen = AlertWoundCounts.FindOrAdd(TWeakObjectPtr<const APawn>(Villager), Wounds);
+		if (Wounds > Seen)
+		{
+			if (const AMOCreature* Attacker = Cast<AMOCreature>(Anatomy->GetLastDamageInstigator()))
+			{
+				const FMOCreatureDefinitionRow* Kind = Attacker->GetCreatureDefinitionRow();
+				const FText What = Kind && !Kind->DisplayName.IsEmpty() ? Kind->DisplayName.ToLower() : NSLOCTEXT("MOColony", "AnAnimal", "an animal");
+				AlertPlayers(Villager, TEXT("Attacked"), FText::Format(NSLOCTEXT("MOColony", "AlertAttacked", "{0} is being attacked by a {1}!"), Who, What),
+					EMONotificationType::Error);
+			}
+		}
+		Seen = Wounds;
+
+		// Dying (a failure clock is running) outranks bleeding badly.
+		if (Vitals && (Vitals->GetCirculatoryFailureSeconds() > 0.0f || Vitals->GetRespiratoryFailureSeconds() > 0.0f || Vitals->GetHeatStrokeDoseMinutes() > 0.0f))
+		{
+			AlertPlayers(Villager, TEXT("Dying"), FText::Format(NSLOCTEXT("MOColony", "AlertDying", "{0} is dying."), Who), EMONotificationType::Error);
+		}
+		else if (Anatomy && Anatomy->GetTotalBleedRate() >= AlertBleedMlPerSecond)
+		{
+			AlertPlayers(Villager, TEXT("Bleeding"), FText::Format(NSLOCTEXT("MOColony", "AlertBleeding", "{0} is bleeding badly."), Who),
+				EMONotificationType::Warning);
+		}
+	}
+}
+
+void UMOColonyManagerSubsystem::NoteMedicCouldNotTreat(const AActor* Patient)
+{
+	if (const UWorld* World = GetWorld(); World && IsValid(Patient))
+	{
+		MedicRetryAfter.Add(TWeakObjectPtr<const AActor>(Patient), World->GetTimeSeconds() + MedicRetryAfterFailureSeconds);
+	}
+}
+
 void UMOColonyManagerSubsystem::RunMedicPass(const TArray<APawn*>& Roster)
 {
 	UWorld* World = GetWorld();
@@ -1383,6 +1462,14 @@ void UMOColonyManagerSubsystem::RunMedicPass(const TArray<APawn*>& Roster)
 		}
 	}
 
+	const double Now = World->GetTimeSeconds();
+	for (auto It = MedicRetryAfter.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid() || It.Value() <= Now)
+		{
+			It.RemoveCurrent();
+		}
+	}
 	for (const TPair<float, AMOCharacter*>& Entry : Patients)
 	{
 		AMOCharacter* Patient = Entry.Value;
@@ -1390,7 +1477,7 @@ void UMOColonyManagerSubsystem::RunMedicPass(const TArray<APawn*>& Roster)
 		{
 			break;
 		}
-		if (Tended.Contains(Patient))
+		if (Tended.Contains(Patient) || MedicRetryAfter.Contains(TWeakObjectPtr<const AActor>(Patient)))
 		{
 			continue;
 		}
@@ -1428,6 +1515,14 @@ void UMOColonyManagerSubsystem::RunMedicPass(const TArray<APawn*>& Roster)
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Medic %s goes to treat %s (%s, bleeding %.2f mL/s)%s"),
 					*Medic->GetName(), *Patient->GetName(), *TreatmentId.ToString(), Entry.Key,
 					From ? *FString::Printf(TEXT(", supplies from %s"), *From->GetName()) : TEXT(""));
+				// A player who is bleeding is told help is coming (and stays put: the treatment needs the patient still).
+				if (AMOPlayerController* PatientPC = Cast<AMOPlayerController>(Patient->GetController()))
+				{
+					const UMOIdentityComponent* MedicId = Medic->FindComponentByClass<UMOIdentityComponent>();
+					const FText MedicName = MedicId && !MedicId->DisplayName.IsEmpty() ? MedicId->DisplayName : NSLOCTEXT("MOColony", "AVillager", "A villager");   // never an actor name on a player's screen
+					PatientPC->ClientShowNotification(FText::Format(NSLOCTEXT("MOColony", "MedicComing", "{0} is coming to dress your wound. Stay still."),
+						MedicName), 5.0f, EMONotificationType::Info);
+				}
 				Idle.RemoveAt(Index);
 				Tended.Add(Patient);
 			}
