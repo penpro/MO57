@@ -168,6 +168,11 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AI")
 	TSoftObjectPtr<UBehaviorTree> BehaviorTree;
 
+	/** How close it will come to a flame (a carried torch, a campfire: the flames UMOAmbientEnvironmentRegistry knows), cm. A wolf will not
+	 *  close on someone holding fire or standing by one, nor bite near it; it holds off at the edge. 0 = no fear of fire. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	float FireFearRadiusCm = 0.0f;
+
 	// ============================================================================
 	// ANIMATION
 	// ============================================================================

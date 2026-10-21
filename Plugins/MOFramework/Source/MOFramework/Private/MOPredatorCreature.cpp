@@ -102,6 +102,11 @@ bool AMOPredatorCreature::ShouldAttack() const
 
 bool AMOPredatorCreature::ShouldFlee() const
 {
+	// ONE flee decision (AMOCreatureController::ShouldFlee, the species row's FleeThreshold); this class's own threshold only without a controller
+	if (const AMOCreatureController* CreatureAI = GetCreatureController())
+	{
+		return CreatureAI->ShouldFlee();
+	}
 	return GetHealthPercent() <= FleeHealthThreshold;
 }
 

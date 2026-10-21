@@ -55,6 +55,12 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 		return EBTNodeResult::Failed;
 	}
 
+	// No bite by a fire: the species' FireFearRadiusCm around a carried torch or a campfire (the chase already stops short of it)
+	if (const AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); Creature && Creature->IsWaryOfFireAt(OwnerPawn->GetActorLocation()))
+	{
+		return EBTNodeResult::Failed;
+	}
+
 	// Face the target
 	FVector Direction = (TargetActor->GetActorLocation() - OwnerPawn->GetActorLocation()).GetSafeNormal();
 	Direction.Z = 0.f;

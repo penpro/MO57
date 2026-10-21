@@ -120,8 +120,13 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   `LoadSynchronous` at the spawn.
 - **Fallback spawns** use `MOSpawnClearance::TraceVoxelGround` + `IsUnderOpenWater` + `IsStandingSpotClear` (no sea-floor deer).
 - **Sleep is real-clock:** frozen mobs stay asleep until the recheck timer fires (`Docs/ENGINEERING_PRINCIPLES.md` #11 example).
-- The flee decision is computed twice (`BTService_UpdateCreatureState` and `AMOCreatureController::ShouldFlee`); unify before adding
-  inputs such as fire-fear (`Docs/Light_Sources.md`).
+- **One flee decision** (Oct 20): `AMOCreatureController::ShouldFlee` (the species row's `FleeThreshold`); `BTService_UpdateCreatureState` and
+  `AMOPredatorCreature::ShouldFlee` ask it (each kept its own 0.3 before).
+- **Fire-fear** (N-096, Oct 20): a creature will not close on a target within its species' `FireFearRadiusCm` of a flame (a carried torch or
+  a campfire: the flames `UMOAmbientEnvironmentRegistry` knows, `AMOCreature::IsWaryOfFireAt`). `BTTask_ChaseTarget` stops about 6 m short
+  and fails ("[MOCreature] Wolf_C_0 holds off from X: fire within N cm"); the tree wanders it and tries again, so it circles; and
+  `BTTask_CreatureAttack` makes no bite within the radius of a flame. Wolf01 400 cm; the deer 0 (prey flees threats anyway). Proof:
+  `nettest actions` `_host_wolf_holds_off_fire` (control: the torch put out, the same wolf bites).
 - Creature ABP state machines (locomotion / rest / sleep / death) and EQS query assets (`EQ_FindHarvestableItems`,
   `EQ_FindHarvestTargets`, `EQ_FindEscapeRoute`) still need Blueprint setup (C++ complete).
 - Only deer and wolf exist; the animal pack has fox / pig / crow assets but new fauna needs ABP work. Creature footsteps need foot

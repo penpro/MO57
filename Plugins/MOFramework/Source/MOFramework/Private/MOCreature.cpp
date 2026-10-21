@@ -22,6 +22,7 @@
 #include "Animation/AnimMontage.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
+#include "MOAmbientEnvironmentProvider.h"
 
 AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -316,6 +317,29 @@ EMOCreatureHitSide AMOCreature::ClassifyHitSide(const FVector& CreatureForward, 
 	}
 	// +Y is the right of a pawn facing +X: forward x (to the attacker) points up when the attacker is on its right
 	return FVector::CrossProduct(Forward, To).Z > 0.0f ? EMOCreatureHitSide::Right : EMOCreatureHitSide::Left;
+}
+
+float AMOCreature::NearestFlameDistanceCm(const UWorld* World, const FVector& Location)
+{
+	const UMOAmbientEnvironmentRegistry* Registry = World ? World->GetSubsystem<UMOAmbientEnvironmentRegistry>() : nullptr;
+	float Nearest = TNumericLimits<float>::Max();
+	if (Registry)
+	{
+		for (const IMOLocalLightSource* Flame : Registry->GetLightSources())
+		{
+			if (Flame && Flame->GetLuminousIntensityCd() > 0.0f)
+			{
+				Nearest = FMath::Min(Nearest, static_cast<float>(FVector::Dist(Flame->GetLightLocation(), Location)));
+			}
+		}
+	}
+	return Nearest;
+}
+
+bool AMOCreature::IsWaryOfFireAt(const FVector& Location) const
+{
+	const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow();
+	return Definition && Definition->FireFearRadiusCm > 0.0f && NearestFlameDistanceCm(GetWorld(), Location) <= Definition->FireFearRadiusCm;
 }
 
 void AMOCreature::PlayHitReactionFrom(const AActor* Attacker)

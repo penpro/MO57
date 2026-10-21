@@ -57,8 +57,9 @@ void UBTService_UpdateCreatureState::TickNode(UBehaviorTreeComponent& OwnerComp,
 	// Update health
 	BlackboardComp->SetValueAsFloat(HealthPercentKey.SelectedKeyName, HealthPercent);
 
-	// Update should flee
-	bool bShouldFlee = HealthPercent <= FleeHealthThreshold;
+	// Update should flee: the controller's one decision (the species row's FleeThreshold); this node's threshold only for another controller
+	const AMOCreatureController* CreatureController = Cast<AMOCreatureController>(AIController);
+	bool bShouldFlee = CreatureController ? CreatureController->ShouldFlee() : HealthPercent <= FleeHealthThreshold;
 	BlackboardComp->SetValueAsBool(ShouldFleeKey.SelectedKeyName, bShouldFlee);
 
 	// Get target

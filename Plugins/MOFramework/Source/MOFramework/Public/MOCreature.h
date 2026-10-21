@@ -175,6 +175,13 @@ public:
 	/** Which side of the creature a blow came from: its forward against the flat direction to the attacker (Front / Back within 45 deg). */
 	static EMOCreatureHitSide ClassifyHitSide(const FVector& CreatureForward, const FVector& ToAttacker);
 
+	/** True when a flame (a carried torch, a campfire) burns within this species' FireFearRadiusCm of Location: the chase stops short of a
+	 *  target holding fire or standing by one, and no bite is made by a fire (BTTask_ChaseTarget / BTTask_CreatureAttack). */
+	bool IsWaryOfFireAt(const FVector& Location) const;
+
+	/** The distance from Location to the nearest registered flame (cm), or a huge number when none burns. */
+	static float NearestFlameDistanceCm(const UWorld* World, const FVector& Location);
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// ============================================================================
