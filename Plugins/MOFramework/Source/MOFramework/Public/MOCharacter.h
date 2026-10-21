@@ -775,7 +775,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMORespirationComponent> RespirationComponent;
 
-	/** Surface-aware footsteps (dormant on skeletons without the foot bones, e.g. creatures; no-op on a dedicated server). */
+	/** Surface-aware footsteps (foot plants; a skeleton without the foot bones, a creature, steps by distance when BoneFreeStepLengthCm is set; no-op on a dedicated server). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOFootstepComponent> FootstepComponent;
 

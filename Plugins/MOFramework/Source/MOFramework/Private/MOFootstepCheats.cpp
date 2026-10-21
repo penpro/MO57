@@ -11,6 +11,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Containers/Ticker.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -72,6 +73,24 @@ namespace
 				Steps->SetDebugLog(bOn);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP Log %s"), bOn ? TEXT("on") : TEXT("off"));
 			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GLogAllCmd(
+		TEXT("MO.Footstep.LogAll"),
+		TEXT("Dev: log every footstep of every pawn in this world (creatures too). Usage: MO.Footstep.LogAll <0|1>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const bool bOn = Args.Num() == 0 || FCString::Atoi(*Args[0]) != 0;
+			int32 Count = 0;
+			for (TObjectIterator<UMOFootstepComponent> It; It; ++It)
+			{
+				if (It->GetWorld() == World)
+				{
+					It->SetDebugLog(bOn);
+					++Count;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP LogAll %s (%d pawns)"), bOn ? TEXT("on") : TEXT("off"), Count);
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GHeightsCmd(

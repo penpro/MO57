@@ -60,12 +60,16 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
 - **What**: `IMOFootstepSurfaceInterface` on the actor stood on, else the world generator (floor vs the generated surface: structure /
   underground / the BIOME, `FMOBiomeDefinitionRow::FootstepSet`). The set name is the middle of the sound-bank ids `SFX.Footsteps.<Set>1` /
   `<Set>2`: a new surface = bank rows + a data value, never code. Crouched = Sneak gait (quiet).
-- Dev verbs: `MO.Footstep.Probe|Log|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
+- Dev verbs: `MO.Footstep.Probe|Log|LogAll|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
 - Biome sets (DT_Biomes `FootstepSet`; Temperate / Locust had drifted to SandTrail in the data, restored Oct 18, BR18-8): Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
   Rainforest MuddyStep, AlpineRock StoneStep.
 - **Props underfoot** (N-132, Oct 20): a placed mesh stood on (PCG rocks and logs, props) names its set by its asset path,
   `UMOFootstepComponent::PropRules`, first match (`FMOFootstepMath::DefaultPropRules`): rocky ground / riverbed / rock / boulder / cliff /
   stone / cobble / shelf / pebble = StoneStep; stump / tree / branch / log / trunk / roots / wood / plank / stick = BareWood; ground / terrain /
   embankment / path patches defer to the biome below. Before, every prop rang as BareWood (no physical materials). Probe reason: `prop <mesh>`.
+- **Creatures** (N-132, Oct 20): the wolf and deer skeletons have no ball-of-foot bones, so their footstep component was silent. A pawn
+  without the bones now steps by the ground it covers when `BoneFreeStepLengthCm` is set (AMOCreature: 70 cm at a walk, longer strides
+  past 3 m/s, `FMOFootstepMath::BoneFreeStepCm`), on the same surface sets, at `StepVolumeScale` 0.5 (a padded paw, a light hoof). One
+  shared set for both species for now. `MO.Footstep.LogAll 1` logs every pawn's steps (`pawn=` on each line); host: the wolf case hears it.
 
 **Water:** splash / wading / stroke sounds (`AMOCharacter::UpdateWaterSounds`, ids `SFX.Footsteps.WaterSplash1/2`).

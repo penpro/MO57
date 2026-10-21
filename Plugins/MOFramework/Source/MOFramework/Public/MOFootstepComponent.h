@@ -1,4 +1,4 @@
-// Surface-aware footsteps for any pawn with a humanoid skeleton.
+// Surface-aware footsteps for any pawn: a humanoid skeleton's foot plants, or (a wolf, a deer: no ball bones) the ground it covers.
 //
 // WHEN a step happens: the animation decides. Each tick the component reads the world speed of both ball-of-foot bones; a foot that swung (fast against the body) and came to rest in the world has PLANTED
 // (FMOFootPlantDetector), so the sound lands exactly where the animation puts the foot, whatever the gait or the clip. If the bones never report a plant (a pose without the bones, a frozen animation)
@@ -56,6 +56,10 @@ struct MOFRAMEWORK_API FMOFootstepMath
 	/** The distance between two steps of this gait (cm); the fallback fires after FallbackFactor times it without an animation plant. */
 	static float StepLengthCm(EMOFootstepGait Gait);
 	static constexpr float FallbackFactor = 1.6f;
+
+	/** A bone-free pawn's distance between two footfall sounds (cm): its walking step, lengthening with speed past a walk (3 m/s) the way a
+	 *  four-legged gait's stride does (trot, gallop). N-132. */
+	static float BoneFreeStepCm(float WalkStepCm, float Speed2D);
 
 	/** Bank id of variant 0/1 of a set: "SFX.Footsteps.<Set><1|2>". */
 	static FName SoundIdFor(FName Set, int32 Variant);
@@ -169,6 +173,15 @@ public:
 	/** Below this horizontal speed (cm/s) a standing pawn makes no steps. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps", meta=(ClampMin="0.0"))
 	float MinStepSpeedCm = 40.0f;
+
+	/** A pawn whose skeleton has no foot bones (the wolf, the deer) steps by the ground it covers instead: a footfall every this many cm at a
+	 *  walk, longer as it runs (FMOFootstepMath::BoneFreeStepCm). 0 = such a pawn is silent. AMOCreature sets it (N-132, Oct 20). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps", meta=(ClampMin="0.0"))
+	float BoneFreeStepLengthCm = 0.0f;
+
+	/** How loud this pawn's steps are against the bank row (a person's foot 1; a padded paw or a light hoof less). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps", meta=(ClampMin="0.0"))
+	float StepVolumeScale = 1.0f;
 
 	/** Which sound set the floor under this pawn plays (also what the probe cheat prints). OutDescription gets a one-line reason. */
 	FName ResolveSet(const FHitResult& FloorHit, const FVector& FootLocation, FString* OutDescription = nullptr);

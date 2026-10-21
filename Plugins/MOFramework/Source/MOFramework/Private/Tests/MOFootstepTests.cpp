@@ -8,6 +8,7 @@
 #include "MOBiomeDatabaseSettings.h"
 #include "MOBiomeDefinitionRow.h"
 #include "MOFootstepComponent.h"
+#include "MOCreature.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -163,6 +164,13 @@ bool FMOFootstep_StrideFallback::RunTest(const FString& Parameters)
 	Fallback.Advance(Trigger * 0.9f, Step);
 	Fallback.NotePlant();
 	TestFalse(TEXT("a plant resets the distance"), Fallback.Advance(Trigger * 0.2f, Step));
+
+	// A pawn without foot bones (a wolf, a deer: N-132, Oct 20 2026) steps by distance alone: its walking step up to 3 m/s, a longer stride beyond.
+	TestEqual(TEXT("bone-free: the walking step at a walk"), FMOFootstepMath::BoneFreeStepCm(70.0f, 150.0f), 70.0f);
+	TestEqual(TEXT("bone-free: twice the stride at 6 m/s (a trot)"), FMOFootstepMath::BoneFreeStepCm(70.0f, 600.0f), 140.0f);
+	const UMOFootstepComponent* CreatureSteps = GetDefault<AMOCreature>()->FootstepComponent;
+	TestTrue(TEXT("a creature steps without bones, softer than a person"), CreatureSteps && CreatureSteps->BoneFreeStepLengthCm > 0.0f && CreatureSteps->StepVolumeScale < 1.0f);
+	TestEqual(TEXT("a person's pawn does not (its feet plant)"), GetDefault<UMOFootstepComponent>()->BoneFreeStepLengthCm, 0.0f);
 	return true;
 }
 

@@ -94,6 +94,11 @@ bool FMOFootPlantDetector::Update(float FootSpeedCm, float BodySpeedCm, float De
 	return false;
 }
 
+float FMOFootstepMath::BoneFreeStepCm(float WalkStepCm, float Speed2D)
+{
+	return WalkStepCm * FMath::Max(1.0f, Speed2D / 300.0f);
+}
+
 bool FMOStrideFallback::Advance(float DistanceCm, float StepLengthCm)
 {
 	Accumulated += DistanceCm;
@@ -195,7 +200,12 @@ void UMOFootstepComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	}
 	USkeletalMeshComponent* Mesh = Character->GetMesh();
 	UCharacterMovementComponent* Move = Character->GetCharacterMovement();
-	if (!Mesh || !Move || !EnsureBones(Mesh))
+	if (!Mesh || !Move)
+	{
+		return;
+	}
+	const bool bBones = EnsureBones(Mesh);
+	if (!bBones && BoneFreeStepLengthCm <= 0.0f)
 	{
 		return;
 	}
@@ -240,6 +250,16 @@ void UMOFootstepComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	LastVerticalSpeed = Velocity.Z;
 	if (!bGrounded)
 	{
+		return;
+	}
+
+	if (!bBones)
+	{
+		// No feet to watch (a wolf, a deer): a footfall every BoneFreeStepCm of ground covered (N-132).
+		if (Speed2D >= MinStepSpeedCm && Fallback.Advance(Speed2D * DeltaTime, FMOFootstepMath::BoneFreeStepCm(BoneFreeStepLengthCm, Speed2D) / FMOFootstepMath::FallbackFactor))
+		{
+			EmitStep(NextVariant & 1, EStepSource::Stride, 1.0f);
+		}
 		return;
 	}
 
@@ -397,7 +417,7 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 
 	const float Speed2D = Character->GetVelocity().Size2D();
 	const EMOFootstepGait Gait = FMOFootstepMath::GaitFor(Move && Move->IsCrouching(), Speed2D, RunSpeedThresholdCm);
-	const float Volume = FMOFootstepMath::VolumeFor(Gait) * VolumeScale * FMath::FRandRange(0.9f, 1.1f);
+	const float Volume = FMOFootstepMath::VolumeFor(Gait) * VolumeScale * StepVolumeScale * FMath::FRandRange(0.9f, 1.1f);
 	const float Pitch = FMath::FRandRange(0.94f, 1.06f);
 
 	FName Played = Set;
@@ -421,8 +441,9 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 
 	if (bDebugLog)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP step %s foot=%s set=%s%s gait=%d speed=%.0f vol=%.2f (%s) %s"),
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP step %s foot=%s set=%s%s gait=%d speed=%.0f vol=%.2f (%s) %s pawn=%s"),
 			Source == EStepSource::Plant ? TEXT("plant") : Source == EStepSource::Stride ? TEXT("stride") : TEXT("landing"),
-			FootIndex == 0 ? TEXT("L") : TEXT("R"), *Played.ToString(), Played == Set ? TEXT("") : TEXT(" (fallback)"), (int32)Gait, Speed2D, Volume, *Why, bOk ? TEXT("") : TEXT("NOT PLAYED"));
+			FootIndex == 0 ? TEXT("L") : TEXT("R"), *Played.ToString(), Played == Set ? TEXT("") : TEXT(" (fallback)"), (int32)Gait, Speed2D, Volume, *Why, bOk ? TEXT("") : TEXT("NOT PLAYED"),
+			*Character->GetName());
 	}
 }

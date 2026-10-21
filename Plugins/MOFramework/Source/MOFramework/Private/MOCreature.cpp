@@ -23,6 +23,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 #include "MOAmbientEnvironmentProvider.h"
+#include "MOFootstepComponent.h"
 
 AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -31,6 +32,13 @@ AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
 	if (GetCharacterMovement())
 	{
 		GetCharacterMovement()->NavAgentProps.bCanSwim = false;
+	}
+
+	// No foot bones in the animal skeletons: footfalls come from the ground covered (N-132). A padded paw or a light hoof, softer than a person.
+	if (FootstepComponent)
+	{
+		FootstepComponent->BoneFreeStepLengthCm = 70.0f;
+		FootstepComponent->StepVolumeScale = 0.5f;
 	}
 
 	// Set default AI controller class
