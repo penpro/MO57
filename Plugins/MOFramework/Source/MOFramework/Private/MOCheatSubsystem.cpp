@@ -4771,10 +4771,16 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			if (UMOCommonButton* Btn = Exact ? Exact : Partial)
 			{
-				const bool bClicked = Btn->SimulateClick();
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s ClickWidget: '%s' via direct MOCommonButton path%s"),
-					bClicked ? TEXT("PASS") : TEXT("FAIL"), *Btn->GetName(),
-					bClicked ? TEXT("") : TEXT(" (button not interactable)"));
+				// Next tick: a click whose handler sends a Server RPC (a treatment, a world action) run from the harness's Python bridge would run that
+				// RPC locally on a client and drop it (Oct 20: the joiner's "Apply Bandage" never reached the host). See RunOnNextTick.
+				RunOnNextTick(World, [WeakBtn = MakeWeakObjectPtr(Btn)](UWorld*)
+				{
+					UMOCommonButton* B = WeakBtn.Get();
+					const bool bClicked = B && B->SimulateClick();
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s ClickWidget: '%s' via direct MOCommonButton path%s"),
+						bClicked ? TEXT("PASS") : TEXT("FAIL"), *GetNameSafe(B),
+						bClicked ? TEXT("") : TEXT(" (button not interactable)"));
+				});
 				return;
 			}
 
