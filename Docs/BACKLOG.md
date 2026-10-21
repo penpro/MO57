@@ -41,13 +41,20 @@
 | Kneeling to work | Drill a fire, drink at a lake, butcher a carcass, dig for roots | the pawn crouches to the work and stands up after; a joiner sees the same | N-181 (Oct 20) |
 | A wolf carcass | Kill a wolf | its body lies as a carcass; right-click lists Hide, quarters, sinew, bones ... | Oct 20 |
 | "While you were away" | Recruit a survivor, give it a job, play your own pawn a few minutes, then take the survivor back (P) | a notice lists what it did ("Finished: Gather Sticks") and how long you were gone | N-091 (Oct 20) |
+| A torch in the rain | Light a torch, then `weather rain` (or wait for a storm) and stand in the open a few minutes; then under a roof | it goes out after a few minutes in heavy rain ("goes out (rain)"); under a roof or in a cave it keeps burning | N-056 (Oct 20) |
+| Rocks and logs underfoot (by ear) | Walk over a boulder and along a fallen log | stone steps on the rock, wood on the log, the biome's sound on the ground around them | N-132 (Oct 20) |
+| Treating a wound | Get cut (a wolf), open Status > Wounds | a button per treatment under the wound ("Apply Bandage (15 s)"), greyed with a readable reason when you lack the bandage; the click starts the timed treatment | N-061 (Oct 20) |
+| A wolf held off by fire | `MO.AI.StressSpawn 1 600 900` at night holding a lit torch, hit the wolf once | it circles at a few metres and does not bite; drop or put out the torch and it closes | N-096 (Oct 20) |
+| Treating a friend / the colony medic | Host + joiner: cut one (a wolf), right-click them; or found a settlement with a villager carrying a bandage | the right-click lists "Forearm Left Laceration: Apply Bandage (15 s)"; a villager walks over and bandages the bleeding player | N-061 (Oct 20) |
+| Wolf and deer steps (by ear) | Stand still while a wolf or deer walks past within ~20 m | soft footfalls that follow its pace, quieter than a person's, on the ground's sound | N-132 (Oct 20) |
+| Torch from torch | Two players, one with a lit torch, the other with an unlit one; right-click the torch-bearer | "Light your Torch from their Torch"; after a few seconds the second torch burns | N-056 (Oct 20) |
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
 
 F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F7 building refund ·
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time.
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth.
 
 ## Collaboration dependencies and recent handoffs
 
@@ -104,7 +111,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-053 | DEFERRED | Claude | Hair buns under water + creator DOF: engine patch #1 needs a source engine. Wes, Oct 18: "i originally thought one of the fixes for the processing was breaking the lakes but that was a separate issue we will revisit" | `Docs/Engine_Patches.md` | F11 |
 | N-054 | DONE-2026-10-18 | Claude | A joiner lights its own torch at a fire: `MO.Fire.Do LightCarried` from the joiner, 6 s on the server, lit on the joiner (6 cd, eye adapts) and rendered on the host (6.45 cd light on the joiner's pawn) | Light_Sources | |
 | N-055 | OPEN | Claude | Torch-raising arm pose (animation) | Light_Sources | |
-| N-056 | OPEN | Claude | Not modelled: smoke in dead-end galleries; rain on torches; torch from torch + survivors carrying torches; lamp fuel refill; snuff key; torch as fire for other uses | Light_Sources | |
+| N-056 | OPEN | Claude | Not modelled: smoke in dead-end galleries; survivors carrying torches at night; lamp fuel refill; a snuff key (an equipped torch is not in the pack's item menu, and a key needs choosing); a torch as fire for other uses -- DONE Oct 20: rain at the flame puts a torch out (a43e0d17), one torch lights from another (db4cd99e) | Light_Sources | |
 | N-057 | OPEN | Claude | Weather per biome (rain / snow line at altitude) + the sound layers that go with it | AAA P2 | P-8 |
 
 ## Medical and survival
@@ -117,9 +124,9 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-155 | DONE-2026-10-19 | Claude | The dead stay where they fell with their gear: deceased person records spawn on load and `RestoreAsCorpse` (the one dead state); creatures still skipped; load possession never takes a corpse. Verified: killed survivor's hammerstone / cordage / cobbles on its body after save + reload | `Docs/Persistence.md` §1 | |
 | N-157 | DONE-2026-10-18 | Claude | Timed autosave: `UMOAutosaveSubsystem` saves the host's world every `MO.Save.AutosaveMinutes` (10) real minutes through the one save step `MOWorldSave::SaveThisWorld`, with a "Saving the world..." notice; host + joiner: 11-16 ms per save, the joiner writes nothing | `Docs/Persistence.md` §1 | |
 | N-060 | WAITING | Wes | Survival single source (F1); thermal model (F2) | DECISIONS | G10, G11, H10/H11 of the Oct 13 handoff |
-| N-061 | OPEN | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
-| N-062 | OPEN | Claude | Early dressing before cloth exists (MakeBandage needs WovenCloth01) | PROGRESSION_ROADMAP §3 | |
-| N-063 | VERIFY | Claude | Thermal extremes have an enforced failure (orphaned IsCritical / cardiac / respiratory broadcasts were the July finding; DieOf systemic clocks landed Oct 13) | dev_status | M13 |
+| N-061 | DONE-2026-10-20 | Claude | Treatment UI (picker), assigned medic job, treating another patient from a client (owner-only wound replication needs an inspection request), HealingSpeedBonus / PainReduction effects -- DONE Oct 20: the Wounds-tab menu, healing / pain effects, wounds replicate to every machine (426f75fb); treating another pawn or a survivor from its menu (db4cd99e); the colony medic (c1ac76de). Left as forks: F35 (a novice's treatment does 7 %), F36 (a dressing before cloth). | `Docs/Medical_And_Survival.md` §7 | Deep Dive #7 |
+| N-062 | WAITING | Claude | Early dressing before cloth exists (MakeBandage needs WovenCloth01) -- fork F36 (Oct 20): a fibre dressing recommended. | PROGRESSION_ROADMAP §3 | |
+| N-063 | DONE-2026-10-20 | Claude | Thermal extremes have an enforced failure (orphaned IsCritical / cardiac / respiratory broadcasts were the July finding; DieOf systemic clocks landed Oct 13) -- checked Oct 20: cold kills through the heart's collapse; heat had no failure at all: heat stroke added, and the recap names both (43f3b6c7). | dev_status | M13 |
 | N-064 | DONE-2026-10-18 | Claude | A joiner's death reaches the joiner (replicated FMODeathRecord + EnterDeadState; the recap delivered by OnAnyPawnDied); host + joiner: recap with the killer, Continue -> Characters -> Create character -> a new survivor | Medical §2 | |
 | N-065 | WAITING | Wes | Nobody can sleep (players or survivors) while Energy only recovers by sleeping: every pawn runs down for good. How sleep works is fork F29 | DECISIONS F29 | |
 
@@ -146,10 +153,10 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-080 | WAITING | Wes | Excavation stage 6 UI (F8); building cancel / refund (F7) | DECISIONS | G22, G23 |
 | N-081 | DONE-2026-10-18 | Claude | `ServerPlaceBuilding` re-checked: the server holds the transform to the pawn's reach and build requests to `MaxBuildRequestReachCm`; the rest -> N-171 | Building §2 | H19 residual |
 | N-082 | DONE-2026-10-18 | Claude | `ServerApplyTerraform` re-checked: server reach (25 m) and a rate limit (80 % of the action time); the tool requirement is client-side only -> N-171 | OVERNIGHT_LOG | H17 |
-| N-171 | OPEN | Claude | Server re-checks a hostile client could skip (low priority for friends-only co-op): building collision / slope / recipe knowledge in `ServerPlaceBuilding`. (The terraform part is moot: digging has no tool requirement anywhere -- ROADMAP: hard rock costs time, not a tool gate) | Building §2 | N-081, N-082 |
+| N-171 | OPEN | Claude | Server re-checks a hostile client could skip (low priority for friends-only co-op): building collision / slope in `ServerPlaceBuilding` -- the client's snap rules (a roof tile onto walls) would fail a naive server check, so the snapping code has to run on the server first. Recipe knowledge DONE Oct 20 (1ac5f22d). (The terraform part is moot: digging has no tool requirement anywhere -- ROADMAP: hard rock costs time, not a tool gate) | Building §2 | N-081, N-082 |
 | N-172 | DONE-2026-10-19 | Claude | A building's skill is how well, never whether (F31 A, Wes Oct 19): `FMOBuildSkillPenalty` -- x2 time and a quarter of the material spoiled with no skill, linear to none at the level; spoils replaced from the builder's sources or the build pauses; the menu shows the time at your skill. Verified: a Forge at Smithing 0 / 30 took 240 s, 9 of 36 units spoiled (5 replaced, 1 paused until a stone was added, 3 more replaced) | `Docs/Building.md` §2 | |
 | N-083 | DONE-2026-10-18 | Claude | Site menu nits: the campfire listed hand recipes (fixed: a station lists its own + heat recipes, test StationListsItsOwnRecipes); the "Rotate and Flip" hint lingered after the first build (fixed: Tutorial_BuildControls completes on the first placed ghost); the source labels: left-aligned since the kit spec (`ui_specs/kit_build_context.py`) -- Wes: check by eye | first-ten-minutes | |
-| N-084 | OPEN | Claude | Voxel Nanite material crash after two simultaneous digs (not reproduced): watch | Terraform header | |
+| N-084 | OPEN | Claude | Voxel Nanite material crash after two simultaneous digs (not reproduced): watch -- Oct 20: the NeverParallel patch on the Voxel Nanite material-selection pass (f09790eb, N-185) covers its suspect; watch. | Terraform header | |
 
 ## AI, colony, combat
 
@@ -161,7 +168,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-093 | IN PROGRESS | Claude | Readability: "why" readouts -- the cold one DONE Oct 19 (Status > Vitals: "Feels Like 0.9 C (air 9.9, wind -5.6, wet -3.5)", "Clothing Damp (37% wet)", one breakdown `GetFeelsLikeBreakdown`); left: action timers everywhere, a failure string for every bucket | pipeline R1 | |
 | N-094 | OPEN | Claude | Wet wood burns poorly (needs per-item wetness: design first); winter + fire soak under load | pipeline F1 | |
 | N-095 | OPEN | Claude | Colony UI: colony bar (4B), task assignment without possession (6B), alert tiers (7B) | AI_And_Colony §4 | |
-| N-096 | OPEN | Claude | Creature ABP state machines + EQS query assets (Blueprint setup; C++ complete); more fauna (fox / pig / crow assets exist; birds also unblock feathers); creature footsteps (no ball bones); unify the creature flee decision before fire-fear | AI_And_Colony §1 | P-9 |
+| N-096 | OPEN | Claude | Creature ABP state machines + EQS query assets (Blueprint setup; C++ complete); more fauna (fox / pig / crow assets exist; birds also unblock feathers); per-species footstep sounds -- DONE Oct 20: one flee decision + fire-fear (ebeef608), creature footsteps (33ad4d7b) | AI_And_Colony §1 | P-9 |
 | N-097 | OPEN | Claude | Survivor quests: no survivor has `PossibleQuests` configured (data task) | AI_And_Colony §2 | |
 | N-098 | OPEN | Claude | Combat feel: hit-stop, hit-flash, camera shake, impact VFX, weighty audio, directional hit reactions; movesets + weapon variety; parry / block / dodge windows + stamina; enemy combat AI (predators that fight, hostile humanoids); ranged (bow / atlatl / sling); surface the wound sim | archived Fable 5 charter Pillar 4 | |
 | N-099 | DONE-2026-10-18 | Claude | Combat weapon subsystem not wired to equipment: the right hand's weapon item is now the main-hand weapon (`SyncMainHandFromEquipment`), wear lands on the held item | AI_And_Colony §1 Melee damage | old #24 |
@@ -243,7 +250,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 |---|---|---|---|---|---|
 | N-130 | OPEN | Claude | Verify the XAudio2 backend at launch (log shows the XAudio2 mixer) + Wes's relaunch test | `Docs/Audio.md` | G18 |
 | N-131 | OPEN | Claude | ~20 s of thin menu audio after a map load (UDW DSP) | Audio §2 | |
-| N-132 | OPEN | Claude | Footsteps on props / buildings (needs physical materials) and creatures | Audio §3 | P-9, G18 |
+| N-132 | DONE-2026-10-20 | Claude | Footsteps on props / buildings (needs physical materials) and creatures -- props underfoot by mesh path (aac87064), creatures by distance covered (33ad4d7b). | Audio §3 | P-9, G18 |
 
 ## Performance, packaging, tooling
 
@@ -288,6 +295,7 @@ re-checked defects were already fixed): **re-verify against current code before 
 
 ## Done in the last week (one line each; older -> Docs/Archive/BACKLOG_DONE.md)
 
+- DONE-2026-10-20 batches 13-15: rain puts a torch out (N-056, a43e0d17); rocks and logs sound like what they are (N-132, aac87064); the Voxel Nanite material-selection pass never runs in parallel (local patch, N-185, f09790eb); treat a wound from the Wounds tab, treatments heal faster and hurt less, wounds replicate to all (N-061, 426f75fb); a wolf will not close on fire, one flee decision (N-096, ebeef608); wolves and deer have footsteps (N-132, 33ad4d7b); heat stroke kills, a death by cold says so (N-063, 43f3b6c7); the server places only discovered buildings (N-171, 1ac5f22d); the colony medic (N-061, c1ac76de); right-click another pawn to treat it or light your torch from its flame (N-061 / N-056, db4cd99e); co-op cases and harness fixes (4350570d, cde84dc1). Suite 348 / 0; forks F35, F36.
 - DONE-2026-10-20 batch 12: "While you were away" when you take a pawn back (N-091, efd0f1dc); two local patches to the vendored Voxel plugin: the PCG wait node can no longer wait forever (N-031 suspect) and the texture-pool copy transitions (N-185 validation clean, the crash not cured); co-op harness: no Escape into the in-game menu, built-world guard, a log underfoot is a valid footstep source; Tools/git_stage_part.py. Suite 342 / 0.
 - DONE-2026-10-20 batch 11: co-op footstep / gait steps proof against the seed and the join (N-184, 267b4aaf); creature animations on every machine -- the wolf flinches from the blow's side and a joiner sees its bite -- and a killed wolf leaves a carcass (N-169, 1985189b); work at the ground kneels (N-181 part, 15a55fae). Suite 341 / 0; seeded co-op 108 + 96 pass, the failures explained (the joiner's crash N-185, a run-first artifact, one noisy glide). Fork F34 logged (N-092).
 - DONE-2026-10-20 batch 10: nettest game / actions honour --seed (MO.Session.Host takes a seed; it was silently ignored), the co-op suite on seed 670711536 passes 189 / 3, and the three are explained: two made order- and text-proof, one environmental (N-184) (14f4e5e8). N-173 re-diagnosed, not a bug where measured (its fix reverted).

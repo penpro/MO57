@@ -130,7 +130,7 @@ world with today's gates).
 - **BuildChariot (T6) and ForgeHorseshoe** exist with no draft animals (the only fauna are deer and wolf). Keep, gate behind
   domestic horses, or cut: **Needs Wes** (DECISIONS F17).
 - **MakeBandage** needs woven cloth (blocked): a realistic early bandage is plant fibre, moss or hide strips. PROPOSED to add an
-  early dressing before cloth exists, so first aid does not wait for the loom.
+  early dressing before cloth exists, so first aid does not wait for the loom: **Needs Wes** (DECISIONS F36, Oct 20).
 
 ## 4. The heat ladder (PROPOSED values; fields exist)
 
