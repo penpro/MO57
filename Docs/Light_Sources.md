@@ -44,7 +44,13 @@ complement each other. A candle is ~1 cd (~12.6 lm). Wood and fat flames burn at
 - **Going out:**
   - it leaves the hand (put away, dropped, swapped): nobody pockets a burning torch;
   - the flame goes under the water surface, or the pawn swims (wading with it held up is fine);
-  - it burns down (the owner is told).
+  - it burns down (the owner is told);
+  - **rain at the flame** (N-056, Oct 20): the weather's rain exposure AT the flame (a roof, an overhang or a cave keeps it off), looked at
+    once a second. Up to the profile's `RainSafeIntensity` (0.4) nothing happens: a resin torch survives light rain. Above it a constant
+    hazard, `(Rain - Safe) / (1 - Safe)` per `MeanSecondsInHeaviestRain` (120 s at rain 1): UDW "Rain" (0.7 in the open) puts a torch out
+    after ~4 min on average, at random (`UMOCarriedLightComponent::RainDouseChance`, memoryless, so the check rate does not matter). The
+    numbers are an estimate (no measurement found; DECISIONS Oct 20); 0 = a covered lantern. The owner is told ("goes out (rain)").
+    Test speed-up: `MO.Test.RainOnFlameSpeedup` (not in Shipping).
 - **The light:**
   - a point light in **candelas** at the far end of the held mesh's long axis, warm (`ColorTemperatureK`), with shadows;
   - flicker comes from two noise octaves;
@@ -147,7 +153,6 @@ cannot change at runtime and `SetVisibility` is overwritten by the sky blueprint
 ## Not modelled yet
 
 - Smoke (a torch in a dead-end gallery fills it).
-- Rain on a torch (resin torches survive light rain).
 - Lighting one torch from another, and survivors carrying torches at night.
 - Fuel for lamps: an oil lamp's durability stands in for its oil; refilling with fat or oil is not a recipe yet.
 - A key to snuff the flame without putting it away.

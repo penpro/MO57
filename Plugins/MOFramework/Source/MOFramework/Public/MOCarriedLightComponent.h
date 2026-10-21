@@ -68,6 +68,10 @@ public:
 	/** Burn bookkeeping (pure, for the tests): adds GameSeconds to Accumulator and returns the whole durability points that burned; the remainder stays. */
 	static int32 ConsumeBurn(float& Accumulator, float GameSeconds, float SecondsPerPoint);
 
+	/** The chance the rain puts the flame out over GameSeconds, with Rain01 reaching the flame (pure; MOFramework.Light.RainOnFlame): none up to
+	 *  SafeIntensity, then a constant hazard of (Rain01 - Safe) / (1 - Safe) per MeanSecondsInHeaviestRain. */
+	static float RainDouseChance(float Rain01, float GameSeconds, float SafeIntensity, float MeanSecondsInHeaviestRain);
+
 protected:
 	UFUNCTION()
 	void OnRep_Lit();
@@ -100,6 +104,8 @@ private:
 
 	/** Server: game seconds burned since the last durability point. */
 	float BurnAccumulator = 0.0f;
+	/** Real seconds since the rain at the flame was last looked at (once a second: the exposure query traces for shelter). */
+	float RainCheckSeconds = 0.0f;
 
 	/** Smoothed airflow (a flame takes a moment to flare up or die down). */
 	float AirflowSmoothed = 0.6f;

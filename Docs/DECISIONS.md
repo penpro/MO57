@@ -58,6 +58,9 @@
 ## Decisions, newest first
 
 ### 2026-10-20
+- Claude, small call (noted): **rain puts a carried torch out** (N-056): nothing up to rain 0.4 at the flame (a resin torch survives light
+  rain), then a constant hazard reaching a 2-minute mean in the heaviest rain (UDW "Rain", 0.7: ~4 min). No measurement was found: the numbers
+  are profile fields (`RainSafeIntensity`, `MeanSecondsInHeaviestRain`) to tune, 0 = a covered lantern. `Docs/Light_Sources.md`.
 - Claude, small call (noted): **a killed wolf leaves a carcass** (`DT_Carcasses` "Wolf", `DT_Creatures` Wolf01's carcass id): the deer's parts and
   items at a ~40 kg animal's yields (meat 11 against the doe's 20, sinew 3, bones 4 + skull, hide, brain, bladder; cuts ~0.7 x the deer's time).
   Before, a dead wolf ragdolled and left nothing (and the log said "using legacy loot system"). No new items: `Docs/PROGRESSION_ROADMAP.md` §5.

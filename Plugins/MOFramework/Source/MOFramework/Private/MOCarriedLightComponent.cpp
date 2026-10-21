@@ -3,6 +3,8 @@
 #include "MOCharacter.h"
 #include "MOCharacterMovementComponent.h"
 #include "MOGameClockSubsystem.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "HAL/IConsoleManager.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOPlayerController.h"
 #include "MONotificationWidget.h"
@@ -317,6 +319,14 @@ void UMOCarriedLightComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 }
 
+#if !UE_BUILD_SHIPPING
+namespace
+{
+	TAutoConsoleVariable<float> CVarRainOnFlameSpeedup(TEXT("MO.Test.RainOnFlameSpeedup"), 1.0f,
+		TEXT("TEST ONLY: multiply the rain's hazard to a carried flame (1 = real) so a test sees a douse in seconds."), ECVF_Cheat);
+}
+#endif
+
 void UMOCarriedLightComponent::TickBurnAuthority(const FMOLightSourceProfile& Profile, float DeltaTime)
 {
 	// Under water: a flame does not survive a dunking. Swimming takes the hands under; wading with it held up is fine.
@@ -339,6 +349,33 @@ void UMOCarriedLightComponent::TickBurnAuthority(const FMOLightSourceProfile& Pr
 	}
 
 	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+
+	// Rain on the flame (N-056): what reaches the flame, so a roof, an overhang or a cave keeps it burning. Light rain does nothing (a resin torch
+	// survives it); heavier rain puts it out after a while, at random (the profile's RainSafeIntensity / MeanSecondsInHeaviestRain).
+	RainCheckSeconds += DeltaTime;
+	if (RainCheckSeconds >= 1.0f)
+	{
+		const float RealSeconds = RainCheckSeconds;
+		RainCheckSeconds = 0.0f;
+		const UMOWeatherIntegrationSubsystem* Weather = GetWorld() ? GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+		if (Weather && Weather->IsRaining())
+		{
+			const FVector Flame = FlameLight ? FlameLight->GetComponentLocation() : GetOwner()->GetActorLocation();
+			const float Rain = Weather->GetWeatherExposureAtLocation(Flame).Rain;
+			float GameSeconds = Clock ? Clock->GetScaledDeltaTime(RealSeconds) : RealSeconds;
+#if !UE_BUILD_SHIPPING
+			GameSeconds *= FMath::Max(0.0f, CVarRainOnFlameSpeedup.GetValueOnGameThread());
+#endif
+			const float Chance = RainDouseChance(Rain, GameSeconds, Profile.RainSafeIntensity, Profile.MeanSecondsInHeaviestRain);
+			if (Chance > 0.0f && FMath::FRand() < Chance)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOLight] %s: rain %.2f at the flame put it out"), *GetOwner()->GetName(), Rain);
+				Extinguish(TEXT("rain"), true);
+				return;
+			}
+		}
+	}
+
 	const int32 Points = ConsumeBurn(BurnAccumulator, Clock ? Clock->GetScaledDeltaTime(DeltaTime) : DeltaTime, Profile.BurnSecondsPerDurability);
 	if (Points <= 0)
 	{
@@ -385,6 +422,16 @@ FVector UMOCarriedLightComponent::FlameLocalPosition(const FBox& LocalBounds, fl
 	FVector Out = LocalBounds.GetCenter();
 	Out[Axis] = FMath::Lerp(NearEnd, FarEnd, (double)FMath::Clamp(Position, 0.0f, 1.0f));
 	return Out;
+}
+
+float UMOCarriedLightComponent::RainDouseChance(float Rain01, float GameSeconds, float SafeIntensity, float MeanSecondsInHeaviestRain)
+{
+	if (MeanSecondsInHeaviestRain <= 0.0f || GameSeconds <= 0.0f || Rain01 <= SafeIntensity || SafeIntensity >= 1.0f)
+	{
+		return 0.0f;
+	}
+	const float Severity = FMath::Clamp((Rain01 - SafeIntensity) / (1.0f - SafeIntensity), 0.0f, 1.0f);
+	return 1.0f - FMath::Exp(-Severity * GameSeconds / MeanSecondsInHeaviestRain);
 }
 
 int32 UMOCarriedLightComponent::ConsumeBurn(float& Accumulator, float GameSeconds, float SecondsPerPoint)

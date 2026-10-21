@@ -104,6 +104,36 @@ bool FMOCarriedLight_Burn::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Rain on a carried flame (N-056, Oct 20 2026): light rain does nothing, heavier rain puts it out after a while, at random; a roof keeps the rain off
+// (the caller passes the rain AT the flame, the weather's exposure there).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCarriedLight_RainOnFlame,
+	"MOFramework.Light.RainOnFlame",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCarriedLight_RainOnFlame::RunTest(const FString& Parameters)
+{
+	const FMOLightSourceProfile Defaults;
+	const auto Chance = [&](float Rain, float Seconds) { return UMOCarriedLightComponent::RainDouseChance(Rain, Seconds, Defaults.RainSafeIntensity, Defaults.MeanSecondsInHeaviestRain); };
+	TestEqual(TEXT("no rain: the flame is safe"), Chance(0.0f, 60.0f), 0.0f);
+	TestEqual(TEXT("light rain (0.3): a resin torch burns on"), Chance(0.3f, 600.0f), 0.0f);
+	TestEqual(TEXT("at the safe line itself: still safe"), Chance(Defaults.RainSafeIntensity, 600.0f), 0.0f);
+	TestEqual(TEXT("the heaviest rain: one mean lifetime puts it out 63 % of the time"), Chance(1.0f, Defaults.MeanSecondsInHeaviestRain), 1.0f - FMath::Exp(-1.0f), 1e-4f);
+	// UDW's "Rain" (0.7 in the open): half the heaviest hazard, a mean of ~4 min
+	TestEqual(TEXT("UDW Rain (0.7): a 4-minute mean"), Chance(0.7f, 240.0f), 1.0f - FMath::Exp(-1.0f), 1e-3f);
+	TestTrue(TEXT("one second of it is a small chance"), Chance(0.7f, 1.0f) > 0.0f && Chance(0.7f, 1.0f) < 0.01f);
+	TestTrue(TEXT("heavier rain is worse"), Chance(0.9f, 30.0f) > Chance(0.6f, 30.0f));
+	// The once-a-second checks add up to the same chance as one long check (a memoryless hazard): the tick rate does not change the torch's life
+	float Survive = 1.0f;
+	for (int32 S = 0; S < 120; ++S)
+	{
+		Survive *= 1.0f - Chance(0.7f, 1.0f);
+	}
+	TestEqual(TEXT("120 one-second checks = one 120 s check"), 1.0f - Survive, Chance(0.7f, 120.0f), 1e-4f);
+	TestEqual(TEXT("a profile with no rain hazard (a covered lantern): never"), UMOCarriedLightComponent::RainDouseChance(1.0f, 3600.0f, 0.4f, 0.0f), 0.0f);
+	TestEqual(TEXT("no time: no chance"), Chance(1.0f, 0.0f), 0.0f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCarriedLight_CarriedFire,
 	"MOFramework.Light.CarriedFire",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

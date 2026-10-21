@@ -71,6 +71,17 @@ struct MOFRAMEWORK_API FMOLightSourceProfile
 	/** Uniform scale of the flame effect. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Light", meta=(ClampMin="0.01"))
 	float FlameEffectScale = 1.0f;
+
+	/** Rain at the flame (0-1: the weather's exposure there, so a roof, an overhang or a cave keeps it off) up to which it burns on: a resin torch
+	 *  survives light rain. UDW's "Rain" reads 0.7 in the open. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Rain", meta=(ClampMin="0", ClampMax="1"))
+	float RainSafeIntensity = 0.4f;
+
+	/** Mean game seconds the flame lasts in the heaviest rain (1); between RainSafeIntensity and 1 the chance scales with how far above it the
+	 *  rain is (UDW "Rain", 0.7: ~4 min). An estimate -- no measurement found: a pitch torch gutters out in a downpour within minutes. 0 = rain
+	 *  never puts it out (a covered lantern). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Rain", meta=(ClampMin="0"))
+	float MeanSecondsInHeaviestRain = 120.0f;
 };
 
 UCLASS(config=Game, defaultconfig, meta=(DisplayName="Light Sources"))
