@@ -29,6 +29,21 @@ enum class EMOFootstepGait : uint8
 	Run,
 };
 
+/** A placed mesh (a rock, a log: PCG instances, props) names its footstep set by its asset path: the first rule whose PathContains is in it wins.
+ *  Set None = a ground patch (forest floor, an embankment): the ground below decides (the biome). N-132. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOFootstepPropRule
+{
+	GENERATED_BODY()
+
+	/** Matched case-insensitively against the mesh's path name ("/Game/Megascans/3D_Assets/MossyForestBoulder/..."). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")
+	FString PathContains;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")
+	FName Set;
+};
+
 /** The decisions of the footstep system, free of world and actor state so the automation tests cover them. */
 struct MOFRAMEWORK_API FMOFootstepMath
 {
@@ -56,6 +71,12 @@ struct MOFRAMEWORK_API FMOFootstepMath
 	static EGround ClassifyGround(float FloorZ, float GeneratedSurfaceZ);
 	static constexpr float StructureAboveCm = 60.0f;
 	static constexpr float UndergroundBelowCm = 150.0f;
+
+	/** The first rule matching MeshPath (case-insensitive): true and its Set (None = defer to the ground), or false when none matches. */
+	static bool MatchPropRule(const TArray<FMOFootstepPropRule>& Rules, const FString& MeshPath, FName& OutSet);
+
+	/** Rocks, boulders, cliffs and cobbles ring as stone; stumps, fallen trees, branches, logs and sticks as wood; ground patches defer to the biome. */
+	static TArray<FMOFootstepPropRule> DefaultPropRules();
 };
 
 /**
@@ -124,9 +145,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")
 	FName FallbackTerrainSet = FName(TEXT("GrassTread"));
 
-	/** A floor or prop without IMOFootstepSurfaceInterface: built things are mostly timber. */
+	/** A floor or prop without IMOFootstepSurfaceInterface or a matching PropRules entry: built things are mostly timber. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")
 	FName StructureSet = FName(TEXT("BareWood"));
+
+	/** What a placed mesh underfoot sounds like, by its asset path (first match; FMOFootstepMath::DefaultPropRules). Before Oct 20 every rock and
+	 *  boulder stood on rang as bare wood (StructureSet). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")
+	TArray<FMOFootstepPropRule> PropRules;
 
 	/** Caves, pits, tunnels. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Footsteps")

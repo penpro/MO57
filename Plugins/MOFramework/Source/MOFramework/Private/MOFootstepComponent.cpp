@@ -8,6 +8,8 @@
 #include "MOWorldGen.h"
 #include "MOWorldSeedSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -112,6 +114,36 @@ UMOFootstepComponent::UMOFootstepComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;   // after the animation of this frame is evaluated: the bones are where the player sees the feet
 	SetIsReplicatedByDefault(false);
+	PropRules = FMOFootstepMath::DefaultPropRules();
+}
+
+bool FMOFootstepMath::MatchPropRule(const TArray<FMOFootstepPropRule>& Rules, const FString& MeshPath, FName& OutSet)
+{
+	for (const FMOFootstepPropRule& Rule : Rules)
+	{
+		if (!Rule.PathContains.IsEmpty() && MeshPath.Contains(Rule.PathContains, ESearchCase::IgnoreCase))
+		{
+			OutSet = Rule.Set;
+			return true;
+		}
+	}
+	return false;
+}
+
+TArray<FMOFootstepPropRule> FMOFootstepMath::DefaultPropRules()
+{
+	const FName Stone(TEXT("StoneStep"));
+	const FName Wood(TEXT("BareWood"));
+	const FName Ground = NAME_None;
+	// Order matters: "ErodedRockyGround" is rock before it is ground; "ForestGround" / "GrassyEmbankment" are ground patches.
+	return {
+		{ TEXT("RockyGround"), Stone }, { TEXT("RiverBed"), Stone },
+		{ TEXT("Ground"), Ground }, { TEXT("Terrain"), Ground }, { TEXT("Embankment"), Ground }, { TEXT("Path"), Ground }, { TEXT("SandWith"), Ground },
+		{ TEXT("Rock"), Stone }, { TEXT("Boulder"), Stone }, { TEXT("Cliff"), Stone }, { TEXT("Stone"), Stone }, { TEXT("Cobble"), Stone },
+		{ TEXT("Shelf"), Stone }, { TEXT("Pebble"), Stone },
+		{ TEXT("Stump"), Wood }, { TEXT("Tree"), Wood }, { TEXT("Branch"), Wood }, { TEXT("Log"), Wood }, { TEXT("Trunk"), Wood },
+		{ TEXT("Roots"), Wood }, { TEXT("Wood"), Wood }, { TEXT("Plank"), Wood }, { TEXT("Stick"), Wood },
+	};
 }
 
 bool UMOFootstepComponent::EnsureBones(const USkeletalMeshComponent* Mesh)
@@ -278,6 +310,18 @@ FName UMOFootstepComponent::ResolveSet(const FHitResult& FloorHit, const FVector
 				if (OutDescription) { *OutDescription = FString::Printf(TEXT("actor %s"), *Ground->GetName()); }
 				return Set;
 			}
+		}
+	}
+
+	// 1b. A placed mesh (a rock, a log, a PCG instance) names its surface by its asset path (PropRules); a ground patch defers to the ground below.
+	if (const UStaticMeshComponent* Prop = Cast<UStaticMeshComponent>(FloorHit.GetComponent()))
+	{
+		const UStaticMesh* Mesh = Prop->GetStaticMesh();
+		FName PropSet;
+		if (Mesh && FMOFootstepMath::MatchPropRule(PropRules, Mesh->GetPathName(), PropSet) && !PropSet.IsNone())
+		{
+			if (OutDescription) { *OutDescription = FString::Printf(TEXT("prop %s"), *Mesh->GetName()); }
+			return PropSet;
 		}
 	}
 

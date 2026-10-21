@@ -207,4 +207,33 @@ bool FMOFootstep_BiomeData::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A rock, a boulder or a log underfoot sounds like what it is (N-132, Oct 20 2026): every placed mesh used to ring as bare wood (StructureSet).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOFootstep_PropRules,
+	"MOFramework.Footsteps.PropRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOFootstep_PropRules::RunTest(const FString& Parameters)
+{
+	const TArray<FMOFootstepPropRule> Rules = FMOFootstepMath::DefaultPropRules();
+	const auto SetFor = [&Rules](const TCHAR* Path, bool& bMatched)
+	{
+		FName Set;
+		bMatched = FMOFootstepMath::MatchPropRule(Rules, Path, Set);
+		return Set;
+	};
+	bool bMatched = false;
+	TestEqual(TEXT("a mossy boulder rings as stone"), SetFor(TEXT("/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_01.SM_MossyForestBoulder_01"), bMatched), FName(TEXT("StoneStep")));
+	TestEqual(TEXT("a sea cliff"), SetFor(TEXT("/Game/Megascans/3D_Assets/HugeNordicCoastalCliff/SM_HugeNordicCoastalCliff.SM_HugeNordicCoastalCliff"), bMatched), FName(TEXT("StoneStep")));
+	TestEqual(TEXT("eroded rocky ground is rock before it is ground"), SetFor(TEXT("/Game/Megascans/3D_Assets/ErodedRockyGround/SM_ErodedRockyGround.SM_ErodedRockyGround"), bMatched), FName(TEXT("StoneStep")));
+	TestEqual(TEXT("a fallen spruce trunk is wood"), SetFor(TEXT("/Game/Megascans/3D_Assets/FallenSpruceTree/SM_FallenSpruceTree.SM_FallenSpruceTree"), bMatched), FName(TEXT("BareWood")));
+	TestEqual(TEXT("a rotten stump"), SetFor(TEXT("/Game/Megascans/3D_Assets/RottenTreeStump/SM_RottenTreeStump.SM_RottenTreeStump"), bMatched), FName(TEXT("BareWood")));
+	TestEqual(TEXT("case does not matter"), SetFor(TEXT("/game/props/sm_beachrock_small"), bMatched), FName(TEXT("StoneStep")));
+	const FName Patch = SetFor(TEXT("/Game/Megascans/3D_Assets/ForestGround/SM_ForestGround.SM_ForestGround"), bMatched);
+	TestTrue(TEXT("a forest-floor patch matches, and defers to the biome below (None)"), bMatched && Patch.IsNone());
+	SetFor(TEXT("/Game/Props/SM_Crate.SM_Crate"), bMatched);
+	TestFalse(TEXT("an unknown mesh matches nothing (StructureSet decides)"), bMatched);
+	TestTrue(TEXT("the component starts with the default rules"), GetDefault<UMOFootstepComponent>()->PropRules.Num() == Rules.Num());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

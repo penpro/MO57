@@ -62,6 +62,10 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   `<Set>2`: a new surface = bank rows + a data value, never code. Crouched = Sneak gait (quiet).
 - Dev verbs: `MO.Footstep.Probe|Log|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
 - Biome sets (DT_Biomes `FootstepSet`; Temperate / Locust had drifted to SandTrail in the data, restored Oct 18, BR18-8): Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
-  Rainforest MuddyStep, AlpineRock StoneStep; props on terrain (rocks) read as BareWood (no physical materials).
+  Rainforest MuddyStep, AlpineRock StoneStep.
+- **Props underfoot** (N-132, Oct 20): a placed mesh stood on (PCG rocks and logs, props) names its set by its asset path,
+  `UMOFootstepComponent::PropRules`, first match (`FMOFootstepMath::DefaultPropRules`): rocky ground / riverbed / rock / boulder / cliff /
+  stone / cobble / shelf / pebble = StoneStep; stump / tree / branch / log / trunk / roots / wood / plank / stick = BareWood; ground / terrain /
+  embankment / path patches defer to the biome below. Before, every prop rang as BareWood (no physical materials). Probe reason: `prop <mesh>`.
 
 **Water:** splash / wading / stroke sounds (`AMOCharacter::UpdateWaterSounds`, ids `SFX.Footsteps.WaterSplash1/2`).
