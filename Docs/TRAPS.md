@@ -39,7 +39,10 @@
 - **Build fails in ~5 s: `CS0117 ... V7` / RulesError** -> the UE_5.7 UBT -> use the UE_5.8 UBT (`Docs/TOOLING.md` § Build) or `ue.py build` / `cycle`. (build_engine_path)
 - **"Unable to build while Live Coding is active" / LNK1104** -> the editor (or a crashed editor's CrashReportClientEditor window) holds the
   DLL -> `ue.py editor stop` (graceful: QUIT_EDITOR, refuses with unsaved packages); close a crash reporter by PID. Check the DLL mtime: Live
-  Coding sometimes hot-patched instead. (user_preferences, Handoff_2026-10-13)
+  Coding sometimes hot-patched instead. (user_preferences, Handoff_2026-10-13) Crashed `-game` INSTANCES leave one too: every instance starts a
+  `CrashReportClientEditor -RespawnedInstance -MONITOR=<its pid>` that stays open after a crash (nine piled up on Oct 21, one holding
+  UnrealEditor-Voxel.dll) -> after crash-heavy test runs list them (`Get-CimInstance Win32_Process -Filter "Name='CrashReportClientEditor.exe'"`,
+  start times = the instance launches) and stop those PIDs.
 - **A one-off build or shader-compile failure** -> may be the downclocked 14900K -> retry once before debugging. (user_preferences)
 - **Build breaks right after committing new files** -> adaptive unity moves committed files into unity blobs and exposes duplicate
   anonymous-namespace names -> `python Tools/check_unity_collisions.py` before committing C++. (swimming, world-features)
@@ -154,6 +157,18 @@
 - **Smoothness measured on two local processes says little about Steam** -> loopback has no internet latency, loss or jitter, and both
   processes share one CPU / GPU (frame times and the round trip are frame-bound: ~35 ms rtt on loopback) -> `nettest netdiag` validates the
   instruments; real numbers come from a Steam session's two logs (`Tools/ue_netdiag.py logs`, `Docs/Coop_And_Networking.md` §7). (Wes, Oct 17)
+- **A stopped background test batch keeps launching runs; a run's verbs land twice, "bridge not responding", 20+ unrelated failures** -> stopping
+  a background Bash task (TaskStop) does not end a script's process tree on Windows: the bash script and its `ue.py nettest` lived on and drove
+  the same `acthost` / `actclient` as the next batch (Oct 21: `[MOTEST] PickupNearest` logged twice in one frame) -> after stopping one, list
+  the leftovers by command line (`Get-CimInstance Win32_Process` where CommandLine matches `nettest|<script name>`), stop those PIDs, then
+  `ue.py inst stop <name>`. (Oct 21)
+- **An instance never gets past "Waiting for ZenServer to be ready..." (the pair's boot step fails)** -> no Zen server was running (it exits
+  with the process that launched it, `--owner-pid`: closing the editor or a crashed instance takes it down) and both instances brought it up
+  at once -> `ue_inst.start()` now waits for the first instance's "ZenServer AutoLaunch initialization completed" (~16 s) before starting the
+  next. (Oct 21)
+- **`-ini:Engine:[ConsoleVariables]:r.ShaderCompiler.JobCacheDDC=0` on a game instance (full material shader maps, like a cooked build)** -> both
+  instances assert compiling M_MS_Surface_Material (MaterialShader.cpp:2567, "missing expected shader type FAnisotropyPS": its cached
+  conservative parameters disagree with the compile) -> don't; on-demand compile is the only working mode for the uncooked game here. (Oct 21)
 
 ## 6. Co-op and RPC
 
@@ -317,6 +332,12 @@
   (`foliage_wind_precision.py`, test `MOFramework.Data.FoliageWindPrecision`); graphs that scale it down first are fine. (`Docs/PCG.md` §9, Oct 18)
 - **Foliage within ~1.6 m of the camera reads as jumping in `motion_probe` (and looks noisy with AA off)** -> the camera fade dithers every
   leaf 40-160 cm from the lens with a pattern that changes each frame -> measure foliage from >= 2.5 m (narrow the FOV instead). (Oct 18)
+- **A harness instance dies in `Nanite::BasePass` right after content first renders (executing a heap address ending a24e00; "Invalid uniform
+  buffer <any type> bound on ComputeShader at index 3")** -> an uncooked `-game` compiles material shader maps on demand; each arrival swaps
+  the material's shader map and uniform buffer while a Nanite shading pipeline of a primitive the engine did not re-create still points at
+  the old ones (N-185, `Docs/Engine_Patches.md` #2) -> `MOMaterialKeepAlive.cpp` keeps the replaced ones alive in uncooked game processes
+  (`mo.Debug.MaterialKeepAlive`, default on: keep it on); a cooked build never swaps shader maps. The same race can hit PIE in the editor
+  (not covered). (Oct 21)
 
 ## 13. UI (CommonUI / UMG)
 

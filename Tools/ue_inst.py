@@ -123,11 +123,36 @@ def start(name, uproject, editor_exe, **kw):
         kw["extra"] = tuple(kw.get("extra", ())) + tuple(extra)
     cmd = [editor_exe] + build_launch_args(uproject, game_log(name), **kw)
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    zen_was_up = _zen_running()
     p = subprocess.Popen(cmd, env=env_for(name), creationflags=flags, stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     with open(_pid_file(name), "w", encoding="ascii") as f:
         f.write(str(p.pid))
+    if not zen_was_up:
+        _wait_zen_ready(name)
     return p.pid
+
+
+def _zen_running():
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq zenserver.exe", "/NH", "/FO", "CSV"], capture_output=True, text=True).stdout
+    return "zenserver.exe" in out
+
+
+def _wait_zen_ready(name, timeout=90):
+    """With no Zen server running (the editor closed, or a crash took it down), the first instance launches one: wait for that before the
+    next instance starts. Two instances bringing Zen up at once hung the one that launched it at "Waiting for ZenServer to be ready..."
+    for good (Oct 21: the host of a nettest pair never got past it; the same pair failed to boot twice right after a crash)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with open(game_log(name), encoding="utf-8", errors="replace") as f:
+                if "ZenServer AutoLaunch initialization completed" in f.read():
+                    return True
+        except OSError:
+            pass
+        time.sleep(1)
+    print(f"[inst] {name}: no 'ZenServer AutoLaunch initialization completed' line in {timeout} s; starting the next instance anyway", flush=True)
+    return False
 
 
 def call(name, ue_args, timeout=90):

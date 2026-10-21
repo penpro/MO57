@@ -1346,3 +1346,13 @@ Batch 15 full run: 235 pass, no crash (N-185 third clean full run); the 5 failur
 Status: PROGRESS (batch 16 committed: 0ac379c8 footsteps per species + DT_Creatures Wolf01 / Deer_Doe, 3308f14b wolf packs, 9ed2bf77 colony alerts + medic follow-ups, d70af92f co-op cases) + RELEASE (every CL-0138 file, DT_Creatures, the build window, the editor, instances acthost / actclient)
 References: CL-0138
 Suite 348 / 0. New: N-186 (a wolf carcass sometimes missing on the joiner).
+
+### 2026-10-21 09:57 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0140
+Status: CLAIM (Plugins/MOFramework/Source/MOFramework/Private/MOWorldFeatureSubsystem.cpp, MOCreature.h / .cpp, Tools/ue_inst.py, Docs/BACKLOG.md, Docs/AI_And_Colony.md, Docs/Voxel_Plugin_Reference.md, Docs/TRAPS.md, Docs/TOOLING.md; the editor, instances acthost / actclient, the build window)
+References: CL-0139
+N-185 (the Nanite::BasePass crash in nettest): skipping ED_RockSpire gave 4 of 4 clean runs. Lead: uncooked -game compiles material shader maps on demand (r.ShaderCompiler.JobCacheDDC, default on), and each arrival recreates the material's uniform buffer while Nanite's shading pipelines still hold the old pointer. A/B with -dpcvars=r.ShaderCompiler.JobCacheDDC=0 on both instances next.
+
+### 2026-10-21 14:35 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0141
+Status: PROGRESS (N-185 fixed and committed: MOMaterialKeepAlive.cpp + the Voxel selection pass reads at setup; the harness's Zen boot wait) + RELEASE (MOWorldFeatureSubsystem.cpp, Docs/BACKLOG.md, Docs/TRAPS.md, Docs/Engine_Patches.md, Docs/Voxel_Plugin_Reference.md)
+References: CL-0140
+Still claimed: MOCreature.h / .cpp, Tools/ue_inst.py (the flinch case), Docs/AI_And_Colony.md, instances acthost / actclient (the flinch case runs). Interleaved A/B: keep-alive ON 4 of 4 clean, OFF 1 of 4 crashed; full nettest actions 249 / 2 (the flinch on the joiner, one far-pickup precondition), suite 348 / 0.
