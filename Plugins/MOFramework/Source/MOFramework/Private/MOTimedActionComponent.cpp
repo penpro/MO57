@@ -3,6 +3,8 @@
 #include "MOGameClockSubsystem.h"
 #include "MOFramework.h"
 #include "Engine/World.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 
@@ -48,6 +50,7 @@ bool UMOTimedActionComponent::Begin(FName ActionId, const FText& Label, float Ga
 	State.RealSeconds = FMath::Max(0.1f, GameSeconds / TimeScale);
 	State.StartServerSeconds = ServerNow();
 	State.bActive = true;
+	State.Posture = EMOActionPosture::Stand;
 	++State.Serial;
 	PendingComplete = MoveTemp(OnComplete);
 	PendingCancelled = MoveTemp(OnCancelled);
@@ -64,6 +67,53 @@ bool UMOTimedActionComponent::Begin(FName ActionId, const FText& Label, float Ga
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTimedAction] %s: %s (%.1f s)"), *GetNameSafe(GetOwner()), *ActionId.ToString(), State.RealSeconds);
 	OnStateChanged.Broadcast(State);
 	return true;
+}
+
+bool UMOTimedActionComponent::BeginKneeling(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled,
+	float MaxDriftCm, TFunction<bool()> CanContinue)
+{
+	if (!Begin(ActionId, Label, GameSeconds, MoveTemp(OnComplete), MoveTemp(OnCancelled), MaxDriftCm, MoveTemp(CanContinue)))
+	{
+		return false;
+	}
+	SetPosture(EMOActionPosture::Kneel);
+	return true;
+}
+
+void UMOTimedActionComponent::SetPosture(EMOActionPosture InPosture)
+{
+	if (GetOwnerRole() != ROLE_Authority || !State.bActive)
+	{
+		return;
+	}
+	State.Posture = InPosture;
+	ApplyPosture();
+}
+
+void UMOTimedActionComponent::ApplyPosture()
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character || !Character->IsLocallyControlled())
+	{
+		return;   // a joiner's pawn on the server: the joiner crouches it (OnRep_State), its moves bring the crouch here
+	}
+	const bool bWantKneel = State.bActive && State.Posture == EMOActionPosture::Kneel;
+	// The wish, not bIsCrouched (that follows a movement tick later): a completion that stands the pawn up and begins the next kneeling action
+	// (butchering the next part) in the same frame keeps it down.
+	const UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+	const bool bDownAlready = Move ? Move->bWantsToCrouch : Character->bIsCrouched;
+	if (bWantKneel && !bCrouchedForAction && !bDownAlready)
+	{
+		Character->Crouch();
+		bCrouchedForAction = true;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTimedAction] %s kneels for %s"), *Character->GetName(), *State.ActionId.ToString());
+	}
+	else if (!bWantKneel && bCrouchedForAction)
+	{
+		bCrouchedForAction = false;
+		Character->UnCrouch();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTimedAction] %s stands up after %s"), *Character->GetName(), *State.ActionId.ToString());
+	}
 }
 
 void UMOTimedActionComponent::Cancel(const TCHAR* Why)
@@ -153,6 +203,7 @@ void UMOTimedActionComponent::Finish(bool bCompleted, const TCHAR* Why)
 	const uint8 FinishedSerial = State.Serial;
 	State.bActive = false;
 	SetComponentTickEnabled(false);
+	ApplyPosture();   // stands up (a completion that begins the next kneeling action crouches again)
 	if (bListening)
 	{
 		if (AMOCharacter* Character = Cast<AMOCharacter>(GetOwner()))
@@ -180,6 +231,7 @@ void UMOTimedActionComponent::Finish(bool bCompleted, const TCHAR* Why)
 
 void UMOTimedActionComponent::OnRep_State()
 {
+	ApplyPosture();   // the owning client's own pawn
 	OnStateChanged.Broadcast(State);
 }
 

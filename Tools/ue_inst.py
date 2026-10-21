@@ -2413,13 +2413,24 @@ def _client_light_fire(rep, host, client):
                  "if f.get_editor_property('requires_fuel') and (f.get_actor_location() - p.get_actor_location()).length() < 500]; "
                  "[f.set_editor_property('current_fuel', f.get_editor_property('max_fuel')) for f in fs]; out('FUELLED %d' % len(fs))")
     time.sleep(2)
+    # The drill is work at the ground: the joiner kneels for it (N-181, UMOTimedActionComponent::BeginKneeling). The joiner's own machine crouches its
+    # pawn (from the replicated action state) and its moves carry the crouch to the server, whose copy is what everyone else sees.
+    down = "p = unreal.GameplayStatics.get_player_pawn(world, %d); out('DOWN=%%s' %% p.get_editor_property('is_crouched'))"
+    before = _probe(host, down % 1)
+    rep.step("CONTROL: the joiner stands before it drills (host's copy)", "DOWN=False" in before, " ".join(re.findall(r"DOWN=\w+", before)) or before.strip()[-120:])
     hoff, coff = log_size(host), log_size(client)
     console(client, "MO.Fire.Do Light")
+    time.sleep(1.0)
+    during = _probe(host, down % 1) + _probe(client, down % 0)
+    rep.step("client fire: the joiner kneels to drill -- on the HOST's copy and on its own", during.count("DOWN=True") == 2, " / ".join(re.findall(r"DOWN=\w+", during)))
     lit = wait_log(host, r"\[MOFire\] \S+ lighting \S+ \(improvised hand drill[^)]*\): chance \d+ % -> (failed|CAUGHT)", since=hoff, timeout=20)
     rep.step("client fire: the HOST ran the joiner's hand-drill attempt (timed, chancy)", bool(lit), lit.group(0) if lit else "no [MOFire] lighting line on the host")
     toast = wait_log(client, r"Skill toast: \"Firemaking \+(25|40) XP\"", since=coff, timeout=10)
     rep.step("client fire: ... and the JOINER's own screen showed what it taught (the server -> joiner skill toast)", bool(toast),
              toast.group(0) if toast else "no Firemaking skill toast in the client's log")
+    time.sleep(1.0)
+    after = _probe(host, down % 1)
+    rep.step("client fire: ... and stands up when the attempt is over (host's copy)", "DOWN=False" in after, " ".join(re.findall(r"DOWN=\w+", after)) or after.strip()[-120:])
     console(host, "MO.Test.FireAttemptSeconds 0")
 
 

@@ -11,7 +11,9 @@
  *
  *   One action at a time; starting another cancels the first. The completion is a server-side callback the caller hands in (the water action applies the draught).
  *
- * ADDING AN ACTION: one Begin() call with a label, a length and a completion. No new component, no new widget.
+ * ADDING AN ACTION: one Begin() call with a label, a length and a completion. No new component, no new widget. Work done at the ground
+ *   (drilling a fire, butchering, digging, drinking at the water's edge) calls BeginKneeling instead: the pawn crouches down to it on every
+ *   machine and stands up after (N-181).
  * =============================================================================
  */
 
@@ -21,6 +23,15 @@
 #include "Components/ActorComponent.h"
 #include "MOInterruptibleInterface.h"
 #include "MOTimedActionComponent.generated.h"
+
+/** The body's pose while an action runs. */
+UENUM()
+enum class EMOActionPosture : uint8
+{
+	Stand,
+	/** Down at the work on the ground: the pawn's crouch. */
+	Kneel
+};
 
 /** What the owner's progress bar needs (replicated). */
 USTRUCT(BlueprintType)
@@ -45,6 +56,10 @@ struct MOFRAMEWORK_API FMOTimedActionState
 	UPROPERTY(BlueprintReadOnly, Category="MO|TimedAction")
 	bool bActive = false;
 
+	/** The pose for this action (SetPosture): the owning client crouches its own pawn from it. */
+	UPROPERTY()
+	EMOActionPosture Posture = EMOActionPosture::Stand;
+
 	/** Bumped on every Begin, so the client tells two back-to-back actions of the same kind apart. */
 	UPROPERTY()
 	uint8 Serial = 0;
@@ -68,6 +83,18 @@ public:
 	 */
 	bool Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled = nullptr, float MaxDriftCm = 75.0f,
 		TFunction<bool()> CanContinue = nullptr);
+
+	/** Begin, then SetPosture(Kneel) if it started: work at the ground. */
+	bool BeginKneeling(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled = nullptr,
+		float MaxDriftCm = 75.0f, TFunction<bool()> CanContinue = nullptr);
+
+	/**
+	 * The body's pose for the running action (server, after Begin; each Begin resets it to Stand). Kneel crouches the pawn for as long as the action runs
+	 * and stands it up after, unless it was crouching already. The machine that moves the pawn does it: the server for its own and AI pawns, the owning
+	 * client for a joiner's (from the replicated State: the joiner's moves carry the crouch, and one the server made would be undone by the next move).
+	 * Others see the crouch through the movement component's replicated bIsCrouched.
+	 */
+	void SetPosture(EMOActionPosture InPosture);
 
 	/** Stop the running action without completing it (server). */
 	void Cancel(const TCHAR* Why);
@@ -104,6 +131,11 @@ private:
 
 	void Finish(bool bCompleted, const TCHAR* Why);
 	double ServerNow() const;
+
+	/** Crouch / stand the pawn to State's posture, on the machine that moves it (SetPosture). */
+	void ApplyPosture();
+	/** This component crouched the pawn (so it stands it up again; a pawn that was crouching already stays down). */
+	bool bCrouchedForAction = false;
 
 	TFunction<void()> PendingComplete;
 	TFunction<void()> PendingCancelled;

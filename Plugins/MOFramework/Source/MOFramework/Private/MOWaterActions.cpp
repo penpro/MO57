@@ -55,7 +55,7 @@ EMODrinkRefusal FMOWaterActions::BeginDrink(APawn* Drinker, const FVector& Point
 	const float Ml = Settings->DraughtMillilitres;
 	const EMOConditionType Illness = Settings->IllnessCondition;
 	TWeakObjectPtr<APawn> WeakDrinker(Drinker);
-	Action->Begin(FName(TEXT("Drink")), FText::Format(LOCTEXT("Drinking", "Drinking {0}"), Profile.DisplayName.ToLower()), Settings->DraughtSeconds,
+	Action->BeginKneeling(FName(TEXT("Drink")), FText::Format(LOCTEXT("Drinking", "Drinking {0}"), Profile.DisplayName.ToLower()), Settings->DraughtSeconds,
 		[WeakDrinker, Ml, Profile, Illness, Kind]()
 		{
 			APawn* Pawn = WeakDrinker.Get();

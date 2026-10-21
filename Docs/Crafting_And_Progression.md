@@ -89,6 +89,13 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
 - **Pattern still to fix:** the player's harvest timing is owned by a widget (`UMOHarvestProgressWidget::StartHarvest`, the
   subsystem vetoes early completion), unlike drinking, filling, boiling, fire lighting and eating, which run on the pawn's
   `UMOTimedActionComponent`.
+- **Work at the ground kneels** (N-181, Oct 20): `UMOTimedActionComponent::BeginKneeling` = Begin + `SetPosture(Kneel)` -- every fire action
+  (the drill, laying fuel, lighting from a flame or a torch), butchering, gathering ground cover, drinking and filling at a water source. The
+  pawn crouches (its crouch-idle pose) for the action and stands after, unless it was crouching already; a completion that begins the next
+  kneeling action (the next cut) keeps it down. The machine that moves the pawn crouches it: the server for its own and AI pawns, the joiner
+  for its own pawn from the replicated `State.Posture` (its moves carry the crouch; a crouch the server made would be undone by the next
+  move); everyone else sees `bIsCrouched`. Proof: `MOFramework.TimedAction.Posture`, `nettest actions` `_client_light_fire` ("the joiner
+  kneels to drill"). A drilling / butchering animation proper is still art (N-181).
 - **E on a resource node** (KeepOnHarvest / ResourceNode_* / MOResource_*) opens the harvest menu (it used to take the item-pickup
   RPC and log "No item mapping").
 - **A standing node's yields are finite** (`UMOResourceDepletionSubsystem`): each yield's count is rolled the first time it is taken from

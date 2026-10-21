@@ -244,7 +244,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 			return false;
 		}
 		TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Carried);
-		return Timed->Begin(LightCarried, FText::Format(LOCTEXT("LightingCarried", "Holding the {0} in the flames"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId)),
+		return Timed->BeginKneeling(LightCarried, FText::Format(LOCTEXT("LightingCarried", "Holding the {0} in the flames"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId)),
 			Profile->LightSeconds,
 			[WeakCarried, WeakStation]()
 			{
@@ -260,7 +260,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 	if (ActionId == LightFromCarried)
 	{
 		TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Pawn->FindComponentByClass<UMOCarriedLightComponent>());
-		return Timed->Begin(LightFromCarried, LOCTEXT("LightingFromFlame", "Holding the flame to the kindling"), LightFromFlameSeconds,
+		return Timed->BeginKneeling(LightFromCarried, LOCTEXT("LightingFromFlame", "Holding the flame to the kindling"), LightFromFlameSeconds,
 			[WeakPawn, WeakStation, WeakCarried]()
 			{
 				APawn* P = WeakPawn.Get();
@@ -300,7 +300,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 	{
 		const FName FuelItem(*FuelItemText);
 		const int32 Fits = AMOCraftingStationActor::ComputeAcceptedFuelItems(Station->CurrentFuel, Station->MaxFuel, Station->FuelPerItemUnit, Inventory->GetItemCountByDefinitionId(FuelItem));
-		return Timed->Begin(AddFuel, FText::Format(LOCTEXT("AddingFuel", "Laying on {0}"), UMOItemDatabaseSettings::GetItemDisplayName(FuelItem)), SecondsPerFuelItem * Fits,
+		return Timed->BeginKneeling(AddFuel, FText::Format(LOCTEXT("AddingFuel", "Laying on {0}"), UMOItemDatabaseSettings::GetItemDisplayName(FuelItem)), SecondsPerFuelItem * Fits,
 			[WeakPawn, WeakStation, FuelItem]()
 			{
 				AMOCraftingStationActor* S = WeakStation.Get();
@@ -323,7 +323,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 	if (ActionId == Light)
 	{
 		const FLightingMethod Method = FindLightingMethod(Pawn, Inventory);
-		return Timed->Begin(Light, Method.IsImprovised() ? LOCTEXT("Twirling", "Twirling the hand drill")
+		return Timed->BeginKneeling(Light, Method.IsImprovised() ? LOCTEXT("Twirling", "Twirling the hand drill")
 				: FText::Format(LOCTEXT("Drilling", "Working the {0}"), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId)),
 			AttemptSeconds(Method),
 			[WeakPawn, WeakStation, Method]()

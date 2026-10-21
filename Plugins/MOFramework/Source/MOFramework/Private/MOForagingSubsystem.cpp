@@ -454,7 +454,7 @@ bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location
 	}
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
 	TWeakObjectPtr<UMOForagingSubsystem> WeakThis(this);
-	return Timed->Begin(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, Cover]()
+	return Timed->BeginKneeling(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, Cover]()
 		{
 			APawn* P = WeakPawn.Get();
 			UMOForagingSubsystem* Self = WeakThis.Get();

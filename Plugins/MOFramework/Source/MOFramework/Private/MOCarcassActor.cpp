@@ -297,7 +297,7 @@ bool AMOCarcassActor::BeginCut(APawn* Pawn, FName PartId, bool bThenTheRest)
 
 	TWeakObjectPtr<AMOCarcassActor> WeakThis(this);
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
-	const bool bBegun = Timed->Begin(FName(TEXT("Butcher")), FText::Format(NSLOCTEXT("MOCarcass", "Cutting", "Butchering: {0}"), Part->DisplayName), Part->HarvestTime,
+	const bool bBegun = Timed->BeginKneeling(FName(TEXT("Butcher")), FText::Format(NSLOCTEXT("MOCarcass", "Cutting", "Butchering: {0}"), Part->DisplayName), Part->HarvestTime,
 		[WeakThis, WeakPawn, PartId, bThenTheRest]()
 		{
 			AMOCarcassActor* Carcass = WeakThis.Get();

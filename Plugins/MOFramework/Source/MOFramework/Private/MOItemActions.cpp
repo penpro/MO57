@@ -311,7 +311,7 @@ bool FMOItemActions::Perform(APawn* Pawn, const FGuid& ItemGuid, FName ActionId)
 		FindReachableWater(Pawn, WaterPoint, WaterKindByte);
 		const EMOWaterBodyKind Kind = static_cast<EMOWaterBodyKind>(WaterKindByte);
 		const float Capacity = Def.LiquidCapacityMl;
-		return Timed->Begin(Fill, FText::Format(LOCTEXT("Filling", "Filling with {0}"), UMOWaterSourceSettings::GetProfile(Kind).DisplayName.ToLower()), FillSeconds,
+		return Timed->BeginKneeling(Fill, FText::Format(LOCTEXT("Filling", "Filling with {0}"), UMOWaterSourceSettings::GetProfile(Kind).DisplayName.ToLower()), FillSeconds,
 			[WeakPawn, WeakInventory, ItemGuid, Kind, Capacity]()
 			{
 				UMOInventoryComponent* Inv = WeakInventory.Get();
