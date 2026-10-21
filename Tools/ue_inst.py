@@ -1658,6 +1658,10 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
     item, mesh, x, y, z, _d = chosen
     before = _joiner_item_count(host, item)
     # Stand the joiner 150 cm from the item (the server owns its pawn; the move replicates), then turn the client's camera onto it until the crosshair is on it.
+    # The host's own pawn steps 25 m aside first: standing between the joiner and the item it took the joiner's line (Oct 20, Stone01: the
+    # client's trace hit the host's body).
+    _probe(host, "import builtins; h = unreal.GameplayStatics.get_player_pawn(world, 0); builtins.MO_G_HOSTHOME = h.get_actor_location(); "
+                 f"h.set_actor_location(unreal.Vector({x}, {y}, {z}) + unreal.Vector(0.0, 2500.0, 300.0), False, True); out('G_HOSTAWAY')")
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_G_HOME = p.get_actor_location(); "
                  f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
                  "p.set_actor_location(l + d * 150.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('G_STAND')")
@@ -1700,7 +1704,9 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
             rep.step("... and the item is gone from the CLIENT's world too (the removal record)", bool(m) and m.group(1) == "0", m.group(0) if m else "no INSTANCE_AT line")
             _joiner_remove(host, item, _joiner_item_count(host, item) - before)
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_G_HOME', None); "
-                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('G_HOME')")
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); "
+                 "q = unreal.GameplayStatics.get_player_pawn(world, 0); hh = getattr(builtins, 'MO_G_HOSTHOME', None); "
+                 "hh and q.set_actor_location(hh + unreal.Vector(0.0, 0.0, 30.0), False, True); out('G_HOME')")
     time.sleep(2)
 
 
@@ -1745,6 +1751,11 @@ def _client_harvest(rep, host, client):
             after = {i: _joiner_item_count(host, i) for i in yields}
             got = any(after[i] > before[i] for i in yields)
             outcome = re.search(HARVEST_OUTCOME_RE, read_log_from(client, coff))
+        if outcome and not got:
+            # The outcome can land between this pass's host count and its outcome check: count once more (Oct 20: "Nuts01 x2" picked up, read 0 -> 0)
+            time.sleep(0.5)
+            after = {i: _joiner_item_count(host, i) for i in yields}
+            got = any(after[i] > before[i] for i in yields)
         hlog = read_log_from(host, hoff)
         began = re.search(r"\[MOHarvest\] [^\n]*server-timed[^\n]*", hlog) or re.search(r"\[MOHarvest\] [^\n]*refused[^\n]*", hlog)
         tried.append(f"{action} on {mesh}: {before} -> {after}; host: {began.group(0)[-140:] if began else 'no [MOHarvest] line'}; "
@@ -2479,15 +2490,385 @@ def _client_sees_creature_flinch(rep, host, client):
                  "out('KILL %s' % w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, j))")
     laid = wait_log(host, r"\[MOCreature\] Spawned carcass '([^']*)' for \S+", since=hoff, timeout=15)
     rep.step("host: the dead wolf leaves a carcass", bool(laid) and laid.group(1) == "Wolf Carcass", laid.group(0) if laid else "no Spawned carcass line on the host")
-    time.sleep(3)
-    rows = _probe(client, "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
-                          "out('CARCASSES %s' % sorted(str(c.get_editor_property('carcass_definition').row_name) for c in "
-                          "unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor) if (c.get_actor_location() - p.get_actor_location()).length() < 3000))")
+    # The wolf dies where it stood when the probe killed it -- after the bite it may be tens of metres off (Oct 20: none within 30 m): look within
+    # 150 m, and give the replication a few tries.
+    rows = ""
+    for _ in range(5):
+        time.sleep(2)
+        rows = _probe(client, "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                              "out('CARCASSES %s' % sorted(str(c.get_editor_property('carcass_definition').row_name) for c in "
+                              "unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor) if (c.get_actor_location() - p.get_actor_location()).length() < 15000))")
+        if "'Wolf'" in rows:
+            break
     rep.step("client: ... and the joiner's copy of it knows its parts (the Wolf carcass row)", "'Wolf'" in rows,
              (re.search(r"CARCASSES [^\r\n]*", rows) or re.search(r"[\s\S]{0,160}$", rows)).group(0))
     _probe(host, "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature, unreal.MOCarcassActor) "
                  "for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 3000]; out('TIDY')")
+
+
+def _client_treats_own_wound(rep, host, client):
+    """A joiner bandages its own wound from the Status panel's Wounds tab (N-061, Oct 20 2026): before, no UI could treat a wound at all (only
+    the dev verb MO.Medical.Treat). Under each wound a button per treatment for it (FMOMedicalTreatmentActions::GetOptions: the server's own
+    checks), greyed with the reason; a click asks the server (ServerTreatWound), which runs the timed treatment on the joiner's pawn.
+    Control: without a bandage the button is greyed (ClickWidget refuses a disabled button)."""
+    pawn = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    bleed = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); a = p.get_component_by_class(unreal.MOAnatomyComponent); "
+             "ws = [w for w in a.get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_RIGHT]; "
+             "out('BLEED %.3f BANDAGES %d' % (ws[0].bleed_rate if ws else -1, p.get_component_by_class(unreal.MOInventoryComponent).count_ingredient('Bandage01')))")
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "out('CUT %s' % p.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_RIGHT, 15.0, unreal.MOWoundType.LACERATION, h))")
+    before = re.search(r"BLEED (-?[\d.]+) BANDAGES (\d+)", _probe(host, bleed))
+    if not rep.step("CONTROL: the joiner has a bleeding cut on its right forearm and no bandage (host)", bool(before) and float(before.group(1)) > 0 and before.group(2) == "0",
+                    before.group(0) if before else "no wound"):
+        return
+    console(client, "MO.UI.Open Status")
+    time.sleep(1.5)
+    console(client, "MO.Test.ClickWidget WoundsTabButton")
+    time.sleep(2.5)   # the tab refreshes its rows once a second
+    m = _motest(client, "MO.Test.ClickWidget text=Apply Bandage", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
+    rep.step("client: the Wounds tab offers Apply Bandage, greyed without a bandage", bool(m) and m.group(1) == "FAIL" and "not interactable" in m.group(0),
+             m.group(0) if m else "no ClickWidget line")
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); p.get_component_by_class(unreal.MOInventoryComponent)"
+                 ".add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Bandage01', 1); out('GAVE')")
+    time.sleep(3.0)   # the bandage replicates; the tab refreshes
+    hoff = log_size(host)
+    m = _motest(client, "MO.Test.ClickWidget text=Apply Bandage", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
+    begun = wait_log(host, rf"\[MOTimedAction\] {re.escape(pawn)}: MedicalTreatment \(([\d.]+) s\)", since=hoff, timeout=10)
+    rep.step("client: with a bandage the button works, and the HOST starts the joiner's timed treatment", bool(begun),
+             (m.group(0) if m else "no click line") + " | " + (begun.group(0) if begun else "no MedicalTreatment on the host"))
+    if begun:
+        time.sleep(float(begun.group(1)) + 2.0)
+        after = re.search(r"BLEED (-?[\d.]+) BANDAGES (\d+)", _probe(host, bleed))
+        rep.step("... and when it is done the cut bleeds less and the bandage is used (host)",
+                 bool(after) and 0 <= float(after.group(1)) < float(before.group(1)) and after.group(2) == "0",
+                 f"bleed {before.group(1)} -> {after.group(1) if after else '?'}, bandages {after.group(2) if after else '?'}")
+    console(client, "MO.UI.Close")
+
+
+def _client_footstep_on_rock(rep, host, client):
+    """A boulder underfoot sounds like stone (N-132, Oct 20 2026): every placed mesh stood on rang as bare wood. The host finds the nearest PCG
+    rock / boulder instance to the joiner, stands the joiner on its top, and the joiner's own probe names the set (UMOFootstepComponent::PropRules)."""
+    if not _worlds_built(rep, host, client):
+        return
+    find = ("import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); builtins.MO_R_HOME = jl; best = None\n"
+            "for c in unreal.ObjectIterator(unreal.InstancedStaticMeshComponent):\n"
+            "    m = c.static_mesh\n"
+            "    mp = m.get_path_name() if m else ''\n"
+            "    if c.get_world() != world or not ('Boulder' in mp or 'MossyRocks' in mp):\n"   # plain tests: an exec'd generator cannot see exec's locals
+            "        continue\n"
+            "    for i in range(min(c.get_instance_count(), 400)):\n"
+            "        t = c.get_instance_transform(i, True)\n"
+            "        d = (t.translation - jl).length()\n"
+            "        if d < 6000 and (best is None or d < best[0]):\n"
+            "            best = (d, t, m)\n"
+            "if best:\n"
+            "    d, t, m = best; b = m.get_bounds(); top = t.translation.z + b.box_extent.z * 2.0 * t.scale3d.z\n"
+            "    j.set_actor_location(unreal.Vector(t.translation.x, t.translation.y, top + 150.0), False, True)\n"
+            "    out('ROCK %s at %.0f m, top %.0f' % (m.get_name(), d / 100.0, top))\n"
+            "else:\n"
+            "    out('ROCK none')")
+    found = _probe(host, find)
+    m = re.search(r"ROCK (\S+) at ([\d.]+) m", found)
+    if not rep.step("CONTROL: a boulder near the joiner, and the joiner stood on it (host)", bool(m), (re.search(r"ROCK[^\r\n]*", found) or re.search(r"[\s\S]{0,160}$", found)).group(0)):
+        return
+    probe_re = r"\[MOQUERY\] FOOTSTEP Probe pos=[^\r\n]*? set=(\S+) \(([^)]*)\)"
+    heard = None
+    for _ in range(6):
+        time.sleep(2.5)
+        heard = _motest(client, "MO.Footstep.Probe", probe_re)
+        if heard and "grounded=1" in heard.group(0):
+            break
+    rep.step("client: on the boulder its footsteps are stone (a prop rule, not bare wood)", bool(heard) and heard.group(1) == "StoneStep" and heard.group(2).startswith("prop"),
+             heard.group(0)[-160:] if heard else "no probe line")
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_R_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('R_HOME')")
+    time.sleep(2)
+
+
+def _host_torch_in_rain(rep, host, client):
+    """Rain puts a carried torch out (N-056, Oct 20 2026): light rain does nothing, heavier rain at the flame (the weather's exposure there, so a
+    roof keeps it off) puts it out at random -- UDW "Rain" (0.7) after ~4 min on average. MO.Test.RainOnFlameSpeedup 30 makes that seconds.
+    Control: under a clear sky the same speed-up leaves the torch burning."""
+    console(host, "MO.Weather.SetPreset Clear_Skies")
+    console(host, "MO.Light.Carried give")
+    time.sleep(3.0)   # the equip swap
+    lit = _motest(host, "MO.Light.Carried light", r"\[MOQUERY\] LIGHT Carried light: (\d)")
+    if not rep.step("CONTROL: the host holds a lit torch", bool(lit) and lit.group(1) == "1", lit.group(0) if lit else "no light line"):
+        return
+    console(host, "MO.Test.RainOnFlameSpeedup 30")
+    hoff = log_size(host)
+    time.sleep(15.0)
+    rep.step("CONTROL: under a clear sky the sped-up torch burns on", "went out" not in read_log_from(host, hoff), "no '[MOLight] ... went out' in 15 s")
+    hoff = log_size(host)
+    console(host, "MO.Weather.SetPreset Rain")
+    out = wait_log(host, r"\[MOLight\] \S+: rain ([\d.]+) at the flame put it out", since=hoff, timeout=120)
+    rep.step("rain at the flame puts the torch out", bool(out) and float(out.group(1)) > 0.4, out.group(0) if out else "still burning after 120 s of rain")
+    console(host, "MO.Test.RainOnFlameSpeedup 1")
+    console(host, "MO.Weather.SetPreset Clear_Skies")
+
+
+def _host_wolf_holds_off_fire(rep, host, client):
+    """A wolf will not close on someone holding fire (N-096 fire-fear, Oct 20 2026): within its species' FireFearRadiusCm of a flame (a carried
+    torch, a campfire) the chase stops short and no bite is made; it circles. The host holds a lit torch with the joiner moved far off, a wolf is
+    spawned beside the host: it holds off. Control: the torch put out, the same wolf bites."""
+    wounds = "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('WOUNDS %d' % len(p.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds()))"
+    _probe(host, "import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_W_HOME = j.get_actor_location(); "
+                 "j.set_actor_location(j.get_actor_location() + unreal.Vector(6000.0, 6000.0, 300.0), False, True); out('JOINER_AWAY')")
+    console(host, "MO.Light.Carried give")
+    time.sleep(3.0)
+    lit = _motest(host, "MO.Light.Carried light", r"\[MOQUERY\] LIGHT Carried light: (\d)")
+    if not rep.step("CONTROL: the host holds a lit torch, the joiner is 85 m off", bool(lit) and lit.group(1) == "1", lit.group(0) if lit else "no light line"):
+        return
+    w0 = int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "0"])[1])
+    hoff = log_size(host)
+    console(host, "MO.AI.StressSpawn 1 600 900")
+    wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=hoff, timeout=15)
+    # StressSpawn adds a deer with every wolf, and the wolf hunts the deer (Oct 20: it chased it 200 m off): only the host is left to close on
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); [a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPreyCreature) "
+                 "if (a.get_actor_location() - h.get_actor_location()).length() < 5000]; out('NO_DEER')")
+    # A wolf left alone did not come for the host at all (Oct 20: no bite in 40 s even with the torch out, two runs): it turns on whoever hurts
+    # it (AMOCreatureController::NotifyDamaged), so the host's blow makes it want the host -- the torch decides whether it closes.
+    provoke = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
+               "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - hl).length()); "
+               "w.set_actor_location(hl + unreal.Vector(600.0, 0.0, 120.0), False, True); "
+               "out('PROVOKED %s %s' % (w.get_name(), w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, h)))")
+    angry = re.search(r"PROVOKED (\S+) (\w+)", _probe(host, provoke))
+    rep.step("CONTROL: the host's blow turns the wolf on the host", bool(angry), angry.group(0) if angry else "no wolf to provoke")
+    console(host, "MO.Footstep.LogAll 1")   # the wolf's own footfalls too (N-132: a creature has no foot bones; it steps by distance)
+    time.sleep(30.0)
+    console(host, "MO.Footstep.LogAll 0")
+    hlog = read_log_from(host, hoff)
+    held = re.search(r"\[MOCreature\] (\S+) holds off from \S+: fire within (\d+) cm", hlog)
+    w1 = int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "-1"])[1])
+    rep.step("the wolf holds off from the torch-bearer (no bite in 30 s)", bool(held) and w1 == w0, (held.group(0) if held else "no hold-off line") + f"; host wounds {w0} -> {w1}")
+    paw = re.search(r"\[MOQUERY\] FOOTSTEP step stride [^\r\n]*vol=([\d.]+)[^\r\n]* pawn=(\S*(?:Wolf|Predator)\S*)", hlog)
+    rep.step("the host hears the wolf's steps as it comes (a creature steps by distance, softly)", bool(paw),
+             f"{paw.group(2)} vol={paw.group(1)}" if paw else "no stride step from a wolf")
+    console(host, "MO.Light.Carried out")
+    _probe(host, provoke)   # its anger may have run out while it circled
+    bitten = False
+    for _ in range(8):
+        time.sleep(5.0)
+        if int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "0"])[1]) > w1:
+            bitten = True
+            break
+    rep.step("CONTROL: with the torch out, the wolf closes and bites", bitten, "a new wound on the host" if bitten else "no bite in 40 s")
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
+                 "if (a.get_actor_location() - h.get_actor_location()).length() < 4000]; import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "hm = getattr(builtins, 'MO_W_HOME', None); hm and j.set_actor_location(hm + unreal.Vector(0.0, 0.0, 30.0), False, True); out('W_TIDY')")
+    time.sleep(2)
+
+
+def _clear_around_host(host, keep=""):
+    """Earlier cases leave people where the next one works: the joiner and a survivor both stood 1.5 m in front of the host, so a medic
+    stalled 2 m short and a joiner's line hit the survivor (Oct 20). The joiner goes 20 m aside, any other person (not `keep`) within 6 m of
+    the host 12 m away."""
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); hl = h.get_actor_location(); "
+                 "j.set_actor_location(hl + h.get_actor_right_vector() * 2000.0 + unreal.Vector(0.0, 0.0, 200.0), False, True); "
+                 f"o = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a not in (h, j) and a.get_name() != '{keep}' "
+                 "and (a.get_actor_location() - hl).length() < 600]; "
+                 "[a.set_actor_location(hl - h.get_actor_right_vector() * 1200.0 + unreal.Vector(0.0, 0.0, 200.0), False, True) for a in o]; out('CLEARED %d' % len(o))")
+
+
+def _client_aim_at_host(client):
+    """Turn the joiner's camera onto ITS copy of the host's pawn (the other player-owned pawn), chest high, from where its camera really is.
+    The host's server position missed (Oct 20: after the host moved the joiner, the client's copies stood elsewhere and the line hit the
+    ground 3.7 m off). Repeats until the aim settles."""
+    code = ("pc = unreal.GameplayStatics.get_player_controller(world, 0); me = pc.get_controlled_pawn(); "
+            "hs = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a != me and a.get_editor_property('player_state') is not None]; "
+            "h = min(hs, key=lambda a: (a.get_actor_location() - me.get_actor_location()).length()); t = h.get_actor_location() + unreal.Vector(0.0, 0.0, 30.0); "
+            "cam = pc.player_camera_manager.get_camera_location(); fwd = pc.player_camera_manager.get_camera_rotation().get_forward_vector(); "
+            "miss = ((t - cam) - fwd * (t - cam).dot(fwd)).length(); pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(cam, t)); "
+            "out('H_AIM %s dist=%.0f miss=%.1f' % (h.get_name(), (t - cam).length(), miss))")
+    m = None
+    for _ in range(6):
+        m = re.search(r"H_AIM \S+ dist=(-?\d+) miss=(-?[\d.]+)", _probe(client, code))
+        if not m or float(m.group(2)) < 4.0:
+            break
+        time.sleep(0.4)
+    time.sleep(0.8)
+    return m.group(0) if m else "no H_AIM line"
+
+
+def _client_treats_host(rep, host, client):
+    """A joiner dresses the HOST's wound (N-061 co-op, Oct 20 2026): wounds replicate to every machine, and a right-click on a wounded pawn opens
+    its treatment menu (AMOCharacter: IMOWorldActionProvider, the same GetOptions as Status > Wounds). The joiner faces the host, right-clicks,
+    picks "Apply Bandage"; the host runs the treatment as the joiner's (the healer's) timed action. Control: the joiner's copy sees the wound."""
+    hp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    jp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    bleed = ("p = unreal.GameplayStatics.get_player_pawn(world, 0); a = p.get_component_by_class(unreal.MOAnatomyComponent); "
+             "ws = [w for w in a.get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; out('HBLEED %.3f' % (ws[0].bleed_rate if ws else -1))")
+    _clear_around_host(host)
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "h.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_LEFT, 15.0, unreal.MOWoundType.LACERATION, j); "
+                 "j.get_component_by_class(unreal.MOInventoryComponent).add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Bandage01', 1); "
+                 "j.set_actor_location(h.get_actor_location() + h.get_actor_forward_vector() * 150.0 + unreal.Vector(0.0, 0.0, 20.0), False, True); out('SET')")
+    before = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
+    time.sleep(3.0)
+    seen = _probe(client, "ps = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a != unreal.GameplayStatics.get_player_pawn(world, 0)]; "
+                          "out('CLIENTSEES %s' % [len(p.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds()) for p in ps])")
+    rep.step("CONTROL: the host is cut, and the joiner's copy of the host shows the wound (wounds replicate to all)",
+             bool(before) and float(before.group(1)) > 0 and re.search(r"CLIENTSEES \[[^\]]*[1-9]", seen) is not None,
+             (before.group(0) if before else "no wound") + " | " + (re.search(r"CLIENTSEES[^\r\n]*", seen) or re.search(r"[\s\S]{0,120}$", seen)).group(0))
+    aim = _client_aim_at_host(client)
+    coff = log_size(client)
+    console(client, "mo.Interact.Debug 1")
+    console(client, "MO.Test.Input SecondaryInteract")
+    # The client's own name for the host's pawn (actor names differ between machines: BP_..._C_0 on the host can be _C_1 on the joiner)
+    seen_as = (re.search(r"H_AIM (\S+)", aim) or [None, hp])[1]
+    shown = wait_log(client, rf"\[MOCraftUI\] Showing world action menu for {re.escape(seen_as)}[^\r\n]*", since=coff, timeout=10)
+    console(client, "mo.Interact.Debug 0")
+    aimed = " // ".join(dict.fromkeys(re.findall(r"\[MOInteractor\] [^\r\n]*", read_log_from(client, coff))))[:300]
+    rep.step("client: right-clicking the wounded host opens its treatment menu on the joiner", bool(shown), shown.group(0) if shown else "no world action menu line | " + aim + " | " + (aimed or "no targeting lines"))
+    if not shown:
+        return
+    hoff = log_size(host)
+    m = _motest(client, "MO.Test.ClickWidget text=Laceration: Apply Bandage", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
+    begun = wait_log(host, rf"\[MOTimedAction\] {re.escape(jp)}: MedicalTreatment \(([\d.]+) s\)", since=hoff, timeout=10)
+    rep.step("client: its pick runs on the HOST as the joiner's timed treatment", bool(begun), (m.group(0) if m else "no click") + " | " + (begun.group(0) if begun else "no MedicalTreatment"))
+    if begun:
+        time.sleep(float(begun.group(1)) + 2.0)
+        after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
+        rep.step("... and the host's cut bleeds less when it is done", bool(after) and 0 <= float(after.group(1)) < float(before.group(1)),
+                 f"bleed {before.group(1)} -> {after.group(1) if after else '?'}")
+    console(client, "MO.UI.Close")
+
+
+def _client_lights_from_host(rep, host, client):
+    """A joiner lights its torch from the HOST's burning one (N-056 torch from torch, Oct 20 2026): a right-click on a pawn carrying a flame
+    offers "Light your Torch from their Torch" when you hold an unlit one (AMOCharacter's world actions, FMOFireActions::GetBearerActions,
+    built on the joiner from the replicated flame); the pick runs on the host as the joiner's timed action, and the joiner's torch burns."""
+    hp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    jp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    _clear_around_host(host)
+    console(host, "MO.Light.Carried give")
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "inv = j.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); "
+                 "inv.add_item_by_guid_with_durability(g, 'Torch01', 1, -1); "
+                 "j.get_component_by_class(unreal.MOEquipmentComponent).equip_from_inventory(inv, g, unreal.MOEquipmentSlot.RIGHT_HAND); "
+                 "j.set_actor_location(h.get_actor_location() + h.get_actor_forward_vector() * 150.0 + unreal.Vector(0.0, 0.0, 20.0), False, True); out('SET')")
+    time.sleep(3.0)
+    lit = _motest(host, "MO.Light.Carried light", r"\[MOQUERY\] LIGHT Carried light: (\d)")
+    clit = "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('CLIT %d' % p.get_component_by_class(unreal.MOCarriedLightComponent).is_lit())"
+    before = re.search(r"CLIT (\d)", _probe(client, clit))
+    if not rep.step("CONTROL: the host's torch burns, the joiner holds an unlit one in front of it", bool(lit) and lit.group(1) == "1" and bool(before) and before.group(1) == "0",
+                    (lit.group(0) if lit else "no light line") + " | " + (before.group(0) if before else "no client probe")):
+        return
+    aim = _client_aim_at_host(client)
+    coff = log_size(client)
+    console(client, "mo.Interact.Debug 1")
+    console(client, "MO.Test.Input SecondaryInteract")
+    # The client's own name for the host's pawn (actor names differ between machines: BP_..._C_0 on the host can be _C_1 on the joiner)
+    seen_as = (re.search(r"H_AIM (\S+)", aim) or [None, hp])[1]
+    shown = wait_log(client, rf"\[MOCraftUI\] Showing world action menu for {re.escape(seen_as)}[^\r\n]*", since=coff, timeout=10)
+    console(client, "mo.Interact.Debug 0")
+    aimed = " // ".join(dict.fromkeys(re.findall(r"\[MOInteractor\] [^\r\n]*", read_log_from(client, coff))))[:300]
+    rep.step("client: right-clicking the torch-bearing host opens its menu on the joiner", bool(shown), shown.group(0) if shown else "no world action menu line | " + aim + " | " + (aimed or "no targeting lines"))
+    if shown:
+        hoff = log_size(host)
+        m = _motest(client, "MO.Test.ClickWidget text=Light your Torch from their Torch", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
+        caught = wait_log(host, rf"\[MOFire\] {re.escape(jp)} lit its Torch01 from {re.escape(hp)}'s flame", since=hoff, timeout=20)
+        rep.step("client: its pick runs on the HOST, and the joiner's torch catches from the host's flame", bool(caught),
+                 (m.group(0) if m else "no click") + " | " + (caught.group(0) if caught else "no lit-from line on the host"))
+        time.sleep(1.5)
+        after = re.search(r"CLIT (\d)", _probe(client, clit))
+        rep.step("... and the joiner's own copy shows its torch burning", bool(after) and after.group(1) == "1", after.group(0) if after else "no client probe")
+        console(client, "MO.UI.Close")
+    # Tidy: both torches back in the packs (a torch that leaves the hand goes out).
+    _probe(host, "for i in (0, 1):\n p = unreal.GameplayStatics.get_player_pawn(world, i)\n "
+                 "p.get_component_by_class(unreal.MOEquipmentComponent).unequip_to_inventory(unreal.MOEquipmentSlot.RIGHT_HAND, p.get_component_by_class(unreal.MOInventoryComponent))\nout('UNEQUIPPED')")
+
+
+def _host_treats_survivor(rep, host, client):
+    """A player dresses a recruited survivor's wound from its command menu (N-061, Oct 20 2026): a survivor's right-click is its command menu,
+    so the menu lists its wounds' treatments after the orders (the same options as a stranger's treatment menu). Host-side."""
+    # The joiner steps 20 m aside first: the previous case left it on the very spot in front of the host where the survivor goes, and the
+    # host's right-click took the joiner (Oct 20).
+    _clear_around_host(host)
+    off = log_size(host)
+    console(host, "MO.Colony.SpawnSurvivor 250")
+    m = wait_log(host, r"\[MOQUERY\] COLONY SpawnSurvivor (\S+)", since=off, timeout=15)
+    if not rep.step("CONTROL: the host spawned a survivor", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no SpawnSurvivor line"):
+        return
+    name = m.group(1)
+    console(host, f"MO.Colony.Recruit {name}")
+    wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=(\d)", since=off, timeout=15)
+    sv = f"sv = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
+    bleed = sv + ("ws = [w for w in sv.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_RIGHT]; "
+                  "out('SBLEED %.3f' % (ws[0].bleed_rate if ws else -1))")
+    _probe(host, sv + "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "sv.set_actor_location(h.get_actor_location() + h.get_actor_forward_vector() * 150.0 + unreal.Vector(0.0, 0.0, 30.0), False, True); "
+                 "sv.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_RIGHT, 15.0, unreal.MOWoundType.LACERATION, h); "
+                 "h.get_component_by_class(unreal.MOInventoryComponent).add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Bandage01', 1); "
+                 "l = sv.get_actor_location(); out('SVAT x=%.0f y=%.0f z=%.0f' % (l.x, l.y, l.z + 40.0))")
+    at = re.search(r"SVAT x=(-?\d+) y=(-?\d+) z=(-?\d+)", _probe(host, sv + "l = sv.get_actor_location(); out('SVAT x=%.0f y=%.0f z=%.0f' % (l.x, l.y, l.z + 40.0))"))
+    before = re.search(r"SBLEED (-?[\d.]+)", _probe(host, bleed))
+    if not rep.step("CONTROL: the recruited survivor is cut and stands in front of the host", bool(at) and bool(before) and float(before.group(1)) > 0,
+                    (before.group(0) if before else "no wound") + (f" at {at.group(0)}" if at else "")):
+        return
+    time.sleep(2.0)
+    console(host, f"MO.Player.Face {at.group(1)} {at.group(2)} {at.group(3)}")
+    time.sleep(0.8)
+    hoff = log_size(host)
+    console(host, "MO.Test.Input RightClick")   # the controller's right-click: the survivor menu is chosen there (SecondaryInteract skips it)
+    menu = wait_log(host, rf"\[MOSurvivorContextMenu\] Initialized for survivor {re.escape(name)}[^\r\n]*", since=hoff, timeout=10)
+    rep.step("host: right-clicking the survivor opens its command menu", bool(menu), menu.group(0) if menu else "no survivor menu line")
+    if not menu:
+        return
+    time.sleep(1.0)
+    hoff = log_size(host)
+    console(host, "MO.Test.ClickWidget text=Laceration: Apply Bandage")
+    hp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
+    begun = wait_log(host, rf"\[MOTimedAction\] {re.escape(hp)}: MedicalTreatment \(([\d.]+) s\)", since=hoff, timeout=10)
+    rep.step("host: the menu's Apply Bandage starts the host's timed treatment of the survivor", bool(begun), begun.group(0) if begun else "no MedicalTreatment on the host")
+    if begun:
+        time.sleep(float(begun.group(1)) + 2.0)
+        after = re.search(r"SBLEED (-?[\d.]+)", _probe(host, bleed))
+        rep.step("... and when it is done the survivor's cut bleeds less", bool(after) and 0 <= float(after.group(1)) < float(before.group(1)),
+                 f"bleed {before.group(1)} -> {after.group(1) if after else '?'}")
+    console(host, "MO.UI.Close")
+
+
+def _host_colony_medic(rep, host, client):
+    """A colony villager dresses a bleeding player's wound (N-061 medic job, Oct 20 2026): the colony's upkeep pass (every 10 s) sends the
+    nearest idle villager that has the skill and the supplies -- here a bandage in its own pack -- to the bleeding host; it walks over and runs
+    the same server treatment a player would (FMOMedicalTreatmentActions::Begin). Founds a settlement, so it runs last. Host-side."""
+    off = log_size(host)
+    console(host, "MO.Colony.Found MedicTest 20000")
+    m = wait_log(host, r"\[MOQUERY\] COLONY Found (\S+)", since=off, timeout=10)
+    if not rep.step("CONTROL: the host founded a settlement", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no Found line"):
+        return
+    console(host, "MO.Colony.SpawnSurvivor 600")
+    m = wait_log(host, r"\[MOQUERY\] COLONY SpawnSurvivor (\S+)", since=off, timeout=15)
+    if not rep.step("CONTROL: the host spawned a survivor", bool(m) and m.group(1) != "FAILED", m.group(0) if m else "no SpawnSurvivor line"):
+        return
+    name = m.group(1)
+    console(host, f"MO.Colony.Recruit {name}")
+    wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=(\d)", since=off, timeout=15)
+    sv = f"sv = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
+    _probe(host, sv + "sv.get_component_by_class(unreal.MOInventoryComponent).add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Bandage01', 1); out('GAVE')")
+    bleed = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+             "ws = [w for w in h.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; "
+             "out('HBLEED %.3f' % (max(w.bleed_rate for w in ws) if ws else -1))")
+    _clear_around_host(host, keep=name)
+    off = log_size(host)
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                 "h.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_LEFT, 30.0, unreal.MOWoundType.LACERATION, h); out('CUT')")
+    before = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
+    if not rep.step("CONTROL: the host's forearm is cut and bleeds at least 0.2 mL/s (the medic threshold)", bool(before) and float(before.group(1)) >= 0.2,
+                    before.group(0) if before else "no wound"):
+        return
+    sent = wait_log(host, rf"\[MOColony\] Medic {re.escape(name)} goes to treat [^\r\n]*", since=off, timeout=25)
+    rep.step("the colony's upkeep sends the villager with the bandage to the bleeding host", bool(sent), sent.group(0) if sent else "no Medic line for " + name)
+    if not sent:
+        return
+    done = wait_log(host, r"\[MOSurvivorController\] Treat job (?:done|FAILED|refused|WEDGED)[^\r\n]*", since=off, timeout=90)
+    rep.step("... the villager walks over and finishes the treatment", bool(done) and " done:" in done.group(0), done.group(0) if done else "no Treat job outcome")
+    after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
+    rep.step("... and the host's cut bleeds less", bool(after) and 0 <= float(after.group(1)) < float(before.group(1)),
+             f"bleed {before.group(1)} -> {after.group(1) if after else '?'}")
 
 
 def _client_gait(rep, host, client):
@@ -3027,9 +3408,9 @@ def _trust_placement(rep, host, client):
     near_spot, far_spot = (x + fx * 300.0, y + fy * 300.0), (x + fx * 20000.0, y + fy * 20000.0)
     at = lambda spot: _buildables_near(host, spot[0], spot[1], 1500.0)
 
-    def send(forward_cm):
+    def send(forward_cm, recipe="auto"):
         off = log_size(host)
-        console(client, f"MO.Test.PlaceBuildingRPC auto {forward_cm}")
+        console(client, f"MO.Test.PlaceBuildingRPC {recipe} {forward_cm}")
         time.sleep(6)  # next tick + RPC + the host spawning it
         return read_log_from(host, off)
 
@@ -3053,6 +3434,21 @@ def _trust_placement(rep, host, client):
     refused = re.search(r"ServerPlaceBuilding rejected: [^\n]*", log)
     rep.step("trust: a placement 200 m away is REFUSED by the server (and nothing new stands at the requested spot)", bool(refused) and after == before,
              (refused.group(0)[:120] if refused else "no 'ServerPlaceBuilding rejected' line") + f"; buildings at the far spot {before} -> {after}")
+
+    # N-171 (Oct 20 2026): a building the joiner has not discovered -- one its build menu does not list -- is refused even within reach.
+    before = at(near_spot)
+    coff = log_size(client)
+    log = send(300, "undiscovered")
+    sent = re.search(r"\[MOTEST\] PlaceBuildingRPC: sent recipe=(\S+)", read_log_from(client, coff))
+    after = at(near_spot)
+    refused = re.search(r"ServerPlaceBuilding rejected: \S+ has not discovered \S+", log)
+    if sent and sent.group(1) == "None":
+        # No building in the live data needs discovering (Oct 20): nothing to send. The rule itself is
+        # MOFramework.Building.PlacementOnlyWhatTheMenuLists; this step counts once a building is discovery-gated.
+        print("[SKIP] trust: an undiscovered building -- none in the live data needs discovering (unit test covers the rule)", flush=True)
+    else:
+        rep.step("trust: a building the joiner has not discovered is REFUSED by the server, even within reach", bool(refused) and after == before,
+                 f"sent {sent.group(1) if sent else '?'}: " + (refused.group(0) if refused else "no 'has not discovered' line") + f"; buildings at the spot {before} -> {after}")
 
 
 def _buildables_near(host, x, y, radius):
@@ -3224,8 +3620,14 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout, seed=seed):
             return False
+        # MO_ACTIONS_CMDS_<NAME>: console commands (";"-separated) for one instance right after the join -- an A/B switch for an
+        # investigation, e.g. MO_ACTIONS_CMDS_ACTCLIENT="voxel.MegaMaterial.DisableMaterialSelection 1" (N-185)
+        for n in names:
+            for cmd in (c.strip() for c in os.environ.get(f"MO_ACTIONS_CMDS_{n.upper()}", "").split(";") if c.strip()):
+                console(n, cmd)
+                print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic):
             if only and fn.__name__ not in only:
                 continue
             try:
