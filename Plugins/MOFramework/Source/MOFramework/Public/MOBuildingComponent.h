@@ -35,6 +35,7 @@
 
 class AMOBuildableActor;
 class AMOPlayerController;
+class UMORecipeDiscoveryComponent;
 
 /**
  * =============================================================================
@@ -345,6 +346,11 @@ public:
 	// resolved placement here; the server spawns the real replicated building.
 	UFUNCTION(Server, Reliable)
 	void ServerPlaceBuilding(FName InRecipeId, FTransform PlacementTransform);
+
+	/** Whether a pawn with this discovery state may place RecipeId: a building recipe, and one that needs discovering only once discovered
+	 *  (a pawn without the component is not gated, as before). The build menu lists exactly these and ServerPlaceBuilding holds a request to
+	 *  the same rule (N-171, Oct 20 2026: a hostile client could place any building). A building's skill never gates it (F31). */
+	static bool IsBuildingRecipeOpenTo(FName RecipeId, const UMORecipeDiscoveryComponent* Discovery);
 
 	// ============================================================================
 	// CONSTRUCTION REQUESTS (co-op: the server runs every step on a placed building)

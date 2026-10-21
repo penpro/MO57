@@ -11,6 +11,8 @@
 #include "MOGameClockSubsystem.h"
 #include "MOQuestSubsystem.h"
 #include "MOBuildingTypes.h"
+#include "MOBuildingComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "MOSpeciesPlacement.h"
 #include "MOPossessionTypes.h"
 #include "MOWorldSeedSubsystem.h"
@@ -1400,6 +1402,34 @@ bool FMOBuild_SkillSlowsAndWastesNeverGates::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no skill line on the recipe: no penalty"), FMOBuildSkillPenalty::For(0, 0).TimeScale, 1.0f);
 	// CONTROL (can fail): the shortfall really scales -- a level below the requirement costs something.
 	TestTrue(TEXT("CONTROL: one level short costs time"), FMOBuildSkillPenalty::For(29, 30).TimeScale > 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuild_PlacementOnlyWhatTheMenuLists,
+	"MOFramework.Building.PlacementOnlyWhatTheMenuLists",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuild_PlacementOnlyWhatTheMenuLists::RunTest(const FString& Parameters)
+{
+	// N-171 (Oct 20 2026): ServerPlaceBuilding took any building recipe a client named. UMOBuildingComponent::IsBuildingRecipeOpenTo is the
+	// build menu's list rule and the server's check. Two temporary recipes (the mod overlay), removed at the end.
+	FMORecipeDefinitionRow Open;
+	Open.bIsBuilding = true;
+	FMORecipeDefinitionRow Gated = Open;
+	Gated.bRequiresDiscovery = true;
+	FMORecipeDefinitionRow Tool;   // not a building
+	UMORecipeDatabaseSettings::RegisterModRecipe(TEXT("TestBuildOpen"), Open);
+	UMORecipeDatabaseSettings::RegisterModRecipe(TEXT("TestBuildGated"), Gated);
+	UMORecipeDatabaseSettings::RegisterModRecipe(TEXT("TestNotABuilding"), Tool);
+	UMORecipeDiscoveryComponent* Discovery = NewObject<UMORecipeDiscoveryComponent>();
+	TestTrue(TEXT("a building nobody has to discover is open"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("TestBuildOpen"), Discovery));
+	TestFalse(TEXT("a building not yet discovered is refused"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("TestBuildGated"), Discovery));
+	TestFalse(TEXT("a recipe that is not a building is refused"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("TestNotABuilding"), Discovery));
+	TestFalse(TEXT("an unknown recipe is refused"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("NoSuchRecipe"), Discovery));
+	TestTrue(TEXT("a pawn without discoveries to check is not gated (as before)"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("TestBuildGated"), nullptr));
+	Discovery->DiscoverRecipe(TEXT("TestBuildGated"));
+	TestTrue(TEXT("once discovered it is open"), UMOBuildingComponent::IsBuildingRecipeOpenTo(TEXT("TestBuildGated"), Discovery));
+	UMORecipeDatabaseSettings::ClearModRecipes();
 	return true;
 }
 

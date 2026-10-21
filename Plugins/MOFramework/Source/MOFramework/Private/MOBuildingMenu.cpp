@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOKnowledgeComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOBuildingComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
 #include "MORecipeDatabaseSettings.h"
@@ -141,30 +142,18 @@ void UMOBuildingMenu::RefreshBuildingList()
 	TArray<FName> AllBuildingRecipes;
 	UMORecipeDatabaseSettings::GetBuildingRecipes(AllBuildingRecipes);
 
-	// Filter by discovery requirements
+	// Filter by discovery requirements: the same rule the server holds a placement to (UMOBuildingComponent::IsBuildingRecipeOpenTo, N-171)
 	TArray<FName> DiscoveredBuildingRecipes;
 	DiscoveredBuildingRecipes.Reserve(AllBuildingRecipes.Num());
 
-	UMORecipeDiscoveryComponent* Discovery = DiscoveryComponent.Get();
+	const UMORecipeDiscoveryComponent* Discovery = DiscoveryComponent.Get();
 
 	for (const FName& RecipeId : AllBuildingRecipes)
 	{
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-		if (!Recipe)
+		if (UMOBuildingComponent::IsBuildingRecipeOpenTo(RecipeId, Discovery))
 		{
-			continue;
+			DiscoveredBuildingRecipes.Add(RecipeId);
 		}
-
-		// Check discovery if required
-		if (Recipe->bRequiresDiscovery && IsValid(Discovery))
-		{
-			if (!Discovery->IsRecipeDiscovered(RecipeId))
-			{
-				continue;
-			}
-		}
-
-		DiscoveredBuildingRecipes.Add(RecipeId);
 	}
 
 	// Populate the recipe list widget

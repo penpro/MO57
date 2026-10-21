@@ -65,6 +65,7 @@
 #include "MOCraftingStationActor.h"
 #include "MOPlayerController.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "MOFramework.h"
 #include "MOQuestSubsystem.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -509,6 +510,16 @@ namespace
 		TEXT("TEST ONLY: ServerPlaceBuilding does not hold the requested transform to the pawn's reach."), ECVF_Cheat);
 }
 
+bool UMOBuildingComponent::IsBuildingRecipeOpenTo(FName RecipeId, const UMORecipeDiscoveryComponent* Discovery)
+{
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe || !Recipe->bIsBuilding)
+	{
+		return false;
+	}
+	return !Recipe->bRequiresDiscovery || !IsValid(Discovery) || Discovery->IsRecipeDiscovered(RecipeId);
+}
+
 void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, FTransform PlacementTransform)
 {
 	UWorld* World = GetWorld();
@@ -542,6 +553,13 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding rejected: %s is %.0f cm from the pawn (max %.0f) -- recipe %s"),
 			*PlacementTransform.GetLocation().ToCompactString(),
 			FVector::Dist(RequestingPawn->GetActorLocation(), PlacementTransform.GetLocation()), MaxServerReach, *InRecipeId.ToString());
+		return;
+	}
+	// Only what the build menu would list for this pawn (N-171): the server's copy of its discoveries decides, not the client's say-so.
+	if (!IsBuildingRecipeOpenTo(InRecipeId, RequestingPawn->FindComponentByClass<UMORecipeDiscoveryComponent>()))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding rejected: %s has not discovered %s"),
+			*RequestingPawn->GetName(), *InRecipeId.ToString());
 		return;
 	}
 

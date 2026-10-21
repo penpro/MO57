@@ -356,7 +356,9 @@ window while still logging PASS. Select an entry with its own button instead:
 `entry.get_editor_property('entry_button').simulate_click()` (read the detail
 panel back to prove it). `MO.Test.PlaceBuildingRPC` places at the pawn's capsule
 centre with no ground trace, so the building floats ~60 cm: real placement goes
-through the ghost's trace.
+through the ghost's trace. Its recipe argument `auto` / `undiscovered` picks the
+first building this pawn may / may not place (`UMOBuildingComponent::IsBuildingRecipeOpenTo`,
+N-171, Oct 20).
 
 Retry trap (same day): an MCP call is re-sent after an EMPTY first response,
 but the first attempt may already have applied. `remove_rows` deleted the rows,

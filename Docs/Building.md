@@ -38,8 +38,10 @@
   plants) under and around it goes on every machine and stays gone in the save. A campfire no longer sits in tall grass. Measured on a host +
   joiner: a campfire placed by the joiner, radius 118 cm, 17 instances swept on the host and the same 17 on the joiner.
 - Server checks (Oct 18 re-check of the July H19 note): `ServerPlaceBuilding` holds the transform to the pawn's reach
-  (`MaxPlacementDistance + ServerMaxPlacementMargin`); build requests need the pawn within `MaxBuildRequestReachCm`. Not re-checked on the
-  server: collision, slope, recipe knowledge (BACKLOG N-171, low priority for friends-only co-op).
+  (`MaxPlacementDistance + ServerMaxPlacementMargin`) and, since Oct 20, to the recipes the build menu lists for that pawn
+  (`UMOBuildingComponent::IsBuildingRecipeOpenTo`: one that needs discovering only once the server's copy of the pawn's discoveries has it;
+  the menu uses the same function). Build requests need the pawn within `MaxBuildRequestReachCm`. Not re-checked on the server: collision
+  and slope (the client's ghost decides; BACKLOG N-171, low priority for friends-only co-op).
 - **A building's skill is how well, never whether** (F31 A, Wes Oct 19: "building skill slows the work and wastes material, never gates"):
   `FMOBuildSkillPenalty` (MOBuildingTypes.h) is the one rule. When the work first starts (`UMOBuildProgressComponent::ApplyBuilderSkill`) the
   builder's level against the recipe's scales the build time (x2 with no skill, linearly to x1 at the level) and plans how many units the work

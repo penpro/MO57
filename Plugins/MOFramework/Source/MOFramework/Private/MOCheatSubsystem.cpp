@@ -38,6 +38,7 @@
 #include "MOSaveGameTypes.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOBuildingComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "MOTerraformingComponent.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
@@ -2149,13 +2150,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
-	// ---------- MO.Test.PlaceBuildingRPC [recipeId=auto] [forwardCm=300] ----------
+	// ---------- MO.Test.PlaceBuildingRPC [recipeId=auto|undiscovered] [forwardCm=300] ----------
 	// TRUST-BOUNDARY test (run on a CLIENT): sends UMOBuildingComponent::ServerPlaceBuilding from THIS machine's controller with a transform
 	// `forwardCm` in front of the pawn -- near is what the placement UI sends, far is what a hostile client sends. The harness reads the result
 	// on the host (building count, rejection log line). Deferred so the RPC really transports (see RunOnNextTick).
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.PlaceBuildingRPC"),
-		TEXT("Client->server ServerPlaceBuilding at forwardCm in front of the pawn (trust-boundary test). Usage: MO.Test.PlaceBuildingRPC [recipeId=auto] [forwardCm=300]"),
+		TEXT("Client->server ServerPlaceBuilding at forwardCm in front of the pawn (trust-boundary test). auto = the first building this pawn may place, undiscovered = the first it may not. Usage: MO.Test.PlaceBuildingRPC [recipeId=auto|undiscovered] [forwardCm=300]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FString RecipeArg = Args.Num() > 0 ? Args[0] : FString(TEXT("auto"));
@@ -2171,11 +2172,15 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					return;
 				}
 				FName RecipeId = FName(*RecipeArg);
-				if (RecipeArg.Equals(TEXT("auto"), ESearchCase::IgnoreCase))
+				const bool bAuto = RecipeArg.Equals(TEXT("auto"), ESearchCase::IgnoreCase);
+				if (bAuto || RecipeArg.Equals(TEXT("undiscovered"), ESearchCase::IgnoreCase))
 				{
+					// Judged on THIS machine's replicated discoveries, by the rule the server applies (N-171).
+					const UMORecipeDiscoveryComponent* Discovery = Pawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
 					TArray<FName> Ids;
 					UMORecipeDatabaseSettings::GetBuildingRecipes(Ids);
-					RecipeId = Ids.Num() > 0 ? Ids[0] : NAME_None;
+					const FName* Pick = Ids.FindByPredicate([bAuto, Discovery](FName Id) { return UMOBuildingComponent::IsBuildingRecipeOpenTo(Id, Discovery) == bAuto; });
+					RecipeId = Pick ? *Pick : NAME_None;
 				}
 				const FVector Location = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * Forward;
 				Building->ServerPlaceBuilding(RecipeId, FTransform(Pawn->GetActorRotation(), Location));
