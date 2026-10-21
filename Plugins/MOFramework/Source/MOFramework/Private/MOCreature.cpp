@@ -187,6 +187,19 @@ void AMOCreature::ApplyCreatureDefinition()
 	SprintSpeed = Definition->RunSpeed;
 	WalkSpeed = Definition->WalkSpeed;
 
+	// This species' footfalls (0 keeps the constructor's defaults)
+	if (FootstepComponent)
+	{
+		if (Definition->FootstepStrideCm > 0.0f)
+		{
+			FootstepComponent->BoneFreeStepLengthCm = Definition->FootstepStrideCm;
+		}
+		if (Definition->FootstepVolume > 0.0f)
+		{
+			FootstepComponent->StepVolumeScale = Definition->FootstepVolume;
+		}
+	}
+
 	// Check if this creature has a carcass definition
 	bSpawnCarcassOnDeath = !Definition->CarcassDefinitionId.IsNone();
 

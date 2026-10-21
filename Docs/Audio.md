@@ -69,7 +69,9 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   embankment / path patches defer to the biome below. Before, every prop rang as BareWood (no physical materials). Probe reason: `prop <mesh>`.
 - **Creatures** (N-132, Oct 20): the wolf and deer skeletons have no ball-of-foot bones, so their footstep component was silent. A pawn
   without the bones now steps by the ground it covers when `BoneFreeStepLengthCm` is set (AMOCreature: 70 cm at a walk, longer strides
-  past 3 m/s, `FMOFootstepMath::BoneFreeStepCm`), on the same surface sets, at `StepVolumeScale` 0.5 (a padded paw, a light hoof). One
-  shared set for both species for now. `MO.Footstep.LogAll 1` logs every pawn's steps (`pawn=` on each line); host: the wolf case hears it.
+  past 3 m/s, `FMOFootstepMath::BoneFreeStepCm`), on the same surface sets, at `StepVolumeScale` 0.5 (a padded paw, a light hoof),
+  set per species in `DT_Creatures` (`FootstepStrideCm` / `FootstepVolume`, 0 = those defaults; Oct 20: Wolf01 60 cm / 0.35, a padded
+  paw; Deer_Doe 75 cm / 0.55, a hoof -- estimates). `MO.Footstep.LogAll 1` logs every pawn's steps (`pawn=` on each line); host: the
+  wolf case hears it.
 
 **Water:** splash / wading / stroke sounds (`AMOCharacter::UpdateWaterSounds`, ids `SFX.Footsteps.WaterSplash1/2`).

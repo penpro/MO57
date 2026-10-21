@@ -173,6 +173,14 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
 	float FireFearRadiusCm = 0.0f;
 
+	/** Footsteps (N-132): this species' footfall spacing at a walk (cm; longer strides past 3 m/s) and loudness against a person's step
+	 *  (a padded paw is quiet, a hoof on hard ground less so). 0 = AMOCreature's defaults (70 cm, 0.5). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ClampMin="0"))
+	float FootstepStrideCm = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ClampMin="0"))
+	float FootstepVolume = 0.0f;
+
 	// ============================================================================
 	// ANIMATION
 	// ============================================================================
