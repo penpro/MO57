@@ -40,6 +40,15 @@ struct MOFRAMEWORK_API FMOMedicalTreatmentActions
 	 *  when it cannot be done now. A click sends AMOPlayerController::ServerTreatWound; the server checks it all again. */
 	static void GetOptions(APawn* Healer, AActor* Patient, const FMOWound& Wound, TArray<FMOItemActionOption>& Out);
 
+	/** The colony medic's choice (N-061): the patient's worst bleeding wound at or above MinBleedMlPerSecond, and of the treatments for it that
+	 *  slow bleeding, the one Healer has the skill and supplies for with the most total benefit (bleed + infection + healing reductions), so a
+	 *  dressing beats a tourniquet, which stays the fallback when it is all the medic carries. ExtraSupplies counts as carried too (a settlement
+	 *  store the medic would fetch from first). Healer == Patient is self-treatment, with its penalty and its unreachable body parts. Reach,
+	 *  sight and a busy healer are ignored (the job walks there first; Begin checks them all at the bedside). False when nothing needs, or
+	 *  nothing can get, treatment. */
+	static bool PickForMedic(APawn* Healer, AActor* Patient, float MinBleedMlPerSecond, const TArray<FMOInventoryEntry>& ExtraSupplies,
+		FGuid& OutWoundId, FName& OutTreatmentId);
+
 	/** RequiredItemIds means one unit per occurrence. Defined tools are reusable presence requirements;
 	 * broken tools fail. Consumables and liquid measures use the same joint planner as crafting.
 	 * Pure and atomic: refusal leaves OutPlan untouched. Unknown requirements fail closed. */

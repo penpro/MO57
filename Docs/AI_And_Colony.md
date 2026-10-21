@@ -134,7 +134,7 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
 
 ## 2. Survivors and the village loop
 
-- **Survivor AI = `AMOSurvivorController`'s C++ simple-job state machine** (bands: craft 10-15, refuel 20-23, excavate 30-33).
+- **Survivor AI = `AMOSurvivorController`'s C++ simple-job state machine** (bands: craft 10-15, refuel 20-23, excavate 30-33, treat 40-43).
   There are NO behavior-tree assets for survivors in Content: don't look for them.
 - Jobs: `UMOSurvivorJobQueueComponent` guards every mutator (a model implementation to clone). The haul pattern (fetch into pack ->
   deliver -> station-specific handling) is `RefuelStation`; `ExcavateAndHaul` mirrors it (`Docs/Terraform_Excavation_Plan.md`).
@@ -142,6 +142,15 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   -> skill decay / schools -> relationships -> seasons -> dynasty courtship / marriage / REAL children -> winter shelter; F1 fire
   units 1-4: fire is warmth (`IMOLocalHeatSource`), dries clothes (~11x), cold villagers seek lit hearths, the hearth pass issues
   RefuelStation jobs (firewood demand joined food demand). Station AddFuel is transactional (returns the accepted count).
+- **The colony medic** (Oct 20, N-061): `RunMedicPass` runs first in every upkeep tick (10 s): anyone in the settlement -- villager, player or
+  guest, never an animal -- with a wound bleeding at least `MedicBleedThresholdMlPerSecond` (0.2 mL/s) gets the nearest idle villager that has the skill and
+  the supplies, one medic per patient, worst bleeder first; tending its own wound comes last. `FMOMedicalTreatmentActions::PickForMedic`
+  chooses the worst bleeding wound and, of the treatments that slow bleeding and that the medic can do, the one of most total benefit (bleed +
+  infection + healing), so a dressing beats a tourniquet. Supplies come from the medic's pack, else the nearest settlement store that holds
+  them: the `TreatWound` job then fetches them first (states 42-43: walk to the store, take the shortfall; a tool is carried whole with its
+  durability), walks to the patient (40, following it if it moves), and runs `FMOMedicalTreatmentActions::Begin` on its own timed action
+  (41) -- the same server treatment, checks and duration a player's is. Done when the wound bleeds less. Test
+  `MOFramework.Medical.Treatment.MedicPick`; host: `_host_colony_medic`.
 - **A pawn's age** (Oct 19): `FMOPersistedPawnRecord::DefaultAgeInDays(Guid)` (18-40 years, fixed by the GUID) wherever a record is made without
   one -- the save capture, the possession list's live-world rows, the game mode's spawn registration. Before, only game-mode spawns got an age;
   the player's own pawn, recruits and wild survivors read "0 years" in the Characters list. Gender stays "Unknown" until F15.

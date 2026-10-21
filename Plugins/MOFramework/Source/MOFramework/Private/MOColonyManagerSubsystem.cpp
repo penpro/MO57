@@ -27,6 +27,9 @@
 #include "MOSkillsComponent.h"
 #include "MOBuildProgressComponent.h"
 #include "MODesignationSubsystem.h"
+#include "MOAnatomyComponent.h"
+#include "MOCreature.h"
+#include "MOMedicalTreatmentActions.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
@@ -742,7 +745,10 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 
 	const TArray<APawn*> Roster = GetColonyRoster();
 
-	// Standing orders first: idle hands pick up quota work this same pass.
+	// The bleeding first (N-061): an idle hand dresses a wound before taking standing orders.
+	RunMedicPass(Roster);
+
+	// Standing orders next: idle hands pick up quota work this same pass.
 	RunQuotaPass(Roster);
 
 	// School: maintenance flags + teaching for co-located villagers (V2.2).
@@ -1295,6 +1301,142 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 		{
 			AI->ClearStayLocation();
 			ShelteringVillagers.Remove(PawnGuid);
+		}
+	}
+}
+
+void UMOColonyManagerSubsystem::RunMedicPass(const TArray<APawn*>& Roster)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	// Patients: anyone in the settlement (villager, player, guest) with a wound bleeding enough to need a dressing, worst first.
+	TArray<TPair<float, AMOCharacter*>> Patients;
+	for (TActorIterator<AMOCharacter> It(World); It; ++It)
+	{
+		AMOCharacter* Patient = *It;
+		// People only: an animal is an AMOCharacter too, and a villager does not walk up to a wounded wolf with a bandage.
+		if (!IsValid(Patient) || Patient->IsDead() || Patient->IsA<AMOCreature>() || !IsInSettlement(Patient->GetActorLocation()))
+		{
+			continue;
+		}
+		const UMOAnatomyComponent* Anatomy = Patient->FindComponentByClass<UMOAnatomyComponent>();
+		float Worst = 0.0f;
+		if (Anatomy)
+		{
+			for (const FMOWound& Wound : Anatomy->GetAllWounds())
+			{
+				Worst = FMath::Max(Worst, Wound.BleedRate);
+			}
+		}
+		if (Worst >= MedicBleedThresholdMlPerSecond)
+		{
+			Patients.Emplace(Worst, Patient);
+		}
+	}
+	if (Patients.Num() == 0)
+	{
+		return;
+	}
+	Patients.Sort([](const TPair<float, AMOCharacter*>& A, const TPair<float, AMOCharacter*>& B) { return A.Key > B.Key; });
+
+	// Idle villagers + patients already being tended (one medic per patient).
+	TArray<APawn*> Idle;
+	TSet<const AActor*> Tended;
+	for (APawn* Villager : Roster)
+	{
+		if (!Villager->GetController() || !Villager->GetController()->IsA<AMOSurvivorController>())
+		{
+			continue;
+		}
+		const UMOSurvivorJobQueueComponent* JobQueue = Villager->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+		if (!JobQueue)
+		{
+			continue;
+		}
+		const FMOSurvivorJobEntry Current = JobQueue->GetCurrentJob();
+		if (Current.IsValid())
+		{
+			if (Current.JobType == EMOSurvivorJobType::TreatWound && Current.TargetActor.IsValid())
+			{
+				Tended.Add(Current.TargetActor.Get());
+			}
+		}
+		else if (!ShelteringVillagers.Contains(GetPawnGuid(Villager)))
+		{
+			Idle.Add(Villager);   // a villager sheltering from the cold is not idle; the shelter pass owns them
+		}
+	}
+
+	// Settlement stores and what they hold: a medic with an empty pack fetches the dressing first.
+	TArray<TPair<AMOContainerActor*, TArray<FMOInventoryEntry>>> Stores;
+	for (TActorIterator<AMOContainerActor> It(World); It; ++It)
+	{
+		const UMOInventoryComponent* Inv = IsValid(*It) && IsInSettlement(It->GetActorLocation()) ? It->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+		if (Inv)
+		{
+			auto& Store = Stores.AddDefaulted_GetRef();
+			Store.Key = *It;
+			Inv->GetInventoryEntries(Store.Value);
+		}
+	}
+
+	for (const TPair<float, AMOCharacter*>& Entry : Patients)
+	{
+		AMOCharacter* Patient = Entry.Value;
+		if (Idle.Num() == 0)
+		{
+			break;
+		}
+		if (Tended.Contains(Patient))
+		{
+			continue;
+		}
+		// The nearest idle hand that can do it; tending one's own wound comes last (self-treatment is worse and can't reach everywhere).
+		const FVector At = Patient->GetActorLocation();
+		Idle.Sort([&At, Patient](const APawn& A, const APawn& B)
+		{
+			const double DA = &A == Patient ? TNumericLimits<double>::Max() : FVector::DistSquared(A.GetActorLocation(), At);
+			const double DB = &B == Patient ? TNumericLimits<double>::Max() : FVector::DistSquared(B.GetActorLocation(), At);
+			return DA < DB;
+		});
+		Stores.Sort([&At](const TPair<AMOContainerActor*, TArray<FMOInventoryEntry>>& A, const TPair<AMOContainerActor*, TArray<FMOInventoryEntry>>& B)
+		{
+			return FVector::DistSquared(A.Key->GetActorLocation(), At) < FVector::DistSquared(B.Key->GetActorLocation(), At);
+		});
+		for (int32 Index = 0; Index < Idle.Num(); ++Index)
+		{
+			APawn* Medic = Idle[Index];
+			FGuid WoundId;
+			FName TreatmentId;
+			AMOContainerActor* From = nullptr;
+			bool bCan = FMOMedicalTreatmentActions::PickForMedic(Medic, Patient, MedicBleedThresholdMlPerSecond, {}, WoundId, TreatmentId);
+			for (int32 S = 0; !bCan && S < Stores.Num(); ++S)
+			{
+				bCan = FMOMedicalTreatmentActions::PickForMedic(Medic, Patient, MedicBleedThresholdMlPerSecond, Stores[S].Value, WoundId, TreatmentId);
+				From = bCan ? Stores[S].Key : nullptr;
+			}
+			if (!bCan)
+			{
+				continue;
+			}
+			UMOSurvivorJobQueueComponent* JobQueue = Medic->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+			if (JobQueue && JobQueue->EnqueueTreatJob(Patient, WoundId, TreatmentId, From).IsValid())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Medic %s goes to treat %s (%s, bleeding %.2f mL/s)%s"),
+					*Medic->GetName(), *Patient->GetName(), *TreatmentId.ToString(), Entry.Key,
+					From ? *FString::Printf(TEXT(", supplies from %s"), *From->GetName()) : TEXT(""));
+				Idle.RemoveAt(Index);
+				Tended.Add(Patient);
+			}
+			break;
+		}
+		if (!Tended.Contains(Patient))
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOColony] %s is bleeding %.2f mL/s but no idle villager has the skill and supplies to treat it"),
+				*Patient->GetName(), Entry.Key);
 		}
 	}
 }

@@ -168,8 +168,12 @@ applied to the body through the survival stats. Chances per litre and the resear
   (1 - relief) as much. Bandage / suture / splint flags are still not set by treatments (no name mapping invented).
 - **Wounds replicate to every machine** (Oct 20, for treating each other): `UMOAnatomyComponent::Wounds` (body parts and
   conditions stay owner-only); host + joiner: the joiner's copy shows the host's wound.
-- **Not built:** treating another pawn from a right-click on it, an assigned medic job, treating a recruited survivor from its command menu,
-  condition-only rows and CPR.
+- **The colony medic** (N-061, Oct 20): the colony's upkeep sends an idle villager with the skill and the supplies (its pack, else a
+  settlement store it fetches from) to anyone in the settlement bleeding 0.2 mL/s or more; it walks over and runs the same `Begin`
+  (`PickForMedic` chooses the wound and treatment). `Docs/AI_And_Colony.md` section 2.
+- **Not built:** treating another pawn from a right-click on it, treating a recruited survivor from its command menu, condition-only
+  rows (infection, hypothermia, shock), CPR, and a medic that cleans or sutures a wound that has stopped bleeding (the medic treats
+  bleeding only).
   Detail and acceptance steps: `Docs/agent/audit/MEDICAL_HANDOFF.md`.
 
 ## 8. Rules

@@ -9,6 +9,7 @@
 #include "MOHarvestSubsystem.h"
 #include "MOHISMHarvestHelper.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 #include "MOInventoryComponent.h"
 #include "MOTerraformingComponent.h"   // (unit 3) TerraformAtLocationEx + excavation config
 #include "MODesignationSubsystem.h"    // (unit 3) dig/dump zone lookup + budget
@@ -18,6 +19,10 @@
 #include "MOCraftingStationActor.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOInventoryHolderInterface.h"
+#include "MOMedicalTreatmentActions.h"
+#include "MOMedicalSubsystem.h"
+#include "MOTimedActionComponent.h"
+#include "MOCharacter.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "EngineUtils.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -36,6 +41,8 @@ namespace MOSurvivorJobWhy
 	FText NoIngredients() { return NSLOCTEXT("MOSurvivorJobs", "NoIngredients", "the ingredients aren't in the storage"); }
 	FText CraftCancelled() { return NSLOCTEXT("MOSurvivorJobs", "CraftCancelled", "the craft was cancelled"); }
 	FText NothingLeftToDig() { return NSLOCTEXT("MOSurvivorJobs", "NothingLeftToDig", "there is nothing left to dig there"); }
+	FText PatientGone() { return NSLOCTEXT("MOSurvivorJobs", "PatientGone", "the patient is gone"); }
+	FText WoundTended() { return NSLOCTEXT("MOSurvivorJobs", "WoundTended", "the wound no longer needs that treatment"); }
 }
 
 void AMOSurvivorController::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
@@ -620,6 +627,7 @@ bool AMOSurvivorController::CanExecuteSimply(EMOSurvivorJobType JobType) const
 	case EMOSurvivorJobType::CraftAtStation:
 	case EMOSurvivorJobType::RefuelStation:
 	case EMOSurvivorJobType::ExcavateAndHaul:
+	case EMOSurvivorJobType::TreatWound:
 		return true;
 	default:
 		return false;
@@ -673,6 +681,12 @@ void AMOSurvivorController::StartSimpleJobExecution()
 	if (CurrentJob.JobType == EMOSurvivorJobType::ExcavateAndHaul)
 	{
 		StartExcavateJobExecution();
+		return;
+	}
+	// Treat-wound jobs walk to the patient and dress the wound (states 40-41).
+	if (CurrentJob.JobType == EMOSurvivorJobType::TreatWound)
+	{
+		StartTreatJobExecution();
 		return;
 	}
 
@@ -769,9 +783,14 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 		return;
 	}
 
-	// Excavate-leg (30-33), refuel-leg (20-23), and craft-leg (10-15) states live
+	// Treat-leg (40-41), excavate-leg (30-33), refuel-leg (20-23), and craft-leg (10-15) states live
 	// in their own machines. Dispatch highest band first — the >= checks below
 	// would otherwise swallow the higher bands.
+	if (SimpleJobState >= 40)
+	{
+		UpdateTreatJobExecution(DeltaTime);
+		return;
+	}
 	if (SimpleJobState >= 30)
 	{
 		UpdateExcavateJobExecution(DeltaTime);
@@ -1666,6 +1685,238 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 				RefuelCarried = 0;
 				CompleteSimpleJob(true);
 			}
+			break;
+		}
+
+	default:
+		CompleteSimpleJob(false);
+		break;
+	}
+}
+
+void AMOSurvivorController::StartTreatJobExecution()
+{
+	AActor* Patient = CurrentJob.TargetActor.Get();
+	if (!IsValid(Patient) || !GetPawn())
+	{
+		FailSimpleJob(MOSurvivorJobWhy::PatientGone());
+		return;
+	}
+	// Supplies in a settlement store: fetch them first (42-43); otherwise straight to the patient (40).
+	AActor* Store = CurrentJob.StorageActor.Get();
+	SimpleJobState = IsValid(Store) ? 42 : 40;
+	bTreatDirectApproach = false;
+	SimpleJobTimer = 0.0f;
+	SimpleJobTotalSeconds = 0.0f;
+	MoveLegBestDistance = FLT_MAX;
+	MoveLegNoProgressSeconds = 0.0f;
+	SimpleJobTargetLocation = IsValid(Store) ? Store->GetActorLocation() : Patient->GetActorLocation();
+	MoveToLocation(SimpleJobTargetLocation, IsValid(Store) ? 150.0f : 80.0f);
+	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
+	{
+		JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget);
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job started: %s on %s (supplies from %s)"),
+		*CurrentJob.TreatmentId.ToString(), *Patient->GetName(), IsValid(Store) ? *Store->GetName() : TEXT("own pack"));
+}
+
+bool AMOSurvivorController::TakeTreatmentSupplies()
+{
+	const UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	const UMOMedicalSubsystem* Medical = GI ? GI->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	UMOInventoryComponent* StorageInv = GetActorInventory(CurrentJob.StorageActor.Get());
+	UMOInventoryComponent* PawnInv = GetPawn() ? GetPawn()->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	FMOMedicalTreatmentRow Treatment;
+	if (!Medical || !StorageInv || !PawnInv || !Medical->GetTreatmentDefinition(CurrentJob.TreatmentId, Treatment))
+	{
+		return false;
+	}
+	TArray<FMOInventoryEntry> StoreEntries;
+	StorageInv->GetInventoryEntries(StoreEntries);
+	TArray<FMOInventoryEntry> PackEntries;
+	PawnInv->GetInventoryEntries(PackEntries);
+	TMap<FName, int32> Consumables;
+	TArray<FGuid> ToolsToCarry;
+	for (FName Id : Treatment.RequiredItemIds)
+	{
+		FMOItemDefinitionRow Def;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(Id, Def)) return false;
+		if (!Def.bIsTool)
+		{
+			Consumables.FindOrAdd(Id)++;
+			continue;
+		}
+		// A tool is carried whole, durability and all: a usable one in the pack is enough, else the store's usable one comes along.
+		const auto Usable = [Id](const FMOInventoryEntry& Entry) { return Entry.ItemDefinitionId == Id && Entry.Quantity > 0 && Entry.CurrentDurability != 0; };
+		if (PackEntries.ContainsByPredicate(Usable)) continue;
+		const FMOInventoryEntry* Tool = StoreEntries.FindByPredicate(Usable);
+		if (!Tool) return false;
+		ToolsToCarry.AddUnique(Tool->ItemGuid);
+	}
+	// Only the shortfall: what the pack already holds is used first.
+	for (auto It = Consumables.CreateIterator(); It; ++It)
+	{
+		It.Value() -= FMath::Min(It.Value(), PawnInv->CountIngredient(It.Key()));
+		if (It.Value() <= 0) It.RemoveCurrent();
+	}
+	FMOInventoryMutationScope StorageMutation(StorageInv);
+	FMOInventoryMutationScope PawnMutation(PawnInv);
+	if (Consumables.Num() > 0)
+	{
+		const auto Result = StorageInv->TransferIngredientsTo(PawnInv, Consumables);
+		if (!Result.IsComplete())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job: the store lacks %s (%d short)"),
+				*Result.IngredientId.ToString(), Result.MissingUnits);
+			return false;
+		}
+	}
+	for (const FGuid& ToolGuid : ToolsToCarry)
+	{
+		if (!StorageInv->TryTransferItem(ToolGuid, PawnInv).IsComplete()) return false;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job: took the supplies for %s from %s"),
+		*CurrentJob.TreatmentId.ToString(), *CurrentJob.StorageActor->GetName());
+	return true;
+}
+
+void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
+{
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	APawn* Medic = GetPawn();
+	AActor* Patient = CurrentJob.TargetActor.Get();
+	const AMOCharacter* PatientCharacter = Cast<AMOCharacter>(Patient);
+	if (!Medic || !IsValid(Patient) || (PatientCharacter && PatientCharacter->IsDead()))
+	{
+		FailSimpleJob(MOSurvivorJobWhy::PatientGone());
+		return;
+	}
+
+	// GLOBAL JOB WATCHDOG (B1): the longest authored treatment (a suture) is 60 s; a walk across the settlement fits in the rest.
+	SimpleJobTotalSeconds += DeltaTime;
+	if (SimpleJobTotalSeconds > 180.0f)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job WEDGED in state %d after %.0fs - failing"),
+			SimpleJobState, SimpleJobTotalSeconds);
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	const UMOAnatomyComponent* Anatomy = Patient->FindComponentByClass<UMOAnatomyComponent>();
+	const FMOWound* Wound = nullptr;
+	TArray<FMOWound> Wounds;
+	if (Anatomy)
+	{
+		Wounds = Anatomy->GetAllWounds();
+		Wound = Wounds.FindByPredicate([this](const FMOWound& Entry) { return Entry.WoundId == CurrentJob.WoundId; });
+	}
+
+	switch (SimpleJobState)
+	{
+	case 42: // walking to the store
+		{
+			if (!CurrentJob.StorageActor.IsValid()) { FailSimpleJob(MOSurvivorJobWhy::StorageGone()); return; }
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
+			if (Arrive < 0) { FailSimpleJob(MOSurvivorJobWhy::CantReach()); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 43;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			if (JobQueue) { JobQueue->UpdateJobProgress(CurrentJob.JobId, 0.05f); }
+			break;
+		}
+
+	case 43: // taking the supplies (one combined handling gesture)
+		{
+			SimpleJobTimer += DeltaTime;
+			if (SimpleJobTimer < CraftHandlingDuration) break;
+			if (!TakeTreatmentSupplies())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job: no %s supplies in the store - failing"),
+					*CurrentJob.TreatmentId.ToString());
+				CompleteSimpleJob(false);
+				return;
+			}
+			SimpleJobState = 40;
+			MoveLegBestDistance = FLT_MAX;
+			MoveLegNoProgressSeconds = 0.0f;
+			SimpleJobTargetLocation = Patient->GetActorLocation();
+			MoveToLocation(SimpleJobTargetLocation, 80.0f);
+			if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget); }
+			break;
+		}
+
+	case 40: // walking to the patient
+		{
+			if (!Wound)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job FAILED: %s's wound no longer needs it"), *Patient->GetName());
+				FailSimpleJob(MOSurvivorJobWhy::WoundTended());
+				return;
+			}
+			// A patient on its feet moves: follow it rather than kneeling where it stood.
+			if (FVector::Dist2D(Patient->GetActorLocation(), SimpleJobTargetLocation) > 100.0f)
+			{
+				SimpleJobTargetLocation = Patient->GetActorLocation();
+				MoveToLocation(SimpleJobTargetLocation, 60.0f, true, /*bUsePathfinding=*/!bTreatDirectApproach);
+			}
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 150.0f, 150.0f);
+			if (Arrive < 0)
+			{
+				// A standing body carves the nav mesh around itself: the path ends a couple of metres short of the patient (Oct 20: stalled at
+				// 202 cm, again every upkeep tick). The last stretch is open ground: walk straight in, once.
+				const float Short = FVector::Dist2D(Medic->GetActorLocation(), Patient->GetActorLocation());
+				if (!bTreatDirectApproach && Short < 400.0f)
+				{
+					bTreatDirectApproach = true;
+					MoveLegBestDistance = FLT_MAX;
+					MoveLegNoProgressSeconds = 0.0f;
+					SimpleJobTargetLocation = Patient->GetActorLocation();
+					MoveToLocation(SimpleJobTargetLocation, 60.0f, true, /*bUsePathfinding=*/false);
+					break;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job FAILED: can't reach %s (%.0f cm off)"), *Patient->GetName(), Short);
+				FailSimpleJob(MOSurvivorJobWhy::CantReach());
+				return;
+			}
+			if (Arrive == 0)
+			{
+				if (JobQueue) { JobQueue->UpdateJobProgress(CurrentJob.JobId, 0.1f); }
+				break;
+			}
+			// At the bedside: Begin checks reach, sight, skill and supplies on the server like a player's own treatment.
+			const FMOMedicalActionResult Result = FMOMedicalTreatmentActions::Begin(Medic, Patient, CurrentJob.WoundId, CurrentJob.TreatmentId);
+			if (!Result.IsAccepted())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job refused at %s: %s"),
+					*Patient->GetName(), *Result.Describe().ToString());
+				FailSimpleJob(Result.Describe());
+				return;
+			}
+			TreatStartBleedRate = Wound->BleedRate;
+			SimpleJobState = 41;
+			SimpleJobTimer = 0.0f;
+			if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			break;
+		}
+
+	case 41: // treating (this pawn's timed action)
+		{
+			SimpleJobTimer += DeltaTime;
+			const UMOTimedActionComponent* Timed = Medic->FindComponentByClass<UMOTimedActionComponent>();
+			if (Timed && Timed->IsActive())
+			{
+				if (JobQueue) { JobQueue->UpdateJobProgress(CurrentJob.JobId, 0.5f); }
+				break;
+			}
+			// The action ended: it worked if the wound now bleeds less (or has closed).
+			const bool bWorked = !Wound || Wound->BleedRate < TreatStartBleedRate;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Treat job %s: %s on %s, bleed %.2f -> %.2f mL/s after %.0fs"),
+				bWorked ? TEXT("done") : TEXT("FAILED"), *CurrentJob.TreatmentId.ToString(), *Patient->GetName(),
+				TreatStartBleedRate, Wound ? Wound->BleedRate : 0.0f, SimpleJobTimer);
+			CompleteSimpleJob(bWorked);
 			break;
 		}
 

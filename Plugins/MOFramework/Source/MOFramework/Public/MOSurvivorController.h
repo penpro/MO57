@@ -468,6 +468,30 @@ private:
 	int32 RefuelCarried = 0;
 
 	// =========================================================================
+	// TREAT-WOUND JOB (N-061 medic: walk to the patient, dress the wound)
+	// =========================================================================
+	// SimpleJobState:
+	//   40 = walking to the patient (re-aimed when the patient moves)
+	//   41 = treating: FMOMedicalTreatmentActions::Begin on this pawn's timed action, then waiting for it to end
+	//   42 = walking to the settlement store holding the supplies (only when the job names one)
+	//   43 = taking the supplies (timed handling), then 40
+
+	/** Resolve the patient + start the walk. */
+	void StartTreatJobExecution();
+
+	/** Tick the treat-wound state machine (states 40-41). */
+	void UpdateTreatJobExecution(float DeltaTime);
+
+	/** The wound's bleed rate when the treatment began: completion is judged on the wound, not on the timer ending. */
+	float TreatStartBleedRate = 0.0f;
+
+	/** State 40's last stretch: the path ended short of the patient (its body carves the nav mesh), so the medic walks straight in. */
+	bool bTreatDirectApproach = false;
+
+	/** State 43: move the treatment's supplies this pawn lacks from the job's store into its pack. False when the store no longer has them. */
+	bool TakeTreatmentSupplies();
+
+	// =========================================================================
 	// EXCAVATE-AND-HAUL JOB (unit 3: pawn-automated dig -> haul -> dump)
 	// =========================================================================
 	// SimpleJobState:

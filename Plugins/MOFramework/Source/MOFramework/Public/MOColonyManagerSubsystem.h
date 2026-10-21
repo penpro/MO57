@@ -304,6 +304,10 @@ public:
 	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float HearthRefuelBelowPercent = 0.4f;
 
+	/** Medic pass (N-061): anyone in the settlement with a wound bleeding at least this many mL/s gets an idle villager to dress it. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony", meta=(ClampMin="0.0"))
+	float MedicBleedThresholdMlPerSecond = 0.2f;
+
 	/** Fuel items a refueling villager withdraws per trip. */
 	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="1"))
 	int32 HearthFuelWithdrawCount = 5;
@@ -335,6 +339,7 @@ private:
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunHearthPass(const TArray<APawn*>& Roster);
+	void RunMedicPass(const TArray<APawn*>& Roster);
 	void RunExcavationPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);

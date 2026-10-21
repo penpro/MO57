@@ -479,4 +479,30 @@ bool FMOMedicalHealingAndPain::RunTest(const FString&)
 	return true;
 }
 
+// The colony medic's choice (N-061 medic job, Oct 20 2026): which wound and which treatment a villager is sent to do, from its own pack or a
+// settlement store's supplies, ignoring the distance it will walk first.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedicalMedicPick, "MOFramework.Medical.Treatment.MedicPick", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FMOMedicalMedicPick::RunTest(const FString&)
+{
+	using namespace MOMedicalActionTests;
+	FWorld F;
+	F.Patient->SetActorLocation(FVector(5000, 0, 0));   // across the settlement: the job walks there, so the pick ignores reach
+	FGuid WoundId;
+	FName TreatmentId;
+	TestTrue(TEXT("a bleeding patient and a medic with supplies: a pick"), FMOMedicalTreatmentActions::PickForMedic(F.Healer, F.Patient, 0.2f, {}, WoundId, TreatmentId));
+	TestEqual(TEXT("... the bleeding wound"), WoundId, F.Injury.WoundId);
+	TestEqual(TEXT("... with the doable treatment of most benefit (not the skilled one, not the wrong-wound one)"), TreatmentId, FName(TEXT("AuditStrongTreatment")));
+	TestFalse(TEXT("a wound bleeding under the threshold is left alone"), FMOMedicalTreatmentActions::PickForMedic(F.Healer, F.Patient, 11.0f, {}, WoundId, TreatmentId));
+
+	F.Inventory->RemoveItemByDefinitionId(TEXT("Stick01"), 2);
+	TestFalse(TEXT("an empty pack and no store: no pick"), FMOMedicalTreatmentActions::PickForMedic(F.Healer, F.Patient, 0.2f, {}, WoundId, TreatmentId));
+	FMOInventoryEntry Stocked;
+	Stocked.ItemGuid = FGuid::NewGuid();
+	Stocked.ItemDefinitionId = TEXT("Stick01");
+	Stocked.Quantity = 2;
+	TestTrue(TEXT("a store holding what is missing: a pick (the job fetches it first)"),
+		FMOMedicalTreatmentActions::PickForMedic(F.Healer, F.Patient, 0.2f, {Stocked}, WoundId, TreatmentId));
+	return true;
+}
+
 #endif

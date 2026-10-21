@@ -205,6 +205,49 @@ FGuid UMOSurvivorJobQueueComponent::EnqueueRefuelJob(AActor* Station, AActor* St
 	return NewJob.JobId;
 }
 
+FGuid UMOSurvivorJobQueueComponent::EnqueueTreatJob(AActor* Patient, const FGuid& WoundId, FName TreatmentId, AActor* Storage)
+{
+	if (!IsValid(Patient) || !WoundId.IsValid() || TreatmentId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueTreatJob rejected: patient/wound/treatment missing"));
+		return FGuid();
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueTreatJob called on non-authority"));
+		return FGuid();
+	}
+
+	FMOSurvivorJobEntry NewJob = CreateJobEntry(EMOSurvivorJobType::TreatWound, 1);
+	NewJob.TargetActor = Patient;                     // patient in the shared target slot
+	NewJob.TargetLocation = Patient->GetActorLocation();
+	NewJob.WoundId = WoundId;
+	NewJob.TreatmentId = TreatmentId;
+	if (const UMOIdentityComponent* PatientId = Patient->FindComponentByClass<UMOIdentityComponent>())
+	{
+		NewJob.TargetActorGuid = PatientId->GetGuid();
+	}
+	if (IsValid(Storage))
+	{
+		NewJob.StorageActor = Storage;
+		if (const UMOIdentityComponent* StorageId = Storage->FindComponentByClass<UMOIdentityComponent>())
+		{
+			NewJob.StorageActorGuid = StorageId->GetGuid();
+		}
+	}
+
+	JobQueue.Jobs.Add(NewJob);
+	MarkQueueDirty();
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] Enqueued treat job %s: %s on %s's wound %s (supplies from %s)"),
+		*NewJob.JobId.ToString(), *TreatmentId.ToString(), *Patient->GetName(), *WoundId.ToString(),
+		IsValid(Storage) ? *Storage->GetName() : TEXT("the medic's pack"));
+
+	OnQueueChanged.Broadcast();
+	return NewJob.JobId;
+}
+
 FGuid UMOSurvivorJobQueueComponent::EnqueueExcavateJob(FGuid DigZoneId, EMOExcavateDumpMode DumpMode,
 	FGuid DumpZoneId, AActor* DumpContainer, FName SpoilItemId)
 {

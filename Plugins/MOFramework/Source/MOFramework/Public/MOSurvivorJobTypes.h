@@ -93,6 +93,10 @@ enum class EMOSurvivorJobType : uint8
 	// Docs/Terraform_Excavation_Plan.md.
 	ExcavateAndHaul,
 
+	// Medic (N-061, Oct 20 2026): walk to a wounded colonist or player and dress its worst wound with the treatment its own supplies and
+	// skill allow (FMOMedicalTreatmentActions::Begin, the survivor's timed action). Issued by the colony's medic pass.
+	TreatWound,
+
 	// Future expansion
 	// Hunt,
 	// Farm,
@@ -236,6 +240,13 @@ struct MOFRAMEWORK_API FMOSurvivorJobEntry : public FFastArraySerializerItem
 	/** Item the dug earth becomes when carried/deposited (default Dirt01). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
 	FName SpoilItemId = FName("Dirt01");
+
+	/** TreatWound: the patient's wound (the patient is TargetActor / TargetActorGuid) and the treatment row to use. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
+	FGuid WoundId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	FName TreatmentId;
 
 	FMOSurvivorJobEntry()
 		: JobId(FGuid::NewGuid())

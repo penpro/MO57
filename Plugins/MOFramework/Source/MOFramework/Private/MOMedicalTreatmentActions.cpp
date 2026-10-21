@@ -164,6 +164,47 @@ void FMOMedicalTreatmentActions::GetOptions(APawn* Healer, AActor* Patient, cons
 	}
 }
 
+bool FMOMedicalTreatmentActions::PickForMedic(APawn* Healer, AActor* Patient, float MinBleedMlPerSecond, const TArray<FMOInventoryEntry>& ExtraSupplies,
+	FGuid& OutWoundId, FName& OutTreatmentId)
+{
+	const UGameInstance* GI = IsValid(Healer) && Healer->GetWorld() ? Healer->GetWorld()->GetGameInstance() : nullptr;
+	const auto* Medical = GI ? GI->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	const auto* Anatomy = IsValid(Patient) ? Patient->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+	if (!Medical || !Anatomy) return false;
+	if (const auto* PatientCharacter = Cast<AMOCharacter>(Patient); PatientCharacter && PatientCharacter->IsDead()) return false;
+	if (const auto* HealerCharacter = Cast<AMOCharacter>(Healer); HealerCharacter && HealerCharacter->IsDead()) return false;
+	TArray<FMOWound> Wounds = Anatomy->GetAllWounds();
+	Wounds.Sort([](const FMOWound& A, const FMOWound& B) { return A.BleedRate > B.BleedRate; });
+	const auto* Skills = Healer->FindComponentByClass<UMOSkillsComponent>();
+	TArray<FMOInventoryEntry> Entries;
+	if (const auto* Inventory = Healer->FindComponentByClass<UMOInventoryComponent>()) Inventory->GetInventoryEntries(Entries);
+	Entries.Append(ExtraSupplies);
+	for (const FMOWound& Wound : Wounds)
+	{
+		if (!(Wound.BleedRate >= MinBleedMlPerSecond)) break;   // sorted: nothing after this one bleeds enough either
+		const TArray<FMOMedicalTreatmentRow> Rows = Medical->GetTreatmentsForWoundType(Wound.WoundType);
+		const FMOMedicalTreatmentRow* Best = nullptr;
+		float BestBenefit = 0.0f;
+		for (const FMOMedicalTreatmentRow& Row : Rows)
+		{
+			if (Row.BleedReduction <= 0.0f) continue;
+			const int32 Skill = Skills && !Row.RequiredSkillId.IsNone() ? Skills->GetSkillLevel(Row.RequiredSkillId) : 0;
+			if (UMOAnatomyComponent::ValidateTreatmentDefinition(Wound, Row, Skill, Patient == Healer) != EMOWoundTreatmentFailure::None) continue;
+			TArray<FMOInventoryEntry> Plan;
+			if (!PlanSupplies(Row, Entries, Plan, UMOItemDatabaseSettings::GetItemDefinition).IsAccepted()) continue;
+			const float Benefit = Row.BleedReduction + Row.InfectionReduction + Row.HealingSpeedBonus;
+			if (!Best || Benefit > BestBenefit) { Best = &Row; BestBenefit = Benefit; }
+		}
+		if (Best)
+		{
+			OutWoundId = Wound.WoundId;
+			OutTreatmentId = Best->TreatmentId;
+			return true;
+		}
+	}
+	return false;
+}
+
 FMOMedicalActionResult FMOMedicalTreatmentActions::Begin(APawn* Healer, AActor* Patient, const FGuid& WoundId, FName TreatmentId)
 {
 	if (!IsValid(Healer) || !Healer->HasAuthority()) return {EMOMedicalActionFailure::NotAuthority};

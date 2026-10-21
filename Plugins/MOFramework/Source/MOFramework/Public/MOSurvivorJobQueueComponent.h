@@ -173,6 +173,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
 	FGuid EnqueueRefuelJob(AActor* Station, AActor* Storage, FName FuelItemId, int32 Quantity = 5);
 
+	/** A TreatWound job (N-061): walk to Patient and dress WoundId with TreatmentId (server); with a Storage, fetch the supplies from it first.
+	 *  The colony's medic pass issues it. */
+	FGuid EnqueueTreatJob(AActor* Patient, const FGuid& WoundId, FName TreatmentId, AActor* Storage = nullptr);
+
 	/**
 	 * Add an ExcavateAndHaul job (unit 3): dig a bounded volume of earth from a
 	 * designated Dig zone (producing carryable spoil), haul it, and deposit it
