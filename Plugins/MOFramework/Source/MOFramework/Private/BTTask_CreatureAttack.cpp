@@ -1,6 +1,7 @@
 #include "BTTask_CreatureAttack.h"
 #include "MOBlackboardKeys.h"
 #include "MOFramework.h"
+#include "MOCreature.h"
 #include "MOAnatomyComponent.h"
 #include "MOBodyPartTypes.h"
 #include "MOWoundTypes.h"
@@ -78,8 +79,12 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 	// Set IsAttacking blackboard key (for AnimBP to prevent idle override)
 	BlackboardComp->SetValueAsBool(MOBlackboardKeys::IsAttacking, true);
 
-	// Play attack animation montage
-	if (AttackMontage)
+	// Play attack animation montage: a creature's on every machine (a montage played on the AnimInstance alone shows on the server only)
+	if (AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); AttackMontage && Creature)
+	{
+		Memory->bMontageStarted = Creature->PlayAnimationEverywhere(AttackMontage, MontagePlayRate) > 0.f;
+	}
+	else if (AttackMontage)
 	{
 		if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
 		{
@@ -132,7 +137,11 @@ EBTNodeResult::Type UBTTask_CreatureAttack::AbortTask(UBehaviorTreeComponent& Ow
 		{
 			if (APawn* OwnerPawn = AIController->GetPawn())
 			{
-				if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
+				if (AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn))
+				{
+					Creature->PlayAnimationEverywhere(nullptr);   // stops it on every machine
+				}
+				else if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
 				{
 					if (USkeletalMeshComponent* Mesh = Character->GetMesh())
 					{

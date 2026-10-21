@@ -180,7 +180,7 @@ With these a campfire cooks and fires crude earthenware but melts no metal; wood
 | Stone types, coal, ores | the geology (`FMOGeologyYield`): limestone, sandstone, granite, basalt, coal, hematite, copper, tin, flint, galena |
 | Bog iron | Rainforest dig table (12 %, Foraging 2) |
 | Native copper | copper deposits (biome-placed; to be replaced by geology outcrops) |
-| Meat, hide, bone, sinew, brain, bladder | deer carcass |
+| Meat, hide, bone, sinew, brain, bladder | deer and wolf carcasses (a wolf about half the meat) |
 | Resin | DistillBarkTar (birch-bark tar at a campfire) |
 | Soda ash | BurnPlantAsh |
 | Hide glue | BoilHideGlue |

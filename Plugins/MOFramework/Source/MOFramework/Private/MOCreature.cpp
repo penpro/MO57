@@ -19,6 +19,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/DataTable.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "GameFramework/GameStateBase.h"
+#include "Net/UnrealNetwork.h"
 
 AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -126,7 +129,20 @@ void AMOCreature::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 		{
 			Out.AddUnique(Definition->CarcassDataTable.ToSoftObjectPath());
 		}
+		for (const TSoftObjectPtr<UAnimSequenceBase>* HitReact : { &Definition->HitReactFront, &Definition->HitReactLeft, &Definition->HitReactRight, &Definition->HitReactBack })
+		{
+			if (!HitReact->IsNull())
+			{
+				Out.AddUnique(HitReact->ToSoftObjectPath());
+			}
+		}
 	}
+}
+
+void AMOCreature::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMOCreature, AnimCue);
 }
 
 AMOCreatureController* AMOCreature::GetCreatureController() const
@@ -254,6 +270,7 @@ void AMOCreature::HandleBodyPartDamaged(EMOBodyPartType Part, float Damage, floa
 	{
 		CreatureAI->NotifyDamaged(GetLastDamageInstigator());
 	}
+	PlayHitReactionFrom(GetLastDamageInstigator());
 }
 
 bool AMOCreature::IsVitalPart(EMOBodyPartType Part)
@@ -280,22 +297,122 @@ AActor* AMOCreature::GetLastDamageInstigator() const
 	return Anatomy ? Anatomy->GetLastDamageInstigator() : nullptr;
 }
 
-void AMOCreature::PlayHitReaction()
+EMOCreatureHitSide AMOCreature::ClassifyHitSide(const FVector& CreatureForward, const FVector& ToAttacker)
 {
-	if (bIsDead)
+	const FVector Forward = CreatureForward.GetSafeNormal2D();
+	const FVector To = ToAttacker.GetSafeNormal2D();
+	if (Forward.IsNearlyZero() || To.IsNearlyZero())
+	{
+		return EMOCreatureHitSide::Front;   // directly above or below: no side to tell
+	}
+	const float Dot = FVector::DotProduct(Forward, To);
+	if (Dot >= UE_HALF_SQRT_2)
+	{
+		return EMOCreatureHitSide::Front;
+	}
+	if (Dot <= -UE_HALF_SQRT_2)
+	{
+		return EMOCreatureHitSide::Back;
+	}
+	// +Y is the right of a pawn facing +X: forward x (to the attacker) points up when the attacker is on its right
+	return FVector::CrossProduct(Forward, To).Z > 0.0f ? EMOCreatureHitSide::Right : EMOCreatureHitSide::Left;
+}
+
+void AMOCreature::PlayHitReactionFrom(const AActor* Attacker)
+{
+	if (bIsDead || !HasAuthority() || !IsValid(Attacker))
+	{
+		return;   // no attacker = the environment (a fall, the cold): nothing to flinch from
+	}
+	const UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : 0.0f;
+	if (Now - LastHitReactionTime < 0.3f)
+	{
+		return;   // one blow that damaged several parts
+	}
+	const USkeletalMeshComponent* MeshComp = GetMesh();
+	const UAnimInstance* AnimInstance = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+	if (!AnimInstance || AnimInstance->IsAnyMontagePlaying())
+	{
+		return;   // mid-bite (its damage lands on the attack task's own timer, so cutting the animation would only hide the bite) or mid-flinch
+	}
+	const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow();
+	if (!Definition)
 	{
 		return;
 	}
 
-	if (HitReactionMontage)
+	const EMOCreatureHitSide Side = ClassifyHitSide(GetActorForwardVector(), Attacker->GetActorLocation() - GetActorLocation());
+	const TSoftObjectPtr<UAnimSequenceBase>* Pick = &Definition->HitReactFront;
+	switch (Side)
 	{
-		if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-		{
-			AnimInstance->Montage_Play(HitReactionMontage);
-			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
-			// UE_LOG(LogMOFramework, Log, TEXT("AMOCreature: %s playing hit reaction"), *GetName());
-		}
+	case EMOCreatureHitSide::Back:  Pick = &Definition->HitReactBack;  break;
+	case EMOCreatureHitSide::Left:  Pick = &Definition->HitReactLeft;  break;
+	case EMOCreatureHitSide::Right: Pick = &Definition->HitReactRight; break;
+	default: break;
 	}
+	const TSoftObjectPtr<UAnimSequenceBase>& Chosen = Pick->IsNull() ? Definition->HitReactFront : *Pick;
+	if (Chosen.IsNull())
+	{
+		return;   // this species has no hit reaction
+	}
+	UAnimSequenceBase* Animation = Chosen.Get();
+	if (!Animation)
+	{
+		Animation = Chosen.LoadSynchronous();   // GatherRuntimeAssets preloads them with the creature; this is the fallback
+	}
+	LastHitReactionTime = Now;
+	const float Played = PlayAnimationEverywhere(Animation);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s hit from the %s by %s: %s (%.2f s)"), *GetName(), *UEnum::GetDisplayValueAsText(Side).ToString(),
+		*GetNameSafe(Attacker), *GetNameSafe(Animation), Played);
+}
+
+float AMOCreature::PlayAnimationEverywhere(UAnimSequenceBase* Animation, float PlayRate)
+{
+	if (!HasAuthority())
+	{
+		return 0.0f;
+	}
+	AnimCue.Animation = Animation;
+	AnimCue.PlayRate = PlayRate;
+	AnimCue.ServerTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	++AnimCue.Serial;
+	ForceNetUpdate();   // a flinch or a bite that reaches the joiner a net update late reads as lag
+	return PlayAnimCueLocally(AnimCue);
+}
+
+void AMOCreature::OnRep_AnimCue()
+{
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	const double Late = GameState ? GameState->GetServerWorldTimeSeconds() - AnimCue.ServerTime : 0.0;
+	if (Late > 1.0)
+	{
+		return;   // a cue from before this machine saw the creature (a join, the creature coming into relevance): the moment has passed
+	}
+	const float Played = PlayAnimCueLocally(AnimCue);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s: anim cue %d on this client: %s (%.2f s)"), *GetName(), AnimCue.Serial,
+		*GetNameSafe(AnimCue.Animation), Played);
+}
+
+float AMOCreature::PlayAnimCueLocally(const FMOCreatureAnimCue& Cue)
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	UAnimInstance* AnimInstance = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+	if (!AnimInstance || bIsDead)
+	{
+		return 0.0f;
+	}
+	if (!Cue.Animation)
+	{
+		AnimInstance->Montage_Stop(0.2f);   // every active montage
+		return 0.0f;
+	}
+	if (UAnimMontage* Montage = Cast<UAnimMontage>(Cue.Animation))
+	{
+		return AnimInstance->Montage_Play(Montage, Cue.PlayRate);
+	}
+	const UAnimMontage* Dynamic = AnimInstance->PlaySlotAnimationAsDynamicMontage(Cue.Animation, TEXT("DefaultSlot"), 0.1f, 0.2f, Cue.PlayRate);
+	return Dynamic ? Dynamic->GetPlayLength() / FMath::Max(Cue.PlayRate, UE_KINDA_SMALL_NUMBER) : 0.0f;
 }
 
 void AMOCreature::OnDeath_Implementation(AActor* Killer)

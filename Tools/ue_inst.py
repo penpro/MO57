@@ -2423,6 +2423,60 @@ def _client_light_fire(rep, host, client):
     console(host, "MO.Test.FireAttemptSeconds 0")
 
 
+def _client_sees_creature_flinch(rep, host, client):
+    """A wolf hit by the joiner flinches away from it, and bites, ON THE JOINER'S SCREEN (N-169, Oct 20 2026): creature animations went to the
+    server's AnimInstance only (the bite was a BT task's Montage_Play), so a joiner saw wolves glide in and hurt it with no bite. Both now go
+    through AMOCreature::PlayAnimationEverywhere (a replicated cue). The host spawns a wolf beside the joiner, turns it so the joiner is on its
+    LEFT and hurts it in the joiner's name: the host picks the left flinch, and the joiner's own log shows it played there; then the angry wolf
+    bites someone, and the joiner's log shows the bite. Runs late (the bite wounds the joiner), before the cases that end the joiner."""
+    hoff = log_size(host)
+    console(host, "MO.AI.StressSpawn 1 500 800")
+    spawned = wait_log(host, r"\[MO.AI.StressSpawn\] Done[^\r\n]*", since=hoff, timeout=20)
+    if not rep.step("CONTROL: the host spawned a wolf", bool(spawned), spawned.group(0) if spawned else "no StressSpawn Done line"):
+        return
+    hit = None
+    coff = log_size(client)
+    for _ in range(4):   # a wolf mid-bite does not flinch (its bite's damage lands anyway): try again after it
+        hoff = log_size(host)
+        _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); "
+                     "ws = list(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)); "
+                     "w = min(ws, key=lambda a: (a.get_actor_location() - jl).length()); "
+                     "w.set_actor_location(jl + unreal.Vector(500.0, 0.0, 120.0), False, True); "
+                     # the joiner lies at -X from the wolf: facing yaw 270 (-Y) puts it on the wolf's left
+                     "w.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=270.0), False); "
+                     "a = w.get_component_by_class(unreal.MOAnatomyComponent); "
+                     "out('WOLF %s DMG=%s' % (w.get_name(), a.inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, j)))")
+        hit = wait_log(host, r"\[MOCreature\] \S+ hit from the (\w+) by \S+: (\S+) \(([\d.]+) s\)", since=hoff, timeout=4)
+        if hit:
+            break
+        time.sleep(1.5)
+    rep.step("host: the wolf flinches from the side the joiner stands on (its left: ANIM_Wolf_GetHitLeft)",
+             bool(hit) and hit.group(1) == "Left" and hit.group(2) == "ANIM_Wolf_GetHitLeft" and float(hit.group(3)) > 0.0,
+             hit.group(0) if hit else "no hit-reaction line on the host")
+    seen = wait_log(client, r"\[MOCreature\] \S+: anim cue \d+ on this client: ANIM_Wolf_GetHit\w+ \(([\d.]+) s\)", since=coff, timeout=10)
+    rep.step("client: ... and the flinch plays on the JOINER's copy of the wolf", bool(seen) and float(seen.group(1)) > 0.0,
+             seen.group(0) if seen else "no anim cue line on the client")
+    bite = wait_log(client, r"\[MOCreature\] \S+: anim cue \d+ on this client: AM_WolfBite \(([\d.]+) s\)", since=coff, timeout=40)
+    rep.step("client: the angry wolf's bite plays on the joiner's copy too", bool(bite) and float(bite.group(1)) > 0.0,
+             bite.group(0) if bite else "no bite cue on the client within 40 s")
+    # A killed wolf leaves a carcass to skin and butcher (DT_Carcasses "Wolf", Oct 20; before, only the deer had one and a wolf left nothing).
+    hoff = log_size(host)
+    _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); "
+                 "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - jl).length()); "
+                 "out('KILL %s' % w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, j))")
+    laid = wait_log(host, r"\[MOCreature\] Spawned carcass '([^']*)' for \S+", since=hoff, timeout=15)
+    rep.step("host: the dead wolf leaves a carcass", bool(laid) and laid.group(1) == "Wolf Carcass", laid.group(0) if laid else "no Spawned carcass line on the host")
+    time.sleep(3)
+    rows = _probe(client, "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                          "out('CARCASSES %s' % sorted(str(c.get_editor_property('carcass_definition').row_name) for c in "
+                          "unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor) if (c.get_actor_location() - p.get_actor_location()).length() < 3000))")
+    rep.step("client: ... and the joiner's copy of it knows its parts (the Wolf carcass row)", "'Wolf'" in rows,
+             (re.search(r"CARCASSES [^\r\n]*", rows) or re.search(r"[\s\S]{0,160}$", rows)).group(0))
+    _probe(host, "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature, unreal.MOCarcassActor) "
+                 "for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
+                 "if (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 3000]; out('TIDY')")
+
+
 def _client_gait(rep, host, client):
     """CLIENT jog / sprint (Steam playtest Oct 16 2026: "the second person can't jog or sprint"). The gait is movement input carried by the saved moves
     (UMOCharacterMovementComponent, FLAG_Custom_0 / _1), so the HOST must see the joiner's pawn move at the gait's speed. It used to be set on the
@@ -3140,7 +3194,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout, seed=seed):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn, _host_possession_click):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_takes_departed_pawn, _host_possession_click):
             if only and fn.__name__ not in only:
                 continue
             try:

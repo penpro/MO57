@@ -45,6 +45,7 @@
 #include "MOCreatureDefinitionRow.generated.h"
 
 class UBehaviorTree;
+class UAnimSequenceBase;
 
 /**
  * Loot entry for creature drops.
@@ -166,6 +167,24 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	/** Behavior tree asset for this creature type. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AI")
 	TSoftObjectPtr<UBehaviorTree> BehaviorTree;
+
+	// ============================================================================
+	// ANIMATION
+	// ============================================================================
+
+	/** The flinch when a blow lands from the front (a sequence or a montage for this species' skeleton; it plays in the ABP's DefaultSlot on
+	 *  every machine: AMOCreature::PlayAnimationEverywhere). Left / Right / Back fall back to it; none = no reaction. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Animation")
+	TSoftObjectPtr<UAnimSequenceBase> HitReactFront;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Animation")
+	TSoftObjectPtr<UAnimSequenceBase> HitReactLeft;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Animation")
+	TSoftObjectPtr<UAnimSequenceBase> HitReactRight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Animation")
+	TSoftObjectPtr<UAnimSequenceBase> HitReactBack;
 
 	// ============================================================================
 	// PERCEPTION

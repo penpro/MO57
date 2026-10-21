@@ -39,6 +39,22 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   controller holds a threat; health plays no part. BT_Predator = `HasTarget` -> `ChaseTarget` / `IsInAttackRange` -> `CreatureAttack`
   (AM_WolfBite), else wander.
 
+### Animation on every machine (Oct 20 2026, N-169)
+
+- **A creature animation is a replicated cue:** `AMOCreature::PlayAnimationEverywhere(Anim, Rate)` (server) plays it there and sets `AnimCue`
+  (animation, rate, server time, serial); each client plays it in `OnRep_AnimCue`, skipping a cue more than 1 s old (a join, the creature
+  coming into relevance). A montage plays as itself, a sequence in the ABP's `DefaultSlot`. Before, the bite (`BTTask_CreatureAttack`) was a
+  `Montage_Play` on the server's AnimInstance: a joiner saw a wolf glide up and hurt it with no bite. Any new creature animation goes through here.
+- **Hit reactions:** a blow with an attacker (`UMOAnatomyComponent`'s instigator; none = the environment, no flinch) plays the definition's
+  `HitReactFront / Left / Right / Back` for the side it came from (`AMOCreature::ClassifyHitSide`: Front / Back within 45 deg of the nose, flat;
+  missing sides fall back to Front). Not while a montage plays (mid-bite: the bite's damage lands on the task's own timer, so a flinch would
+  only hide it) and once per 0.3 s (one blow, several parts). Data: `DT_Creatures` Wolf01 -> `ANIM_Wolf_GetHitFront / Left / Right` (0.67 s);
+  Deer_Doe has none: **`ABP_DeerDoe` has no `DefaultSlot` node** (wolf's has), so a deer would show no montage at all -- add the slot in the graph
+  editor (not scriptable; N-096), then its row. Proof: `nettest actions` `_client_sees_creature_flinch` (the joiner's log: "anim cue N on this
+  client: ANIM_Wolf_GetHitLeft", then AM_WolfBite); `MOFramework.Creature.HitSide`.
+- **A killed wolf leaves a carcass** (`DT_Carcasses` "Wolf": the deer's parts at a ~40 kg animal's yields; DECISIONS Oct 20). Before, it
+  ragdolled and left nothing.
+
 ### Senses, wounds and the chase (Oct 18 2026)
 
 - **Hearing** works from Oct 18: every creature sense uses `AMOCreatureController::SenseAllAffiliations()`. The hearing sense compares

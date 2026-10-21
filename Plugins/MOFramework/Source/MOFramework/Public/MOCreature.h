@@ -60,9 +60,42 @@
 class AMOCreatureController;
 class AMOCarcassActor;
 class UBehaviorTree;
+class UAnimSequenceBase;
 struct FMOCreatureDefinitionRow;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCreatureDeath, AMOCreature*, Creature, AActor*, Killer);
+
+/** The side of a creature a blow came from (AMOCreature::ClassifyHitSide): picks the hit reaction. */
+UENUM()
+enum class EMOCreatureHitSide : uint8
+{
+	Front,
+	Back,
+	Left,
+	Right
+};
+
+/** A creature animation for every machine (AMOCreature::PlayAnimationEverywhere): the server sets it, each client plays it in OnRep_AnimCue. */
+USTRUCT()
+struct FMOCreatureAnimCue
+{
+	GENERATED_BODY()
+
+	/** A montage, or a sequence played in the ABP's DefaultSlot; null stops the current one. */
+	UPROPERTY()
+	TObjectPtr<UAnimSequenceBase> Animation = nullptr;
+
+	UPROPERTY()
+	float PlayRate = 1.0f;
+
+	/** The server's game time when it played: a client that receives the cue late (joining, or the creature coming into relevance) skips it. */
+	UPROPERTY()
+	float ServerTime = 0.0f;
+
+	/** Bumped on every cue, so the same animation twice still replicates. */
+	UPROPERTY()
+	uint8 Serial = 0;
+};
 
 /**
  * Base class for all creatures.
@@ -128,6 +161,23 @@ public:
 	static bool IsVitalPart(EMOBodyPartType Part);
 
 	// ============================================================================
+	// ANIMATION ON EVERY MACHINE
+	// ============================================================================
+
+	/**
+	 * Play a creature animation on every machine (server only): a montage plays as itself, a sequence in the ABP's DefaultSlot (an ABP
+	 * without a DefaultSlot node shows nothing: ABP_DeerDoe, N-096). The server plays it now, each client when AnimCue arrives; null stops
+	 * the current one. A montage played straight on the AnimInstance shows on the server only: the bite (BTTask_CreatureAttack) and the hit
+	 * reactions go through here. Returns the length played on the server (0 = nothing played).
+	 */
+	float PlayAnimationEverywhere(UAnimSequenceBase* Animation, float PlayRate = 1.0f);
+
+	/** Which side of the creature a blow came from: its forward against the flat direction to the attacker (Front / Back within 45 deg). */
+	static EMOCreatureHitSide ClassifyHitSide(const FVector& CreatureForward, const FVector& ToAttacker);
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// ============================================================================
 	// EVENTS
 	// ============================================================================
 
@@ -143,17 +193,25 @@ protected:
 	// HIT REACTIONS
 	// ============================================================================
 
-	/** Animation montage to play when hit. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
-	TObjectPtr<UAnimMontage> HitReactionMontage;
-
 	/** Animation montage to play on death. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
 	TObjectPtr<UAnimMontage> DeathMontage;
 
-	/** Play hit reaction animation. Called when creature takes damage. */
-	UFUNCTION(BlueprintCallable, Category="MO|Creature")
-	void PlayHitReaction();
+	/** A blow from Attacker: the definition's reaction for the side it came from (HitReact*, Front the fallback), on every machine. Server. */
+	void PlayHitReactionFrom(const AActor* Attacker);
+
+	/** The last cue the server played (PlayAnimationEverywhere). */
+	UPROPERTY(ReplicatedUsing=OnRep_AnimCue)
+	FMOCreatureAnimCue AnimCue;
+
+	UFUNCTION()
+	void OnRep_AnimCue();
+
+	/** Plays Cue on this machine; returns its length (0 = nothing played). */
+	float PlayAnimCueLocally(const FMOCreatureAnimCue& Cue);
+
+	/** Server game time of the last hit reaction: one blow can damage several parts, and it flinches once. */
+	float LastHitReactionTime = -100.0f;
 
 	// ============================================================================
 	// DEATH HANDLING

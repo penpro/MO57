@@ -57,6 +57,9 @@
 ## Decisions, newest first
 
 ### 2026-10-20
+- Claude, small call (noted): **a killed wolf leaves a carcass** (`DT_Carcasses` "Wolf", `DT_Creatures` Wolf01's carcass id): the deer's parts and
+  items at a ~40 kg animal's yields (meat 11 against the doe's 20, sinew 3, bones 4 + skull, hide, brain, bladder; cuts ~0.7 x the deer's time).
+  Before, a dead wolf ragdolled and left nothing (and the log said "using legacy loot system"). No new items: `Docs/PROGRESSION_ROADMAP.md` §5.
 - **F33 A, Wes:** "keep the 20% odds but make a failed drill teach more (about 25 XP), so practice helps by the 4th try." A failed attempt teaches
   25 Firemaking XP, a lit one 40 (was 8 / 20). Firemaking's first level is 60 XP (live DT_Skills), so three failures earn +6 % for the 4th try
   (before: eight failures, 24 minutes of drilling). Every attempt shows the drilling player a skill toast ("Firemaking +25 XP"), so the practice is
