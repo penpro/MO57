@@ -28,6 +28,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnHistoryEntryAdded, const FMOCharacterHistoryEntry&, Entry);
 
+class AController;
+
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOCharacterHistoryComponent : public UActorComponent
 {
@@ -52,6 +54,18 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="MO|History|Save")
 	bool ApplySaveDataAuthority(const FMOCharacterHistorySaveData& InSaveData);
+
+	// =========================================================================
+	// WHILE YOU WERE AWAY (N-091)
+	// =========================================================================
+
+	/** The pawn's controller changed (server, AMOCharacter::NotifyControllerChanged): a player leaving stamps the game time; a player taking
+	 *  it back is told what it did since (BuildAwaySummary, as a notification on that player's screen). */
+	void HandleControllerChange(const AController* Previous, AController* Current);
+
+	/** "While you were away (2 h 10 min):" and the entries after LeftAt, oldest first: the newest MaxLines, the rest counted. False when there
+	 *  is nothing after LeftAt (or no player left: LeftAt = MinValue). Pure (tested: MOFramework.Colony.AwaySummary). */
+	static bool BuildAwaySummary(const TArray<FMOCharacterHistoryEntry>& InEntries, const FDateTime& LeftAt, const FDateTime& Now, int32 MaxLines, FText& OutText);
 
 	// =========================================================================
 	// RELATIONSHIP GRAPH (V2.3) — grown by REAL shared time, not scripts.
@@ -111,4 +125,7 @@ private:
 
 	UPROPERTY()
 	TArray<FMOCharacterRelationship> Relationships;
+
+	/** Game time a player last left this pawn (MinValue = none this session; not saved, so a reload starts the count fresh). */
+	FDateTime PlayerLeftAt = FDateTime::MinValue();
 };

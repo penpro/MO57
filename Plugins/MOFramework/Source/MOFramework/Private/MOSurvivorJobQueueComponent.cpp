@@ -5,6 +5,7 @@
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOCraftingQueueComponent.h"
 #include "MOPlayerController.h"
+#include "MOCharacterHistoryComponent.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
@@ -478,6 +479,16 @@ void UMOSurvivorJobQueueComponent::CompleteCurrentJobWithReason(bool bSuccess, c
 	}
 	CurrentJob->State = bSuccess ? EMOSurvivorJobState::Completed : EMOSurvivorJobState::Failed;
 	CurrentJob->Progress = bSuccess ? 1.0f : CurrentJob->Progress;
+
+	// The pawn's own record: what a player who takes it back is told it did meanwhile (N-091, "while you were away")
+	if (UMOCharacterHistoryComponent* History = GetOwner()->FindComponentByClass<UMOCharacterHistoryComponent>())
+	{
+		const FMOSurvivorJobDefinitionRow* Def = GetJobDefinitionPtr(Removed.JobType);
+		const FString Name = (Def ? Def->DisplayName : UEnum::GetDisplayValueAsText(Removed.JobType)).ToString();
+		History->AddEntry(bSuccess ? EHistoryEntryType::TaskComplete : EHistoryEntryType::TaskFailed,
+			bSuccess ? FString::Printf(TEXT("Finished: %s"), *Name)
+				: FailureReason.IsEmpty() ? FString::Printf(TEXT("Gave up: %s"), *Name) : FString::Printf(TEXT("Gave up: %s (%s)"), *Name, *FailureReason.ToString()));
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Job %s completed (Success: %s)"),
 		*JobId.ToString(), bSuccess ? TEXT("true") : TEXT("false"));

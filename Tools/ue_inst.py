@@ -2695,11 +2695,19 @@ def _host_takes_departed_pawn(rep, host, client):
     rep.step("host's possession MENU lists the survivor left behind as one it can take (2 = its own + the left one)",
              bool(pop) and int(pop.group(1)) >= 2 and pop.group(2) == "0", pop.group(0) if pop else "the menu did not populate")
     console(host, "MO.Test.PressKey Escape")
+    # Something happens to the survivor while nobody plays it (its history: a job it finished, here written by hand), so taking it back has news (N-091)
+    _probe(host, f"p = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{pawn_name}'][0]; "
+                 "p.get_component_by_class(unreal.MOCharacterHistoryComponent).add_entry(unreal.HistoryEntryType.TASK_COMPLETE, 'Finished: Gather Sticks'); out('NEWS')")
     time.sleep(1)
+    hoff = log_size(host)
     console(host, f"MO.Possess.Take {guid}")
     time.sleep(5)
     now = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('HOSTPAWN %s' % (p.get_name() if p else 'none'))")
     rep.step("the host took the survivor the joiner left behind", f"HOSTPAWN {pawn_name}" in now, now.strip()[-80:] + f" (wanted {pawn_name})")
+    away = re.search(r"\[MOHistory\] \S+: back under \S+ -- ([^\r\n]*)", read_log_from(host, hoff))
+    rep.step("... and is told what it did while nobody played it (\"While you were away\", N-091)",
+             bool(away) and away.group(1).startswith("While you were away") and "Finished: Gather Sticks" in away.group(1),
+             away.group(0)[:200] if away else "no [MOHistory] back-under line on the host")
 
 
 def _dropped_item_falls_on_client(rep, host, client):

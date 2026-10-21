@@ -2770,6 +2770,14 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 
 void AMOCharacter::NotifyControllerChanged()
 {
+	// The pawn's record: a player leaving it, or taking it back ("while you were away", N-091). Read before Super, which overwrites PreviousController.
+	if (HasAuthority())
+	{
+		if (UMOCharacterHistoryComponent* History = FindComponentByClass<UMOCharacterHistoryComponent>())
+		{
+			History->HandleControllerChange(PreviousController, Controller);
+		}
+	}
 	Super::NotifyControllerChanged();
 
 	if (VoxelCollisionInvoker)

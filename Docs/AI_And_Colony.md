@@ -180,6 +180,13 @@ joiner's task menu said why.
   (`IsPawnAvailableTo` is the one definition of "available"). The menu shows occupancy ("Current survivor" / "Played by <Steam name>",
   `EMOPawnOccupancy`; Wes, Oct 15). Co-op details: `Docs/Coop_And_Networking.md` §2.
 - Known coupling: `MOPossessionSubsystem` requires `UMOIdentityComponent` + `UMOInventoryComponent` (TECHNICAL_REFERENCE, coupling HIGH).
+- **"While you were away"** (N-091, Oct 20): a pawn's `UMOCharacterHistoryComponent` stamps the game time when a player leaves it
+  (`HandleControllerChange`, from `AMOCharacter::NotifyControllerChanged` on the server, read before the engine overwrites
+  `PreviousController`); when a player takes it back, that player gets one notice: "While you were away (2 h 10 min):" and the pawn's
+  history entries since, the newest four (`BuildAwaySummary`, pure). Nothing recorded since = no notice. Survivor jobs now write their
+  result into the history ("Finished: Gather Sticks", "Gave up: Chop Tree (why)"), next to the colony's activity / mood / relationship
+  entries. The stamp is not saved (a reload starts fresh). Proof: `MOFramework.Colony.AwaySummary`; `nettest actions`
+  `_host_takes_departed_pawn`.
 
 ## 4. Colony management (planned, partly built)
 

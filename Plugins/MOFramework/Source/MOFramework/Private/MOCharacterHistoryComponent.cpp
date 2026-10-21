@@ -1,10 +1,82 @@
 #include "MOCharacterHistoryComponent.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
+#include "MOPlayerController.h"
+#include "GameFramework/Controller.h"
 
 UMOCharacterHistoryComponent::UMOCharacterHistoryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+}
+
+bool UMOCharacterHistoryComponent::BuildAwaySummary(const TArray<FMOCharacterHistoryEntry>& InEntries, const FDateTime& LeftAt, const FDateTime& Now, int32 MaxLines, FText& OutText)
+{
+	if (LeftAt == FDateTime::MinValue())
+	{
+		return false;
+	}
+	TArray<const FMOCharacterHistoryEntry*> Since;
+	for (const FMOCharacterHistoryEntry& Entry : InEntries)
+	{
+		if (Entry.Timestamp > LeftAt)
+		{
+			Since.Add(&Entry);
+		}
+	}
+	if (Since.Num() == 0)
+	{
+		return false;
+	}
+	const FTimespan Away = Now > LeftAt ? Now - LeftAt : FTimespan::Zero();
+	const int32 Days = Away.GetDays(), Hours = Away.GetHours(), Minutes = FMath::Max(Away.GetMinutes(), Days == 0 && Hours == 0 ? 1 : 0);
+	FString Span = Days > 0 ? FString::Printf(TEXT("%d d %d h"), Days, Hours) : Hours > 0 ? FString::Printf(TEXT("%d h %d min"), Hours, Minutes)
+		: FString::Printf(TEXT("%d min"), Minutes);
+	FString Text = FString::Printf(TEXT("While you were away (%s):"), *Span);
+	const int32 Shown = FMath::Min(Since.Num(), FMath::Max(1, MaxLines));
+	for (int32 i = Since.Num() - Shown; i < Since.Num(); ++i)
+	{
+		Text.AppendChar(TCHAR(10));   // a new line
+		Text += TEXT("- ") + Since[i]->Description.ToString();
+	}
+	if (Since.Num() > Shown)
+	{
+		Text.AppendChar(TCHAR(10));
+		Text += FString::Printf(TEXT("(and %d earlier)"), Since.Num() - Shown);
+	}
+	OutText = FText::FromString(Text);
+	return true;
+}
+
+void UMOCharacterHistoryComponent::HandleControllerChange(const AController* Previous, AController* Current)
+{
+	const UWorld* World = GetWorld();
+	const UMOGameClockSubsystem* Clock = World ? World->GetSubsystem<UMOGameClockSubsystem>() : nullptr;
+	if (!Clock || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	const bool bPlayerBefore = Previous && Previous->IsPlayerController();
+	const bool bPlayerNow = Current && Current->IsPlayerController();
+	if (bPlayerBefore && !bPlayerNow)
+	{
+		PlayerLeftAt = Clock->GetGameDateTime();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHistory] %s: the player left at %s"), *GetOwner()->GetName(), *PlayerLeftAt.ToString());
+		return;
+	}
+	if (!bPlayerNow || bPlayerBefore)
+	{
+		return;
+	}
+	FText Summary;
+	if (BuildAwaySummary(Entries, PlayerLeftAt, Clock->GetGameDateTime(), 4, Summary))
+	{
+		if (AMOPlayerController* PC = Cast<AMOPlayerController>(Current))
+		{
+			PC->ClientShowNotification(Summary, 10.0f, EMONotificationType::Info);
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHistory] %s: back under %s -- %s"), *GetOwner()->GetName(), *Current->GetName(), *Summary.ToString().Replace(*FString::Chr(TCHAR(10)), TEXT(" | ")));
+	}
+	PlayerLeftAt = FDateTime::MinValue();
 }
 
 void UMOCharacterHistoryComponent::AddEntry(EHistoryEntryType EntryType, const FString& Description)
