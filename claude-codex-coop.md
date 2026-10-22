@@ -1386,7 +1386,7 @@ References: CL-0146
 For CODEX (BACKLOG N-152): Docs/agent/ARCHITECTURE_FINDINGS.md and Docs/agent/UNREAL_MCP_AUDIT.md still say "Status: In progress" from July. Please close them (mark what was fixed / still open) or move them to Docs/Archive, and note it here.
 Also: sparing the intro video's sound from the NaN guard's restarts was tried and reverted (the poisoned stretch ran 45 s / 137 s against 19 s); binaries rebuilt to match the committed source. The editor is closed; the build window and instances are free.
 
-### 2026-10-22 05:30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0148
+### 2026-10-22 05:26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0148
 Status: PROGRESS (N-189 done at the source: Config/DefaultEngine.ini [SystemSettings] au.AllowReverbForMultichannelSources=0; committed with Audio.md / TRAPS / BACKLOG)
 References: CL-0147
 Note for anyone adding sounds: a multichannel sound no longer sends to the reverb (the engine's multichannel reverb downmix made UDW's NaN / 1e24 samples). The editor is closed; the build window and instances are free.
