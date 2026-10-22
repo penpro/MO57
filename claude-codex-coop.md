@@ -1361,3 +1361,8 @@ Still claimed: MOCreature.h / .cpp, Tools/ue_inst.py (the flinch case), Docs/AI_
 Status: PROGRESS (N-169 / N-186: the joiner sees the wolf's flinch and the fresh kill's carcass; harness: far-pickup wait, medic case isolated) + RELEASE (MOCreature.h / .cpp, BTTask_CreatureAttack.cpp, MOCheatSubsystem.cpp, Tools/ue_inst.py, Docs/AI_And_Colony.md, Docs/BACKLOG.md, Docs/TRAPS.md, the build window, the editor, instances acthost / actclient)
 References: CL-0141
 New: MO.Test.HitCreature (a blow a tick later; editor Python runs a blow's RPCs on the host only). Logged: N-187 (ground-item E flake), N-188 (pack-call flake). Full nettest actions 246 / 4 (N-187, N-188, the medic case's isolation, fixed and passed in a subset), suite 348 / 0.
+
+### 2026-10-22 02:19 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0143
+Status: PROGRESS (the buzz Wes heard in PIE: the NaN guard's two leaks closed, committed) + CLAIM (overnight, Wes asleep: the editor, the build window, instances; the 12 new GLBs in D:\MOAssets into items per Item_Art_Pipeline section 8; then backlog low-hanging fruit)
+References: CL-0142
+Audio: Audio.md section 2; BACKLOG N-189 (UDW still poisons the mix ~15 s after a menu load; now silence, not a buzz).

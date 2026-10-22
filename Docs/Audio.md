@@ -2,8 +2,9 @@
 
 > **Covers:** the audio subsystem (volumes, ambience states, music, one-shots), the heartbeat / output meter that diagnoses audio
 > reports, the NaN guard, the Windows backend, footsteps and water sounds, and the focus policy.
-> **Current state (2026-10-17):** the Oct 16 buzz / silence was NaN and absurd samples from Ultra Dynamic Weather MetaSounds latched by
-> the engine's master reverb; `MOAudioNaNGuard` fixes it. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`); not yet
+> **Current state (2026-10-22):** the Oct 16 buzz / silence was NaN and absurd samples from Ultra Dynamic Weather MetaSounds latched by
+> the engine's master reverb; `MOAudioNaNGuard` fixes it. Oct 22: two leaks closed (the master's dry path, garbage around invalid samples):
+> a poisoned stretch is now ~15 s of silence after a menu load, not a buzz (section 2, BACKLOG N-189); measured, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`); not yet
 > verified at launch (look for the XAudio2 mixer in the log) nor by Wes's relaunch test. The game is silent while unfocused (Wes's policy).
 > **Entry points:** `UMOAudioSubsystem` (`HandleWorldAudioContext`, `PreloadOneShots`, ambient state / layers, `PlayOneShotAtLocation`
 > with volume / pitch scales), `MOAudioDiagCommands.cpp` (heartbeat + `FOutputMeter`), `MOAudioNaNGuard`, `UMOAmbientEnvironmentSubsystem`
@@ -30,6 +31,23 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   chain + on master: non-finite or > 16 -> 0; a 1 Hz watchdog restarts procedural sounds and re-applies the reverb chain). Bisect tools
   that worked: `au.BypassAllSubmixEffects 1`, `unreal.AudioMixerLibrary.clear_submix_effects(world, submix)`, stopping AudioComponents
   (muting is useless: NaN x 0 = NaN). ~20 s of thin menu audio after a map load remains (UDW DSP).
+- **The buzz came back past the guard (Oct 22, Wes in PIE).** Measured with sound instances on the silent renderer (`-DeterministicAudio`:
+  the whole mix runs, the meter reads it, nothing reaches the speakers, focused or not) and the guard's per-second counts:
+  - After most menu loads (14 of 20 runs; 2 more briefly) the mix holds invalid samples for ~15 s while ONLY UDW's three weather MetaSounds play
+    (UDS_Global_WeatherSounds, UDS_Directional_WeatherSounds, UDS_WeatherSoundMixer; positions and multipliers sane). Their generated
+    audio is clean: a source guard on them (`FMOSourceNaNGuard`) processed 400-560 blocks a second and found nothing invalid, while the
+    master's and the reverb's input guard each found every block poisoned. So the garbage is made in the mixer's per-source stages AFTER
+    source effects (volume fade, channel map, send levels), driven by UDW; turning the reverb effect off changes nothing
+    (`mo.Audio.NaNGuard.ReverbOff 1`). The watchdog's restarts end it after ~5 recoveries.
+  - Two leaks let it reach the speakers: the master submix's DRY path (a submix's default dry level, -96 dB, converts to 1.6e-5 linear,
+    not 0, and the mixer keeps it live: `FMixerSubmix::ProcessAudio`, `IsNearlyZero` at 1e-8) carried 1e24 samples around the guard at
+    ~1e19; and zeroing only the invalid samples left the garbage around them (output still 13.6-15 peak, rms 0.5-0.7).
+  - Now: the guard sets the master's dry level to exactly 0 ("dry path closed"; `mo.Audio.NaNGuard.CloseDry`), a block with ANY invalid
+    sample goes out silent whole (`SanitizeBlock`, threshold +12 dBFS, unit test `MOFramework.Audio.NaNGuard`), and the source guard rides
+    on every procedural sound (it must declare 8 channels: a source chain whose presets support fewer channels than the source is never
+    instantiated, default 2). Measured: no invalid sample and no peak over 0.24 at the output in any run since. The cost: while UDW
+    poisons the mix, the mix is silent (~15 s after a menu load) instead of buzzing (BACKLOG N-189). The guard logs per second "silenced
+    N master + N reverb-input of N mix block(s), and N of N source block(s)" and, once per stretch, every sound playing.
 - **WASAPI vs XAudio2:** UE 5.8 switched the Windows default backend to WASAPI; in its render callback a block the mixer declines (device
   swap in flight, stream not Running) is released unwritten, so the device replays stale memory ("dddd"). The project uses XAudio2 (a
   declined block starves the voice = silence, never a replay); delete the key in `Config/Windows/WindowsEngine.ini` to return to WASAPI.

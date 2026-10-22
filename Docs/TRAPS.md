@@ -363,6 +363,11 @@
 - **Audio faults leave no log** -> `LogAudio=Warning` hides Display lines and the engine reports nothing -> the `[MOAudio] HB` heartbeat.
   **Muting doesn't fix a NaN mix** (NaN x 0 = NaN) -> bypass submix effects / stop components to bisect. **Full volume after a map load** ->
   `UEngine::LoadMap` resets the device volume -> re-apply. **A debug file logger costs ms** -> default off, gated, compiled out in Shipping. (audio-heartbeat, post-reveal)
+- **A source effect never runs on a sound (its counters stay 0)** -> a source effect chain is NOT instantiated on a source with more channels than
+  its presets support, and `USoundEffectSourcePreset::GetMaxSupportedChannels` defaults to 2: UDW's multichannel weather sounds ran unguarded ->
+  override it (the NaN guard says 8). **An audio test buzzes on Wes's speakers** -> a harness instance takes focus when it opens, so the
+  unfocused mute does not apply -> `-DeterministicAudio` (MO_INST_EXTRA_<NAME>): the non-realtime renderer mixes everything (the heartbeat
+  reads it) and plays nothing. (Oct 22)
 - **Every pawn's footsteps as loud as your own** -> `PlaySoundAtLocation` with no attenuation plays an asset that has none of its own at full
   volume wherever it is -> `UMOAudioSubsystem::PlayOneShotAtLocation` gives such assets a profile (footsteps: `GetFootstepAttenuation`). (Oct 18)
 
