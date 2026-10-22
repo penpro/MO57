@@ -1578,6 +1578,10 @@ def _client_press_e(rep, host, client):
 
 
 GROUND_ITEM_RE = re.compile(r"\[MOTEST\] GROUND_ITEM i=\d+ item=(\S+) mesh=(\S+) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) dist=(\d+)")
+# The centre of an item's bounds, by its place (at=): a case aims there, not at the origin (a small stone's origin is at the ground, and the line
+# to it grazed the terrain first -- N-187, Oct 22). Filled by _ground_items_both.
+GROUND_ITEM_CENTRE_RE = re.compile(r"\[MOTEST\] GROUND_ITEM i=\d+ item=\S+ mesh=\S+ at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) dist=\d+ centre=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)")
+_GROUND_CENTRES = {}
 INSTANCE_AT_RE = r"\[MOTEST\] INSTANCE_AT present=(\d)[^\n]*"
 SWEEPABLE_RE = r"\[MOTEST\] SWEEPABLE n=(\d+)[^\n]*"
 
@@ -1636,7 +1640,10 @@ def _ground_items_both(rep, host, client, radius, lines):
     console(client, f"MO.Test.GroundItems {radius} {lines}")
     wait_log(client, r"\[MOTEST\] GROUND_ITEMS n=\d+", since=off, timeout=15)
     both = []
-    for item, mesh, x, y, z, d in GROUND_ITEM_RE.findall(read_log_from(client, off)):
+    text = read_log_from(client, off)
+    for x, y, z, cx, cy, cz in GROUND_ITEM_CENTRE_RE.findall(text):
+        _GROUND_CENTRES[(x, y, z)] = (cx, cy, cz)
+    for item, mesh, x, y, z, d in GROUND_ITEM_RE.findall(text):
         m = _motest(host, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
         if m and m.group(1) == "1":
             both.append((item, mesh, x, y, z, int(d)))
@@ -1692,7 +1699,8 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
                  f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
                  "p.set_actor_location(l + d * 150.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('G_STAND')")
     time.sleep(3)
-    aim_code = (f"pc = unreal.GameplayStatics.get_player_controller(world, 0); t = unreal.Vector({float(x) + aim_offset_cm}, {y}, {z}); "
+    cx, cy, cz = _GROUND_CENTRES.get((x, y, z), (x, y, z))
+    aim_code = (f"pc = unreal.GameplayStatics.get_player_controller(world, 0); t = unreal.Vector({float(cx) + aim_offset_cm}, {cy}, {cz}); "
                 "cam = pc.player_camera_manager.get_camera_location(); fwd = pc.player_camera_manager.get_camera_rotation().get_forward_vector(); "
                 "miss = ((t - cam) - fwd * (t - cam).dot(fwd)).length(); pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(cam, t)); "
                 "out('G_AIM dist=%.0f miss=%.1f' % ((t - cam).length(), miss))")
@@ -1721,7 +1729,7 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
         served = re.search(r"\[MOInteractor\] (?:instance interact|ServerRequestInstanceInteract)[^\n]*", hlog)
         rep.step(f"client E on a PCG ground item ({item}): the host puts it in the joiner's inventory", got,
                  f"{item} {before} -> {_joiner_item_count(host, item)} | host: " + (served.group(0) if served else "no [MOInteractor] line")
-                 + ("" if got else " | client targeting: " + " // ".join(p[:220] for p in passes[-4:])))
+                 + ("" if got else " | client targeting: " + " // ".join(p[:220] for p in passes[-8:])))
         rep.step("... and the host resolved every reference the client sent (no 'Unable to resolve')", unresolved is None,
                  unresolved.group(0)[:200] if unresolved else "none")
         if got:
@@ -2745,13 +2753,16 @@ def _host_wolf_pack(rep, host, client):
     blackboard keys the controller overwrote the next frame. Two wolves 8 m from the host, 4 m apart; the host hurts one; the OTHER turns on
     the host. Host-side; the host is bitten."""
     hoff = log_size(host)
+    # The wolves THIS case spawns, by name: the two nearest predators could be an earlier case's (dead, or on someone else) -- N-188
+    _probe(host, "import builtins; builtins.MO_PACK_BEFORE = set(a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)); out('PACK_BEFORE')")
     console(host, "MO.AI.StressSpawn 2 600 900")
     if not rep.step("CONTROL: the host spawned two wolves", bool(wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=hoff, timeout=20)), "StressSpawn 2"):
         return
     soff = log_size(host)   # a wolf that sees the host when it is placed calls the other right away (Oct 20): count calls from here
-    setup = _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
+    setup = _probe(host, "import builtins; h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
                          "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPreyCreature) if (a.get_actor_location() - hl).length() < 5000]; "
-                         "ws = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - hl).length())[:2]; "
+                         "ws = sorted([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_name() not in builtins.MO_PACK_BEFORE], "
+                         "key=lambda a: (a.get_actor_location() - hl).length())[:2]; "
                          "[w.set_actor_location(hl + unreal.Vector(800.0, -200.0 + 400.0 * i, 120.0), False, True) for i, w in enumerate(ws)]; "
                          "out('PACK %s' % ' '.join(w.get_name() for w in ws))")
     pack = (re.search(r"PACK (\S+) (\S+)", setup) or [None])
@@ -2763,9 +2774,11 @@ def _host_wolf_pack(rep, host, client):
     _probe(host, f"h = unreal.GameplayStatics.get_player_pawn(world, 0); w = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_name() == '{first}'][0]; "
                  "out('HURT %s' % w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, h))")
     pair = f"(?:{re.escape(first)}|{re.escape(second)})"
-    answered = wait_log(host, rf"\[MOCreatureController\] {pair} answers {pair}'s call: turns on \S+", since=soff, timeout=10)
-    rep.step("one wolf calls the other against the host (it saw the host, or the host hurt it) and the packmate answers", bool(answered),
-             answered.group(0) if answered else f"no answer between {first} and {second}")
+    # The packmate answers the call (turns on the host), or was on the host already by itself (it saw the host too): either way the pack is
+    # together. Before Oct 22 the second was silent, and the step failed on a pack that worked (N-188).
+    answered = wait_log(host, rf"\[MOCreatureController\] {pair} (?:answers {pair}'s call: turns on|hears {pair}'s call: already on) \S+", since=soff, timeout=10)
+    rep.step("one wolf calls the other against the host (it saw the host, or the host hurt it) and the packmate answers (or is on the host already)",
+             bool(answered), answered.group(0) if answered else f"no call answered between {first} and {second}")
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
                  "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - h.get_actor_location()).length() < 5000]; out('PACK_TIDY')")

@@ -653,8 +653,16 @@ void AMOCreatureController::NotifyDamaged(AActor* DamageInstigator)
 void AMOCreatureController::NotifyPackThreat(AActor* Threat, const APawn* Caller)
 {
 	APawn* ControlledPawn = GetPawn();
-	if (!ControlledPawn || !IsValid(Threat) || Threat == ControlledPawn || !bPursuesThreats || IsDead() || CurrentThreatActor.Get() == Threat)
+	if (!ControlledPawn || !IsValid(Threat) || Threat == ControlledPawn || !bPursuesThreats || IsDead())
 	{
+		return;
+	}
+	if (CurrentThreatActor.Get() == Threat)
+	{
+		// Already on it by itself (it saw the quarry too): the pack is together, and the call changes nothing. Said apart from "answers":
+		// a co-op case read the silence as a packmate that ignored the call (N-188, Oct 22).
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s hears %s's call: already on %s"), *ControlledPawn->GetName(), *GetNameSafe(Caller),
+			*Threat->GetName());
 		return;
 	}
 	if (const APawn* ThreatPawn = Cast<APawn>(Threat); ThreatPawn && ThreatPawn->GetClass() == ControlledPawn->GetClass())

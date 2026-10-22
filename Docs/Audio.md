@@ -4,8 +4,7 @@
 > reports, the NaN guard, the Windows backend, footsteps and water sounds, and the focus policy.
 > **Current state (2026-10-22):** the Oct 16 buzz / silence was NaN and absurd samples from Ultra Dynamic Weather MetaSounds latched by
 > the engine's master reverb; `MOAudioNaNGuard` fixes it. Oct 22: two leaks closed (the master's dry path, garbage around invalid samples):
-> a poisoned stretch is now ~15 s of silence after a menu load, not a buzz (section 2, BACKLOG N-189); measured, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`); not yet
-> verified at launch (look for the XAudio2 mixer in the log) nor by Wes's relaunch test. The game is silent while unfocused (Wes's policy).
+> a poisoned stretch is now ~15 s of silence after a menu load, not a buzz (section 2, BACKLOG N-189); measured, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`; every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'"); Wes's relaunch test is left. The game is silent while unfocused (Wes's policy).
 > **Entry points:** `UMOAudioSubsystem` (`HandleWorldAudioContext`, `PreloadOneShots`, ambient state / layers, `PlayOneShotAtLocation`
 > with volume / pitch scales), `MOAudioDiagCommands.cpp` (heartbeat + `FOutputMeter`), `MOAudioNaNGuard`, `UMOAmbientEnvironmentSubsystem`
 > (Cave / Water / Outdoor from the generator), `UMOFootstepComponent`, `AMOCharacter::UpdateWaterSounds`, `DT_MOSound.json`,

@@ -139,7 +139,7 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 			}
 			const double Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atod(*Args[0]), 100.0, 100000.0) : 3000.0;
 			const int32 MaxLines = Args.Num() > 1 ? FMath::Clamp(FCString::Atoi(*Args[1]), 1, 100) : 5;
-			struct FFound { double Dist; FName Item; FString Mesh; FVector At; };
+			struct FFound { double Dist; FName Item; FString Mesh; FVector At; FVector Centre; };
 			TArray<FFound> Found;
 			const FVector P = Pawn->GetActorLocation();
 			ForEachISMNear(World, P, Radius, [&](UInstancedStaticMeshComponent* ISM)
@@ -154,7 +154,10 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 					FTransform Xf;
 					if (ISM->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true) && FVector::Dist(Xf.GetLocation(), P) <= Radius)
 					{
-						Found.Add({ FVector::Dist(Xf.GetLocation(), P), Item, ISM->GetStaticMesh()->GetName(), Xf.GetLocation() });
+						// The centre of the item's bounds: aim there, not at its origin (a small stone's origin is at the ground, and a line
+						// to it grazed the terrain first: N-187)
+						const FVector Centre = ISM->GetStaticMesh()->GetBoundingBox().TransformBy(Xf).GetCenter();
+						Found.Add({ FVector::Dist(Xf.GetLocation(), P), Item, ISM->GetStaticMesh()->GetName(), Xf.GetLocation(), Centre });
 					}
 				}
 			});
@@ -163,8 +166,8 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 			for (int32 K = 0; K < FMath::Min(MaxLines, Found.Num()); ++K)
 			{
 				const FFound& F = Found[K];
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] GROUND_ITEM i=%d item=%s mesh=%s at=%.1f,%.1f,%.1f dist=%.0f"),
-					K, *F.Item.ToString(), *F.Mesh, F.At.X, F.At.Y, F.At.Z, F.Dist);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] GROUND_ITEM i=%d item=%s mesh=%s at=%.1f,%.1f,%.1f dist=%.0f centre=%.1f,%.1f,%.1f"),
+					K, *F.Item.ToString(), *F.Mesh, F.At.X, F.At.Y, F.At.Z, F.Dist, F.Centre.X, F.Centre.Y, F.Centre.Z);
 			}
 		}));
 
