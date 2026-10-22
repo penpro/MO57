@@ -2110,6 +2110,53 @@ def _trust_instance_far(rep, host, client):
              (refused.group(0) if refused else "no 'rejected: instance ... away' line") + f" | {item} {before} -> {after}")
 
 
+def _trust_instance_out_of_sight(rep, host, client):
+    """C8: the server holds an instance request to the player's line of sight as well as its reach. The joiner asks for a ground item 2.5-7 m away
+    through a slab the HOST alone has, between the server's view of the joiner and the item (MO.Test.SightWall): refused "out of sight", nothing
+    given. Control: the wall taken down, the same request picks the item up -- the refusal was the wall, not the item, the reach or the rate. The
+    control is also the check against a false refusal of an item in plain sight (the sight rule tries the pivot, the axis, the bounds' centre and
+    top: UMOInteractorComponent::IsInstanceInSight)."""
+    if not _worlds_built(rep, host, client):
+        return
+    near = _ground_items_both(rep, host, client, 3000, 20)
+    if not rep.step("CONTROL: a PCG ground item within 30 m of the joiner exists on both machines", bool(near),
+                    f"{near[0][0]} {near[0][5]} cm away" if near else "none"):
+        return
+    _joiner_make_room(host)
+    item, mesh, x, y, z, _d = near[0]
+    # Stand the joiner 3 m from it (the server owns its pawn; the move replicates), within reach: the earlier cases take the items nearest it.
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
+                 "p.set_actor_location(l + d * 300.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('S_STAND')")
+    time.sleep(3)
+    d = 300
+    hoff = log_size(host)
+    console(host, f"MO.Test.SightWall {x} {y} {z} 1")
+    wall = wait_log(host, r"\[MOTEST\] (?:SIGHT_WALL|FAIL SightWall)[^\n]*", since=hoff, timeout=10)
+    before = _joiner_item_count(host, item)
+    hoff = log_size(host)
+    console(client, f"MO.Test.InstanceInteract {x} {y} {z} {mesh}")
+    refused = wait_log(host, r"\[MOInteractor\] ServerRequestInstanceInteract rejected: [^\n]*", since=hoff, timeout=10)
+    time.sleep(1)
+    after = _joiner_item_count(host, item)
+    rep.step(f"trust: E on a ground item {d} cm away through a wall is REFUSED by the server (out of sight)",
+             bool(wall) and "SIGHT_WALL at=" in wall.group(0) and bool(refused) and "out of sight" in refused.group(0) and after == before,
+             f"wall: {wall.group(0)[:160] if wall else 'no SIGHT_WALL line'} | host: {refused.group(0)[:200] if refused else 'no rejected line'} | "
+             f"{item} {before} -> {after}")
+    console(host, "MO.Test.SightWall clear")
+    time.sleep(1)
+    hoff = log_size(host)
+    console(client, f"MO.Test.InstanceInteract {x} {y} {z} {mesh}")
+    got, deadline = after, time.time() + 10
+    while time.time() < deadline and got <= before:
+        time.sleep(1)
+        got = _joiner_item_count(host, item)
+    served = re.search(r"\[MOInteractor\] (?:instance interact|ServerRequestInstanceInteract rejected)[^\n]*", read_log_from(host, hoff))
+    rep.step("CONTROL: with the wall down, the same request picks the item up", got > before,
+             f"{item} {before} -> {got}; host: {served.group(0)[:200] if served else 'no [MOInteractor] line'}")
+    _joiner_remove(host, item, got - before)
+
+
 def _host_foliage_reaches_client(rep, host, client):
     """The HOST clears foliage (the terraform tool's Remove Foliage, by the joiner) and the CLIENT's grass there goes too. Wes's Steam test, Oct 18
     2026: "remove foliage replicates from client to host but not host to client" -- the worked-ground zones that keep it clear lived only on the
@@ -3776,7 +3823,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
                 console(n, cmd)
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
             if only and fn.__name__ not in only:
                 continue
             try:

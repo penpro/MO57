@@ -3,6 +3,7 @@
 //   MO.Test.GroundItems [radiusCm=3000] [n=5]        the PCG ground items (MOItem_<ItemId> tags) nearest the local pawn, nearest first
 //   MO.Test.InstanceAt <x> <y> <z> <meshName>        whether an instance of that mesh stands within FMOInstanceRef::ToleranceCm of the point here
 //   MO.Test.InstanceInteract <x> <y> <z> <meshName>  E on that instance without aiming: the interactor's real server RPC, next tick (for refusal controls)
+//   MO.Test.SightWall <x> <y> <z> [PlayerIndex=1]    (host) a 3 x 3 m slab on this machine only, between that player's view and the point; 'clear' (C8)
 //   MO.Test.NearestSweepable [radiusCm=2000]         the decorative instance (AutoSweepTags) nearest the local pawn: where a foliage test can clear something
 //   MO.Test.Sweepable <x> <y> <z> [radiusCm=250]     decorative instances (UMOTerrainModificationSubsystem::AutoSweepTags) within the radius here, and the
 //                                                    worked-ground zones this machine knows (a client's are the host's)
@@ -22,8 +23,13 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "MOViewpointUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Character.h"
@@ -241,6 +247,52 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 				const bool bSent = Interactor->RequestInteractWithInstance(ISM, Index);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] InstanceInteract: %s %s"), bSent ? TEXT("sent") : TEXT("NOT sent"), *FMOInstanceRef::Make(ISM, Index).ToString());
 			});
+		}));
+
+	/** The slab MO.Test.SightWall put up on this machine (one at a time). */
+	TWeakObjectPtr<AActor> GSightWall;
+
+	FAutoConsoleCommandWithWorldAndArgs GSightWallCmd(
+		TEXT("MO.Test.SightWall"),
+		TEXT("Test (host): a 3 x 3 m slab on THIS machine only, 45% of the way from player PlayerIndex's view (the server's own viewpoint for that player) to the point: what the server's line-of-sight check on an instance request must refuse through (C8). 'clear' takes it down. Usage: MO.Test.SightWall <x> <y> <z> [PlayerIndex=1] | MO.Test.SightWall clear"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (AActor* Old = GSightWall.Get())
+			{
+				Old->Destroy();
+			}
+			GSightWall.Reset();
+			if (Args.Num() > 0 && Args[0] == TEXT("clear"))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SIGHT_WALL cleared"));
+				return;
+			}
+			FVector P;
+			APlayerController* PC = World && Args.Num() >= 3 ? UGameplayStatics::GetPlayerController(World, Args.Num() > 3 ? FCString::Atoi(*Args[3]) : 1) : nullptr;
+			FVector View;
+			FRotator ViewRotation;
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			if (!ParsePoint(Args, P) || !PC || !Cube || !UMOViewpointUtils::ResolveViewpointForController(PC, View, ViewRotation))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SightWall: usage MO.Test.SightWall <x> <y> <z> [PlayerIndex=1] (needs that player's controller here and the engine cube)"));
+				return;
+			}
+			const FVector At = View + (P - View) * 0.45;
+			FActorSpawnParameters Spawn;
+			Spawn.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AStaticMeshActor* Wall = World->SpawnActor<AStaticMeshActor>(At, FRotator(0.0, (P - View).Rotation().Yaw, 0.0), Spawn);
+			if (!Wall)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SightWall: the spawn failed"));
+				return;
+			}
+			UStaticMeshComponent* Mesh = Wall->GetStaticMeshComponent();
+			Mesh->SetMobility(EComponentMobility::Movable);
+			Mesh->SetStaticMesh(Cube);
+			Mesh->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+			Wall->SetActorScale3D(FVector(0.1, 3.0, 3.0));   // the cube is 1 m: a slab 10 cm thick, 3 m wide and tall, across the line
+			GSightWall = Wall;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SIGHT_WALL at=%s view=%s point=%s"), *At.ToCompactString(), *View.ToCompactString(), *P.ToCompactString());
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GResourceNodesCmd(

@@ -2,6 +2,7 @@
 #include "MOHarvestSubsystem.h"
 #include "MOCraftingSubsystem.h"
 #include "MOInteractionSubsystem.h"
+#include "MOInteractorComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOTimedActionComponent.h"
@@ -56,18 +57,15 @@ bool FMOHarvestActions::Begin(APawn* Harvester, const FMOInstanceRef& Instance, 
 		return false;
 	}
 
-	// Reach: the interact reach, doubled because an instance's origin can sit metres from the surface the player aimed at (a trunk's pivot) -- the
-	// rule the instance pickup RPC uses (UMOInteractorComponent::ValidateInstanceHarvestRequest).
-	FTransform Xf;
-	ISM->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true);
-	const UMOInteractionSubsystem* Interaction = World->GetSubsystem<UMOInteractionSubsystem>();
-	const double Reach = 2.0 * (Interaction ? Interaction->MaximumInteractDistance : 500.0);
-	const double Distance = FVector::Dist(Harvester->GetActorLocation(), Xf.GetLocation());
-	if (Distance > Reach)
+	// Reach and sight: the rule every instance request shares (UMOInteractorComponent::ServerCheckInstanceRequest; the pickup RPC's too).
+	FString Why;
+	const UMOInteractorComponent::EInstanceRequestCheck Check = UMOInteractorComponent::ServerCheckInstanceRequest(Harvester, ISM, Index, Why);
+	if (Check != UMOInteractorComponent::EInstanceRequestCheck::Ok)
 	{
-		OutReason = LOCTEXT("TooFar", "Too far away: step closer.");
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] %s: '%s' refused: %s is %.0f cm away (reach %.0f)"), *Harvester->GetName(), *ActionId.ToString(),
-			*Instance.ToString(), Distance, Reach);
+		OutReason = Check == UMOInteractorComponent::EInstanceRequestCheck::TooFar ? LOCTEXT("TooFar", "Too far away: step closer.")
+			: Check == UMOInteractorComponent::EInstanceRequestCheck::OutOfSight ? LOCTEXT("OutOfSight", "You can't see that from here.")
+			: LOCTEXT("NothingThere", "Nothing to harvest there.");
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] %s: '%s' refused: %s -- %s"), *Harvester->GetName(), *ActionId.ToString(), *Instance.ToString(), *Why);
 		return false;
 	}
 

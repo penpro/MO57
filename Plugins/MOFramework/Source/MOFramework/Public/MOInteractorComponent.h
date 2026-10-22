@@ -65,6 +65,11 @@
  *   FIX: the RPC carries FMOInstanceRef (MOInstanceRef.h: static mesh + world location) and the server resolves its own copy of the instance.
  *   An instance another player already took no longer resolves, and the request is refused with a log line.
  *
+ * [2026-10-22] AN INSTANCE'S PIVOT IS NOT WHERE YOU SEE IT (C8).
+ *   SYMPTOM: a line of sight to a tree's or a boulder's pivot is blocked by the tree or the boulder itself, or by the ground it is sunk in.
+ *   FIX: IsInstanceInSight tries the pivot, its axis at the viewer's height, the bounds' centre and top; a block by the instance's own component
+ *   or near the point counts as seen. The server refuses an instance request out of sight ("rejected: out of sight", ServerCheckInstanceRequest).
+ *
  * [2024-02] TRACE CHANNEL: Default ECC_Visibility may miss custom collision.
  *   SYMPTOM: Can't interact with certain objects (doors, vehicles).
  *   WHY: Objects using custom collision channels aren't hit by visibility trace.
@@ -119,6 +124,7 @@
 #include "MOInstanceRef.h"
 #include "MOInteractorComponent.generated.h"
 
+class APawn;
 class UMOHISMInteractableComponent;
 class UHierarchicalInstancedStaticMeshComponent;
 class UInstancedStaticMeshComponent;
@@ -252,6 +258,25 @@ public:
 	 */
 	static bool IsSeeThroughForInteraction(const UPrimitiveComponent* Component);
 
+	/**
+	 * Whether a viewer at ViewLocation sees instance Index of ISM: a line to its pivot (5 cm up), its axis at the viewer's height, the centre or the
+	 * top of its bounds meets nothing solid but see-through cover, the instance's own component, or something within NearTolerance of that point
+	 * (the ground a stone lies on). The pivot alone is not enough: a trunk's or a boulder's pivot sits inside it or under the ground (C8). One rule
+	 * for the client's aim assist and the server's instance requests (ServerCheckInstanceRequest).
+	 */
+	static bool IsInstanceInSight(UWorld* World, const FVector& ViewLocation, const UInstancedStaticMeshComponent* ISM, int32 Index, const AActor* IgnoredActor,
+		ECollisionChannel Channel, float NearTolerance);
+
+	/** What the server made of a player's request on an instance (ServerCheckInstanceRequest). */
+	enum class EInstanceRequestCheck : uint8 { Ok, BadIndex, TooFar, OutOfSight };
+
+	/**
+	 * The server's check of an instance a player asked to pick up or harvest (ServerRequestInstanceInteract, ServerBeginHarvest): a valid index,
+	 * within reach of the pawn (twice the interact distance: an instance's pivot can sit metres from the surface aimed at) and in sight of the
+	 * player's view (IsInstanceInSight, on the pawn's interaction trace channel; mo.Interact.ServerInstanceSight). OutWhy says why not, for the log.
+	 */
+	static EInstanceRequestCheck ServerCheckInstanceRequest(APawn* Pawn, const UInstancedStaticMeshComponent* ISM, int32 Index, FString& OutWhy);
+
 private:
 	/** One hit as an interaction target: a harvest / HISM instance, decorative cover (forage) or an actor with an interactable component. */
 	bool EvaluateInteractionHit(const FHitResult& HitResult, FMOInteractionTarget& OutTarget) const;
@@ -331,12 +356,9 @@ private:
 	bool TraceForHit(const FVector& TraceStart, const FVector& TraceEnd, FHitResult& OutHitResult) const;
 
 	/**
-	 * Server-side validation for the instance-harvest RPCs: index in range,
-	 * instance within interact reach of the pawn, and minimum spacing
-	 * between accepted requests. The client supplies the component and
-	 * index, so without this a client could harvest any instance in the
-	 * world at unlimited rate (the actor path validates in
-	 * UMOInteractionSubsystem; the instance path must match it).
+	 * Server-side validation for the instance-harvest RPCs: ServerCheckInstanceRequest (index, reach, line of sight) and minimum spacing
+	 * between accepted requests. The client names the instance, so without this a client could harvest any instance in the world, through
+	 * walls, at unlimited rate (the actor path validates in UMOInteractionSubsystem; the instance path must match it).
 	 */
 	bool ValidateInstanceHarvestRequest(UInstancedStaticMeshComponent* Component, int32 InstanceIndex, const TCHAR* RPCName);
 

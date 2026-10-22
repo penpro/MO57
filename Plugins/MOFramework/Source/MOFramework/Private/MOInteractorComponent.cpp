@@ -13,12 +13,16 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/OverlapResult.h"
+#include "Engine/StaticMesh.h"
 #include "UObject/UObjectIterator.h"
 
 namespace
 {
 	TAutoConsoleVariable<int32> CVarInteractDebug(TEXT("mo.Interact.Debug"), 0,
 		TEXT("1 = log every pass of the interaction targeting (line, sweep, near the aim point: candidates, reach, line of sight). It runs every frame for the focus hint: switch it on around one press."));
+
+	TAutoConsoleVariable<int32> CVarServerInstanceSight(TEXT("mo.Interact.ServerInstanceSight"), 1,
+		TEXT("1 = the server refuses a player's pick-up / harvest of an instance out of the player's sight (C8, UMOInteractorComponent::ServerCheckInstanceRequest); 0 = reach and rate only."));
 
 	FString DescribeHit(bool bHit, const FHitResult& Hit)
 	{
@@ -185,6 +189,86 @@ bool UMOInteractorComponent::IsSeeThroughForInteraction(const UPrimitiveComponen
 {
 	const UInstancedStaticMeshComponent* Ism = Cast<UInstancedStaticMeshComponent>(Component);
 	return Ism && IsWorldCoverComponent(Ism) && !IsHarvestableInstanceComponent(Ism, Ism->GetWorld());
+}
+
+bool UMOInteractorComponent::IsInstanceInSight(UWorld* World, const FVector& ViewLocation, const UInstancedStaticMeshComponent* ISM, int32 Index, const AActor* IgnoredActor,
+	ECollisionChannel Channel, float NearTolerance)
+{
+	FTransform Xf;
+	if (!World || !IsValid(ISM) || !ISM->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true))
+	{
+		return false;
+	}
+	const FVector Pivot = Xf.GetLocation();
+	TArray<FVector, TInlineAllocator<4>> Points;
+	Points.Add(Pivot + FVector(0.0f, 0.0f, 5.0f));   // a stone lying on the ground
+	if (const UStaticMesh* Mesh = ISM->GetStaticMesh())
+	{
+		const FBox Box = Mesh->GetBoundingBox().TransformBy(Xf);
+		Points.Add(FVector(Pivot.X, Pivot.Y, FMath::Clamp(ViewLocation.Z, Box.Min.Z, Box.Max.Z)));   // a trunk at eye height
+		Points.Add(Box.GetCenter());
+		Points.Add(FVector(Box.GetCenter().X, Box.GetCenter().Y, Box.Max.Z - 0.1 * Box.GetSize().Z));   // a crown, a boulder's top
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOInstanceSight), false);
+	if (IgnoredActor)
+	{
+		Params.AddIgnoredActor(IgnoredActor);
+	}
+	for (const FVector& Point : Points)
+	{
+		FHitResult Block;
+		FHitResult Cover;
+		const bool bBlocked = UMOViewpointUtils::TraceThroughSeeThrough(World, ViewLocation, Point, Channel, Params, 0.0f,
+			&UMOInteractorComponent::IsSeeThroughForInteraction, Block, Cover);
+		if (!bBlocked || Block.GetComponent() == ISM || FVector::Dist(Block.ImpactPoint, Point) < NearTolerance)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+UMOInteractorComponent::EInstanceRequestCheck UMOInteractorComponent::ServerCheckInstanceRequest(APawn* Pawn, const UInstancedStaticMeshComponent* ISM, int32 Index, FString& OutWhy)
+{
+	UWorld* World = IsValid(Pawn) ? Pawn->GetWorld() : nullptr;
+	FTransform Xf;
+	if (!World || !IsValid(ISM) || Index < 0 || Index >= ISM->GetInstanceCount() || !ISM->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true))
+	{
+		OutWhy = FString::Printf(TEXT("instance index %d out of range (count %d)"), Index, IsValid(ISM) ? ISM->GetInstanceCount() : 0);
+		return EInstanceRequestCheck::BadIndex;
+	}
+
+	// Reach: the actor path's (UMOInteractionSubsystem::MaximumInteractDistance), doubled because an instance's pivot can sit metres from the
+	// surface the player aimed at (a trunk's). Still kills the harvest-anything-anywhere exploit by orders of magnitude.
+	const UMOInteractionSubsystem* Interaction = World->GetSubsystem<UMOInteractionSubsystem>();
+	const float Reach = 2.0f * (Interaction ? Interaction->MaximumInteractDistance : 500.0f);
+	const float Distance = FVector::Dist(Pawn->GetActorLocation(), Xf.GetLocation());
+	if (Distance > Reach)
+	{
+		OutWhy = FString::Printf(TEXT("instance %.0fcm away (max %.0fcm)"), Distance, Reach);
+		return EInstanceRequestCheck::TooFar;
+	}
+
+	// Sight: from the player's view (the actor path's viewpoint), on the pawn's own interaction channel, by the client's own rule.
+	if (CVarServerInstanceSight.GetValueOnGameThread() > 0)
+	{
+		FVector ViewLocation;
+		FRotator ViewRotation;
+		if (!UMOViewpointUtils::ResolveViewpointForController(Pawn->GetController(), ViewLocation, ViewRotation))
+		{
+			Pawn->GetActorEyesViewPoint(ViewLocation, ViewRotation);
+		}
+		const UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
+		const ECollisionChannel Channel = Interactor ? Interactor->TraceConfig.TraceChannel.GetValue() : ECC_Visibility;
+		const float Near = Interactor ? Interactor->TraceConfig.AimAssistRadius : 40.0f;
+		if (!IsInstanceInSight(World, ViewLocation, ISM, Index, Pawn, Channel, Near))
+		{
+			OutWhy = FString::Printf(TEXT("out of sight: %s #%d, %.0f cm away, from the view at %s"), *GetNameSafe(ISM->GetStaticMesh()), Index, Distance,
+				*ViewLocation.ToCompactString());
+			return EInstanceRequestCheck::OutOfSight;
+		}
+	}
+	return EInstanceRequestCheck::Ok;
 }
 
 bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarget) const
@@ -379,16 +463,10 @@ bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLoc
 		bool bInSight = false;
 		if (Candidate.InstanceIndex != INDEX_NONE)
 		{
-			// An instance: reach to its pivot, and nothing solid between the eye and it but see-through cover (its PCG cell's actor bounds say nothing).
+			// An instance: reach to its pivot, and in sight by the rule the server checks (its PCG cell's actor bounds say nothing).
 			bInReach = UMOInteractionSubsystem::IsWithinInteractReach(ViewLocation, FVector::ZeroVector, Candidate.Point, FVector(15.0f), MaxReach, 0.0f);
-			FCollisionQueryParams SightParams(SCENE_QUERY_STAT(MOInteractorInstanceSight), false);
-			SightParams.AddIgnoredActor(GetOwner());
-			FHitResult Block;
-			FHitResult Cover;
-			const FVector Target = Candidate.Point + FVector(0.0f, 0.0f, 5.0f);
-			const bool bBlocked = UMOViewpointUtils::TraceThroughSeeThrough(World, ViewLocation, Target, TraceConfig.TraceChannel.GetValue(), SightParams, 0.0f,
-				&UMOInteractorComponent::IsSeeThroughForInteraction, Block, Cover);
-			bInSight = bInReach && (!bBlocked || Block.GetComponent() == Candidate.Component || FVector::Dist(Block.ImpactPoint, Target) < TraceConfig.AimAssistRadius);
+			bInSight = bInReach && IsInstanceInSight(World, ViewLocation, Cast<UInstancedStaticMeshComponent>(Candidate.Component), Candidate.InstanceIndex, GetOwner(),
+				TraceConfig.TraceChannel.GetValue(), TraceConfig.AimAssistRadius);
 		}
 		else
 		{
@@ -793,36 +871,10 @@ bool UMOInteractorComponent::ValidateInstanceHarvestRequest(UInstancedStaticMesh
 		return false;
 	}
 
-	if (InstanceIndex < 0 || InstanceIndex >= Component->GetInstanceCount())
+	FString Why;
+	if (ServerCheckInstanceRequest(OwnerPawn, Component, InstanceIndex, Why) != EInstanceRequestCheck::Ok)
 	{
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOInteractor] %s rejected: instance index %d out of range (count %d)"),
-			RPCName, InstanceIndex, Component->GetInstanceCount());
-		return false;
-	}
-
-	// Reach: same policy as the actor path (UMOInteractionSubsystem's
-	// MaximumInteractDistance), doubled because instance origins can sit
-	// meters from the traced surface (tree trunk vs pivot). Still kills the
-	// harvest-anything-anywhere exploit by orders of magnitude.
-	float MaxDistance = 500.0f;
-	if (const UMOInteractionSubsystem* Interaction = World->GetSubsystem<UMOInteractionSubsystem>())
-	{
-		MaxDistance = Interaction->MaximumInteractDistance;
-	}
-	MaxDistance *= 2.0f;
-
-	FTransform InstanceTransform;
-	if (!Component->GetInstanceTransform(InstanceIndex, InstanceTransform, /*bWorldSpace=*/true))
-	{
-		return false;
-	}
-	const float DistSq = FVector::DistSquared(OwnerPawn->GetActorLocation(), InstanceTransform.GetLocation());
-	if (DistSq > FMath::Square(MaxDistance))
-	{
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOInteractor] %s rejected: instance %.0fcm away (max %.0fcm)"),
-			RPCName, FMath::Sqrt(DistSq), MaxDistance);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] %s rejected: %s"), RPCName, *Why);
 		return false;
 	}
 
