@@ -4,7 +4,7 @@
 > reports, the NaN guard, the Windows backend, footsteps and water sounds, and the focus policy.
 > **Current state (2026-10-22):** the Oct 16 buzz / silence was NaN and absurd samples from Ultra Dynamic Weather MetaSounds latched by
 > the engine's master reverb; `MOAudioNaNGuard` fixes it. Oct 22: two leaks closed (the master's dry path, garbage around invalid samples):
-> a poisoned stretch was then ~15-60 s of silence after a menu load, not a buzz; the same day the reverb's dry path was found to be the way in and closed: the mix now plays through it, only the reverb tail is silent for ~20 s (section 2, BACKLOG N-189); measured on the silent renderer, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`; every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'"); Wes's relaunch test is left. The game is silent while unfocused (Wes's policy).
+> a poisoned stretch was then ~15-60 s of silence after a menu load, not a buzz; the same day the reverb's dry path was found to be the way in and closed, and then the SOURCE: the engine's downmix of UDW's multichannel weather beds into the reverb send. `au.AllowReverbForMultichannelSources=0` (DefaultEngine.ini): no invalid sample in any run since (section 2, BACKLOG N-189); the NaN guard stays as the backstop. Measured on the silent renderer, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`; every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'"); Wes's relaunch test is left. The game is silent while unfocused (Wes's policy).
 > **Entry points:** `UMOAudioSubsystem` (`HandleWorldAudioContext`, `PreloadOneShots`, ambient state / layers, `PlayOneShotAtLocation`
 > with volume / pitch scales), `MOAudioDiagCommands.cpp` (heartbeat + `FOutputMeter`), `MOAudioNaNGuard`, `UMOAmbientEnvironmentSubsystem`
 > (Cave / Water / Outdoor from the generator), `UMOFootstepComponent`, `AMOCharacter::UpdateWaterSounds`, `DT_MOSound.json`,
@@ -57,6 +57,14 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   Tried and reverted the same day: every procedural sound through a guarded submix of its own -- its own submix never caught anything
   (the poison is in the reverb send, not the base output), and the watchdog sparing the sounds whose own submix stayed clean kept the
   poison ~135 s (sparing UDS_WeatherSoundMixer's restart). Also: nothing may make a UObject inside `ForEachObjectOfClass` (TRAPS).
+- **The source: the reverb send of a multichannel source (Oct 22, N-189).** The engine downmixes a multichannel source into the reverb
+  submix when `au.AllowReverbForMultichannelSources` is 1 (its default); UDW's Global / Directional beds are multichannel, and that
+  downmix is where the NaN / 1e24 samples were made (the sources' own audio, read by the source guard, was clean). Those beds are
+  bus-only -- heard through UDS_WeatherSoundMixer, which has its own reverb send -- so their reverb send was a second copy anyway.
+  `Config/DefaultEngine.ini` [SystemSettings] `au.AllowReverbForMultichannelSources=0`: 0 invalid samples in 3 of 3 runs on defaults
+  and 3 of 3 with the switch on the command line, against poisoned in all 18 runs before it that day; in-world output rms ~0.035 either
+  way. Cost: no multichannel sound sends to the reverb (a stereo or mono one still does). The guard, the closed dry paths and the
+  watchdog stay as the backstop for any other blow-up.
 - **WASAPI vs XAudio2:** UE 5.8 switched the Windows default backend to WASAPI; in its render callback a block the mixer declines (device
   swap in flight, stream not Running) is released unwritten, so the device replays stale memory ("dddd"). The project uses XAudio2 (a
   declined block starves the voice = silence, never a replay); delete the key in `Config/Windows/WindowsEngine.ini` to return to WASAPI.

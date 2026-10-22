@@ -373,6 +373,9 @@
   MOAudioNaNGuard.cpp: master and reverb). **Fatal "Trying to modify UObject map (FindOrAdd) that is currently being iterated"** ->
   something made a UObject inside `ForEachObjectOfClass` (a NewObject, or a Play that makes one) -> gather the objects first, act after
   the iteration. (Oct 22)
+- **NaN / 1e24 samples from a sound whose own audio is clean** -> the engine's downmix of a MULTICHANNEL source into the reverb send
+  (`au.AllowReverbForMultichannelSources`, default 1) made them for UDW's weather beds -> the project sets it to 0 (DefaultEngine.ini);
+  a new multichannel sound gets no reverb send. (Oct 22)
 - **Every pawn's footsteps as loud as your own** -> `PlaySoundAtLocation` with no attenuation plays an asset that has none of its own at full
   volume wherever it is -> `UMOAudioSubsystem::PlayOneShotAtLocation` gives such assets a profile (footsteps: `GetFootstepAttenuation`). (Oct 18)
 
