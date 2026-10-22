@@ -4,7 +4,7 @@
 > reports, the NaN guard, the Windows backend, footsteps and water sounds, and the focus policy.
 > **Current state (2026-10-22):** the Oct 16 buzz / silence was NaN and absurd samples from Ultra Dynamic Weather MetaSounds latched by
 > the engine's master reverb; `MOAudioNaNGuard` fixes it. Oct 22: two leaks closed (the master's dry path, garbage around invalid samples):
-> a poisoned stretch is now ~15 s of silence after a menu load, not a buzz (section 2, BACKLOG N-189); measured, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`; every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'"); Wes's relaunch test is left. The game is silent while unfocused (Wes's policy).
+> a poisoned stretch was then ~15-60 s of silence after a menu load, not a buzz; the same day the reverb's dry path was found to be the way in and closed: the mix now plays through it, only the reverb tail is silent for ~20 s (section 2, BACKLOG N-189); measured on the silent renderer, not yet heard by Wes. The Windows backend is XAudio2 (`Config/Windows/WindowsEngine.ini`; every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'"); Wes's relaunch test is left. The game is silent while unfocused (Wes's policy).
 > **Entry points:** `UMOAudioSubsystem` (`HandleWorldAudioContext`, `PreloadOneShots`, ambient state / layers, `PlayOneShotAtLocation`
 > with volume / pitch scales), `MOAudioDiagCommands.cpp` (heartbeat + `FOutputMeter`), `MOAudioNaNGuard`, `UMOAmbientEnvironmentSubsystem`
 > (Cave / Water / Outdoor from the generator), `UMOFootstepComponent`, `AMOCharacter::UpdateWaterSounds`, `DT_MOSound.json`,
@@ -47,6 +47,16 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
     instantiated, default 2). Measured: no invalid sample and no peak over 0.24 at the output in any run since. The cost: while UDW
     poisons the mix, the mix is silent (~15 s after a menu load) instead of buzzing (BACKLOG N-189). The guard logs per second "silenced
     N master + N reverb-input of N mix block(s), and N of N source block(s)" and, once per stretch, every sound playing.
+- **The silence was a third leak: the REVERB's dry path (Oct 22, N-189).** UDW's Global / Directional weather sounds are bus-only (base
+  output and submix sends off, one bus send into UDS_WeatherSoundMixer) and poison only their reverb send. The reverb submix's -96 dB dry
+  level carried that around the reverb's guard into the master, whose guard then silenced everything. `CloseDryPath` now closes the dry
+  path of every guarded submix (master and reverb; an audible dry level is left as authored). Measured on sound instances
+  (`-DeterministicAudio`, menu ~60 s then `MO.NewGame 670711536`): 3 runs, the master silenced 1 s (one block), no silent-output or
+  clipping alarm, the poison held in the reverb's input for ~19 s (the reverb tail silent meanwhile, 6 watchdog recoveries); control
+  `mo.Audio.NaNGuard.CloseDry 0`: the master silenced 19-27 s and output peaks of 6.6e28 (the buzz). Before: 19-59 s of silence.
+  Tried and reverted the same day: every procedural sound through a guarded submix of its own -- its own submix never caught anything
+  (the poison is in the reverb send, not the base output), and the watchdog sparing the sounds whose own submix stayed clean kept the
+  poison ~135 s (sparing UDS_WeatherSoundMixer's restart). Also: nothing may make a UObject inside `ForEachObjectOfClass` (TRAPS).
 - **WASAPI vs XAudio2:** UE 5.8 switched the Windows default backend to WASAPI; in its render callback a block the mixer declines (device
   swap in flight, stream not Running) is released unwritten, so the device replays stale memory ("dddd"). The project uses XAudio2 (a
   declined block starves the voice = silence, never a replay); delete the key in `Config/Windows/WindowsEngine.ini` to return to WASAPI.

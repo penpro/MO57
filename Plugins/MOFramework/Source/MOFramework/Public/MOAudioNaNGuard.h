@@ -20,6 +20,12 @@
 // silent whole (SanitizeBlock), and the threshold is +12 dBFS: a master mix sample beyond that is never sound in this game. On the master that
 // silenced the whole mix for ~16 s after each menu load, so the same rule also runs on every procedural sound (FMOSourceNaNGuard, attached by the
 // watchdog): the poisoned weather sound goes silent alone, and the master guard stays the backstop.
+// N-189 (Oct 22, later): the mix still went silent for 19-59 s after most menu loads. UDW's Global / Directional weather sounds are bus-only (base
+// output and submix sends off, one bus send) and poison only their REVERB send; the reverb submix's -96 dB dry level carried that around the
+// reverb's guard into the master, whose guard then silenced everything. Every guarded submix's dry path is closed now (CloseDryPath: the master
+// and the reverb). Measured on the silent renderer: the master silenced 0-1 s, no silent output; the poison stays in the reverb's input (the
+// reverb tail is silent for the stretch, ~20 s). Tried and reverted: each procedural sound through a guarded submix of its own, with the
+// watchdog sparing the ones whose own submix stayed clean -- nothing was ever caught there, and sparing UDW's mixer kept the poison ~135 s.
 
 #pragma once
 

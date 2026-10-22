@@ -51,6 +51,21 @@ namespace MOAudioNaNGuardState
 	TStrongObjectPtr<UMOSubmixNaNGuardPreset> GReverbPreset;   // the reverb's: a preset object of its own, so their counts tell them apart
 	void Install(UWorld* World, FAudioDevice* Device);
 
+	/** A guarded submix's DRY path carries its input AROUND its effect chain, so around the guard: a submix's default dry level is -96 dB, which
+	 *  the mixer converts to 1.6e-5 linear (not 0) and keeps live (FMixerSubmix::ProcessAudio, IsNearlyZero). UDW's 1e24 samples reached the
+	 *  device at ~1e19 through the master's (the buzz again, Oct 22), and the whole mix went silent through the reverb's: UDW's bus-only weather
+	 *  sounds poison their reverb send, and the reverb's dry path carried it around the reverb's guard into the master (N-189). Exactly 0 when the
+	 *  dry level is inaudible anyway (<= -60 dB); an audible one is left as authored. True when closed. */
+	bool CloseDryPath(UWorld* World, USoundSubmix* Submix)
+	{
+		if (!Submix || CVarAudioNaNGuardCloseDry.GetValueOnGameThread() == 0 || Submix->DryLevelModulation.Value > -60.0f)
+		{
+			return false;
+		}
+		Submix->SetSubmixDryLevel(World, 0.0f);
+		return true;
+	}
+
 	/** The master reverb's chain again, guard first: NEW effect instances, so a reverb whose feedback already holds NaN (it latched before the guard
 	 *  was there, in the first frames of a session) starts clean. Returns the reverb effects behind the guard, -1 without a reverb submix. */
 	int32 ApplyReverbGuard(UWorld* World)
@@ -74,6 +89,7 @@ namespace MOAudioNaNGuardState
 			}
 		}
 		UAudioMixerBlueprintLibrary::SetSubmixEffectChainOverride(World, Reverb, Chain, 0.0f);
+		CloseDryPath(World, Reverb);
 		return Chain.Num() - 1;
 	}
 }
@@ -176,21 +192,13 @@ namespace MOAudioNaNGuardState
 		UMOSubmixNaNGuardPreset* Guard = GPreset.Get();
 		UAudioMixerBlueprintLibrary::RemoveMasterSubmixEffect(World, Guard);
 		UAudioMixerBlueprintLibrary::AddMasterSubmixEffect(World, Guard);
-		// The master submix's DRY path carries its input AROUND its effect chain, so around the guard: a submix's default dry level is -96 dB,
-		// which the mixer converts to 1.6e-5 linear (not 0) and keeps live (FMixerSubmix::ProcessAudio, IsNearlyZero). Inaudible for real audio;
-		// UDW's 1e24 samples reached the device at ~1e19 with the guard in place -- the buzz again, Oct 22 (output peak 3e21 in PIE). Exactly 0.
-		bool bDryZeroed = false;
 		USoundSubmix* Master = Cast<USoundSubmix>(GetDefault<UAudioSettings>()->MasterSubmix.TryLoad());
-		if (Master && CVarAudioNaNGuardCloseDry.GetValueOnGameThread() != 0)
-		{
-			Master->SetSubmixDryLevel(World, 0.0f);
-			bDryZeroed = true;
-		}
-		const int32 ReverbEffects = ApplyReverbGuard(World);
+		const bool bDryZeroed = CloseDryPath(World, Master);
+		const int32 ReverbEffects = ApplyReverbGuard(World);   // closes the reverb's dry path too
 		GInstalledDeviceId = Device->DeviceID;
 		GInstalledWorld = World;
 		UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] NaN guard installed on audio device %u: master submix (dry path %s), and before the master reverb's %d effect(s)"),
-			Device->DeviceID, bDryZeroed ? TEXT("closed") : (Master ? TEXT("left open: mo.Audio.NaNGuard.CloseDry 0") : TEXT("NOT closed: no master submix")), ReverbEffects);
+			Device->DeviceID, bDryZeroed ? TEXT("closed") : (Master ? TEXT("left open: mo.Audio.NaNGuard.CloseDry 0, or audible") : TEXT("NOT closed: no master submix")), ReverbEffects);
 	}
 
 	/** The source guard on every procedural sound (MetaSound) of this world that has no source effect chain of its own: a sound playing is
@@ -205,15 +213,21 @@ namespace MOAudioNaNGuardState
 			Chain->Chain.Add(Entry);
 			GSourceChain.Reset(Chain);
 		}
-		int32 Attached = 0;
-		FString Names;
-		ForEachObjectOfClass(UAudioComponent::StaticClass(), [World, &Attached, &Names](UObject* Object)
+		// Gathered first, worked on after: a Play may make UObjects, and nothing may while the object hash is iterated (a fatal "modify UObject
+		// map ... being iterated", Oct 22).
+		TArray<UAudioComponent*> Unguarded;
+		ForEachObjectOfClass(UAudioComponent::StaticClass(), [World, &Unguarded](UObject* Object)
 		{
 			UAudioComponent* Component = static_cast<UAudioComponent*>(Object);
-			if (Component->GetWorld() != World || !Cast<USoundWaveProcedural>(Component->Sound) || Component->SourceEffectChain || Component->Sound->SourceEffectChain)
+			if (Component->GetWorld() == World && Cast<USoundWaveProcedural>(Component->Sound) && !Component->SourceEffectChain && !Component->Sound->SourceEffectChain)
 			{
-				return;   // another world, not a procedural sound, guarded already, or a chain of its own (left alone)
+				Unguarded.Add(Component);   // this world's procedural sound, not guarded already, no chain of its own (those are left alone)
 			}
+		}, true, RF_ClassDefaultObject, EInternalObjectFlags::Garbage);
+		int32 Attached = 0;
+		FString Names;
+		for (UAudioComponent* Component : Unguarded)
+		{
 			Component->SetSourceEffectChain(GSourceChain.Get());
 			if (Component->IsPlaying())
 			{
@@ -222,7 +236,7 @@ namespace MOAudioNaNGuardState
 			}
 			++Attached;
 			Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + GetNameSafe(Component->Sound);
-		}, true, RF_ClassDefaultObject, EInternalObjectFlags::Garbage);
+		}
 		if (Attached > 0)
 		{
 			UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] NaN guard on %d procedural sound(s): %s"), Attached, *Names);

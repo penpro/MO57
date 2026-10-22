@@ -368,6 +368,11 @@
   override it (the NaN guard says 8). **An audio test buzzes on Wes's speakers** -> a harness instance takes focus when it opens, so the
   unfocused mute does not apply -> `-DeterministicAudio` (MO_INST_EXTRA_<NAME>): the non-realtime renderer mixes everything (the heartbeat
   reads it) and plays nothing. (Oct 22)
+- **A guard in a submix's effect chain leaks / the mix goes silent through the reverb** -> a submix's DRY path carries its input around
+  its effect chain, and the default -96 dB is 1.6e-5 linear, live -> close the dry path of every submix you guard (`CloseDryPath` in
+  MOAudioNaNGuard.cpp: master and reverb). **Fatal "Trying to modify UObject map (FindOrAdd) that is currently being iterated"** ->
+  something made a UObject inside `ForEachObjectOfClass` (a NewObject, or a Play that makes one) -> gather the objects first, act after
+  the iteration. (Oct 22)
 - **Every pawn's footsteps as loud as your own** -> `PlaySoundAtLocation` with no attenuation plays an asset that has none of its own at full
   volume wherever it is -> `UMOAudioSubsystem::PlayOneShotAtLocation` gives such assets a profile (footsteps: `GetFootstepAttenuation`). (Oct 18)
 
