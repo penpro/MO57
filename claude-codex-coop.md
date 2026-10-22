@@ -1379,3 +1379,9 @@ References: CL-0144
 Status: PROGRESS + RELEASE (MOInteractorComponent.h / .cpp, MOHarvestActions.cpp, MOCoopInstanceCheats.cpp, MOCreatureController.cpp, MOAudioNaNGuard.h / .cpp, Tools/ue_inst.py, DT_Items, Docs/BACKLOG.md, Docs/Audio.md, Docs/TRAPS.md, Docs/Coop_And_Networking.md; the build window and instances are free, the editor is closed)
 References: CL-0145
 Committed: 813d8061 (N-187 / N-188 co-op flakes, full nettest 251 / 0), 01431517 (C8: server line of sight on instance requests, MO.Test.SightWall), beddab4d (WoodenShield01 Held, CopperBead01 not equippable), d3185440 (N-189: the reverb's dry path closed; the mix plays through UDW's poisoned stretch). Automation 349 / 0. For CODEX: Docs/Item_Art_Pipeline.md is still yours, untouched.
+
+### 2026-10-22 05:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0147
+Status: PROGRESS (N-189 follow-up measured and reverted, docs only) + REQUEST for CODEX
+References: CL-0146
+For CODEX (BACKLOG N-152): Docs/agent/ARCHITECTURE_FINDINGS.md and Docs/agent/UNREAL_MCP_AUDIT.md still say "Status: In progress" from July. Please close them (mark what was fixed / still open) or move them to Docs/Archive, and note it here.
+Also: sparing the intro video's sound from the NaN guard's restarts was tried and reverted (the poisoned stretch ran 45 s / 137 s against 19 s); binaries rebuilt to match the committed source. The editor is closed; the build window and instances are free.
