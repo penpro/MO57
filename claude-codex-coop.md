@@ -1366,3 +1366,7 @@ New: MO.Test.HitCreature (a blow a tick later; editor Python runs a blow's RPCs 
 Status: PROGRESS (the buzz Wes heard in PIE: the NaN guard's two leaks closed, committed) + CLAIM (overnight, Wes asleep: the editor, the build window, instances; the 12 new GLBs in D:\MOAssets into items per Item_Art_Pipeline section 8; then backlog low-hanging fruit)
 References: CL-0142
 Audio: Audio.md section 2; BACKLOG N-189 (UDW still poisons the mix ~15 s after a menu load; now silence, not a buzz).
+
+### 2026-10-22 02:42 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0144
+Status: PROGRESS (12 image-to-3D items wired: meshes, rows, icons; BACKLOG N-076) -- for CODEX: Docs/Item_Art_Pipeline.md still holds your uncommitted Oct 17 reference-pack paragraphs, so I did not edit it; section 8 should gain the floater rule of Tools/glb_item_prep_blender.py and Tools/glb_preview_blender.py when you commit yours
+References: CL-0143

@@ -44,6 +44,66 @@ if tris0 > target:
     mod.use_collapse_triangulate = True
     bpy.ops.object.modifier_apply(modifier=mod.name)
 
+# Floaters: TRELLIS.2 sometimes leaves a loose shard hanging in the air beside the object (Oct 22: WoodenShield01's shard made a flat
+# shield 34 cm tall, and the scale is fitted to the bounding box).
+# Parts within 3 % of the object's diagonal of each other are one cluster; the largest cluster stays, and any holding 5 % of the vertices. (Box rules failed: "small and clear of the big
+# parts' box", took a decimated shield's rim: the mesh is hundreds of islands and the big ones do not span the object.)
+import bmesh
+bm = bmesh.new()
+bm.from_mesh(ob.data)
+bm.verts.ensure_lookup_table()
+seen, parts = set(), []
+for v in bm.verts:
+    if v.index in seen:
+        continue
+    stack, comp = [v], []
+    seen.add(v.index)
+    while stack:
+        u = stack.pop()
+        comp.append(u)
+        for e in u.link_edges:
+            w = e.other_vert(u)
+            if w.index not in seen:
+                seen.add(w.index)
+                stack.append(w)
+    parts.append(comp)
+from mathutils import kdtree
+A = np.array([u.co[:] for u in bm.verts])
+reach = 0.03 * float(np.linalg.norm(A.max(0) - A.min(0)))
+part_of = {}
+for i, p in enumerate(parts):
+    for u in p:
+        part_of[u.index] = i
+kd = kdtree.KDTree(len(bm.verts))
+for u in bm.verts:
+    kd.insert(u.co, u.index)
+kd.balance()
+parent = list(range(len(parts)))
+def root(i):
+    while parent[i] != i:
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    return i
+for i, p in enumerate(parts):                               # parts within `reach` of each other are one cluster
+    for u in p[::max(1, len(p) // 24)]:
+        for _co, j, _d in kd.find_range(u.co, reach):
+            a, b = root(i), root(part_of[j])
+            if a != b:
+                parent[a] = b
+size = {}
+for i, p in enumerate(parts):
+    size[root(i)] = size.get(root(i), 0) + len(p)
+keep = {c for c, n in size.items() if n == max(size.values()) or n >= 0.05 * len(bm.verts)}
+dropped = []
+for i, p in enumerate(parts):
+    if root(i) not in keep:
+        dropped.append(len(p))
+        bmesh.ops.delete(bm, geom=p, context="VERTS")
+bm.to_mesh(ob.data)
+bm.free()
+if dropped:
+    print("PREP dropped %d floating part(s) of %s vertices" % (len(dropped), dropped))
+
 P = np.array([v.co[:] for v in ob.data.vertices])
 c = P.mean(0)
 if orient == "pca":
