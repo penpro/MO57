@@ -2582,9 +2582,12 @@ def _client_sees_creature_flinch(rep, host, client):
     rep.step("client: the angry wolf's bite plays on the joiner's copy too", bool(bite) and float(bite.group(1)) > 0.0,
              bite.group(0) if bite else "no bite cue on the client within 40 s")
     # A killed wolf leaves a carcass to skin and butcher (DT_Carcasses "Wolf", Oct 20; before, only the deer had one and a wolf left nothing).
+    # The wolf is stood 5 m from the joiner first: after its bite it can be anywhere (Oct 22: 178 m off, past the joiner's 150 m net cull
+    # distance, so the joiner never got the carcass and the case failed for its setup, not the game).
     hoff = log_size(host)
     _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); "
                  "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - jl).length()); "
+                 "w.set_actor_location(jl + unreal.Vector(500.0, 0.0, 120.0), False, True); "
                  "out('KILL %s' % w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, j))")
     laid = wait_log(host, r"\[MOCreature\] Spawned carcass '([^']*)' for \S+", since=hoff, timeout=15)
     rep.step("host: the dead wolf leaves a carcass", bool(laid) and laid.group(1) == "Wolf Carcass", laid.group(0) if laid else "no Spawned carcass line on the host")
