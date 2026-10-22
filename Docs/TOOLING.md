@@ -248,6 +248,7 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 | `Content/Python/measure_feature_ground.py` | measure a composition's authored ground |
 | `Content/Python/make_sand_material.py`, `make_alpine_material.py`, `dark_pebbles.py`, `Tools/gen_sand_textures.py`, `Tools/ed_surfaces_prep.py` | voxel surface types |
 | `Content/Python/kit_import.py`, `kit_styles.py`, `Tools/kit_bake.py`, `ui_specs/kit_*.py` | the UI kit (`Docs/UI_Kit_Implementation.md`) |
+| `Tools/ui_inventory.py` | regenerates `Docs/UI_Screen_Inventory.md` from the project (no editor): every WBP's kit spec, parent, input, focus, users, redirectors |
 | `Tools/gen_moodle_icons.py`, `Content/Python/import_moodle_icons.py` | placeholder moodle icons |
 | `Tools/steam_scout.py`, `steam_art_build.py`, `steam_wordmark.py`, `Tools/look_sheet.py`, `Tools/biome_eye.py`, `Tools/biome_tour.py` | screenshots and Steam art (`SteamArt/README.md`) |
 | `Tools/terrain_lab/` | numpy replica of the world generator (iterate shapes in seconds) |
