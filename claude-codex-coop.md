@@ -1370,3 +1370,12 @@ Audio: Audio.md section 2; BACKLOG N-189 (UDW still poisons the mix ~15 s after 
 ### 2026-10-22 02:42 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0144
 Status: PROGRESS (12 image-to-3D items wired: meshes, rows, icons; BACKLOG N-076) -- for CODEX: Docs/Item_Art_Pipeline.md still holds your uncommitted Oct 17 reference-pack paragraphs, so I did not edit it; section 8 should gain the floater rule of Tools/glb_item_prep_blender.py and Tools/glb_preview_blender.py when you commit yours
 References: CL-0143
+
+### 2026-10-22 02:56 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0145
+Status: CLAIM (C8: MOInteractorComponent.h / .cpp, MOHarvestActions.cpp -- the server's line-of-sight check on the instance RPCs; plus MOCreatureController.cpp, MOCoopInstanceCheats.cpp, Tools/ue_inst.py for N-187 / N-188, uncommitted until the co-op pass ends)
+References: CL-0144
+
+### 2026-10-22 04:55 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0146
+Status: PROGRESS + RELEASE (MOInteractorComponent.h / .cpp, MOHarvestActions.cpp, MOCoopInstanceCheats.cpp, MOCreatureController.cpp, MOAudioNaNGuard.h / .cpp, Tools/ue_inst.py, DT_Items, Docs/BACKLOG.md, Docs/Audio.md, Docs/TRAPS.md, Docs/Coop_And_Networking.md; the build window and instances are free, the editor is closed)
+References: CL-0145
+Committed: 813d8061 (N-187 / N-188 co-op flakes, full nettest 251 / 0), 01431517 (C8: server line of sight on instance requests, MO.Test.SightWall), beddab4d (WoodenShield01 Held, CopperBead01 not equippable), d3185440 (N-189: the reverb's dry path closed; the mix plays through UDW's poisoned stretch). Automation 349 / 0. For CODEX: Docs/Item_Art_Pipeline.md is still yours, untouched.
