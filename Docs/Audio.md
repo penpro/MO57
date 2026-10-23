@@ -97,7 +97,10 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   `<Set>2`: a new surface = bank rows + a data value, never code. Crouched = Sneak gait (quiet).
 - Dev verbs: `MO.Footstep.Probe|Log|LogAll|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
 - Biome sets (DT_Biomes `FootstepSet`; Temperate / Locust had drifted to SandTrail in the data, restored Oct 18, BR18-8): Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
-  Rainforest MuddyStep, AlpineRock StoneStep.
+  Rainforest MossPad (MuddyStep until Oct 23: Wes, BR23-8, "rainforest footsteps sound stupid, remove the sound altogether"; nothing uses
+  MuddyStep now), AlpineRock StoneStep.
+- **Loudness** (`FMOFootstepMath::VolumeFor`): sneak 0.175, walk 0.35, run 0.5 -- half the first values (Wes, Oct 23, BR23-2: "footsteps
+  are still really loud, need to drop them by about half"); a creature's `StepVolumeScale` multiplies it.
 - **Props underfoot** (N-132, Oct 20): a placed mesh stood on (PCG rocks and logs, props) names its set by its asset path,
   `UMOFootstepComponent::PropRules`, first match (`FMOFootstepMath::DefaultPropRules`): rocky ground / riverbed / rock / boulder / cliff /
   stone / cobble / shelf / pebble = StoneStep; stump / tree / branch / log / trunk / roots / wood / plank / stick = BareWood; ground / terrain /
@@ -110,3 +113,6 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   wolf case hears it.
 
 **Water:** splash / wading / stroke sounds (`AMOCharacter::UpdateWaterSounds`, ids `SFX.Footsteps.WaterSplash1/2`).
+**The Water ambience** (within 35 m of water, `DT_AmbientLayers` `Ambient.Water`): `BaseLayerVolume` 0.18 / `EventVolume` 0.17 since Oct 23
+(x0.2; Wes, BR23-16: "the water movement noises suck, reduce volume by like 80%"). Its layers are MOVING water (river flow, stream trickle,
+brooks, waterfalls), the same at a still lake: a still-water bed for lakes (lapping, ripples) is the realistic fix (BACKLOG BR23-16).

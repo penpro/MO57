@@ -32,11 +32,12 @@ EMOFootstepGait FMOFootstepMath::GaitFor(bool bCrouched, float Speed2D, float Ru
 
 float FMOFootstepMath::VolumeFor(EMOFootstepGait Gait)
 {
+	// Half of the first values (0.35 / 0.7 / 1.0): Wes, Oct 23 2026 (BR23-2), "footsteps are still really loud, need to drop them by about half".
 	switch (Gait)
 	{
-	case EMOFootstepGait::Sneak: return 0.35f;
-	case EMOFootstepGait::Run:   return 1.0f;
-	default:                     return 0.7f;
+	case EMOFootstepGait::Sneak: return 0.175f;
+	case EMOFootstepGait::Run:   return 0.5f;
+	default:                     return 0.35f;
 	}
 }
 
