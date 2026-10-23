@@ -31,9 +31,13 @@ struct MOFRAMEWORK_API FMOHarvestOutcome
 	UPROPERTY()
 	TArray<int32> ProducedCounts;
 
-	/** The pack had no room for some of it (the inventory's own refusal). */
+	/** The pack had no room for some of it and it could not be laid on the ground either (the inventory's own refusal). */
 	UPROPERTY()
 	bool bFailed = false;
+
+	/** The pack had no room for some of it: it lies on the ground at the harvester's feet (BR23-15). */
+	UPROPERTY()
+	bool bDropped = false;
 
 	/** Everything it gives is used up at this node. */
 	UPROPERTY()

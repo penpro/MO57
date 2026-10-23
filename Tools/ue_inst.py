@@ -1809,6 +1809,64 @@ def _client_harvest(rep, host, client):
     time.sleep(2)
 
 
+def _client_harvest_full_pack(rep, host, client):
+    """CLIENT harvests with a FULL pack (BR23-15, Wes Oct 23 2026: "harvesting with full inventory -- make it so the items drop to the ground"):
+    before, the server refused the whole harvest ("Inventory Full!") and the work counted for nothing. Now what does not fit lies on the ground at
+    the harvester's feet. Proof on the HOST: the "laid on the ground" line and a dropped item of that kind within 3 m of the joiner, with the pack
+    unchanged. Controls: the pack really is full (the host can add no more of the yield); the filler is taken back after."""
+    if not _worlds_built(rep, host, client):
+        return
+    _joiner_make_room(host)
+    off = log_size(client)
+    console(client, "MO.Test.ResourceNodes 2500 12")
+    wait_log(client, r"\[MOTEST\] RESOURCE_NODES n=\d+", since=off, timeout=15)
+    nodes = []
+    for mesh, x, y, z, d, action, yields, secs in RESOURCE_NODE_RE.findall(read_log_from(client, off)):
+        m = _motest(host, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
+        if m and m.group(1) == "1":
+            nodes.append((mesh, x, y, z, action, yields.split(","), float(secs)))
+    if not rep.step("CONTROL: a resource node the joiner can work exists on both machines", bool(nodes), f"{nodes[0][0]} {nodes[0][4]}" if nodes else "none"):
+        return
+    mesh, x, y, z, action, yields, secs = nodes[0]
+    filler = next(i for i in ("Dirt01", "Bark01", "Stick02") if i not in yields)   # not a yield: a yield would stack onto it and fit
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_HF_HOME = p.get_actor_location(); "
+                 f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
+                 "p.set_actor_location(l + d * 100.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); out('HF_STAND')")
+    # Fill every free slot with a one-off filler (no stacking), then check the yield's kinds no longer fit.
+    fill = ("import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+            f"n = sum(1 for _ in range(max(0, inv.get_slot_count() - inv.get_entry_count()) + 2) if inv.add_item_by_guid_no_stack(unreal.GuidLibrary.new_guid(), '{filler}', 1)); "
+            f"builtins.MO_HF_FILLED = n; out('FILLED %d fits=%s' % (n, ','.join('%s:%d' % (i, inv.can_add_item_by_definition_id(i, 1)) for i in {yields!r})))")
+    filled = _probe(host, fill)
+    m = re.search(r"FILLED (\d+) fits=(\S*)", filled)
+    full = bool(m) and all(part.endswith(":0") for part in m.group(2).split(","))
+    if not rep.step("CONTROL: the joiner's pack is full (on the host: no room for the yield's kinds)", full, (m.group(0) if m else filled[-160:])):
+        _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                     f"out('TOOK=%s' % inv.remove_item_by_definition_id('{filler}', getattr(builtins, 'MO_HF_FILLED', 0)))")
+        return
+    before = {i: _joiner_item_count(host, i) for i in yields}
+    time.sleep(2)
+    hoff, coff = log_size(host), log_size(client)
+    console(client, f"MO.Test.Harvest {x} {y} {z} {mesh} {action}")
+    laid = wait_log(host, r"\[MOHarvest\] '(\w+)' x\d+: no room in \S+ pack \(reason \d+\) -- (\d+) laid on the ground", since=hoff, timeout=secs + 15)
+    outcome = wait_log(client, HARVEST_OUTCOME_RE + r" dropped=(\d)", since=coff, timeout=10)
+    near = ""
+    if laid:
+        near = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
+                            f"out('NEAR %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) "
+                            f"if (a.get_actor_location() - pl).length() < 300 and str(a.get_component_by_class(unreal.MOItemComponent).get_editor_property('item_definition_id')) == '{laid.group(1)}']))")
+    after = {i: _joiner_item_count(host, i) for i in yields}
+    rep.step(f"client harvest with a full pack ({action} on {mesh}): the yield lies on the ground by the joiner (host)",
+             bool(laid) and laid.group(2) != "0" and bool(re.search(r"NEAR [1-9]", near)) and after == before,
+             (laid.group(0) if laid else "no 'laid on the ground' line on the host") + f" | {(re.search(r'NEAR \d+', near) or re.search(r'$', near)).group(0)} within 3 m | pack {before} -> {after}")
+    rep.step("... and the joiner is told it lies at its feet (not 'Inventory Full')", bool(outcome) and outcome.group(5) == "1" and outcome.group(2) == "0",
+             outcome.group(0) if outcome else "no outcome line on the client")
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                 f"took = inv.remove_item_by_definition_id('{filler}', getattr(builtins, 'MO_HF_FILLED', 0)); pl = p.get_actor_location(); "
+                 "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if (a.get_actor_location() - pl).length() < 500]; "
+                 "h = getattr(builtins, 'MO_HF_HOME', None); h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('HF_TIDY %s' % took)")
+    time.sleep(2)
+
+
 def _client_inspect(rep, host, client):
     """CLIENT inspects a carried item (the inventory's Inspect). Wes's Steam test, Oct 18 2026: "client leaving game resets all skills/knowledge on
     pawn" -- a joiner's inspection ran in the joiner's UI on the joiner's own copy of its knowledge and skills, which the host never had and never
@@ -3826,7 +3884,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
                 console(n, cmd)
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
             if only and fn.__name__ not in only:
                 continue
             try:

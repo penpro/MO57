@@ -594,7 +594,12 @@ void UMOCraftingUIController::ShowHarvestOutcome(const FMOHarvestOutcome& Outcom
 		// items trying to "fix" a full inventory when the actual issue was that
 		// the tree/rock had nothing left to give.
 		const bool bAnyProduced = Outcome.ProducedIds.Num() > 0;
-		if (Outcome.bFailed)
+		if (Outcome.bDropped && !Outcome.bFailed)
+		{
+			// No room in the pack: what it gave lies at the harvester's feet (BR23-15).
+			NotifComp->ShowWarningNotification(NSLOCTEXT("MO", "HarvestDropped", "Your pack is full: the rest is on the ground at your feet."), 5.0f);
+		}
+		else if (Outcome.bFailed)
 		{
 			// The inventory add contract refused some output because capacity was exhausted.
 			NotifComp->ShowWarningNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory Full! Some items could not be picked up."), 5.0f);
@@ -612,8 +617,8 @@ void UMOCraftingUIController::ShowHarvestOutcome(const FMOHarvestOutcome& Outcom
 		// If some yields produced and others depleted, the produced notifications
 		// already gave positive feedback — don't pile on a warning.
 	}
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest '%s' finished: produced %d kind(s), failed=%d depleted=%d outOfSeason=%d"), *Outcome.ActionId.ToString(),
-		Outcome.ProducedIds.Num(), Outcome.bFailed ? 1 : 0, Outcome.bDepleted ? 1 : 0, Outcome.bOutOfSeason ? 1 : 0);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest '%s' finished: produced %d kind(s), failed=%d depleted=%d outOfSeason=%d dropped=%d"), *Outcome.ActionId.ToString(),
+		Outcome.ProducedIds.Num(), Outcome.bFailed ? 1 : 0, Outcome.bDepleted ? 1 : 0, Outcome.bOutOfSeason ? 1 : 0, Outcome.bDropped ? 1 : 0);
 }
 
 void UMOCraftingUIController::HandleKeepOnHarvestContextMenuRequestClose()

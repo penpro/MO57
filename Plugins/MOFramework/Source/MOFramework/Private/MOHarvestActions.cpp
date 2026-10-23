@@ -28,6 +28,7 @@ FMOHarvestOutcome FMOHarvestOutcome::FromResult(FName InActionId, const FMOCraft
 		Out.ProducedCounts.Add(Pair.Value);
 	}
 	Out.bFailed = Result.HasFailedItems();
+	Out.bDropped = Result.DroppedItems.Num() > 0;
 	Out.bDepleted = Result.HasDepletedItems();
 	Out.bOutOfSeason = Result.HasOutOfSeasonItems();
 	return Out;

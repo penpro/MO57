@@ -8,6 +8,7 @@
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOCraftingSubsystem.h"
+#include "MOGeologyYield.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOResourceDepletionSubsystem.h"
 #include "MOHISMHarvestHelper.h"
@@ -770,17 +771,10 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	{
 		SeasonIndex = Weather->GetCurrentSeasonIndex();
 	}
-	TMap<FName, int32> RequiredOutputRoom;
-	for (FName ItemId : HarvestAction->YieldsItems)
+	// A full pack no longer refuses the harvest (its work done for nothing): what does not fit is laid on the ground at the harvester's feet, as a
+	// dig's spoil is (FMOGeologyYield::GiveOrDrop). Wes, Oct 23 2026 (BR23-15): "harvesting with full inventory -- make it so the items drop to the ground".
+	if (!IsValid(Inventory))
 	{
-		FMOItemDefinitionRow Def;
-		if (ItemId.IsNone() || (Depletion && !NodeKey.IsEmpty() && !Depletion->CanYield(NodeKey, ItemId))) continue;
-		if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, Def) && !Def.IsInForageSeason(SeasonIndex)) continue;
-		RequiredOutputRoom.FindOrAdd(ItemId) += 1;
-	}
-	if (!IsValid(Inventory) || !Inventory->CanAddItemsByDefinition(RequiredOutputRoom))
-	{
-		Result.FailedItems = RequiredOutputRoom;
 		const FName ActionId = Ctx.ActiveActionId;
 		UnregisterFromHarvesterInterrupts(Harvester);
 		ContextsByHarvester.Remove(Harvester);
@@ -788,6 +782,7 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 		return Result;
 	}
 	FMOInventoryMutationScope InventoryMutation(Inventory);
+	const FVector DropLocation = IsValid(Harvester) ? Harvester->GetActorLocation() + Harvester->GetActorForwardVector() * 60.0f : FVector::ZeroVector;
 
 	// If bDestroysResource, remove the instance -- through the helper, which records it as removed for good (the felled tree does not regrow with its PCG
 	// cell, co-op clients drop their copy, the save keeps it).
@@ -886,11 +881,19 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			}
 			else
 			{
-				// Preserve the producer's refusal reason in diagnostics; never report an unplaced item as produced.
-				Result.FailedItems.FindOrAdd(ItemId) += Quantity;
-				MOHARVEST_LOG(this, "Harvest",
-					"  TryAddItem REJECTED '%s' x%d reason=%d",
-					*ItemId.ToString(), Quantity, int32(Added.Failure));
+				// No room: on the ground at the harvester's feet. Only a yield that could not be laid down either is a failure; never report an
+				// unplaced item as produced.
+				const int32 Dropped = FMOGeologyYield::GiveOrDrop(Inventory, { FMOItemYield{ ItemId, Quantity } }, DropLocation, this);
+				if (Dropped > 0)
+				{
+					Result.DroppedItems.FindOrAdd(ItemId) += Dropped;
+				}
+				if (Dropped < Quantity)
+				{
+					Result.FailedItems.FindOrAdd(ItemId) += Quantity - Dropped;
+				}
+				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] '%s' x%d: no room in %s's pack (reason %d) -- %d laid on the ground"), *ItemId.ToString(), Quantity,
+					*GetNameSafe(Harvester), int32(Added.Failure), Dropped);
 			}
 		}
 	}

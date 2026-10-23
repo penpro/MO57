@@ -90,6 +90,10 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   `AMOPlayerController::ServerBeginHarvest` (instance as mesh + place), `FMOHarvestActions` times it on the pawn's
   `UMOTimedActionComponent` like drinking, filling, boiling, fire lighting and eating, and the outcome comes back to the menu
   (`ShowHarvestOutcome`). `UMOHarvestProgressWidget` (the old widget-owned timer) has no caller left in C++.
+- **A full pack does not refuse a harvest** (Oct 23, BR23-15, Wes: "make it so the items drop to the ground"): a yield that does not fit is
+  laid at the harvester's feet (`FMOGeologyYield::GiveOrDrop`, the dig's rule), counted in `FMOCraftResult::DroppedItems`, and the player
+  is told "Your pack is full: the rest is on the ground at your feet." Before, the whole harvest was refused up front ("Inventory Full!")
+  and the work counted for nothing. Proof: `nettest actions` `_client_harvest_full_pack`.
 - **Work at the ground kneels** (N-181, Oct 20): `UMOTimedActionComponent::BeginKneeling` = Begin + `SetPosture(Kneel)` -- every fire action
   (the drill, laying fuel, lighting from a flame or a torch), butchering, gathering ground cover, drinking and filling at a water source. The
   pawn crouches (its crouch-idle pose) for the action and stands after, unless it was crouching already; a completion that begins the next

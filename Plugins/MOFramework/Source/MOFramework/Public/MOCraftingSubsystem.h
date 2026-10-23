@@ -256,6 +256,10 @@ struct MOFRAMEWORK_API FMOCraftResult
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> FailedItems;
 
+	/** Items made with no room in the pack, laid on the ground at the maker's feet instead (ItemDefId -> quantity): a harvest with a full pack. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> DroppedItems;
+
 	/** Liquid measures made but with no container to pour them into (spilled): not "inventory full", so kept apart from FailedItems. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> SpilledLiquid;
