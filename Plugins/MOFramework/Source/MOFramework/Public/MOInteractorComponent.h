@@ -76,10 +76,8 @@
  *   FIX: Configure TraceConfig.TraceChannel to match your collision setup.
  *   DEBUG: Enable "Show Collision" in viewport to visualize trace hits.
  *
- * [2024-02] DEPRECATED API: FindInteractTarget() -> FindInteractionTarget().
- *   WHY: Old API was actor-only, new API supports ISM/HISM instances.
- *   SYMPTOM: Deprecation warning in compile output.
- *   FIX: Replace FindInteractTarget(Actor) with FindInteractionTarget(Target).
+ * [2024-02] DEPRECATED API: FindInteractTarget() (actor-only) gave way to FindInteractionTarget() (actors and ISM/HISM instances);
+ *   the old one was removed Oct 22 2026 (no caller in code, no asset referencing it).
  *
  * [2024-02] TARGET STALING: CurrentTarget cached between frames.
  *   SYMPTOM: GetCurrentInteractionPrompt() shows stale target info.
@@ -285,15 +283,6 @@ private:
 	bool FindInteractableNearAimPoint(const FVector& ViewLocation, const FVector& AimPoint, FMOInteractionTarget& OutTarget) const;
 
 public:
-
-	/**
-	 * Legacy method - finds actor-based targets only.
-	 * @deprecated Use FindInteractionTarget() instead, which supports both actors and ISM/HISM instances.
-	 */
-	UE_DEPRECATED(5.7, "Use FindInteractionTarget() instead, which supports both actors and ISM/HISM instances.")
-	UFUNCTION(BlueprintCallable, Category="MO|Interaction", meta=(DeprecatedFunction, DeprecationMessage="Use FindInteractionTarget instead"))
-	bool FindInteractTarget(AActor*& OutTargetActor, FHitResult& OutHitResult) const;
-
 	/** Try to interact with whatever we're looking at. */
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool TryInteract();

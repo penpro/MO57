@@ -134,6 +134,12 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 			{
 				continue;
 			}
+			// A component whose bounds cannot reach the sphere holds no instance inside it (Oct 22: a survivor's 200 m gather search walked
+			// 4,314 components instance by instance, 137 ms on the host's game thread).
+			if (FVector::DistSquared(ISM->Bounds.Origin, Origin) > FMath::Square(ISM->Bounds.SphereRadius + Radius))
+			{
+				continue;
+			}
 
 			// Skip KeepOnHarvest components - these are resources (trees/bushes) that should be
 			// harvested via recipes, not picked up directly. They yield products like sticks/bark.
@@ -167,9 +173,22 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 
 			TotalHarvestableComponents++;
 
-			// Check each instance
-			const int32 InstanceCount = ISM->GetInstanceCount();
-			for (int32 i = 0; i < InstanceCount; ++i)
+			// Check each instance: a HISM's cluster tree names the candidates (instances whose bounds touch the sphere); the exact centre
+			// distance below decides, as before. A plain ISM is walked whole.
+			TArray<int32> Candidates;
+			if (const UHierarchicalInstancedStaticMeshComponent* HISM = Cast<UHierarchicalInstancedStaticMeshComponent>(ISM))
+			{
+				Candidates = HISM->GetInstancesOverlappingSphere(Origin, Radius, /*bSphereInWorldSpace=*/true);
+			}
+			else
+			{
+				Candidates.Reserve(ISM->GetInstanceCount());
+				for (int32 i = 0; i < ISM->GetInstanceCount(); ++i)
+				{
+					Candidates.Add(i);
+				}
+			}
+			for (const int32 i : Candidates)
 			{
 				FTransform InstanceTransform;
 				if (!ISM->GetInstanceTransform(i, InstanceTransform, true))

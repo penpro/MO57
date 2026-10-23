@@ -103,45 +103,6 @@ bool UMOInteractorComponent::TraceForHit(const FVector& TraceStart, const FVecto
 	return World->LineTraceSingleByChannel(OutHitResult, TraceStart, TraceEnd, TraceChannel, QueryParams);
 }
 
-bool UMOInteractorComponent::FindInteractTarget(AActor*& OutTargetActor, FHitResult& OutHitResult) const
-{
-	OutTargetActor = nullptr;
-	OutHitResult = FHitResult();
-
-	FVector ViewLocation = FVector::ZeroVector;
-	FRotator ViewRotation = FRotator::ZeroRotator;
-	if (!ResolveViewpoint(ViewLocation, ViewRotation))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractTarget: Failed to resolve viewpoint"));
-		return false;
-	}
-
-	FVector TraceStart = FVector::ZeroVector;
-	FVector TraceEnd = FVector::ZeroVector;
-	BuildTrace(ViewLocation, ViewRotation, TraceStart, TraceEnd);
-
-	if (!TraceForHit(TraceStart, TraceEnd, OutHitResult))
-	{
-		return false;
-	}
-
-	AActor* HitActor = OutHitResult.GetActor();
-	if (!IsValid(HitActor))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractTarget: Hit but no valid actor"));
-		return false;
-	}
-
-	UMOInteractableComponent* InteractableComponent = HitActor->FindComponentByClass<UMOInteractableComponent>();
-	if (!IsValid(InteractableComponent))
-	{
-		return false;
-	}
-
-	OutTargetActor = HitActor;
-	return true;
-}
-
 bool UMOInteractorComponent::IsHarvestableInstanceComponent(const UInstancedStaticMeshComponent* ISMComp, const UWorld* World)
 {
 	if (!ISMComp)
