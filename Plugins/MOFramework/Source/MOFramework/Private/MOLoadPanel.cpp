@@ -9,7 +9,10 @@ void UMOLoadPanel::SetFilterToCurrentWorld(bool bFilter)
 		return;
 	}
 	bFilterToCurrentWorld = bFilter;
-	RefreshSaveList();
+	if (IsActivated())
+	{
+		RefreshSaveList();   // shown now: show the new filter; otherwise the next show builds the list
+	}
 }
 
 void UMOLoadPanel::LoadFromSlot(const FString& SlotName)

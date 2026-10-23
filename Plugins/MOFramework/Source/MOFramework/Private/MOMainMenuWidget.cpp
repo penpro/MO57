@@ -444,10 +444,8 @@ void UMOMainMenuWidget::BindButtonEvents()
 
 	if (LoadPanel)
 	{
-		// Main menu shows ALL saves, not filtered to current world
+		// Main menu shows ALL saves, not filtered to current world. The list itself is read when the panel opens (ShowLoadPanel), not at boot.
 		LoadPanel->SetFilterToCurrentWorld(false);
-		// Refresh the list now that filter is disabled (NativeConstruct already ran with filter=true)
-		LoadPanel->RefreshSaveList();
 
 		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleLoadPanelLoadRequested);

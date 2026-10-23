@@ -224,7 +224,8 @@ public:
     bool DoesSaveSlotExist(const FString& SlotName) const;
 
     /**
-     * Get metadata for a save slot without loading full save data.
+     * Get metadata for a save slot. The first ask reads the WHOLE save (~0.6-0.9 MB of world: the format has no separate header); the answer is
+     * kept per slot until the file's size or time changes, so a list panel that opens again reads nothing (Oct 22 2026).
      * @param SlotName The save slot to query
      * @param OutMetadata Filled with metadata if successful
      * @return True if metadata was retrieved successfully
@@ -466,4 +467,13 @@ private:
      *  Nothing ever called AddSessionPlayTime, so until Oct 19 every save recorded 0 and the Load panel read "0m" for every world. */
     double SessionClockStartSeconds = 0.0;
     void RestartSessionClock() { SessionPlayTimeSeconds = 0.0f; SessionClockStartSeconds = FPlatformTime::Seconds(); }
+private:
+    /** GetSaveSlotMetadata's answers, per slot, while the file on disk is the same (its size and time). */
+    struct FSlotMetadataCacheEntry
+    {
+        int64 FileSize = -1;
+        FDateTime FileTime;
+        FMOSaveMetadata Metadata;
+    };
+    mutable TMap<FString, FSlotMetadataCacheEntry> SlotMetadataCache;
 };

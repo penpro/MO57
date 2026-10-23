@@ -72,3 +72,28 @@ harness launch passes `-NoQualityBenchmark` (`ue_inst.py`, `perf_experiments.sh`
 - Far trees: real trees to 1.5 km, stand-ins and canopy proxies beyond, `InstanceMinDrawDistance` handoff, no shadows / RT on far tiers;
   native grass fades 150-200 m: 32 -> 12.6 ms in the Oct 12 measurement (`Docs/PCG.md` §3).
 - The Oct 14 coverage pass cost +0.3 to +1.5 ms GPU per biome and READY 14.0 -> 17.3 s; adaptive build batches cap the worst build batch at ~9 ms.
+
+## 5. The Oct 22 sweep (Wes: "a deep dive on performance ... old logging and other deprecated code ... a general sweep")
+
+What was looked at, and what was found, by evidence rather than by grep alone:
+
+- **Boot: the main menu read every save on disk twice.** The Load panel built its list in `NativeConstruct` (the main menu constructs it
+  hidden at boot), `UMOLoadPanel::SetFilterToCurrentWorld` rebuilt it, and the main menu rebuilt it a third time; each listing called
+  `GetSaveSlotMetadata`, which deserializes a WHOLE world save (0.6-0.9 MB) for a name, a time and a thumbnail. One harness host: 39
+  saves, 78 full loads, ~3 s inside one frame before the title screen. Fixed: the list is built when a panel is shown, and the metadata is
+  kept per slot while the file's size and time are the same (a rename, a save or a delete changes them). The old-format appearance
+  warnings those loads printed (156 per session: `SkinTone` / `EyeColor` changed type) are gone with them; such a save still loads
+  its survivors with the default skin tone and eye colour (the data, not a cost).
+- **Logging.** `UE_LOG` is compiled out of Shipping, so log lines cost only Development / editor runs; there they cost readability more
+  than frame time. The biome spawner's per-cell summary was 1,290 Warning lines in one nettest host (it pushed every other line out of
+  a log tail the harness read): now Log level behind `mo.PCG.LogCells 1`. The 1 Hz `[MONet]` heartbeat stays (the network diagnosis
+  reads it). The Oct 18 pass already commented out 399 debug lines in 96 files; nothing under `#if 0`.
+- **World walks on player actions.** `UMOForagingSubsystem::QueryHISMInstancesInRadius` and `AMOSurvivorController::FindNearestHarvestTarget`
+  iterate EVERY actor of the world, `FindGatherableCoverKinds` every instanced component in memory, to find what is within a few
+  metres. They run per action (a forage search, the ground menu opening, a survivor looking for work), not per frame; each now logs
+  how many it walked and the milliseconds. Measured in the Oct 22 nettest: a survivor's harvest-target search walked 21,888 actors in
+  2.8 ms (tolerable); a survivor's 200 m GATHER search (`QueryHISMInstancesInRadius`) walked 4,314 instanced components instance by
+  instance, **137 ms on the host's game thread** each time a survivor takes a gather job. Fix (N-196): skip a component whose bounds
+  cannot reach the sphere, ask a HISM's cluster tree for the candidates, keep the exact distance test.
+- **Ticking:** 21 classes tick; all but the per-frame ones (buoyancy, foot plants, AI controllers, water) throttle with a tick interval
+  or a timer, and the tickable subsystems carry `MO_TICK_WATCH`. Nothing new to cut there.

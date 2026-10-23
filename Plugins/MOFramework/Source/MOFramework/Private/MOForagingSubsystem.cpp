@@ -105,6 +105,7 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return Result;
 	}
 
+	const double SearchStart = FPlatformTime::Seconds();   // the walk below visits every actor of the world: its cost is logged (perf sweep, Oct 22)
 	const float RadiusSq = Radius * Radius;
 	int32 TotalISMComponentsFound = 0;
 	int32 TotalISMComponentsWithMesh = 0;
@@ -198,9 +199,8 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return A.Distance < B.Distance;
 	});
 
-	// DEBUG (MOForagingSubsystem, disabled Oct 18): re-enable to trace every ISM query
-	// UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM Query: %d components found, %d with mesh, %d harvestable, %d instances within %.0f units"),
-	// 	TotalISMComponentsFound, TotalISMComponentsWithMesh, TotalHarvestableComponents, Result.Num(), Radius);
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM query: %d component(s) walked, %d harvestable, %d instance(s) within %.0f cm, %.2f ms"),
+		TotalISMComponentsFound, TotalHarvestableComponents, Result.Num(), Radius, (FPlatformTime::Seconds() - SearchStart) * 1000.0);
 
 	return Result;
 }
@@ -363,8 +363,11 @@ void UMOForagingSubsystem::FindGatherableCoverKinds(const FVector& Location, flo
 		return;
 	}
 	TMap<int32, TPair<float, FMOGatherableCover>> NearestByKind;
+	const double SearchStart = FPlatformTime::Seconds();   // every instanced component in memory: its cost is logged (perf sweep, Oct 22)
+	int32 Walked = 0;
 	for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
 	{
+		++Walked;
 		UInstancedStaticMeshComponent* Ism = *It;
 		if (!Ism || Ism->GetWorld() != World || Ism->GetInstanceCount() == 0 || !UMOInteractorComponent::IsWorldCoverComponent(Ism)
 			|| FVector::DistSquared(Ism->Bounds.Origin, Location) > FMath::Square(Ism->Bounds.SphereRadius + RadiusCm))
@@ -406,6 +409,8 @@ void UMOForagingSubsystem::FindGatherableCoverKinds(const FVector& Location, flo
 			}
 		}
 	}
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] cover search: %d instanced component(s) walked, %d kind(s) found, %.2f ms"), Walked, NearestByKind.Num(),
+		(FPlatformTime::Seconds() - SearchStart) * 1000.0);
 	TArray<TPair<float, FMOGatherableCover>> Sorted;
 	NearestByKind.GenerateValueArray(Sorted);
 	Sorted.Sort([](const TPair<float, FMOGatherableCover>& A, const TPair<float, FMOGatherableCover>& B) { return A.Key < B.Key; });

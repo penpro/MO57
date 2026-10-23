@@ -298,7 +298,11 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 	{
 		if (bDebug)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] target %s via %s"), *GetNameSafe(OutTarget.TargetActor.Get()), Pass);
+			// An instance names its mesh and index: a partition actor holds every plant and pebble of its cell, and a test (or a report) must tell
+			// "the stick" from "the bush in front of the stick" (Oct 22: a hazel took a joiner's E meant for a river cobble).
+			const UInstancedStaticMeshComponent* ISM = OutTarget.ISMComponent.IsValid() ? OutTarget.ISMComponent.Get() : OutTarget.HISMComponent.Get();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] target %s via %s%s"), *GetNameSafe(OutTarget.TargetActor.Get()), Pass,
+				ISM ? *FString::Printf(TEXT(": %s #%d"), *GetNameSafe(ISM->GetStaticMesh()), OutTarget.InstanceIndex) : TEXT(""));
 		}
 		return true;
 	};

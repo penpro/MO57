@@ -24,7 +24,9 @@ void UMOSaveSlotListPanel::NativeConstruct()
 		BackButton->OnClicked().AddUObject(this, &UMOSaveSlotListPanel::HandleBackClicked);
 	}
 
-	RefreshSaveList();
+	// The list is built when the panel is SHOWN (UMOMainMenuWidget::ShowLoadPanel, UMOInGameMenu::ShowSavePanel / ShowLoadPanel), not here: every
+	// listing reads each save's metadata, and the main menu constructs its hidden Load panel at boot -- it read every save on disk twice before
+	// the title screen (Oct 22: 39 saves, 78 full loads, ~3 s in one frame).
 }
 
 void UMOSaveSlotListPanel::NativeDestruct()

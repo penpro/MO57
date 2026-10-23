@@ -194,6 +194,12 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   refresh. The main menu's Load panel is a separate instance and lists every world.
 - **Exits** save first with no dialog (`Docs/PAUSE_POLICY.md` "Leaving a world"). The only dialog is "Could Not Save -- Leave Anyway / Stay".
 - `bFilterToCurrentWorld` on the list panels is a same-MAP filter (every world on a map shares the identifier), not a same-world one.
+- **The lists are built when a panel is SHOWN** (Oct 22), never in `NativeConstruct`: every listing reads each save's metadata (a whole
+  world save the first time; `UMOPersistenceSubsystem` keeps it per slot while the file is unchanged), and the main menu constructs its
+  hidden Load panel at boot (it read every save twice before the title screen). A new show path must call `RefreshSaveList`.
+### Main menu: New Game creates a world (Oct 22)
+- `WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards, the World and Pace knobs, Defaults / Back / Start. The rows
+  and cards are made at run time from the knob table and DT_Biomes (`Docs/World_Creation.md`); spec `Content/Python/ui_specs/world_creation.py`.
 ### Inventory menu: the transfer buttons follow the visible panel (Oct 18)
 - `UMOUnifiedInventoryMenu::GetTransferTarget()` is the one rule for "<" / ">" / "<<" / ">>": the open container on its tab (all four), the
   ground on Nearby ("<<" picks up all, ">>" drops all), nothing on Gear / Details (all four disabled). Never act on a container the panel

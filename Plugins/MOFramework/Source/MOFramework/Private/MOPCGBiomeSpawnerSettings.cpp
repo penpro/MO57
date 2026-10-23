@@ -151,6 +151,9 @@ namespace
 	// Perf / look experiments ("how dense can a forest be and what does it cost"): scales EVERY species' density before the per-point pick. Points are scatter
 	// slots (one instance each at most), so past the slot budget it saturates instead of growing. Needs pcg.RuntimeGeneration.Refresh (or a new world) to apply.
 	TAutoConsoleVariable<float> CVarSpeciesDensityScale(TEXT("mo.PCG.SpeciesDensityScale"), 1.0f, TEXT("Dev: multiplier on every biome species' density (0..4); refresh PCG to apply."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarWidthScaleMultiplier(TEXT("mo.PCG.WidthScaleMultiplier"), 1.0f,
+		TEXT("Dev: x every species' WidthScale (A/B a widened species: 0.4167 puts the rainforest trees back at their mesh's width); refresh PCG to apply."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarLogCells(TEXT("mo.PCG.LogCells"), 0, TEXT("1 = one [MOBiomeSpawner] line per generated cell (in / accepted / suppressed / timings per bucket): density tuning."), ECVF_Default);
 
 	// Wind (WPO) on shadow-casting foliage re-renders its virtual shadow map pages EVERY frame: in the dense Rainforest that was 7 of the 19 GPU ms, and skipping
 	// those invalidations took the view from 20.1 to 14.3 ms (playtest 2026-10-14 #5, "frame rate dropped by half in this area"). Rigid: the trees still sway,
@@ -394,6 +397,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	const bool bPlantsWaterEdge = PassesWaterEdgeFilter(Settings->SpeciesFilter);
 	const float GroundCoverScale = FMath::Clamp(CVarGroundCoverScale.GetValueOnGameThread(), 0.0f, 2.0f);
 	const float SpeciesDensityScale = FMath::Clamp(CVarSpeciesDensityScale.GetValueOnGameThread(), 0.0f, 4.0f);
+	const float WidthMultiplier = FMath::Clamp(CVarWidthScaleMultiplier.GetValueOnGameThread(), 0.1f, 4.0f);
 	// Highest priority first so the first band match wins.
 	Biomes.Sort([](const FBiomeEntry& A, const FBiomeEntry& B) { return A.Row->Priority > B.Row->Priority; });
 
@@ -750,7 +754,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 
 			FTransform Xf = Point.Transform;
 			const float Scale = RandomStream.FRandRange(Sp.MinScale, Sp.MaxScale);
-			const float Width = Scale * Sp.WidthScale;
+			const float Width = Scale * Sp.WidthScale * WidthMultiplier;
 			Xf.SetScale3D(FVector(Width, Width, Scale));
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
 			const FVector SurfaceNormal = Point.Transform.GetRotation().GetUpVector();
@@ -1074,7 +1078,9 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 	++GBiomeSpawnerRuns;
 	GBiomeSpawnerAccepted += Context->TotalAccepted;
 	// Per-bucket breakdown so density tuning reads from the log, not guesses. ms = the planting slice; build = the game-thread time of every build slice (slices = frames it took).
-	UE_LOG(LogMOFramework, Warning,
+	// Off by default (mo.PCG.LogCells 1): one line per generated cell flooded every log at Warning (1,290 lines in one nettest host, Oct 22).
+	if (CVarLogCells.GetValueOnAnyThread() != 0)
+	UE_LOG(LogMOFramework, Log,
 		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (build %.1f in %d slice(s) worst batch %.1f; %s) inBounds=%s |%s"),
 		Context->TotalIn, Context->TotalAccepted, Context->TotalSuppressed, Context->Components, Context->NumBiomes, Context->PlantMs, Context->BuildMs, Context->Slices, Context->WorstBatchMs,
 		*Context->StageSummary, *Context->BoundsText, *Context->BucketSummary);

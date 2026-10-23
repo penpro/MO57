@@ -10,7 +10,7 @@
 
 void UMOSavePanel::NativeConstruct()
 {
-	Super::NativeConstruct(); // base wires Back button + RefreshSaveList
+	Super::NativeConstruct(); // base wires the Back button; the list is built when the panel is shown
 
 	if (NewSaveButton)
 	{

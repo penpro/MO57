@@ -2245,6 +2245,20 @@ bool UMOPersistenceSubsystem::IsSlotOfCurrentWorld(const FString& SlotName) cons
 
 bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSaveMetadata& OutMetadata) const
 {
+    // The same file as last time: the same answer (a save, a rename, a thumbnail rewrite or a delete all change its size or time).
+    const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
+    IFileManager& FileManager = IFileManager::Get();
+    const int64 FileSize = FileManager.FileSize(*SavePath);
+    const FDateTime FileTime = FileManager.GetTimeStamp(*SavePath);
+    if (const FSlotMetadataCacheEntry* Cached = SlotMetadataCache.Find(SlotName))
+    {
+        if (FileSize >= 0 && Cached->FileSize == FileSize && Cached->FileTime == FileTime)
+        {
+            OutMetadata = Cached->Metadata;
+            return true;
+        }
+    }
+
     // Load the save game to extract metadata
     USaveGame* LoadedBase = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
     UMOWorldSaveGame* LoadedTyped = Cast<UMOWorldSaveGame>(LoadedBase);
@@ -2267,6 +2281,10 @@ bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSa
     OutMetadata.ScreenshotData = LoadedTyped->ScreenshotData;
     OutMetadata.ScreenshotPath = FString(); // Deprecated
 
+    if (FileSize >= 0)
+    {
+        SlotMetadataCache.Add(SlotName, FSlotMetadataCacheEntry{ FileSize, FileTime, OutMetadata });
+    }
     return true;
 }
 

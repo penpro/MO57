@@ -2483,9 +2483,12 @@ bool AMOSurvivorController::FindNearestHarvestTarget(FName RequiredTag, float Se
 	float BestDistanceSq = SearchRadius * SearchRadius;
 	bool bFound = false;
 
-	// Iterate all actors looking for KeepOnHarvest ISM/HISM with the required tag
+	// Iterate all actors looking for KeepOnHarvest ISM/HISM with the required tag (every actor of the world: the cost is logged, perf sweep Oct 22)
+	const double SearchStart = FPlatformTime::Seconds();
+	int32 ActorsWalked = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
+		++ActorsWalked;
 		AActor* Actor = *It;
 		if (!Actor)
 		{
@@ -2570,6 +2573,8 @@ bool AMOSurvivorController::FindNearestHarvestTarget(FName RequiredTag, float Se
 		}
 	}
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] harvest target search ('%s'): %d actor(s) walked, %s, %.2f ms"), *RequiredTag.ToString(), ActorsWalked,
+		bFound ? TEXT("found") : TEXT("none"), (FPlatformTime::Seconds() - SearchStart) * 1000.0);
 	return bFound;
 }
 
