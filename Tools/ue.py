@@ -184,11 +184,11 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
         buf = _read_from(OUT_FILE, out_off)
         if f"<E {mid}>" in buf:
             break
-        time.sleep(0.25)
+        time.sleep(0.05)   # was 0.25: a harness makes hundreds of calls per run, each paid this slack (loop deep dive, Oct 22)
     else:
         return False, [], ""
 
-    time.sleep(0.15)  # let the END marker's [py-ok] ack land, then swallow it
+    time.sleep(0.05)  # let the END marker's [py-ok] ack land, then swallow it (acks that land later are filtered anyway)
     buf = _read_from(OUT_FILE, out_off)
 
     lines = []
@@ -213,7 +213,7 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
                 break
             if not log_grep and log_delta:
                 break
-            time.sleep(0.4)
+            time.sleep(0.1)
         if log_grep:
             log_delta = "\n".join(l for l in log_delta.splitlines() if re.search(log_grep, l))
     return True, lines, log_delta

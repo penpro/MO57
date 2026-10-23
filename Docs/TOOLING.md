@@ -126,6 +126,13 @@ review shots ~1.5 min a spot (a 75 s settle each).
   case skips a candidate whose line hits a plant; the ground-build case counts cobbles inside the build range), so a FAIL is the game's.
 - **Real-cursor isolation:** harness instances launch with `-MOHoldContextMenus` (menus neither warp nor close on the real cursor): a
   person at the machine no longer fails a run, and the run no longer moves their mouse.
+- **Bridge round trips** (measured Oct 22 on a running instance): `console()` cost 1.8 s, of which ~1 s waited for a `MOQUERY` line
+  most commands never print (the bridge already returns only after the command ran): now 0.76 s. `wait_log` polls every 0.25 s (was
+  1 s) and asks `tasklist` whether the process lives every 2 s instead of every poll; `ue.py`'s bridge polls its reply every 50 ms
+  (was 250). Measured and NOT kept: running `ue.py` in-process instead of a subprocess per call (0.76 s either way: one process start
+  is cheap; `ue.py inst do` from a shell spawns two). What is left per call is the game side's 0.25 s command poll and the command.
+  `_ground_items_both` confirms only what a case uses (`want`, `keep`): `_trust_instance_far` confirmed all 40 listed items (107 s).
+  **Measured, the same full pass (suite + nettest, batch_verify):** 35.9 min -> 27.8 min; the cases' own time 1,986 -> 1,508 s.
 - **Next (measured, not built):** two host + joiner pairs in parallel on halves of the case list (128 GB RAM, 32 threads; the second pair
   needs its own listen port and session name) would cut ~12 min; a headless DataTable writer (an `-run=pythonscript` commandlet in place
   of the full editor + bridge) would save the 2-3 min editor start per data change.

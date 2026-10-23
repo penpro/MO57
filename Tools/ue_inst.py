@@ -180,17 +180,21 @@ def read_log_from(name, offset):
         return ""
 
 
-def wait_log(name, regex, since=0, timeout=60, step=1.0):
+def wait_log(name, regex, since=0, timeout=60, step=0.25):
     """Poll the instance log from byte offset `since` for `regex`; returns the match or None. Fails fast if the
-    process died (a crashed instance would otherwise burn the whole timeout)."""
+    process died (a crashed instance would otherwise burn the whole timeout). Polls every 0.25 s (was 1 s: a line that landed just after
+    a poll cost up to a second, at 136 call sites) and asks whether the process lives every 2 s (`tasklist` is a process of its own)."""
     pat = re.compile(regex)
     deadline = time.time() + timeout
+    next_alive_check = time.time() + 2.0
     while time.time() < deadline:
         m = pat.search(read_log_from(name, since))
         if m:
             return m
-        if not is_alive(read_pid(name)):
-            return pat.search(read_log_from(name, since))
+        if time.time() >= next_alive_check:
+            next_alive_check = time.time() + 2.0
+            if not is_alive(read_pid(name)):
+                return pat.search(read_log_from(name, since))
         time.sleep(step)
     return None
 
@@ -215,7 +219,10 @@ def wait_ready(name, timeout=240):
 def console(name, cmd):
     """Run a console command in the instance; returns the log text it produced ('' if none yet)."""
     off = log_size(name)
-    call(name, ["run", cmd, "--grep", "MOQUERY|MOSession", "--logwait", "1"], timeout=30)
+    # No log wait in the bridge: it returns once the command has RUN (its end marker follows the command in the same queue), and every
+    # caller that wants a result waits for its own line (wait_log). The old --grep MOQUERY --logwait 1 waited a full second after most
+    # commands for a line they never print (the loop deep dive, Oct 22).
+    call(name, ["run", cmd, "--logwait", "0"], timeout=30)
     time.sleep(0.5)
     return read_log_from(name, off)
 
@@ -1592,7 +1599,7 @@ def _motest(name, cmd, regex, timeout=12):
     """Run a [MOTEST] verb in an instance; the match of `regex` in what it logged, or None."""
     off = log_size(name)
     console(name, cmd)
-    return wait_log(name, regex, since=off, timeout=timeout, step=0.5)
+    return wait_log(name, regex, since=off, timeout=timeout)
 
 
 def _worlds_built(rep, host, client, timeout=300):
@@ -1635,9 +1642,11 @@ def _worlds_built(rep, host, client, timeout=300):
     return rep.step(f"{client}: its PCG has generated ground items around its pawn", n >= 5, detail)
 
 
-def _ground_items_both(rep, host, client, radius, lines):
+def _ground_items_both(rep, host, client, radius, lines, want=None, keep=None):
     """PCG ground items (MOItem_ tags) the CLIENT lists near its pawn, each confirmed on the HOST at the same place: [(item, mesh, x, y, z, dist)].
-    Instances are named differently on each machine, so they are matched by mesh + place (MOInstanceRef.h)."""
+    Instances are named differently on each machine, so they are matched by mesh + place (MOInstanceRef.h). Each confirmation is a round trip
+    to the host: `keep(dist)` drops a listed item before it is confirmed, and the walk stops after `want` confirmed ones (_trust_instance_far
+    confirmed all 40 of its list to use the first far one: 107 s, the loop deep dive Oct 22)."""
     off = log_size(client)
     console(client, f"MO.Test.GroundItems {radius} {lines}")
     wait_log(client, r"\[MOTEST\] GROUND_ITEMS n=\d+", since=off, timeout=15)
@@ -1646,9 +1655,13 @@ def _ground_items_both(rep, host, client, radius, lines):
     for x, y, z, cx, cy, cz in GROUND_ITEM_CENTRE_RE.findall(text):
         _GROUND_CENTRES[(x, y, z)] = (cx, cy, cz)
     for item, mesh, x, y, z, d in GROUND_ITEM_RE.findall(text):
+        if keep and not keep(int(d)):
+            continue
         m = _motest(host, f"MO.Test.InstanceAt {x} {y} {z} {mesh}", INSTANCE_AT_RE)
         if m and m.group(1) == "1":
             both.append((item, mesh, x, y, z, int(d)))
+            if want and len(both) >= want:
+                break
     return both
 
 
@@ -1685,7 +1698,7 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
     the same instance at the same place before E, and the count before E."""
     if not _worlds_built(rep, host, client):
         return
-    both = _ground_items_both(rep, host, client, 2500, 8)
+    both = _ground_items_both(rep, host, client, 2500, 8, want=pick + 3)   # this pick and two fallbacks behind it
     chosen = both[min(pick, len(both) - 1)] if both else None
     if not rep.step("CONTROL: a PCG ground item near the joiner exists at the same place on host and client", bool(both),
                     f"{chosen[1]} at {chosen[2]},{chosen[3]},{chosen[4]} ({chosen[0]}; #{both.index(chosen)} of {len(both)})" if both else "none found on both"):
@@ -2183,7 +2196,7 @@ def _trust_instance_far(rep, host, client):
     naming nothing)."""
     if not _worlds_built(rep, host, client):
         return
-    far = [g for g in _ground_items_both(rep, host, client, 6000, 40) if g[5] > 1500]
+    far = _ground_items_both(rep, host, client, 6000, 40, want=1, keep=lambda d: d > 1500)
     if not rep.step("CONTROL: a PCG ground item 15-60 m from the joiner exists on both machines", bool(far), f"{far[0][1]} {far[0][5]} cm away" if far else "none"):
         return
     item, mesh, x, y, z, d = far[0]
@@ -2205,7 +2218,7 @@ def _trust_instance_out_of_sight(rep, host, client):
     top: UMOInteractorComponent::IsInstanceInSight)."""
     if not _worlds_built(rep, host, client):
         return
-    near = _ground_items_both(rep, host, client, 3000, 20)
+    near = _ground_items_both(rep, host, client, 3000, 20, want=1)
     if not rep.step("CONTROL: a PCG ground item within 30 m of the joiner exists on both machines", bool(near),
                     f"{near[0][0]} {near[0][5]} cm away" if near else "none"):
         return
