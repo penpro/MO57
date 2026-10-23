@@ -51,8 +51,11 @@
 - **Lake look** (Oct 13): set at spawn from `mo.Lakes.Absorption` ("2.5 4.5 3 50") / `mo.Lakes.Scattering`. Absorption is how far
   each channel CARRIES (bigger = clearer, not more absorbed); plugin default 10/25/30 = turquoise pool; ours = dark teal + green
   shallows. Cost: a lake filling the view ~1.2 ms GPU of 10; the 4 km spawn radius stays.
-- **Lake waves** (Oct 18, Wes: "make lakes less splashy, smaller waves"): `mo.Lakes.WaveScale` (0.4) scales the lake preset's four Gerstner
-  wave heights as each lake spawns. All lakes share the elected lake's wave parameters, so they all get the same scale.
+- **Lake waves** (Oct 18, Wes: "make lakes less splashy, smaller waves"; Oct 23, BR23-16: "these are all small lakes so they should be almost
+  still"): as each lake spawns, `mo.Lakes.WaveScale` (0.1; 0.4 until Oct 23) scales the preset's four Gerstner wave heights,
+  `mo.Lakes.WavelengthScale` (0.2) their wavelengths, and each wave's speed follows by deep-water dispersion (x sqrt(0.2): short waves are
+  slow); `mo.Lakes.TurbulenceScale` (0.1) scales the procedural surface noise (`Procedural.Turbulance`). All lakes share the elected lake's
+  wave parameters, so they all get the same scales. The lake's SOUND is the Water ambience (Audio.md): x0.2 since Oct 23.
 - **Caustics** are only the projected `T_Caustics` texture (cheap, on by default).
 - **Cooking:** Oceanology loads assets through soft paths in `UOceanologyRuntimeSettings` the cooker does not follow (first
   packaged run crashed in `InitBubbles`). `Config/DefaultGame.ini` always-cooks the needed `/Oceanology_Plugin/` dirs, narrowed

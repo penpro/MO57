@@ -28,7 +28,9 @@ namespace
 	// travels (bigger = clearer; the plugin's units): 2.5 / 4.5 / 3 keeps the deep water dark and the shallows green, a highland freshwater lake (A/B shots 2026-10-13; 35/30/45 went clear
 	// and pink). Applied at spawn (the lake pushes it into its material in Init).
 	TAutoConsoleVariable<FString> CVarLakeAbsorption(TEXT("mo.Lakes.Absorption"), TEXT("2.5 4.5 3 50"), TEXT("Upland lake water absorption \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
-	TAutoConsoleVariable<float> CVarLakeWaveScale(TEXT("mo.Lakes.WaveScale"), 0.4f, TEXT("Upland lake wave height as a fraction of the lake preset's (Wes, Oct 18 2026: \"make lakes less splashy, smaller waves\"). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeWaveScale(TEXT("mo.Lakes.WaveScale"), 0.1f, TEXT("Upland lake wave height as a fraction of the lake preset's (Wes, Oct 18 2026: \"make lakes less splashy, smaller waves\" -> 0.4; Oct 23, BR23-16: \"these are all small lakes so they should be almost still\" -> 0.1). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeWavelengthScale(TEXT("mo.Lakes.WavelengthScale"), 0.2f, TEXT("Upland lake wavelength as a fraction of the lake preset's (Oct 23, BR23-16: \"reduce lake water wavelength by like 80%\"); each wave's speed follows by deep-water dispersion (c ~ sqrt(wavelength)). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeTurbulenceScale(TEXT("mo.Lakes.TurbulenceScale"), 0.1f, TEXT("Upland lake procedural surface noise (Oceanology Procedural.Turbulance) as a fraction of the lake blueprint's (Oct 23, BR23-16: \"reduce lake water noise by like 90%\"). Takes effect for lakes spawned afterwards."), ECVF_Default);
 	TAutoConsoleVariable<FString> CVarLakeScattering(TEXT("mo.Lakes.Scattering"), TEXT("0.005 0.012 0.008 2"), TEXT("Upland lake water scattering \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
 
 	/** "R,G,B,A" or "R G B A" (-ExecCmds splits on commas, so a launch line needs the spaces) -> colour; false (Out untouched) when the text is empty or malformed. */
@@ -142,16 +144,28 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 	Water->SetReplicateMovement(false);
 	ParseLakeColor(CVarLakeAbsorption.GetValueOnGameThread(), Water->SurfaceScattering.Absorption);
 	ParseLakeColor(CVarLakeScattering.GetValueOnGameThread(), Water->SurfaceScattering.Scattering);
+	Water->Procedural.Turbulance *= FMath::Clamp(CVarLakeTurbulenceScale.GetValueOnGameThread(), 0.0f, 2.0f);   // pushed into its material in Init
 	Water->FinishSpawning(Where);
-	// Calmer than the preset's sea-like swell: a lake in a basin has little fetch for the wind to raise waves on. The lakes share one wave clock and
-	// parameter set (the elected lake's, ReelectWaveTimeSource), so every lake gets the same scale.
+	// Calmer than the preset's sea-like swell: a small lake in a basin has little fetch for the wind, so its waves are low AND short -- shorter waves
+	// are also slower (deep water: c = sqrt(g L / 2 pi)), or short ones would race across the lake. The lakes share one wave clock and parameter set
+	// (the elected lake's, ReelectWaveTimeSource), so every lake gets the same scales.
 	if (UOceanologyGerstnerWaveSolverComponent* Gerstner = Cast<UOceanologyGerstnerWaveSolverComponent>(Water->GetWaveSolver()))
 	{
 		const float WaveScale = FMath::Clamp(CVarLakeWaveScale.GetValueOnGameThread(), 0.0f, 2.0f);
+		const float LengthScale = FMath::Clamp(CVarLakeWavelengthScale.GetValueOnGameThread(), 0.05f, 2.0f);
+		const float SpeedScale = FMath::Sqrt(LengthScale);
 		Gerstner->Wave_1.Amplitude_1 *= WaveScale;
 		Gerstner->Wave_2.Amplitude_2 *= WaveScale;
 		Gerstner->Wave_3.Amplitude_3 *= WaveScale;
 		Gerstner->Wave_4.Amplitude_4 *= WaveScale;
+		Gerstner->Wave_1.WaveLength_1 *= LengthScale;
+		Gerstner->Wave_2.WaveLength_2 *= LengthScale;
+		Gerstner->Wave_3.WaveLength_3 *= LengthScale;
+		Gerstner->Wave_4.WaveLength_4 *= LengthScale;
+		Gerstner->Wave_1.Speed_1 *= SpeedScale;
+		Gerstner->Wave_2.Speed_2 *= SpeedScale;
+		Gerstner->Wave_3.Speed_3 *= SpeedScale;
+		Gerstner->Wave_4.Speed_4 *= SpeedScale;
 	}
 	// Oceanology makes the wave solver with NewObject in AOceanologyWaterParent::SetupWaveSolvers and never registers it. A lake placed in a level gets it
 	// registered on load (its solver was saved with it); a lake SPAWNED at runtime -- every upland lake -- kept an inactive, never-ticking solver, so the lake
