@@ -2739,6 +2739,9 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			{
 				Cam->SetActorLocationAndRotation(From, (To - From).Rotation());
 				Cam->GetCameraComponent()->FieldOfView = Fov;
+				// A camera actor constrains its view to 16:9 by default: a shot of a wider window (a bug report's 2858x1027 view framed again)
+				// came out pillarboxed (Oct 22). The window's own aspect, as the pawn's camera has it.
+				Cam->GetCameraComponent()->SetConstraintAspectRatio(false);
 				PC->SetViewTarget(Cam);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CAM LookAt from (%.0f,%.0f,%.0f) to (%.0f,%.0f,%.0f) fov=%.0f"), From.X, From.Y, From.Z, To.X, To.Y, To.Z, Fov);
 			}

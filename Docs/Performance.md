@@ -99,3 +99,9 @@ What was looked at, and what was found, by evidence rather than by grep alone:
   physics overlap or a per-cell index of the instanced components.
 - **Ticking:** 21 classes tick; all but the per-frame ones (buoyancy, foot plants, AI controllers, water) throttle with a tick interval
   or a timer, and the tickable subsystems carry `MO_TICK_WATCH`. Nothing new to cut there.
+- **The rainforest's wider trees cost nothing measurable** (Oct 22, Wes's x3-wide Black Alders): same spot, same build and instance
+  (1280x720, seed 3014, `mo.PCG.WidthScaleMultiplier` A/B, `MO.Perf.Bench 20`): x3 width 12.0 ms avg / p95 12.8 / GPU 10.4 ms, the
+  mesh's own width 12.1 / 13.1 / 10.3, x3 again 12.0 / 12.8 / 10.3.
+- **Where a rainforest frame goes** (an Insights capture of the same spot, 20 s, game thread): the frame is render / GPU bound. The
+  game thread does ~4 ms (world tick ~2 ms, Slate ~0.5 ms, Ultra Dynamic Sky ~0.16 ms a frame) and waits ~8 ms a frame on the render
+  thread (`Sync_RenderingThread`). The next frame-time work is the foliage's GPU cost (`Docs/PCG.md` section 6), not game code.

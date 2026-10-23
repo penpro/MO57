@@ -17,7 +17,8 @@ Spec:
                               {"name": "aerial", "yaw": 45, "pitch": -30, "up": 4000, "back": 3000}],
                "spire": [{"name": "wes", "lookat": [cx, cy, cz, tx, ty, tz], "fov": 90, "res": "2858x1027"}]}}   # an exact camera
 A spot with no views of its own gets two eye-level views (yaw 0 and 180). A spot may carry its own "hour"; {"here": true} stays where
-the new game put the pawn (with {"pawn": true} views: the pawn's own camera). A bug report's LookAt.Reproduce
+the new game put the pawn (with {"pawn": true} views: the pawn's own camera); {"feature": "<FeatureId>", "near": [x, y, z]} stands at the
+nearest site of that world feature (MO.WorldFeatures.Dump). A bug report's LookAt.Reproduce
 line is an exact camera: Tools/review_from_reports.py builds the spots and views from a folder of reports.
 """
 import argparse
@@ -137,6 +138,21 @@ def main():
             spot = [0, 0, 0]   # where the new game put the pawn (its coastal spawn, facing the water): views of kind "pawn" only
         elif name in known:
             spot = known[name]
+            run("MO.Player.Teleport %d %d %d" % (spot[0], spot[1], spot[2] + 250))
+        elif "feature" in s:
+            # A world feature's nearest site to "near" (MO.WorldFeatures.Dump): frame the formation where it stands NOW -- a re-packed
+            # cluster no longer stands in the camera a bug report was filed from (Oct 22).
+            near = s["near"]
+            run("MO.Player.Teleport %d %d %d" % (near[0], near[1], near[2] + 250))
+            time.sleep(5)
+            off = log_size()
+            run("MO.WorldFeatures.Dump %d" % s.get("radius_m", 1500))
+            m = wait_log(r"WORLDFEATURES   " + s["feature"] + r" at \((-?\d+), (-?\d+), (-?\d+)\)[^\r\n]*", off, 30)
+            if not m:
+                print(f"{name}: no {s['feature']} site within {s.get('radius_m', 1500)} m")
+                continue
+            spot = [int(m.group(1)), int(m.group(2)), int(m.group(3))]
+            print(f"  site: {m.group(0)[:160]}")
             run("MO.Player.Teleport %d %d %d" % (spot[0], spot[1], spot[2] + 250))
         elif "at" in s:
             spot = s["at"]
