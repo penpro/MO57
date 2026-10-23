@@ -140,6 +140,10 @@ struct FMOLoadResult
     UPROPERTY(BlueprintReadOnly)
     int32 WorldSeed = 0;
 
+    /** The loaded world's creation settings (shape, pace, start): the game mode hands them to AMOGameState before the terrain is generated. */
+    UPROPERTY(BlueprintReadOnly)
+    FMOWorldCreationSettings WorldCreation;
+
     /**
      * GUID of the pawn the player controller was possessing at save time.
      * Game mode uses this after voxel terrain is ready to re-possess the

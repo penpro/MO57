@@ -1,4 +1,5 @@
 #include "MOSkillsComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOGameClockSubsystem.h"
 #include "TimerManager.h"
 #include "MOSkillDatabaseSettings.h"
@@ -50,6 +51,7 @@ bool UMOSkillsComponent::AddExperience(FName SkillId, float XPAmount)
 	{
 		return false;
 	}
+	XPAmount *= FMOWorldRules::GetPace(this, EMOWorldPace::SkillGain);   // this world's skill learning rate (MOWorldCreationTypes.h)
 
 	const FMOSkillDefinitionRow* SkillDef = GetSkillDefinition(SkillId);
 

@@ -1,4 +1,5 @@
 #include "MOForagingSubsystem.h"
+#include "MOWorldCreationTypes.h"
 #include "Engine/StaticMesh.h"
 #include "MOInteractorComponent.h"
 #include "UObject/UObjectIterator.h"
@@ -459,7 +460,7 @@ bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location
 	}
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
 	TWeakObjectPtr<UMOForagingSubsystem> WeakThis(this);
-	return Timed->BeginKneeling(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, Cover]()
+	return Timed->BeginKneeling(GatherCoverActionId, Cover.Label(), FMOWorldRules::ScaleSeconds(Pawn, EMOWorldPace::Gathering, Cover.Entry->Seconds), [WeakPawn, WeakThis, Cover]()
 		{
 			APawn* P = WeakPawn.Get();
 			UMOForagingSubsystem* Self = WeakThis.Get();

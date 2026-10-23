@@ -1,4 +1,5 @@
 #include "MOSurvivorController.h"
+#include "MOWorldCreationTypes.h"
 #include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOSurvivorJobQueueComponent.h"
@@ -2627,7 +2628,7 @@ float AMOSurvivorController::ResolveGatherActionDuration() const
 		}
 	}
 
-	return FMath::Max(0.1f, ActionTime);
+	return FMath::Max(0.1f, FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Gathering, ActionTime));   // the world's gathering pace, as a player's harvest
 }
 
 TArray<FName> AMOSurvivorController::GetItemTagsForJobType(EMOSurvivorJobType JobType) const

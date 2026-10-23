@@ -1,4 +1,5 @@
 #include "MORecipeDetailPanel.h"
+#include "MOWorldCreationTypes.h"
 #include "MOFramework.h"
 #include "MOCraftingSubsystem.h"
 #include "MOKnowledgeComponent.h"
@@ -243,8 +244,8 @@ void UMORecipeDetailPanel::HandleActionButtonClicked()
 
 float UMORecipeDetailPanel::GetRecipeTime(const FMORecipeDefinitionRow* Recipe) const
 {
-	// Crafting uses CraftTime
-	return Recipe ? Recipe->CraftTime : 0.0f;
+	// Crafting uses CraftTime, at this world's crafting pace
+	return Recipe ? FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, Recipe->CraftTime) : 0.0f;
 }
 
 FMOIngredientDisplayData UMORecipeDetailPanel::BuildIngredientData(const FMORecipeIngredient& Ingredient) const

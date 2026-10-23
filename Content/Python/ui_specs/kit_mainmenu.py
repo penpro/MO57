@@ -68,19 +68,59 @@ MAIN_MENU = {
     ]},
 }
 
-# ---------------------------------------------------------------- new game (640 wide)
+# ---------------------------------------------------------------- new game (960 wide): name, seed, starting biome, the world's shape and pace
+# World creation (Wes, Oct 22 2026, MOWorldCreationTypes.h): the knob rows and the biome cards are made at run time by UMONewGamePanel from
+# FMOWorldCreation::GetKnobs() and DT_Biomes (rows with a PreviewImage), so a new knob or biome needs no edit here.
+KNOB_ROW = {
+    "asset": f"{MM}/WBP_WorldKnobRow",
+    "parent": "/Script/MOFramework.MOWorldKnobRow",
+    "root": {"type": "SizeBox", "name": "KnobRowSize", "height": 40, "children": [
+        {"type": "HorizontalBox", "name": "KnobRow", "children": [
+            {"type": "SizeBox", "name": "KnobLabelBox", "width": 260, "slot": VC, "children": [K.text("LabelText", "body", "Knob", "color.text.primary", var=True)]},
+            K.slider("ValueSlider", slot={**FILL_SIZE, **VC, "padding": [0, 0, 16, 0]}),
+            {"type": "SizeBox", "name": "KnobValueBox", "width": 72, "slot": VC, "children": [
+                K.text("ValueText", "body.strong", "x1.00", "color.text.primary", justification="Right", var=True)]}]}]},
+}
+
+BIOME_CARD = {
+    "asset": f"{MM}/WBP_BiomeCard",
+    "parent": "/Script/MOFramework.MOBiomeCard",
+    "root": {"type": "SizeBox", "name": "CardSize", "width": 224, "children": [
+        {"type": "VerticalBox", "name": "CardColumn", "children": [
+            {"type": "SizeBox", "name": "PreviewSize", "width": 224, "height": 126, "children": [
+                {"type": "Overlay", "name": "PreviewOverlay", "children": [
+                    K.image9("PreviewWell", "input_fill", "color.surface.0", slot=FILL),
+                    {"type": "Image", "name": "PreviewImage", "var": True, "slot": FILL},
+                    K.image9("SelectedFrame", "panel_stroke", "color.accent", var=True, slot=FILL)]}]},
+            {"type": "SizeBox", "name": "CardButtonSize", "height": 44, "slot": {"padding": [0, 6, 0, 0]}, "children": [
+                K.button("SelectButton", "Biome", "Secondary", slot=FILL_H)]}]}]},
+}
+
 NEW_GAME = {
     "asset": f"{MM}/WBP_NewGamePanel",
-    "root": {"type": "SizeBox", "name": "SizeBox_96", "width": 640, "height": 560, "children": [
+    "root": {"type": "SizeBox", "name": "SizeBox_96", "width": 960, "height": 860, "children": [
         {"type": "VerticalBox", "name": "NewGameColumn", "children": [
             K.text("NewGameTitle", "title", "New game", "color.text.primary"),
             K.divider("NewGameRule", slot={"padding": [0, 12, 0, 0]}),
-            labelled("WorldName", "World name", input_box("WorldNameInputBox", "Name your world")),
-            labelled("Seed", "Seed", {"type": "HorizontalBox", "name": "SeedRow", "children": [
-                {"type": "SizeBox", "name": "SeedInputSize", "height": 48, "slot": FILL_SIZE, "children": [K.text_input("SeedInputBox", "Leave empty for a random world")]},
-                K.button("RandomSeedButton", "Random", "Secondary", slot={"padding": [12, 0, 0, 0]}, )]}),
-            K.text("SeedPreviewText", "caption", "", "color.text.secondary", var=True, slot={"padding": [0, 8, 0, 0]}),
+            K.scroll_box("NewGameScroll", var=False, slot={**FILL_SIZE, "padding": [0, 4, 0, 0]}, children=[
+                {"type": "VerticalBox", "name": "NewGameFields", "slot": {"padding": [0, 0, 16, 0]}, "children": [
+                    labelled("WorldName", "World name", input_box("WorldNameInputBox", "Name your world")),
+                    labelled("Seed", "Seed", {"type": "HorizontalBox", "name": "SeedRow", "children": [
+                        {"type": "SizeBox", "name": "SeedInputSize", "height": 48, "slot": FILL_SIZE, "children": [K.text_input("SeedInputBox", "Leave empty for a random world")]},
+                        K.button("RandomSeedButton", "Random", "Secondary", slot={"padding": [12, 0, 0, 0]}, )]}),
+                    K.text("SeedPreviewText", "caption", "", "color.text.secondary", var=True, slot={"padding": [0, 8, 0, 0]}),
+                    K.section_label("StartSection", "Starting biome", slot={"padding": [0, 24, 0, 6]}),
+                    K.text("StartingBiomeText", "body", "Starting in: The coast", "color.text.secondary", var=True, slot={"padding": [0, 0, 0, 8]}),
+                    K.scroll_box("BiomeCardsScroll", var=False, orientation="ORIENT_HORIZONTAL", children=[
+                        {"type": "HorizontalBox", "name": "BiomeCardsBox", "var": True, "slot": {"padding": [0, 0, 0, 10]}}]),
+                    K.section_label("ShapeSection", "World", slot={"padding": [0, 24, 0, 6]}),
+                    {"type": "VerticalBox", "name": "ShapeKnobsBox", "var": True},
+                    K.section_label("PaceSection", "Pace (1 = real time)", slot={"padding": [0, 24, 0, 6]}),
+                    {"type": "VerticalBox", "name": "PaceKnobsBox", "var": True},
+                    {"type": "HorizontalBox", "name": "ResetRow", "slot": {"padding": [0, 12, 0, 8]}, "children": [
+                        K.button("ResetCreationButton", "Defaults", "Tertiary")]}]}]),
             button_row([K.button("BackButton", "Back", "SecondaryLg", slot={"padding": [0, 0, 12, 0]}), K.button("StartGameButton", "Start", "PrimaryLg")])]}]},
+    "class_defaults": {"knob_row_class": f"{MM}/WBP_WorldKnobRow", "biome_card_class": f"{MM}/WBP_BiomeCard"},
 }
 
 # ---------------------------------------------------------------- host co-op
@@ -145,4 +185,4 @@ INTRO = {
         K.text("SkipHintText", "caption", "Press any key to skip", "color.text.secondary", justification="Center", var=True, slot=K.place(660, 1000, 600, 24, "BottomCenter"))]},
 }
 
-SPECS = [MAIN_MENU, NEW_GAME, HOST, JOIN, SESSION_LIST, SESSION_ENTRY, LOADING, INTRO]
+SPECS = [MAIN_MENU, KNOB_ROW, BIOME_CARD, NEW_GAME, HOST, JOIN, SESSION_LIST, SESSION_ENTRY, LOADING, INTRO]

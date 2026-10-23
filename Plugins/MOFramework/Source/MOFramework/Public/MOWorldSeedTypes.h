@@ -17,6 +17,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MOWorldCreationTypes.h"
 #include "MOWorldSeedTypes.generated.h"
 
 USTRUCT(BlueprintType)
@@ -40,9 +41,14 @@ struct MOFRAMEWORK_API FMOWorldSeedInfo
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Voxel")
 	FName ParameterName = TEXT("Seed");
 
+	/** How the land is generated (the world's creation settings, MOWorldCreationTypes.h): part of the generator's input, so it arrives with the seed,
+	 *  before a joiner builds its first chunk. */
+	UPROPERTY(BlueprintReadOnly, Category = "MO|Voxel")
+	FMOWorldShape Shape;
+
 	bool operator==(const FMOWorldSeedInfo& Other) const
 	{
-		return bPublished == Other.bPublished && Seed == Other.Seed && ParameterName == Other.ParameterName;
+		return bPublished == Other.bPublished && Seed == Other.Seed && ParameterName == Other.ParameterName && Shape == Other.Shape;
 	}
 	bool operator!=(const FMOWorldSeedInfo& Other) const { return !(*this == Other); }
 };

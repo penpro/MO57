@@ -4,6 +4,7 @@
  */
 
 #include "MOCraftingQueueWidget.h"
+#include "MOWorldCreationTypes.h"
 #include "MOFramework.h"
 #include "MOCraftingQueueComponent.h"
 #include "MOCraftingQueueEntryWidget.h"
@@ -83,7 +84,8 @@ FMOQueueDisplayRow UMOCraftingQueueWidget::BuildCraftingDisplayRow(
 	const FMOCraftingQueueEntry& Entry,
 	const FMORecipeDefinitionRow* Recipe,
 	bool bIsActive,
-	float ActiveRemainingSeconds)
+	float ActiveRemainingSeconds,
+	float CraftingPace)
 {
 	FMOQueueDisplayRow Row;
 	Row.RowId = Entry.EntryId;
@@ -114,7 +116,7 @@ FMOQueueDisplayRow UMOCraftingQueueWidget::BuildCraftingDisplayRow(
 	}
 	else
 	{
-		const float CraftDuration = Recipe ? Recipe->CraftTime : 0.0f;
+		const float CraftDuration = Recipe ? Recipe->CraftTime * CraftingPace : 0.0f;
 		Row.RemainingSeconds = CraftDuration * Entry.Count;
 	}
 
@@ -141,7 +143,7 @@ void UMOCraftingQueueWidget::BuildDisplayRows_Implementation(TArray<FMOQueueDisp
 	for (int32 i = 0; i < QueueEntries.Num(); ++i)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(QueueEntries[i].RecipeId);
-		FMOQueueDisplayRow Row = BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining);
+		FMOQueueDisplayRow Row = BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining, FMOWorldRules::GetPace(this, EMOWorldPace::Crafting));
 		if (i == 0 && !Queue->IsCraftingActive())
 		{
 			Row.State = EMOQueueRowState::Paused;

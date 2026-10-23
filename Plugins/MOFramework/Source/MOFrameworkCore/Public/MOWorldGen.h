@@ -397,6 +397,13 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	float SurfaceHeightBlendCm = 5000.0f;
 
 	/**
+	 * Every biome species' density, x this (the world's Vegetation knob, MOWorldCreationTypes.h; the biome spawner multiplies by it). 1 = as authored.
+	 * In the params hash only when it is not 1, so a default world keeps its identity.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
+	float VegetationDensityScale = 1.0f;
+
+	/**
 	 * Width of the blend band on every MOISTURE / TEMPERATURE edge (those fields run 0..1). 2026-10-14 (Wes: "the biomes should have a lot more blending"): 0.03 -> 0.12.
 	 * Moisture crosses 0..1 in under a kilometre (1.75 km patches), so 0.03 was a 25-50 m seam; 0.12 is a ~100-200 m ecotone and still leaves the narrowest climate
 	 * band (ElectricForest, moisture 0.24 wide) a pure core.

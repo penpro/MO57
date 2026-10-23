@@ -33,6 +33,8 @@
 #include "MODigDropEntry.h"
 #include "MOBiomeDefinitionRow.generated.h"
 
+class UTexture2D;
+
 class UStaticMesh;
 
 /**
@@ -193,6 +195,11 @@ struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 	/** Display name for UI / debug. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome")
 	FText DisplayName;
+
+	/** The New Game panel's starting-biome card (a 16:9 shot of the biome, /MOFramework/UI/BiomePreviews). A biome without one is not offered as a
+	 *  start. Docs/World_Creation.md. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome")
+	TSoftObjectPtr<UTexture2D> PreviewImage;
 
 	// --- Terrain bands (a sample must satisfy ALL to belong) ---
 

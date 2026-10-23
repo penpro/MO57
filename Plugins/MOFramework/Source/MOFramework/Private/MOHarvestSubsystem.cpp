@@ -1,4 +1,5 @@
 #include "MOHarvestSubsystem.h"
+#include "MOWorldCreationTypes.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOFramework.h"
@@ -642,7 +643,7 @@ bool UMOHarvestSubsystem::BeginHarvest(
 		}
 	}
 
-	Ctx.TotalTime = BaseTime;
+	Ctx.TotalTime = FMOWorldRules::ScaleSeconds(Harvester, EMOWorldPace::Gathering, BaseTime);   // this world's gathering pace (MOWorldCreationTypes.h)
 
 	// (H23) Capture the authoritative start timestamp. CompleteHarvest validates
 	// that at least TotalTime real seconds elapse before granting yields/XP, so a

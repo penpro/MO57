@@ -1,4 +1,5 @@
 #include "MOCraftingQueueComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
 #include "MOCraftingSubsystem.h"
@@ -1173,11 +1174,11 @@ float UMOCraftingQueueComponent::GetEffectiveCraftDuration(FName RecipeId) const
 	{
 		// GetAdjustedCraftTime applies tool quality modifiers
 		const float Adjusted = CraftingSubsystem->GetAdjustedCraftTime(RecipeId, Inventory);
-		return FMath::IsFinite(Adjusted) ? FMath::Max(0.1f, Adjusted) : FMath::Max(0.1f, Recipe->CraftTime);
+		return FMath::IsFinite(Adjusted) ? FMath::Max(0.1f, Adjusted) : FMath::Max(0.1f, FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, Recipe->CraftTime));
 	}
 
-	// Fallback to base duration if subsystem or inventory unavailable
-	return Recipe->CraftTime;
+	// Fallback to base duration if subsystem or inventory unavailable (this world's crafting pace still applies)
+	return FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, Recipe->CraftTime);
 }
 
 void UMOCraftingQueueComponent::AdvanceQueueByTime(float ElapsedSeconds)

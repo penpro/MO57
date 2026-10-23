@@ -422,7 +422,7 @@ bool UMOWorldSeedSubsystem::ApplySeedToHeightGraphs(int32 WorldSeed, FName Voxel
 	return GraphsUpdated > 0;
 }
 
-bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext)
+bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext, const FMOWorldShape* Shape)
 {
 	if (!World)
 	{
@@ -431,7 +431,11 @@ bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed,
 	}
 
 	// The MO terrain node reads an immutable snapshot of the generator tuning + DT_Biomes. Publish it NOW, on the game thread, before any
-	// voxel runtime exists (host and client both come through here), so the first chunk already sees the final data.
+	// voxel runtime exists (host and client both come through here), so the first chunk already sees the final data. The world's shape goes in first.
+	if (Shape)
+	{
+		UMOWorldGenSettings::SetActiveWorldShape(*Shape);
+	}
 	UMOWorldGenSettings::RefreshPublishedParams();
 
 	// Apply seed to all stamp components (for runtime stamps)
@@ -484,10 +488,11 @@ bool UMOWorldSeedSubsystem::ApplyBackdropSeed(int32 WorldSeed, FName VoxelSeedPa
 	bHasActiveSeed = true;
 	ActiveSeed = WorldSeed;
 	ActiveParameterName = VoxelSeedParameterName;
-	return RegenerateVoxelWorld(GetWorld(), WorldSeed, VoxelSeedParameterName, this);
+	const FMOWorldShape Default;   // a menu backdrop is the authored world
+	return RegenerateVoxelWorld(GetWorld(), WorldSeed, VoxelSeedParameterName, this, &Default);
 }
 
-void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName)
+void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName, const FMOWorldShape& Shape)
 {
 	UWorld* World = GetWorld();
 	AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr;
@@ -522,6 +527,7 @@ void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedPar
 	Info.bPublished = true;
 	Info.Seed = WorldSeed + Skew;
 	Info.ParameterName = VoxelSeedParameterName;
+	Info.Shape = Shape;
 	State->SetWorldSeedInfo(Info);
 
 	UE_LOG(LogMOFramework, Warning,
@@ -576,7 +582,7 @@ void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& In
 	{
 		return;
 	}
-	if (bHasActiveSeed && ActiveSeed == Info.Seed && ActiveParameterName == Info.ParameterName)
+	if (bHasActiveSeed && ActiveSeed == Info.Seed && ActiveParameterName == Info.ParameterName && UMOWorldGenSettings::GetActiveWorldShape() == Info.Shape)
 	{
 		return; // already generating from exactly this
 	}
@@ -592,7 +598,7 @@ void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& In
 		TEXT("[MOWorldSeed] client received the host's world seed %d (parameter '%s'); generating terrain from it"),
 		Info.Seed, *Info.ParameterName.ToString());
 
-	const bool bStarted = RegenerateVoxelWorld(World, Info.Seed, Info.ParameterName, this);
+	const bool bStarted = RegenerateVoxelWorld(World, Info.Seed, Info.ParameterName, this, &Info.Shape);
 
 	bHasActiveSeed = true;
 	ActiveSeed = Info.Seed;

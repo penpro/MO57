@@ -2,6 +2,7 @@
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldSyncSubsystem.h"
 #include "MODevMode.h"
+#include "MOFramework.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -21,6 +22,7 @@ void AMOGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AMOGameState, TerrainZones);
 	DOREPLIFETIME(AMOGameState, bHostDeveloperMode);
 	DOREPLIFETIME(AMOGameState, GroundWeather);
+	DOREPLIFETIME(AMOGameState, WorldCreation);
 }
 
 void AMOGameState::BeginPlay()
@@ -95,6 +97,15 @@ void AMOGameState::SetWorldWeatherInfo(const FMOWorldWeatherInfo& NewInfo)
 	check(HasAuthority());
 	WorldWeather = NewInfo;
 	ForceNetUpdate(); // a weather change is rare and worth sending now
+}
+
+void AMOGameState::SetWorldCreation(const FMOWorldCreationSettings& NewSettings)
+{
+	check(HasAuthority());
+	WorldCreation = NewSettings;
+	FMOWorldCreation::Sanitize(WorldCreation);
+	ForceNetUpdate();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldCreation] this world: %s"), *FMOWorldCreation::Describe(WorldCreation));
 }
 
 void AMOGameState::SetGroundWeather(const FMOGroundWeatherState& NewState)

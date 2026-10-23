@@ -1,0 +1,66 @@
+# World creation: shape, pace, starting biome
+
+> **Covers:** the settings a world is created with (Wes, Oct 22 2026: "a suite of 'global multipliers' for terraforming, crafting,
+> gatherings, inspecting, etc so we can configure those on a per world basis and add those to the world generation menu, along with some
+> knobs to adjust stuff like biome size, overall world height, etc, whatever makes sense, and then a 'starting biome' selector ... a scroll
+> gallery that shows a screenshot of the biome"). Code: `MOWorldCreationTypes.h` (types, the knob table, `FMOWorldRules`),
+> `MOWorldCreationWidgets.h` (knob row, biome card), `UMONewGamePanel`. UI spec: `Content/Python/ui_specs/world_creation.py`.
+
+## 1. What a world is created with
+
+`FMOWorldCreationSettings` = a **shape** (how the land is generated), a **pace** (how long the work takes) and a **starting biome**. Chosen once
+in the New Game panel (or `MO.World.Creation` for tests), kept with the world for good: `UMOWorldSaveGame::WorldCreation`, replicated on
+`AMOGameState::WorldCreation`, printed in every bug report (`WorldCreation` field) and once per world as `[MOWorldCreation] this world: ...`.
+Every knob is 1 by default, which is the game exactly as authored: a default world keeps its params hash, its golden checksums and every
+existing save (a save from before Oct 22 reads the defaults, which is the world it was).
+
+| Knob | Range | What it changes (`FMOWorldCreation::ApplyShape` / the duration site) |
+|---|---|---|
+| Biome size | 0.5-2.5 | the climate fields' wavelengths (moisture, temperature): wider or narrower biome patches |
+| World height | 0.5-1.5 | the generator's `VerticalScale`: hills, valleys and mountains alike |
+| Mountains | 0-2 | massif, peak, coastal-range and old mountain amplitudes |
+| Lakes | 0-2 | pond, lake and upland-lake cell chances (capped at 1) |
+| Caves | 0-2 | the cave-entrance cell chance (capped at 1); 0 = no cave mouths |
+| Vegetation | 0.25-1.5 | every biome species' density (`FMOWorldGenTuning::VegetationDensityScale`); above 1 costs frame time |
+| Gathering time | 0.1-4 | harvest / chop / mine (`UMOHarvestSubsystem`), foraging (ground menu), gathering cover, butchering, survivor gather jobs |
+| Crafting time | 0.1-4 | every recipe (`UMOCraftingSubsystem` adjusted time, the queue, the recipe panels) |
+| Building time | 0.1-4 | construction (`UMOBuildProgressComponent`), the build panels |
+| Digging time | 0.1-4 | terraforming (`UMOTerraformingComponent`, after the rock-hardness factor) |
+| Study time | 0.1-4 | inspecting an item (`FMOInspectionActions`) |
+| Skill learning | 0.1-4 | a RATE: skill experience x it (`UMOSkillsComponent::AddExperience`) |
+
+Principle 11 still holds: a pace never reaches zero (a 0.1 floor, also enforced on load: `FMOWorldCreation::Sanitize`), 1 is real time, and
+it is a property of the world chosen before its first step, not a mid-game skip. Times below 1 are Wes's call for his worlds (Oct 22).
+
+## 2. How it travels
+
+- **Shape** is generator input, so it rides with the seed: `FMOWorldSeedInfo::Shape`. The host publishes it with the seed
+  (`AMOGameMode::InitializeVoxelWorldWithSeed`); every machine folds it in through `UMOWorldSeedSubsystem::RegenerateVoxelWorld` ->
+  `UMOWorldGenSettings::SetActiveWorldShape` before it publishes the params, so a joiner's first chunk already has it. The menu backdrop
+  resets it to the default.
+- **Load:** `UMOPersistenceSubsystem` applies the save's shape BEFORE comparing the generator hash (otherwise a shaped world read as
+  GENERATOR CHANGED), then the game mode hands the settings to the game state.
+- **Pace** is read where the time is decided, on the server, through one call: `FMOWorldRules::ScaleSeconds(Context, EMOWorldPace::X,
+  Seconds)`. The UI's times use the same call, so a shown time is the real one. A new activity = one `EMOWorldPace` entry + its call.
+- **Starting biome:** `AMOGameMode::FindNewGameSpawn` asks `FMOBiomeFinder::FindNearest` for the spot deep inside that biome nearest the
+  origin (flat, else rough ground); none in the world = the coast, as before.
+- **New knob:** a field in `FMOWorldShape` / `FMOWorldPace` + one entry in `BuildKnobs()` (`MOWorldCreationTypes.cpp`); the panel, the
+  console and the clamps follow from the table.
+
+## 3. The panel
+
+`WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards (`WBP_BiomeCard`: the biome's `PreviewImage` from DT_Biomes and
+an MOButton with its name; the coast first, `CoastPreviewImage`), the World knobs and the Pace knobs (`WBP_WorldKnobRow`: label, slider in
+the knob's steps, value), Defaults, Back, Start. A biome is offered when its DT_Biomes row has a `PreviewImage`; the pictures are 1280x720
+instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePreviews/T_BiomePreview_<Biome>`.
+
+## 4. Tests and checks
+
+- Automation: `MOFramework.WorldCreation.DefaultShapeKeepsTheGenerator` (default = authored hash, shaped = its own; biome size doubles the
+  climate wavelengths; height raises the top), `MOFramework.WorldCreation.KnobsClampAndPaceNeverZero`.
+- Console: `MO.World.Creation BiomeSize=2 Crafting=0.5 StartingBiome=Rainforest` sets the next new game; no arguments prints the pending and
+  this world's settings (`[MOQUERY] WORLDCREATION`).
+- Open: the Host Game panel starts a new world with the defaults (it has no creation settings of its own yet): how it should get them is
+  fork F37 in `Docs/DECISIONS.md` (N-198). A joiner always gets the host's.
+- End to end: `python Tools/world_creation_check.py` (host + joiner: the shape reaches the joiner's terrain, a pace scales an
+  inspection, the start lands in the biome, save / load keeps it all with no GENERATOR CHANGED).

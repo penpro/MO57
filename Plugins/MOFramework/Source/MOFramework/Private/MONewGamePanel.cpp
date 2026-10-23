@@ -4,8 +4,15 @@
 #include "MOGameSettings.h"
 #include "MOSpawnManagerSubsystem.h"
 #include "MOUIUtils.h"
+#include "MOWorldCreationWidgets.h"
+#include "MOBiomeDatabaseSettings.h"
+#include "MOBiomeDefinitionRow.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
+#include "Components/PanelWidget.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Engine/Texture2D.h"
 #include "Kismet/GameplayStatics.h"
 
 UMONewGamePanel::UMONewGamePanel(const FObjectInitializer& ObjectInitializer)
@@ -56,9 +63,19 @@ void UMONewGamePanel::NativeConstruct()
 		SeedInputBox->OnTextCommitted.AddDynamic(this, &UMONewGamePanel::HandleSeedTextCommitted);
 	}
 
+	if (ResetCreationButton)
+	{
+		ResetCreationButton->OnClicked().RemoveAll(this);
+		ResetCreationButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleResetCreationClicked);
+	}
+
 	// Generate initial random seed and default world name
 	GenerateRandomSeed();
 	GenerateDefaultWorldName();
+
+	// A new world starts as authored (every knob 1, the coast) until the player changes it.
+	Creation = FMOWorldCreationSettings();
+	BuildWorldCreationControls();
 }
 
 void UMONewGamePanel::NativeDestruct()
@@ -75,6 +92,24 @@ void UMONewGamePanel::NativeDestruct()
 	if (BackButton)
 	{
 		BackButton->OnClicked().RemoveAll(this);
+	}
+	if (ResetCreationButton)
+	{
+		ResetCreationButton->OnClicked().RemoveAll(this);
+	}
+	for (UMOWorldKnobRow* Row : KnobRows)
+	{
+		if (Row)
+		{
+			Row->OnKnobChanged.RemoveAll(this);
+		}
+	}
+	for (UMOBiomeCard* Card : BiomeCards)
+	{
+		if (Card)
+		{
+			Card->OnPicked.RemoveAll(this);
+		}
 	}
 	if (SeedInputBox)
 	{
@@ -198,6 +233,8 @@ void UMONewGamePanel::HandleStartGameClicked()
 	{
 		Settings->PendingWorldName = WorldName;
 		Settings->PendingWorldSeed = Seed;
+		Settings->PendingWorldCreation = Creation;   // the game mode consumes it once (MOWorldCreationTypes.h)
+		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] World creation: %s"), *FMOWorldCreation::Describe(Creation));
 
 		// Pre-generate the starting survivor's name so the save slot can use
 		// it (e.g. "Alex_Smith-01"). Spawn manager consumes
@@ -302,4 +339,129 @@ void UMONewGamePanel::GenerateDefaultWorldName()
 
 	SetWorldName(DefaultName);
 	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] Generated default world name: %s"), *DefaultName);
+}
+
+// ============================================================================
+// WORLD CREATION (MOWorldCreationTypes.h)
+// ============================================================================
+
+void UMONewGamePanel::BuildWorldCreationControls()
+{
+	KnobRows.Reset();
+	if (ShapeKnobsBox)
+	{
+		ShapeKnobsBox->ClearChildren();
+	}
+	if (PaceKnobsBox)
+	{
+		PaceKnobsBox->ClearChildren();
+	}
+	if (UClass* RowClass = (ShapeKnobsBox || PaceKnobsBox) ? KnobRowClass.LoadSynchronous() : nullptr)
+	{
+		for (const FMOWorldKnob& Knob : FMOWorldCreation::GetKnobs())
+		{
+			UPanelWidget* Box = Knob.Group == EMOWorldKnobGroup::Shape ? ShapeKnobsBox : PaceKnobsBox;
+			UMOWorldKnobRow* Row = Box ? CreateWidget<UMOWorldKnobRow>(this, RowClass) : nullptr;
+			if (!Row)
+			{
+				continue;
+			}
+			if (UVerticalBoxSlot* RowSlot = Cast<UVerticalBoxSlot>(Box->AddChild(Row)))
+			{
+				RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
+			}
+			Row->Configure(Knob, FMOWorldCreation::GetKnob(Creation, Knob.Id));
+			Row->OnKnobChanged.AddUObject(this, &UMONewGamePanel::HandleKnobChanged);
+			KnobRows.Add(Row);
+		}
+	}
+
+	// The starting biomes: the coast (the default), then every DT_Biomes row that has a preview picture, in the table's order.
+	BiomeCards.Reset();
+	UClass* CardClass = BiomeCardsBox ? BiomeCardClass.LoadSynchronous() : nullptr;
+	if (CardClass)
+	{
+		BiomeCardsBox->ClearChildren();
+		auto AddCard = [this, CardClass](FName Id, const FText& Name, UTexture2D* Image)
+		{
+			UMOBiomeCard* Card = CreateWidget<UMOBiomeCard>(this, CardClass);
+			if (!Card)
+			{
+				return;
+			}
+			if (UHorizontalBoxSlot* CardSlot = Cast<UHorizontalBoxSlot>(BiomeCardsBox->AddChild(Card)))
+			{
+				CardSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 0.0f));
+			}
+			Card->Configure(Id, Name, Image);
+			Card->OnPicked.AddUObject(this, &UMONewGamePanel::HandleBiomePicked);
+			BiomeCards.Add(Card);
+		};
+		AddCard(NAME_None, NSLOCTEXT("MONewGame", "Coast", "The coast"), CoastPreviewImage.LoadSynchronous());
+		TArray<FName> BiomeIds;
+		UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);
+		for (const FName& Id : BiomeIds)
+		{
+			const FMOBiomeDefinitionRow* Row = UMOBiomeDatabaseSettings::GetBiomeDefinition(Id);
+			if (Row && !Row->PreviewImage.IsNull())
+			{
+				AddCard(Id, Row->DisplayName.IsEmpty() ? FText::FromName(Id) : Row->DisplayName, Row->PreviewImage.LoadSynchronous());
+			}
+		}
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] world creation: %d knob row(s), %d starting biome card(s)"), KnobRows.Num(), BiomeCards.Num());
+	RefreshWorldCreationControls();
+}
+
+void UMONewGamePanel::RefreshWorldCreationControls()
+{
+	for (UMOWorldKnobRow* Row : KnobRows)
+	{
+		if (Row)
+		{
+			Row->SetValue(FMOWorldCreation::GetKnob(Creation, Row->GetKnobId()));
+		}
+	}
+	FText StartName = NSLOCTEXT("MONewGame", "Coast", "The coast");
+	for (UMOBiomeCard* Card : BiomeCards)
+	{
+		if (!Card)
+		{
+			continue;
+		}
+		const bool bPicked = Card->GetBiomeId() == Creation.StartingBiome;
+		Card->SetSelected(bPicked);
+		if (bPicked && !Creation.StartingBiome.IsNone())
+		{
+			const FMOBiomeDefinitionRow* Row = UMOBiomeDatabaseSettings::GetBiomeDefinition(Creation.StartingBiome);
+			StartName = Row && !Row->DisplayName.IsEmpty() ? Row->DisplayName : FText::FromName(Creation.StartingBiome);
+		}
+	}
+	if (StartingBiomeText)
+	{
+		StartingBiomeText->SetText(FText::Format(NSLOCTEXT("MONewGame", "StartingIn", "Starting in: {0}"), StartName));
+	}
+}
+
+void UMONewGamePanel::ResetWorldCreation()
+{
+	Creation = FMOWorldCreationSettings();
+	RefreshWorldCreationControls();
+}
+
+void UMONewGamePanel::HandleResetCreationClicked()
+{
+	ResetWorldCreation();
+}
+
+void UMONewGamePanel::HandleKnobChanged(FName KnobId, float Value)
+{
+	FMOWorldCreation::SetKnob(Creation, KnobId, Value);
+}
+
+void UMONewGamePanel::HandleBiomePicked(FName BiomeId)
+{
+	Creation.StartingBiome = BiomeId;
+	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] starting biome: %s"), BiomeId.IsNone() ? TEXT("the coast") : *BiomeId.ToString());
+	RefreshWorldCreationControls();
 }

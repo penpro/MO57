@@ -50,6 +50,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameUserSettings.h"
 #include "MOKeyBindingTypes.h"
+#include "MOWorldCreationTypes.h"
 #include "MOGameSettings.generated.h"
 UCLASS()
 class MOFRAMEWORK_API UMOGameSettings : public UGameUserSettings
@@ -193,6 +194,14 @@ public:
 	 */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	int32 PendingWorldSeed = 0;
+
+	/**
+	 * The world-creation settings chosen in the New Game panel (MOWorldCreationTypes.h: shape, pace, starting biome) or by MO.World.Creation.
+	 * Consumed by the next new game (AMOGameMode::HandlePendingNewGame), then reset to the defaults so a later new game never inherits them.
+	 * NOT persisted (no Config): one new-game flow. A loaded world takes its own from its save.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MainMenu")
+	FMOWorldCreationSettings PendingWorldCreation;
 
 	/** Generate a random world seed. */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")

@@ -237,6 +237,10 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	{
 		H = FnvAddInt(H, 0x0F0C0000 + ForcedBiomeIndex);   // a biome test world (only then: an ordinary world keeps its hash)
 	}
+	if (T.VegetationDensityScale != 1.0f)
+	{
+		H = FnvAddFloat(H, T.VegetationDensityScale);   // a world created with more or less vegetation (only then)
+	}
 	return H;
 }
 

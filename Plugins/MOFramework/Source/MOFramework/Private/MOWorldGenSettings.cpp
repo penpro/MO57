@@ -10,6 +10,25 @@ namespace
 	// A biome test world (MO.BiomeTest): every column is this biome. Read when the params are built, i.e. at the next world start.
 	TAutoConsoleVariable<FString> CVarWorldGenForceBiome(TEXT("mo.WorldGen.ForceBiome"), TEXT(""),
 		TEXT("Dev: a biome test world -- every column is this biome (DT_Biomes row id); empty = off. Takes effect at the next world start (MO.BiomeTest does both)."), ECVF_Default);
+
+	FMOWorldShape GActiveWorldShape;
+}
+
+void UMOWorldGenSettings::SetActiveWorldShape(const FMOWorldShape& Shape)
+{
+	check(IsInGameThread());
+	if (Shape != GActiveWorldShape)
+	{
+		FMOWorldCreationSettings Described;
+		Described.Shape = Shape;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldGen] world shape: %s"), *FMOWorldCreation::Describe(Described));
+	}
+	GActiveWorldShape = Shape;
+}
+
+const FMOWorldShape& UMOWorldGenSettings::GetActiveWorldShape()
+{
+	return GActiveWorldShape;
 }
 
 FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
@@ -22,6 +41,7 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 		Params->Tuning = Settings->Tuning;
 		Params->UplandLakeBedSurfaceType = Settings->UplandLakeBedSurfaceType;
 	}
+	FMOWorldCreation::ApplyShape(GActiveWorldShape, Params->Tuning);   // this world's biome size, height, mountains, lakes, caves, vegetation
 
 	TArray<FName> BiomeIds;
 	UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);

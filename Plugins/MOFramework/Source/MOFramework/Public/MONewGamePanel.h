@@ -7,8 +7,9 @@
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Panel for configuring a new game - world name and seed. Part of the main
- * menu flow before starting a fresh world.
+ * Panel for configuring a new game - world name, seed and the world's creation
+ * settings (MOWorldCreationTypes.h: shape knobs, pace knobs, starting biome).
+ * Part of the main menu flow before starting a fresh world.
  *
  * FEATURES:
  * - World name input (used for save folder naming)
@@ -62,6 +63,12 @@
  *   StartGameButton are required (BindWidget). BackButton and SeedPreviewText
  *   are optional.
  *
+ * [2026-10] WORLD CREATION (Wes, Oct 22): ShapeKnobsBox / PaceKnobsBox get one
+ *   KnobRowClass row per FMOWorldCreation knob, BiomeCardsBox one BiomeCardClass
+ *   card per DT_Biomes row with a PreviewImage (the coast first). All optional:
+ *   a WBP without them starts default worlds. Start hands the choice to
+ *   UMOGameSettings::PendingWorldCreation; the game mode consumes it once.
+ *
  * =============================================================================
  * RELATED FILES: MOMainMenuWidget.h, MOGameSettings.h, MOGameInstance.h
  * LAST UPDATED: 2026-02-25
@@ -72,11 +79,16 @@
 
 #include "CoreMinimal.h"
 #include "MOActivatableWidget.h"
+#include "MOWorldCreationTypes.h"
 #include "MONewGamePanel.generated.h"
 
 class UMOCommonButton;
 class UEditableTextBox;
 class UTextBlock;
+class UPanelWidget;
+class UMOWorldKnobRow;
+class UMOBiomeCard;
+class UTexture2D;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameStartSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameCloseSignature);
 
@@ -128,6 +140,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|NewGame")
 	void GenerateDefaultWorldName();
 
+	/** The world-creation settings the panel shows (what Start hands to the next new game). */
+	const FMOWorldCreationSettings& GetWorldCreation() const { return Creation; }
+
+	/** Every knob back to 1 and the coast as the start. */
+	UFUNCTION(BlueprintCallable, Category="MO|NewGame")
+	void ResetWorldCreation();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -143,6 +162,22 @@ private:
 	UFUNCTION() void HandleStartGameClicked();
 	UFUNCTION() void HandleBackClicked();
 	UFUNCTION() void HandleSeedTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+	void HandleResetCreationClicked();
+	void HandleKnobChanged(FName KnobId, float Value);
+	void HandleBiomePicked(FName BiomeId);
+
+	/** One knob row per FMOWorldCreation knob, one card per startable biome (DT_Biomes rows with a PreviewImage, the coast first). */
+	void BuildWorldCreationControls();
+	void RefreshWorldCreationControls();
+
+	/** What the panel shows: reset on every open, handed to the game settings on Start. */
+	FMOWorldCreationSettings Creation;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOWorldKnobRow>> KnobRows;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOBiomeCard>> BiomeCards;
 
 	// ============================================================================
 	// BIND WIDGETS
@@ -171,4 +206,35 @@ private:
 	/** Optional: Display current seed as integer. */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> SeedPreviewText;
+
+	/** Optional: the world-shape knob rows (biome size, height, mountains, lakes, caves, vegetation). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UPanelWidget> ShapeKnobsBox;
+
+	/** Optional: the pace knob rows (gathering, crafting, building, digging, study times; skill learning). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UPanelWidget> PaceKnobsBox;
+
+	/** Optional: the starting-biome cards (a horizontal row inside a scroll box). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UPanelWidget> BiomeCardsBox;
+
+	/** Optional: "Starting in: Rainforest". */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> StartingBiomeText;
+
+	/** Optional: every knob back to 1, the coast as the start. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> ResetCreationButton;
+
+	/** The row and card widgets (WBP_WorldKnobRow / WBP_BiomeCard). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|NewGame")
+	TSoftClassPtr<UMOWorldKnobRow> KnobRowClass;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|NewGame")
+	TSoftClassPtr<UMOBiomeCard> BiomeCardClass;
+
+	/** The coast card's picture (the default start). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|NewGame")
+	TSoftObjectPtr<UTexture2D> CoastPreviewImage;
 };

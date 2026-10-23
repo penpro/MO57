@@ -1,5 +1,6 @@
 #include "MOCraftingSubsystem.h"
 #include "MOCraftingQueueComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOCraftingStationActor.h"
 #include "MOIdentifiableInterface.h"
 #include "MOViewpointUtils.h"
@@ -459,7 +460,7 @@ void UMOCraftingSubsystem::FinalizeReservedCraft(FName RecipeId, UMOInventoryCom
 float UMOCraftingSubsystem::GetRecipeCraftTime(FName RecipeId) const
 {
 	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	return Recipe ? Recipe->CraftTime : 0.0f;
+	return Recipe ? FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, Recipe->CraftTime) : 0.0f;   // this world's crafting pace
 }
 
 bool UMOCraftingSubsystem::HasRequiredKnowledge(
@@ -863,7 +864,8 @@ float UMOCraftingSubsystem::GetAdjustedCraftTime(FName RecipeId, UMOInventoryCom
 		return 0.0f;
 	}
 
-	float BaseCraftTime = Recipe->CraftTime;
+	// This world's crafting pace (MOWorldCreationTypes.h) scales every recipe before the tools adjust it.
+	float BaseCraftTime = FMOWorldRules::ScaleSeconds(IsValid(Inventory) ? static_cast<const UObject*>(Inventory) : this, EMOWorldPace::Crafting, Recipe->CraftTime);
 
 	// No tools required means no adjustment
 	if (Recipe->RequiredTools.Num() == 0 || !IsValid(Inventory))

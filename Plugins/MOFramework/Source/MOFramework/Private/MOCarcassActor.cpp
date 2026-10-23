@@ -1,4 +1,5 @@
 #include "MOCarcassActor.h"
+#include "MOWorldCreationTypes.h"
 #include "MOFramework.h"
 #include "MOCarcassDefinitionRow.h"
 #include "MOInteractableComponent.h"
@@ -218,11 +219,12 @@ void AMOCarcassActor::GetWorldActions(const APawn* Pawn, TArray<FMOItemActionOpt
 	{
 		FMOItemActionOption Option;
 		Option.Id = Part.PartId;
-		Option.Label = FText::Format(NSLOCTEXT("MOCarcass", "CutPart", "{0} ({1})"), Part.DisplayName, UMOUIUtils::FormatDurationAsText(Part.HarvestTime));
+		const float CutSeconds = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Gathering, Part.HarvestTime);   // this world's gathering pace
+		Option.Label = FText::Format(NSLOCTEXT("MOCarcass", "CutPart", "{0} ({1})"), Part.DisplayName, UMOUIUtils::FormatDurationAsText(CutSeconds));
 		Option.bEnabled = CanPawnCutPart(Pawn, Part.PartId, Option.DisabledReason);
 		if (Option.bEnabled)
 		{
-			AllSeconds += Part.HarvestTime;
+			AllSeconds += CutSeconds;
 			++Cuttable;
 		}
 		Parts.Add(MoveTemp(Option));
@@ -297,7 +299,8 @@ bool AMOCarcassActor::BeginCut(APawn* Pawn, FName PartId, bool bThenTheRest)
 
 	TWeakObjectPtr<AMOCarcassActor> WeakThis(this);
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
-	const bool bBegun = Timed->BeginKneeling(FName(TEXT("Butcher")), FText::Format(NSLOCTEXT("MOCarcass", "Cutting", "Butchering: {0}"), Part->DisplayName), Part->HarvestTime,
+	const bool bBegun = Timed->BeginKneeling(FName(TEXT("Butcher")), FText::Format(NSLOCTEXT("MOCarcass", "Cutting", "Butchering: {0}"), Part->DisplayName),
+		FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Gathering, Part->HarvestTime),
 		[WeakThis, WeakPawn, PartId, bThenTheRest]()
 		{
 			AMOCarcassActor* Carcass = WeakThis.Get();

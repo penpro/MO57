@@ -279,6 +279,10 @@ void UMOBugReportSubsystem::RegisterBuiltInContributors()
 		const AMOGameState* MOState = Cast<AMOGameState>(World->GetGameState());
 		const bool bReplicated = MOState && MOState->GetWorldSeedInfo().bPublished;
 		Out.Emplace(TEXT("WorldSeed"), FString::FromInt(bReplicated ? MOState->GetWorldSeedInfo().Seed : UMOGameSettings::GetWorldSeed()));
+		if (MOState)
+		{
+			Out.Emplace(TEXT("WorldCreation"), FMOWorldCreation::Describe(MOState->GetWorldCreation()));   // a shaped / paced world says so
+		}
 		if (const UGameInstance* GameInstance = World->GetGameInstance())
 		{
 			if (const UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())

@@ -1,4 +1,5 @@
 #include "MORecipeDetailPanelBase.h"
+#include "MOWorldCreationTypes.h"
 #include "MOFramework.h"
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
@@ -348,11 +349,11 @@ float UMORecipeDetailPanelBase::GetRecipeTime(const FMORecipeDefinitionRow* Reci
 		{
 			const UMOSkillsComponent* Skills = SkillsComponent.Get();
 			const int32 Current = Skills ? Skills->GetSkillLevel(Recipe->RequiredSkillId) : 0;
-			return Recipe->TotalBuildTime * FMOBuildSkillPenalty::For(Current, Recipe->RequiredSkillLevel).TimeScale;
+			return FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, Recipe->TotalBuildTime * FMOBuildSkillPenalty::For(Current, Recipe->RequiredSkillLevel).TimeScale);
 		}
-		return Recipe->TotalBuildTime;
+		return FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, Recipe->TotalBuildTime);
 	}
-	return Recipe->CraftTime;
+	return FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, Recipe->CraftTime);   // this world's pace (MOWorldCreationTypes.h)
 }
 
 void UMORecipeDetailPanelBase::ClearTextWidgets(TArray<TObjectPtr<UTextBlock>>& WidgetArray)

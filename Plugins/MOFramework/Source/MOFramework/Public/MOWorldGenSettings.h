@@ -32,6 +32,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "MOWorldGen.h"
+#include "MOWorldCreationTypes.h"
 #include "MOWorldGenSettings.generated.h"
 
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="World Generation"))
@@ -68,4 +69,11 @@ public:
 
 	/** BuildParams() + FMOWorldGenParamsProvider::Publish(). Returns what was published. Game thread only. */
 	static FMOWorldGenParamsRef RefreshPublishedParams();
+
+	/**
+	 * The current world's shape (its creation settings, MOWorldCreationTypes.h), folded into the tuning by every BuildParams from now on. Set by
+	 * UMOWorldSeedSubsystem::RegenerateVoxelWorld (host, joiner, menu backdrop) right before it publishes the params. Game thread only.
+	 */
+	static void SetActiveWorldShape(const FMOWorldShape& Shape);
+	static const FMOWorldShape& GetActiveWorldShape();
 };

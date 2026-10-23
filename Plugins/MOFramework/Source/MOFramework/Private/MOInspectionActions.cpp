@@ -1,4 +1,5 @@
 #include "MOInspectionActions.h"
+#include "MOWorldCreationTypes.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
@@ -108,7 +109,8 @@ bool FMOInspectionActions::Begin(APawn* Inspector, FName ItemId, const FGuid& It
 	}
 	const FText Label = FText::Format(LOCTEXT("Inspecting", "Inspecting: {0}"), UMOItemDatabaseSettings::GetItemDisplayName(ItemId));
 	TWeakObjectPtr<APawn> WeakPawn(Inspector);
-	const bool bBegun = Timed->Begin(TimedActionId, Label, GetSeconds(), [WeakPawn, ItemId]()
+	const float Seconds = FMOWorldRules::ScaleSeconds(Inspector, EMOWorldPace::Inspecting, GetSeconds());   // this world's study pace (MOWorldCreationTypes.h)
+	const bool bBegun = Timed->Begin(TimedActionId, Label, Seconds, [WeakPawn, ItemId]()
 		{
 			APawn* Pawn = WeakPawn.Get();
 			UMOKnowledgeComponent* K = Pawn ? Pawn->FindComponentByClass<UMOKnowledgeComponent>() : nullptr;
@@ -126,7 +128,7 @@ bool FMOInspectionActions::Begin(APawn* Inspector, FName ItemId, const FGuid& It
 		});
 	if (bBegun)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] %s: studying '%s' (%s, %.1f s, server-timed)"), *Inspector->GetName(), *ItemId.ToString(), Where, GetSeconds());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] %s: studying '%s' (%s, %.1f s, server-timed)"), *Inspector->GetName(), *ItemId.ToString(), Where, Seconds);
 	}
 	return bBegun;
 }

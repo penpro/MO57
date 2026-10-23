@@ -110,6 +110,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
 | Ocean, lakes, swimming / drinking, illness | `Docs/Water.md` / `Docs/Water_And_Illness.md` |
 | Light, darkness, exposure | `Docs/Light_Sources.md` |
 | Weather, clock, time | `Docs/Weather_And_Time.md` |
+| World creation (shape, pace multipliers, starting biome) | `Docs/World_Creation.md` |
 | Medical, survival, death | `Docs/Medical_And_Survival.md` |
 | Progression design (authority) / crafting code | `Docs/PROGRESSION_ROADMAP.md` / `Docs/Crafting_And_Progression.md` |
 | Technology history (research) | `Docs/Technology_History.md` |

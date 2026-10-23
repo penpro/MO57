@@ -104,13 +104,15 @@ public:
 	/**
 	 * Translate one crafting queue entry into a neutral display row. Pure: the
 	 * recipe row is pre-resolved by the caller, ActiveRemainingSeconds applies
-	 * to the active row only (queued rows estimate CraftTime * Count).
+	 * to the active row only (queued rows estimate CraftTime * Count * CraftingPace,
+	 * the world's crafting pace: FMOWorldRules::GetPace).
 	 */
 	static FMOQueueDisplayRow BuildCraftingDisplayRow(
 		const FMOCraftingQueueEntry& Entry,
 		const FMORecipeDefinitionRow* Recipe,
 		bool bIsActive,
-		float ActiveRemainingSeconds);
+		float ActiveRemainingSeconds,
+		float CraftingPace = 1.0f);
 
 	// --- Domain hooks (adapter seam) ---
 

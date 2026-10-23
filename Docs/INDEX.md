@@ -21,6 +21,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | Doc | Answers | Read when |
 |---|---|---|
 | `Docs/Terrain_Generation_Exploration.md` | The C++ world generator (relief, coasts, rivers, lakes, biomes, spawn), the terrain ground material, the dated generator log | Terrain, biomes, terrain material work |
+| `Docs/World_Creation.md` | A world's creation settings: shape knobs (biome size, height, mountains, lakes, caves, vegetation), pace multipliers, the starting biome; the New Game panel | World creation, new game, multipliers |
 | `Docs/Caves_And_Geology.md` | Cave shape / gates, bedrock and ores, dig yields and dig time, cave PCG, outcrops | Caves, ore, digging |
 | `Docs/PCG.md` | Vegetation tiers, chokepoints, density rules, palettes, PCG perf, removal ledger, the world reveal | Any PCG / vegetation / removal / loading work |
 | `Docs/World_Features_Architecture.md` | POI compositions (Electric Dreams assemblies, spires), the placer, terrain under compositions | New world content, cliffs, POIs |

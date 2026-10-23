@@ -1,4 +1,5 @@
 #include "MOGroundContextMenu.h"
+#include "MOWorldCreationTypes.h"
 #include "MOForagingSubsystem.h"
 #include "MOItemActions.h"
 #include "MOUIUtils.h"
@@ -190,7 +191,7 @@ void UMOGroundContextMenu::StartForagingAction(EMOGroundForageAction Action)
 		true);
 
 	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Started timed foraging action (%d) for %.1fs"),
-		static_cast<int32>(Action), ForagingActionDuration);
+		static_cast<int32>(Action), FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Gathering, ForagingActionDuration));
 }
 
 void UMOGroundContextMenu::TickForagingAction()
@@ -202,7 +203,7 @@ void UMOGroundContextMenu::TickForagingAction()
 
 	ForageActionElapsed += 0.05f;
 
-	if (ForageActionElapsed >= ForagingActionDuration)
+	if (ForageActionElapsed >= FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Gathering, ForagingActionDuration))   // this world's gathering pace
 	{
 		FinishForagingAction();
 	}

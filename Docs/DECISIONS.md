@@ -41,6 +41,7 @@
 | F34 | Does handling items take time? | Moving items is instant everywhere today: one item or Take all / Store all between the pack and a container (`EMOInventoryOp::Transfer` / `TransferAll`), and Loot all on the Nearby tab (already the "sweep pickup": every ground item in reach, at once). A timer on the batch alone would make Take all slower than clicking each item, so N-092's "combined timer" needs a per-item time first. **A** handling takes real time by bulk and weight (about 0.5 s + 0.1 s per kg an item, a batch the sum on the pawn's timed action, interruptible; the principles' Zomboid example); **B** keep it instant (a UI shuffle, like stacking); **C** only the ground costs time (bending to pick up or lay down: E, Loot all), container to container stays instant | `Docs/ENGINEERING_PRINCIPLES.md` (tedium), BACKLOG N-092 | Oct 20 |
 | F35 | How much a novice's treatment does | A treatment's quality is `clamp(skill / 100, 0.1, 1) + (skill - minimum) x QualitySkillScaling / 100` (`UMOAnatomyComponent::ApplyResolvedTreatment`), on skills that run to 100: an unskilled person's bandage (Medicine 0) cuts the bleeding by 0.7 x 0.1 = **7 %**, and even Medicine 10 only ~9 %; a tourniquet anyone ties stops 10 %. Real first aid is the other way round: direct pressure and a dressing, or a tourniquet, work in untrained hands (that is why they are taught to everyone); skill shows in the hard procedures (suture, reducing a dislocation). Every player and the new colony medic start near 0. **A** a floor by the treatment's own minimum skill: a row whose `MinimumSkillLevel` is 0 or 1 (bandage, tourniquet, clean, painkiller) starts at quality ~0.6 and reaches 1.0 by Medicine 30; harder rows keep today's curve; **B** one curve for all, quality 0.4 at skill 0 to 1.0 at 50; **C** keep. **Recommended: A** | `Docs/Medical_And_Survival.md` §7 | Oct 20 |
 | F36 | A first-aid dressing before cloth (N-062) | MakeBandage needs WovenCloth01, which needs flax or wool (no producer yet), so for the whole stone age nobody can dress a wound -- and the colony medic (Oct 20) has nothing to carry. Before cloth people used pads of soft plant fibre or inner bark bound with cordage, sphagnum moss, and hide strips. **A** a new item, a fibre dressing (bark fibre pad + cordage, both made today), with its own treatment row a little weaker than the cloth bandage (bleed 0.5 against 0.7, infection 0.1 against 0.3: absorbent, not clean); **B** the same recipe making the existing Bandage01 (no new item; a cloth bandage in name only); **C** a moss dressing (needs a moss resource on forest floors and bogs first). **Recommended: A** (then C when moss exists) | `Docs/PROGRESSION_ROADMAP.md` section 3 (realism checks) | Oct 20 |
+| F37 | How a HOSTED new world gets its creation settings (N-198) | The New Game panel now sets a world's shape, pace and start; the Host Game panel (camp name, max players) starts a new world with the defaults. **A** a "Host for co-op" toggle (+ camp name / max players) on the New Game panel: one place creates a world, hosting is how it opens; the Host panel keeps hosting a SAVED world. B: the same knobs and cards repeated on the Host panel. C: leave hosted new worlds at the defaults | `Docs/World_Creation.md` | Oct 22 |
 | F23 | Rejected Steam art | `SteamArt/` (~15 MB LFS, pushed): delete only if Wes says so | `SteamArt/README.md` | Oct 13 |
 
 ## Answered 2026-10-17 (knowledge consolidation; Wes's words)
@@ -58,6 +59,22 @@
 | N9 | PATCH_NOTES.md frozen since June 30 | "so long as you can extract steam update patch notes from git commits we don't need it, might just need to note when the last steam patch was every time i ask for steam patch notes so you have a date/time though" | Docs/Archive/PATCH_NOTES.md archived; Steam patch notes are generated from `git log` since the last recorded Steam patch, and each request records its date / time / commit in `Docs/STEAM_RELEASES.md`. |
 
 ## Decisions, newest first
+
+### 2026-10-22
+- **Wes: per-world creation settings** -- "implement a suite of 'global multipliers' for terraforming, crafting, gatherings, inspecting, etc
+  so we can configure those on a per world basis and add those to the world generation menu, along with some knobs to adjust stuff like biome
+  size, overall world height, etc, whatever makes sense, and then a 'starting biome' selector". Built: `Docs/World_Creation.md` (shape: biome
+  size, world height, mountains, lakes, caves, vegetation; pace: gathering, crafting, building, digging, study times, skill learning; the
+  starting-biome cards). Claude, small calls (noted): a pace never goes below 0.1 of real time and never reaches zero (Principle 11's "never
+  collapse a simulated action to zero"; the knob is chosen with the world, not a mid-game skip); every knob defaults to 1 = the game as
+  authored; the shape ranges are capped where the generator stays sane (biome size 0.5-2.5, height 0.5-1.5, vegetation 0.25-1.5); skill
+  learning is a rate (more = faster) where the others are times.
+- **Wes: look checks come as screenshots** -- "from now on if there are things that are a 'have wes look at it' see if you can just collect
+  a few screen shots and i can review them and give thumbs up/thumbs down etc". Each check-by-eye item gets before / after shots
+  (`Tools/review_shots.py`, same spot and camera) on a review page with a thumbs vote; motion that a still cannot show stays a text row.
+- **Wes: the rainforest's trees** -- "try increasing the x,y of the trees by about 200% and the height by about 25%, so bigger FATTER trees
+  with more canopy cover". Claude, small call (noted): read as +200 % wide (x3) and +25 % tall: the nine Black Alder forest meshes, their far
+  stand-ins and canopy proxies; saplings unchanged (new species field `WidthScale`). x2 wide is one data row away if x3 reads too heavy.
 
 ### 2026-10-20
 - Claude, small call (noted): **a wolf calls its pack when it starts a hunt, not only when hurt** (N-096): a predator that perceives a new

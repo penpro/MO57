@@ -1,4 +1,5 @@
 #include "MOBuildProgressComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOFramework.h"
@@ -134,7 +135,7 @@ void UMOBuildProgressComponent::InitializeFromRecipe(const FMORecipeDefinitionRo
 {
 	RecipeId = Recipe.RecipeId;
 	BuildParts = Recipe.BuildParts;
-	Progress.TotalBuildTime = Recipe.TotalBuildTime;
+	Progress.TotalBuildTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, Recipe.TotalBuildTime);   // this world's building pace (MOWorldCreationTypes.h)
 	Progress.GatherRange = Recipe.BuildRange;
 	Progress.State = EMOBuildState::Ghost;
 	Progress.ElapsedTime = 0.0f;

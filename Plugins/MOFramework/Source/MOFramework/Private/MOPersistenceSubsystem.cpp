@@ -1,6 +1,8 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOMetaHumanCharacter.h"
 #include "MOWorldGen.h"
+#include "MOWorldGenSettings.h"
+#include "MOGameState.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
 
@@ -384,6 +386,11 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // World seed (for voxel terrain regeneration)
     SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
+    // What the world was created with: its shape is already folded into the published params below (UMOWorldGenSettings::SetActiveWorldShape).
+    if (const AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr)
+    {
+        SaveObject->WorldCreation = State->GetWorldCreation();
+    }
     // The generator that made this land (the seed alone does not pin it: see UMOWorldSaveGame::GeneratorVersion).
     if (FMOWorldGenParamsProvider::HasPublished())
     {
@@ -674,6 +681,19 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     // Extract world seed from save and store it for voxel regeneration
     LastLoadResult.WorldSeed = LoadedTyped->WorldSeed;
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Loaded world seed: %d"), LastLoadResult.WorldSeed);
+
+    // The world's creation settings, and its shape folded into the generator NOW: the comparison below must be with the land this save regenerates
+    // (a shaped world compared with the default params read as GENERATOR CHANGED).
+    LastLoadResult.WorldCreation = LoadedTyped->WorldCreation;
+    FMOWorldCreation::Sanitize(LastLoadResult.WorldCreation);
+    UMOWorldGenSettings::SetActiveWorldShape(LastLoadResult.WorldCreation.Shape);
+    UMOWorldGenSettings::RefreshPublishedParams();
+    // ... and on the game state (replicated: the pace every machine reads), here where every load passes -- the game mode's load and an
+    // in-place load (MO.Save.LoadFrom) alike (Oct 22: the in-place load kept the previous world's settings).
+    if (AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr)
+    {
+        State->SetWorldCreation(LastLoadResult.WorldCreation);
+    }
 
     // Same seed, same generator? A different generator (or tuning) regenerates different ground under the saved buildings and terrain edits.
     // Reported, not refused: the policy for old worlds is a design decision (H13). Unknown (0) = a save from before the field.

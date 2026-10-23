@@ -422,6 +422,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		const UMOWorldSeedSubsystem* SeedSubsystem = UMOWorldSeedSubsystem::Get(TargetActor);
 		TerrainSeed = (SeedSubsystem && SeedSubsystem->HasActiveSeed()) ? SeedSubsystem->GetActiveTerrainSeed() : Seed;
 	}
+	const float VegetationScale = FMath::Max(0.0f, GenParams->Tuning.VegetationDensityScale);   // the world's Vegetation knob (MOWorldCreationTypes.h)
 	// Soft biome boundaries (generator mode): the generator's biome index -> this node's entry, for FMOWorldGen::PickSurfaceBiome.
 	const bool bSoftPick = Settings->bUseWorldGenerator && CVarBiomeSoftPick.GetValueOnGameThread() != 0;
 	TArray<int32> SpawnerIndexOfGenBiome;
@@ -697,7 +698,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			for (int32 i = 0; i < Candidates.Num(); ++i)
 			{
 				const FMOBiomeSpeciesEntry& Sp = *Candidates[i].Species;
-				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare * SpeciesDensityScale / Settings->InputPointsPerHectare : 0.0f);
+				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare * SpeciesDensityScale * VegetationScale / Settings->InputPointsPerHectare : 0.0f);
 				if (P > 0.0f && Candidates[i].bGroundCoverScaled)
 				{
 					P *= GroundCoverScale;

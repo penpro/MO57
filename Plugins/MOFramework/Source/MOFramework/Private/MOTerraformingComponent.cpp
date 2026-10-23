@@ -1,4 +1,5 @@
 #include "MOTerraformingComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MODevMode.h"
 #include "HAL/IConsoleManager.h"
 #include "MOInventoryComponent.h"
@@ -852,6 +853,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, Config.Radius, CutM3, !bUseVolumeSculpting);
 		PendingAction.TotalTime *= DigHardness;
 	}
+	// This world's digging pace (MOWorldCreationTypes.h): chosen when the world was made, never zero.
+	PendingAction.TotalTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Terraforming, PendingAction.TotalTime);
 	// A developer's shortcut (MO.Dev.TerraformSeconds), only while the world's host is in developer mode.
 	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f)
 	{

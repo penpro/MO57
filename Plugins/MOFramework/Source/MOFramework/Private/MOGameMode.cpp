@@ -9,6 +9,7 @@
 #include "MOSpawnClearance.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOGameState.h"
+#include "MOBiomeFinder.h"
 #include "MOCharacter.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
@@ -217,6 +218,17 @@ void AMOGameMode::HandlePendingNewGame()
 			if (UMOWeatherIntegrationSubsystem* Weather = NewGameWorld->GetSubsystem<UMOWeatherIntegrationSubsystem>())
 			{
 				Weather->ApplyNewGameStartConditions();
+			}
+		}
+
+		// The world's creation settings (MOWorldCreationTypes.h): the New Game panel's choice (or MO.World.Creation), consumed here once and kept
+		// on the game state (replicated, saved). Its shape reaches the generator with the seed below.
+		{
+			const FMOWorldCreationSettings Creation = Settings->PendingWorldCreation;
+			Settings->PendingWorldCreation = FMOWorldCreationSettings();
+			if (AMOGameState* State = GetGameState<AMOGameState>())
+			{
+				State->SetWorldCreation(Creation);
 			}
 		}
 
@@ -1795,6 +1807,39 @@ FVector AMOGameMode::FindNewGameSpawn(FRotator& OutFacing) const
 	bSettlingCoastalSpawn = false;
 
 	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+
+	// A chosen starting biome (the New Game panel, MOWorldCreationTypes.h): the nearest spot deep inside it to the origin, dry and flat if the biome
+	// has any (FMOBiomeFinder: the `biome` dev teleport's search), else on rough ground. None, or a biome this world lacks: the coast, as always.
+	const AMOGameState* State = GetGameState<AMOGameState>();
+	const FName StartBiome = State ? State->GetWorldCreation().StartingBiome : NAME_None;
+	if (!StartBiome.IsNone() && Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
+	{
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		const int32 Index = Params->FindBiomeIndex(StartBiome);
+		if (Index == INDEX_NONE)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome '%s' is not a biome of DT_Biomes -- the coast instead"), *StartBiome.ToString());
+		}
+		else
+		{
+			const FMOBiomeFinder Finder(Params, Seeds->GetActiveTerrainSeed());
+			const double T0 = FPlatformTime::Seconds();
+			FVector Spot;
+			int32 Samples = 0;
+			const bool bFlat = Finder.FindNearest(FVector2D::ZeroVector, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/false, Spot, &Samples);
+			const bool bFound = bFlat || Finder.FindNearest(FVector2D::ZeroVector, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/true, Spot, &Samples);
+			if (bFound)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: (%.0f, %.0f) ground z=%.0f%s, %.1f km from the origin (%d samples, %.0f ms)"),
+					*StartBiome.ToString(), Spot.X, Spot.Y, Spot.Z, bFlat ? TEXT("") : TEXT(" (rough ground)"), FVector2D(Spot).Size() / 100000.0, Samples,
+					(FPlatformTime::Seconds() - T0) * 1000.0);
+				return FVector(Spot.X, Spot.Y, Spot.Z + SpawnHeightOffset);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: no dry spot of it in this world (%d samples) -- the coast instead"),
+				*StartBiome.ToString(), Samples);
+		}
+	}
+
 	if (bCoastalNewGameSpawn && Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
 	{
 		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
@@ -2327,10 +2372,13 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 
 	// Every machine generates its own terrain from the seed, so tell the clients (current and future) which one this is
 	// BEFORE anything else: AMOGameState replicates it, and each client regenerates from it (UMOWorldSeedSubsystem).
+	// The world's shape travels with the seed: every machine folds it into its own generator before its first chunk (MOWorldCreationTypes.h).
+	const AMOGameState* CreationState = GetGameState<AMOGameState>();
+	const FMOWorldShape Shape = CreationState ? CreationState->GetWorldCreation().Shape : FMOWorldShape();
 	UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
 	if (Seeds)
 	{
-		Seeds->PublishWorldSeed(WorldSeed, VoxelSeedParameterName);
+		Seeds->PublishWorldSeed(WorldSeed, VoxelSeedParameterName, Shape);
 	}
 	else
 	{
@@ -2338,7 +2386,7 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 	}
 
 	// The host's own terrain: same shared code the clients run.
-	UMOWorldSeedSubsystem::RegenerateVoxelWorld(World, WorldSeed, VoxelSeedParameterName, this);
+	UMOWorldSeedSubsystem::RegenerateVoxelWorld(World, WorldSeed, VoxelSeedParameterName, this, &Shape);
 }
 
 bool AMOGameMode::ApplySeedToHeightGraphParameter(int32 WorldSeed)

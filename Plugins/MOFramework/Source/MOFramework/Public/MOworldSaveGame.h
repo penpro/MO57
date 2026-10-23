@@ -67,6 +67,7 @@
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
 #include "MOItemInstanceState.h"
 #include "MOSurvivalStatsComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -384,6 +385,11 @@ public:
 
     UPROPERTY()
     int64 GeneratorParamsHash = 0;
+
+    /** What this world was created with (MOWorldCreationTypes.h): its shape regenerates the same land, its pace and start stay its own. A save from
+     *  before the field (Oct 22 2026) reads the defaults, which is exactly the world it was. */
+    UPROPERTY()
+    FMOWorldCreationSettings WorldCreation;
 
     // ============================================================================
     // WORLD DATA

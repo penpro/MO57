@@ -20,6 +20,7 @@
 #include "MOWorldRemovalTypes.h"
 #include "MOTerrainModificationTypes.h"
 #include "MOWeatherTypes.h"
+#include "MOWorldCreationTypes.h"
 #include "MOGameState.generated.h"
 
 UCLASS()
@@ -71,6 +72,14 @@ public:
 	void SetGroundWeather(const FMOGroundWeatherState& NewState);
 	static constexpr float GroundWeatherReplicationStep = 0.004f;
 
+	/** What this world was created with (MOWorldCreationTypes.h): its pace is read on every machine through FMOWorldRules, its shape and start are shown
+	 *  in bug reports. The shape that GENERATES the land travels with the seed (FMOWorldSeedInfo::Shape). */
+	const FMOWorldCreationSettings& GetWorldCreation() const { return WorldCreation; }
+	const FMOWorldPace& GetWorldPace() const { return WorldCreation.Pace; }
+
+	/** Authority only: a new game's choice or a loaded save's. */
+	void SetWorldCreation(const FMOWorldCreationSettings& NewSettings);
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
@@ -103,6 +112,9 @@ private:
 
 	UPROPERTY(Replicated)
 	FMOGroundWeatherState GroundWeather;
+
+	UPROPERTY(Replicated)
+	FMOWorldCreationSettings WorldCreation;
 
 	FTimerHandle DevModeRefreshHandle;
 
