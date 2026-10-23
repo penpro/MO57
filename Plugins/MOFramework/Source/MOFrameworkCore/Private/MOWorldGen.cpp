@@ -723,6 +723,14 @@ float FMOWorldGen::SoftThreshold(float Value, float Edge, float Width, float Bre
 	return MOWorldGenNoise::Smooth01(E - 0.5f * Width, E + 0.5f * Width, Value);
 }
 
+float FMOWorldGen::HeightBlendBandCm(const FMOWorldGenTuning& T, float EdgeCm)
+{
+	const float Above = FMath::Max(EdgeCm - T.SeaLevelCm, 0.0f);
+	const float Widest = FMath::Max(T.SurfaceHeightBlendCm, T.SurfaceHeightBlendMinCm);
+	const float Narrowest = Above > T.SurfaceHeightBlendShoreLimitCm ? FMath::Min(T.SurfaceHeightBlendInlandMinCm, Widest) : T.SurfaceHeightBlendMinCm;
+	return FMath::Clamp(T.SurfaceHeightBlendFraction * Above, Narrowest, Widest);
+}
+
 int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut)
 {
 	if (!Out || MaxOut <= 0 || Params.Biomes.Num() == 0)
@@ -749,11 +757,8 @@ int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, do
 	const float NoiseC = Breakup(X * 0.7 + 13.7 / Inv, Y * 0.7 - 5.3 / Inv, SaltSurfaceBreakup + 1u);
 	const float WC = T.SurfaceClimateBlend;
 	const float BreakC = NoiseC * T.SurfaceBreakup * 0.5f * WC;
-	// A height edge's band scales with how high above the sea it lies (see SurfaceHeightBlendFraction); its breakup scales with its band.
-	const auto HeightBand = [&T](float Edge)
-	{
-		return FMath::Clamp(T.SurfaceHeightBlendFraction * FMath::Max(Edge - T.SeaLevelCm, 0.0f), T.SurfaceHeightBlendMinCm, FMath::Max(T.SurfaceHeightBlendCm, T.SurfaceHeightBlendMinCm));
-	};
+	// A height edge's band scales with how high above the sea it lies (HeightBlendBandCm); its breakup scales with its band.
+	const auto HeightBand = [&T](float Edge) { return HeightBlendBandCm(T, Edge); };
 	const auto HeightInside = [&](float V, float Lo, float Hi, bool bLoOpen, bool bHiOpen)
 	{
 		const float WLo = HeightBand(Lo), WHi = HeightBand(Hi);

@@ -32,6 +32,29 @@ bool FMOWorldGen_SoftThreshold::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_HeightBlendBand,
+	"MOFramework.WorldGen.HeightBlendBand",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_HeightBlendBand::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 23 2026 (BR23-19): "blend the height splits over 25-50m of elevation change for everything except beaches etc at water level". The shipped
+	// tuning, against every height edge DT_Biomes has: the inland edges (300 m, 320 m, 950 m) blend over 25-50 m, the shore edges (4 and 4.5 m) stay narrow.
+	const FMOWorldGenTuning T;
+	const float Sea = T.SeaLevelCm;
+	for (const float Edge : { 30000.0f, 32000.0f, 95000.0f })
+	{
+		const float Band = FMOWorldGen::HeightBlendBandCm(T, Sea + Edge);
+		TestTrue(FString::Printf(TEXT("an inland edge %.0f m above the sea blends over 25-50 m (%.1f m)"), Edge / 100.0f, Band / 100.0f), Band >= 2500.0f && Band <= 5000.0f);
+	}
+	for (const float Edge : { 400.0f, 450.0f })
+	{
+		const float Band = FMOWorldGen::HeightBlendBandCm(T, Sea + Edge);
+		TestTrue(FString::Printf(TEXT("a shore edge %.1f m above the sea stays narrow (%.2f m)"), Edge / 100.0f, Band / 100.0f), Band <= 200.0f);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_SurfaceBlendBands,
 	"MOFramework.WorldGen.SurfaceBlendBands",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

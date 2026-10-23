@@ -373,14 +373,28 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	 * coastal plain. Shore edge -> 1.2 m band (~60 m across a 2 % beach), AlpineHeath (320 m) -> 26 m, AlpineRock -> 40 m.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="1"))
-	float SurfaceHeightBlendFraction = 0.08f;
+	float SurfaceHeightBlendFraction = 0.12f;
 
+	/** The narrowest band of a SHORE height edge (cm): the beaches end ~4 m above the sea. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
 	float SurfaceHeightBlendMinCm = 120.0f;
 
+	/**
+	 * The narrowest band of an INLAND height edge (cm), one more than SurfaceHeightBlendShoreLimitCm above the sea (Wes, Oct 23 2026, BR23-19: "blend the
+	 * height splits over 25-50m of elevation change for everything except beaches etc at water level, they're basically straight lines in the distance").
+	 * With the fraction 0.12 (was 0.08) and the widest band 50 m (was 40): ElectricForest's top (300 m) 36 m (was 24), AlpineHeath (320 m) 38 m (was 26),
+	 * AlpineRock (950 m) 50 m (was 40); the shore edges keep 1.2 m.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
+	float SurfaceHeightBlendInlandMinCm = 2500.0f;
+
+	/** Height edges up to this far above the sea (cm) are shore edges (see SurfaceHeightBlendMinCm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
+	float SurfaceHeightBlendShoreLimitCm = 2000.0f;
+
 	/** The widest height band (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
-	float SurfaceHeightBlendCm = 4000.0f;
+	float SurfaceHeightBlendCm = 5000.0f;
 
 	/**
 	 * Width of the blend band on every MOISTURE / TEMPERATURE edge (those fields run 0..1). 2026-10-14 (Wes: "the biomes should have a lot more blending"): 0.03 -> 0.12.
@@ -1141,6 +1155,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * deterministic noise offset, so the edge wanders instead of following a contour). Width <= 0 = a hard step at Edge + Breakup. Pure, IEEE-exact.
 	 */
 	static float SoftThreshold(float Value, float Edge, float Width, float Breakup = 0.0f);
+
+	/** The blend band (cm) of a biome HEIGHT edge at EdgeCm: SurfaceHeightBlendFraction of its height above the sea, at least SurfaceHeightBlendInlandMinCm
+	 *  inland (an edge more than SurfaceHeightBlendShoreLimitCm above the sea) or SurfaceHeightBlendMinCm at the shore, at most SurfaceHeightBlendCm. Pure. */
+	static float HeightBlendBandCm(const FMOWorldGenTuning& T, float EdgeCm);
 
 	struct FBiomeWeight
 	{
