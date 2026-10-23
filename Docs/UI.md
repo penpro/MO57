@@ -236,7 +236,7 @@ grams under a kilogram, else kilograms to a tenth; the panel carries the label) 
 wrapping under it. The old grid read "Weight: Weight: 1" and ran the description past the panel (N-180). Test `MOFramework.UI.ItemWeight.ReadsAsAWeight`.
 
 ### HUD: breath meter
-`UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
+`UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state. Since Oct 23 (BR23-17, "breath meter is hard to read"): 56 x 18 segments (were 36 x 10), the label in `body.strong` / primary text; the colours are unchanged (calm blue, warning, critical red: `MOFramework.Water.BreathMeter`).
 
 ## 4. UMG / Slate facts that cost a diagnosis (5.8)
 

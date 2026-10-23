@@ -61,16 +61,18 @@ void UMOBreathMeterWidget::NativeOnInitialized()
 	// the plate (kit hud_plate, color.hud.plate) around the label and the segments
 	UBorder* Plate = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BreathPlate"));
 	Plate->SetBrush(UMOUITokens::NineSliceBrush("hud_plate", "color.hud.plate"));
-	Plate->SetPadding(FMargin(14.0f, 8.0f));
+	Plate->SetPadding(FMargin(20.0f, 12.0f));
 	Column->AddChildToVerticalBox(Plate);
 	UVerticalBox* Inner = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BreathInner"));
 	Plate->SetContent(Inner);
 
 	Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BreathLabel"));
 	Label->SetText(NSLOCTEXT("MOBreath", "BreathLabel", "BREATH"));
-	Label->SetFont(UMOUITokens::Font("label"));
+	// Readable at a glance (BR23-17, Wes Oct 23 2026: "breath meter is hard to read"): the label in the strong body face and the primary text colour,
+	// the segments 56 x 18 (were 36 x 10, a thin blue strip over blue water on a wide screen).
+	Label->SetFont(UMOUITokens::Font("body.strong"));
 	Label->SetJustification(ETextJustify::Center);
-	Label->SetColorAndOpacity(FSlateColor(UMOUITokens::Color("color.text.secondary")));
+	Label->SetColorAndOpacity(FSlateColor(UMOUITokens::Color("color.text.primary")));
 	if (UVerticalBoxSlot* LabelSlot = Inner->AddChildToVerticalBox(Label))
 	{
 		LabelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -82,14 +84,14 @@ void UMOBreathMeterWidget::NativeOnInitialized()
 	for (int32 i = 0; i < SegmentCount; ++i)
 	{
 		USizeBox* Cell = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Cell->SetWidthOverride(36.0f);
-		Cell->SetHeightOverride(10.0f);
+		Cell->SetWidthOverride(56.0f);
+		Cell->SetHeightOverride(18.0f);
 		UImage* Segment = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
 		Segment->SetBrush(UMOUITokens::NineSliceBrush("progress_fill", "color.data.track"));
 		Cell->AddChild(Segment);
 		if (UHorizontalBoxSlot* CellSlot = Row->AddChildToHorizontalBox(Cell))
 		{
-			CellSlot->SetPadding(FMargin(i == 0 ? 0.0f : 4.0f, 0.0f, 0.0f, 0.0f));
+			CellSlot->SetPadding(FMargin(i == 0 ? 0.0f : 6.0f, 0.0f, 0.0f, 0.0f));
 		}
 		Segments.Add(Segment);
 	}
