@@ -1036,7 +1036,10 @@ void UMOInventoryUIController::ShowGroundContextMenu(FVector WorldLocation, FVec
 	// Position cursor slightly inside the menu (at top center of menu)
 	const float CursorX = CenterX;
 	const float CursorY = CenterY - 10.0f;  // Slightly above center, inside menu
-	PlayerController->SetMouseLocation(static_cast<int32>(CursorX), static_cast<int32>(CursorY));
+	if (!UMOContextMenuBase::IgnoresRealCursor())
+	{
+		PlayerController->SetMouseLocation(static_cast<int32>(CursorX), static_cast<int32>(CursorY));
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Showing ground context menu at world location %s, cursor at (%.0f, %.0f)"),
 		*WorldLocation.ToString(), CursorX, CursorY);

@@ -66,9 +66,11 @@ def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=Fa
     for a Begin no harness presses (AMOGameMode::OnPawnLandedSafely).
     -nosound unless sound=True: harness instances stay silent; audio investigations need the real device (MO.Audio.Diag, the
     [MOAudio] HB heartbeat).
+    -MOHoldContextMenus: the instance's menus leave the real cursor alone (no warp onto a menu, no close when it leaves): it belongs to
+    whoever sits at the machine, whose next mouse move closed a menu mid-test (Oct 22, UMOContextMenuBase::IgnoresRealCursor).
     """
     args = [uproject, "-game", "-windowed", f"-ResX={res[0]}", f"-ResY={res[1]}", f"-WinX={pos[0]}",
-            f"-WinY={pos[1]}", "-nosplash", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark"]
+            f"-WinY={pos[1]}", "-nosplash", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark", "-MOHoldContextMenus"]
     if not sound:
         args.append("-nosound")
     if nosteam:
@@ -2835,6 +2837,14 @@ def _clear_around_host(host, keep="", within=600):
                  "[a.set_actor_location(hl - h.get_actor_right_vector() * 1200.0 + unreal.Vector(0.0, 0.0, 200.0), False, True) for a in o]; out('CLEARED %d' % len(o))")
 
 
+def _menu_labels(inst):
+    """The labels of the MO buttons on screen, for a failed text= click to say what the menu offered instead."""
+    out = _probe(inst, "bs = unreal.WidgetLibrary.get_all_widgets_of_class(world, unreal.MOCommonButton, False); "
+                       "out('LABELS %s' % [str(b.get_button_text()) for b in bs if b.is_visible()])")
+    m = re.search(r"LABELS [^\r\n]*", out)
+    return m.group(0)[:600] if m else "no LABELS line"
+
+
 def _client_aim_at_host(client):
     """Turn the joiner's camera onto ITS copy of the host's pawn (the other player-owned pawn), chest high, from where its camera really is.
     The host's server position missed (Oct 20: after the host moved the joiner, the client's copies stood elsewhere and the line hit the
@@ -2960,7 +2970,8 @@ def _client_treats_host(rep, host, client):
     hoff = log_size(host)
     m = _motest(client, "MO.Test.ClickWidget text=Laceration: Apply Bandage", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
     begun = wait_log(host, rf"\[MOTimedAction\] {re.escape(jp)}: MedicalTreatment \(([\d.]+) s\)", since=hoff, timeout=10)
-    rep.step("client: its pick runs on the HOST as the joiner's timed treatment", bool(begun), (m.group(0) if m else "no click") + " | " + (begun.group(0) if begun else "no MedicalTreatment"))
+    rep.step("client: its pick runs on the HOST as the joiner's timed treatment", bool(begun), (m.group(0) if m else "no click") + " | " +
+             (begun.group(0) if begun else "no MedicalTreatment | " + _menu_labels(client)))
     if begun:
         time.sleep(float(begun.group(1)) + 2.0)
         after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
@@ -3055,7 +3066,8 @@ def _host_treats_survivor(rep, host, client):
     console(host, "MO.Test.ClickWidget text=Laceration: Apply Bandage")
     hp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
     begun = wait_log(host, rf"\[MOTimedAction\] {re.escape(hp)}: MedicalTreatment \(([\d.]+) s\)", since=hoff, timeout=10)
-    rep.step("host: the menu's Apply Bandage starts the host's timed treatment of the survivor", bool(begun), begun.group(0) if begun else "no MedicalTreatment on the host")
+    rep.step("host: the menu's Apply Bandage starts the host's timed treatment of the survivor", bool(begun),
+             begun.group(0) if begun else "no MedicalTreatment on the host | " + _menu_labels(host))
     if begun:
         time.sleep(float(begun.group(1)) + 2.0)
         after = re.search(r"SBLEED (-?[\d.]+)", _probe(host, bleed))

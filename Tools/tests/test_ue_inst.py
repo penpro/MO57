@@ -27,6 +27,9 @@ class LaunchArgsTests(unittest.TestCase):
         self.assertIn("-nosound", ui.build_launch_args("p", "l"))
         self.assertNotIn("-nosound", ui.build_launch_args("p", "l", sound=True))
 
+    def test_menus_leave_the_real_cursor_alone(self):
+        self.assertIn("-MOHoldContextMenus", ui.build_launch_args("p", "l"))
+
     def test_harness_skips_the_character_creator_unless_asked(self):
         self.assertIn("-NoCharacterCreator", ui.build_launch_args("p", "l"))
         self.assertNotIn("-NoCharacterCreator", ui.build_launch_args("p", "l", creator=True))

@@ -10,6 +10,24 @@
 #include "Engine/GameViewportClient.h"
 #include "Widgets/SViewport.h"
 #include "Input/Events.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+
+// Test instances run beside whoever sits at the machine: a menu's cursor warp moved that person's real mouse, and their next move closed the
+// menu 0.3 s later (Oct 22: two treatment cases of a full nettest found their menu gone, both passed alone). The harness launches its
+// instances with -MOHoldContextMenus (Tools/ue_inst.py build_launch_args).
+static TAutoConsoleVariable<int32> CVarHoldContextMenus(
+	TEXT("mo.UI.HoldContextMenus"), 0,
+	TEXT("1 = context menus ignore the real cursor: no warp onto the menu on open, no close when it leaves or clicks outside (test instances; ")
+	TEXT("the -MOHoldContextMenus switch turns it on for the whole run)."),
+	ECVF_Default);
+
+bool UMOContextMenuBase::IgnoresRealCursor()
+{
+	static const bool bSwitch = FParse::Param(FCommandLine::Get(), TEXT("MOHoldContextMenus"));
+	return bSwitch || CVarHoldContextMenus.GetValueOnGameThread() != 0;
+}
 
 // ============================================================================
 // FMOContextMenuClickOutsideHandler — Slate input pre-processor
@@ -199,7 +217,7 @@ void UMOContextMenuBase::SetPopupPosition(FVector2D ScreenPosition)
 	// SetMouseLocation takes viewport pixels (same coordinate space as the
 	// ScreenPosition we just used for positioning). A small inset (5px)
 	// keeps us solidly inside, immune to float rounding at the boundary.
-	if (bWarpCursorOnOpen)
+	if (bWarpCursorOnOpen && !IgnoresRealCursor())
 	{
 		if (APlayerController* PC = GetOwningPlayer())
 		{
@@ -260,7 +278,11 @@ void UMOContextMenuBase::NativeTick(const FGeometry& MyGeometry, float InDeltaTi
 		if (MouseLeaveTimer <= 0.0f)
 		{
 			MouseLeaveTimer = 0.0f;
-			RequestClose();
+			if (!IgnoresRealCursor())
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenu] %s closes: the cursor left it"), *GetName());
+				RequestClose();
+			}
 		}
 	}
 }
@@ -295,7 +317,11 @@ bool UMOContextMenuBase::IsReadyForClickOutsideClose() const
 
 void UMOContextMenuBase::HandleClickOutside()
 {
-	MOUI_LOG(this, "ContextMenu", "%s: click-outside detected -> RequestClose", *GetName());
+	if (IgnoresRealCursor())
+	{
+		return;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenu] %s closes: a click outside it"), *GetName());
 	RequestClose();
 }
 

@@ -173,6 +173,10 @@ public:
 	 */
 	static bool CloseNewestOpenFor(const APlayerController* PC);
 
+	/** True in test instances (-MOHoldContextMenus or mo.UI.HoldContextMenus 1): menus neither warp the real cursor onto themselves nor close when it
+	 *  leaves them or clicks outside -- that cursor belongs to whoever sits at the machine. */
+	static bool IgnoresRealCursor();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

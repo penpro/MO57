@@ -244,8 +244,10 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL InstanceInteract: %s"), Interactor ? TEXT("no such instance here") : TEXT("no local pawn with an interactor"));
 					return;
 				}
+				// The name before the request: on the host (or standalone) the pick-up runs at once and the index then names another instance.
+				const FString Named = FMOInstanceRef::Make(ISM, Index).ToString();
 				const bool bSent = Interactor->RequestInteractWithInstance(ISM, Index);
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] InstanceInteract: %s %s"), bSent ? TEXT("sent") : TEXT("NOT sent"), *FMOInstanceRef::Make(ISM, Index).ToString());
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] InstanceInteract: %s %s"), bSent ? TEXT("sent") : TEXT("NOT sent"), *Named);
 			});
 		}));
 
