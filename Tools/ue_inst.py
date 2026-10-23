@@ -1690,6 +1690,17 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
     if not rep.step("CONTROL: a PCG ground item near the joiner exists at the same place on host and client", bool(both),
                     f"{chosen[1]} at {chosen[2]},{chosen[3]},{chosen[4]} ({chosen[0]}; #{both.index(chosen)} of {len(both)})" if both else "none found on both"):
         return
+    for attempt, cand in enumerate(both[min(pick, len(both) - 1):][:3]):
+        blocked = _ground_item_attempt(rep, host, client, cand, aim_offset_cm, last=attempt == 2 or cand is both[-1])
+        if not blocked:
+            return
+        print(f"[nettest] ground item {cand[0]} ({cand[1]}): the joiner's line hits {blocked}, not the item: the next candidate", flush=True)
+    rep.step("CONTROL: a ground item the joiner's line reaches (not a plant in front of it)", False, "every candidate tried was behind something")
+
+
+def _ground_item_attempt(rep, host, client, chosen, aim_offset_cm, last):
+    """One candidate of _client_e_on_ground_item. Returns the mesh the line hit instead of the item (the candidate is skipped), or None
+    when the case ran on it."""
     item, mesh, x, y, z, _d = chosen
     before = _joiner_item_count(host, item)
     # Stand the joiner 150 cm from the item (the server owns its pawn; the move replicates), then turn the client's camera onto it until the crosshair is on it.
@@ -1712,6 +1723,22 @@ def _client_e_on_ground_item(rep, host, client, aim_offset_cm=0.0, pick=0):
         if not am or float(am.group(2)) < 4.0:
             break
         time.sleep(0.4)
+    # What the joiner's line is on before E (the targeting line names the instance's mesh since Oct 22): a plant in front of the item is the
+    # world's content, not a failure of the game -- the next candidate is tried (the caller), unless this is the last one.
+    if not aim_offset_cm and not last:
+        time.sleep(1.5)
+        poff = log_size(client)
+        console(client, "mo.Interact.Debug 1")
+        time.sleep(0.8)
+        console(client, "mo.Interact.Debug 0")
+        on = re.findall(r"\[MOInteractor\] target \S+ via [^:\r\n]*: (\S+) #\d+", read_log_from(client, poff))
+        if on and mesh not in on[-1]:
+            _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_G_HOME', None); "
+                         "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); "
+                         "q = unreal.GameplayStatics.get_player_pawn(world, 0); hh = getattr(builtins, 'MO_G_HOSTHOME', None); "
+                         "hh and q.set_actor_location(hh + unreal.Vector(0.0, 0.0, 30.0), False, True); out('G_HOME')")
+            time.sleep(2)
+            return on[-1]
     # The interaction trace sweeps 30 cm and assists 40 cm around the aim: 15 cm of aim error is on the item.
     if rep.step(f"client: the crosshair is {f'{aim_offset_cm:.0f} cm beside' if aim_offset_cm else 'on'} the ground item (aim error < 15 cm)", bool(am) and float(am.group(2)) < 15.0, am.group(0) if am else "no G_AIM line"):
         time.sleep(1.5)  # the new view reaches the server with the next moves
@@ -3622,16 +3649,21 @@ def _client_build_from_ground(rep, host, client):
     drop = _probe(host, inv +
         "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), key=lambda a: (a.get_actor_location() - p.get_actor_location()).length())[0]; "
         # one cobble per drop: an add is capped at the stack size (10 asked, 5 arrived)
-        "ws = [inv.drop_item_by_guid(g, b.get_actor_location() + unreal.Vector(70.0, 70.0, 20.0), unreal.Rotator(0.0, 0.0, 0.0)) "
-        "for g in [unreal.GuidLibrary.new_guid() for _ in range(10)] if inv.add_item_by_guid_no_stack(g, 'RiverCobble01', 1)]; "
+        "import math; "
+        "ws = [inv.drop_item_by_guid(g, b.get_actor_location() + unreal.Vector(60.0 * math.cos(i * 0.6283), 60.0 * math.sin(i * 0.6283), 15.0), unreal.Rotator(0.0, 0.0, 0.0)) "
+        "for i, g in enumerate([unreal.GuidLibrary.new_guid() for _ in range(10)]) if inv.add_item_by_guid_no_stack(g, 'RiverCobble01', 1)]; "
         "out('GDROP items=%d' % len([w for w in ws if w]))")
     time.sleep(6)   # the drop falls and settles
-    seen = _probe(host, ground + "out('GROUND n=%d qty=%d types=%s' % (len(items), sum(w.get_item_component().get_editor_property('quantity') for w in items), "
-                                 "sorted(set(str(w.get_item_mesh().get_collision_object_type()) for w in items))))")
-    gm = re.search(r"GROUND n=(\d+) qty=(\d+) types=([^\n]*)", seen)
+    seen = _probe(host, ground + "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), "
+                                 "key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length())[0]; "
+                                 "near = [w for w in items if (w.get_actor_location() - b.get_actor_location()).length() < 190.0]; "
+                                 "out('GROUND n=%d qty=%d types=%s inrange=%d' % (len(items), sum(w.get_item_component().get_editor_property('quantity') for w in items), "
+                                 "sorted(set(str(w.get_item_mesh().get_collision_object_type()) for w in items)), sum(w.get_item_component().get_editor_property('quantity') for w in near)))")
+    gm = re.search(r"GROUND n=(\d+) qty=(\d+) types=(.*?) inrange=(\d+)", seen)
     left = have()
-    if not rep.step("ground build: 10 cobbles lie on the ground by the ghost (a dropped item: PhysicsBody mesh) and none are in the joiner's pockets",
-                    bool(gm) and int(gm.group(2)) >= 10 and "PHYSICS_BODY" in gm.group(3).upper() and left == 0,
+    # In range = within the campfire's 200 cm build range (BuildCampfire.BuildRange): a cobble that rolled further is the drop's physics, not the gather.
+    if not rep.step("ground build: 10 cobbles lie on the ground within the ghost's build range (a dropped item: PhysicsBody mesh) and none are in the joiner's pockets",
+                    bool(gm) and int(gm.group(4)) >= 10 and "PHYSICS_BODY" in gm.group(3).upper() and left == 0,
                     (gm.group(0) if gm else " ".join(re.findall(r"GDROP[^\n]*", drop)) or drop.strip()[-200:]) + f" | pockets {left}"):
         return
     hoff = log_size(host)
@@ -3896,13 +3928,19 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
                 console(n, cmd)
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
+        case_seconds = []
         for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
             if only and fn.__name__ not in only:
                 continue
+            t0 = time.time()
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others
                 rep.step(f"{fn.__name__} ran without a harness error", False, f"{type(e).__name__}: {e}")
+            case_seconds.append((time.time() - t0, fn.__name__))
+            print(f"[nettest] {fn.__name__}: {time.time() - t0:.0f} s", flush=True)
+        slowest = sorted(case_seconds, reverse=True)[:12]
+        print("[nettest] slowest cases: " + ", ".join(f"{n} {t:.0f} s" for t, n in slowest) + f" | all {sum(t for t, _ in case_seconds):.0f} s", flush=True)
         return rep.ok
     finally:
         print(f"[nettest] actions: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)

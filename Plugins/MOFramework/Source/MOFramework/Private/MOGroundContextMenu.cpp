@@ -454,7 +454,8 @@ void UMOGroundContextMenu::CheckMousePosition()
 		}
 	}
 
-	const bool bMouseOver = IsMouseOverMenu();
+	// A test instance's cursor belongs to whoever sits at the machine (UMOContextMenuBase::IgnoresRealCursor): no closing on it there.
+	const bool bMouseOver = IsMouseOverMenu() || UMOContextMenuBase::IgnoresRealCursor();
 
 	if (!bMouseOver)
 	{

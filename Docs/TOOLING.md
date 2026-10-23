@@ -111,6 +111,25 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
 5. **Package once** only if a fix depends on cooked / Shipping behaviour (`Docs/Packaging.md`).
 6. **Commit each verified fix on its own** with its docs; a fix that failed waits for the next batch (no rebuild for one fix).
 
+### Where a batch's time goes, and the speed-ups (the loop deep dive, Oct 22 2026)
+Measured on one batch (BR23 batch 2): build 48 s (37 actions, UBA local, adaptive unity); automation 313 s (351 tests); full host + joiner
+nettest ~28 min (boot + join ~3 min, the pair READY in 47-50 s against 12-16 s for one instance alone); an editor start for a DataTable
+write 2-3 min, and each editor start / stop around instances (an open editor starves an instance's vegetation, TRAPS 5) costs it again;
+review shots ~1.5 min a spot (a 75 s settle each).
+
+- **`python Tools/batch_verify.py`** does steps 2-4 in one command and runs the suite DURING the nettest (step 3 always allowed it): the
+  suite's ~5 min disappear inside the nettest's ~28. Summary: both verdicts, every failing row, the slowest cases.
+- **Per-case wall time:** the actions nettest prints `[nettest] <case>: N s` after each case and `[nettest] slowest cases: ...` at the end.
+  The harness holds 213 fixed `time.sleep` calls totalling 702 s (~12 of the 28 minutes): the slowest cases are where to replace a sleep
+  by a wait on the thing itself (`wait_log`, a polled probe).
+- **Test-world flakes are named, not retried:** a case that depends on world content checks its precondition first (the ground-item E
+  case skips a candidate whose line hits a plant; the ground-build case counts cobbles inside the build range), so a FAIL is the game's.
+- **Real-cursor isolation:** harness instances launch with `-MOHoldContextMenus` (menus neither warp nor close on the real cursor): a
+  person at the machine no longer fails a run, and the run no longer moves their mouse.
+- **Next (measured, not built):** two host + joiner pairs in parallel on halves of the case list (128 GB RAM, 32 threads; the second pair
+  needs its own listen port and session name) would cut ~12 min; a headless DataTable writer (an `-run=pythonscript` commandlet in place
+  of the full editor + bridge) would save the 2-3 min editor start per data change.
+
 ## 4. DataTables
 
 - **Live tables are the truth.** Edit them with `python Tools/ue.py rows set <table> --file rows.json` (per-row add + set, readback-verified,
