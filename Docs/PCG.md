@@ -102,7 +102,12 @@ saved graphs keep their meaning.
   Rainforest hazel densities live are ~0.7x; live has 42 Black Alder tree entries vs 28 in the plan. Regenerating would revert live
   tuning: diff plan vs `ue.py rows get` first, or edit live rows directly (rows set with the FULL live species arrays; `rows list`
   output has CRLF). The Oct 16 alder burial (+25 cm `SinkMinCm` on Forest_ / Field_ alders, Wes) was done that way and is also in
-  the script's `species()`.
+  the script's `species()`; Oct 23 (BR23-7, "still floating, drop them about 25cm"): 50 cm, the same 42 entries.
+- **A scan that is an item's mesh must be the ITEM'S mesh** (Oct 23, BR23-9 "small sticks not interactable"): `UMOPCGInteractionSubsystem`
+  maps meshes to items by the item's mesh PATH, and the debris branches / sticks (paErt, uehjfcofa) were scattered from their Megascans
+  originals while Branch01 / Stick01 use copies under `/MOFramework/Items/`: they looked like the items and could not be picked up. Their
+  species now point at the item copies (ShoreStrand, Rainforest, NordicStrand; `biome_palettes.py` `MOVED`). Resource nodes that share an
+  item's mesh (beach rocks -> Hammerstone01 / RiverCobble01, the dead shrub -> PlantFiber01) are kept: they are worked, not picked up.
 - Experiments: `Tools/pcg_stocking.py <export> [--old] [--plan]` replays the spawner rule (Monte Carlo over the clump fields,
   engine noise ported); `apply` multiplies the LIVE table (experiments only). Shore lists: `Tools/shore_dressing.py` (additive).
 - Realised densities after the Oct 14 pass (trees/ha): TemperateForest ~213, Locust / Electric ~160, Rainforest ~108 (Wes called

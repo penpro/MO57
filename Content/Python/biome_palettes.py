@@ -32,7 +32,7 @@ MEGA = GAME + "/Fab/Megascans/Plants/%s/Medium/%s_tier_2/StaticMeshes/SM_%s_Var%
 ROCK = GAME + "/Fab/Megascans/3D/%s/Medium/%s_tier_2/StaticMeshes/%s_tier_2.%s_tier_2"
 
 
-ALDER_TREE_EXTRA_SINK_CM = 25.0   # see species()
+ALDER_TREE_EXTRA_SINK_CM = 50.0   # see species(); 25 (Oct 16), 50 (Oct 23, BR23-7: "still floating, drop them about 25cm")
 
 
 def ba(name):
@@ -108,8 +108,12 @@ def lib_rock(folder, mesh, density, res="ForestBoulder", cluster=1500.0, smin=0.
     return species(LIB % (folder, mesh, mesh), density, res=res, tag="MOResource_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax)
 
 
-# Scans that moved into an item's art folder when the item got that mesh (the old path is a redirector; the table stores the new one).
-MOVED = {"wjhiecy": "/MOFramework/Items/Bark01/Medium/wjhiecy_tier_2/StaticMeshes/wjhiecy_tier_2.wjhiecy_tier_2"}
+# Scans that ARE an item's mesh: the item's own copy, so every one lying about is that item (UMOPCGInteractionSubsystem maps meshes to items by the
+# item's mesh path: a copy of the same scan under its Megascans path looked like the item and could not be picked up -- BR23-9, Oct 23 2026, "small
+# sticks not interactable"). wjhiecy moved into the item's folder (the old path is a redirector); paErt / uehjfcofa are copies (the originals remain).
+MOVED = {"wjhiecy": "/MOFramework/Items/Bark01/Medium/wjhiecy_tier_2/StaticMeshes/wjhiecy_tier_2.wjhiecy_tier_2",
+         "paErt": "/MOFramework/Items/Branch01/paErt_tier_2/StaticMeshes/paErt_tier_2.paErt_tier_2",
+         "uehjfcofa": "/MOFramework/Items/Stick01/Medium/uehjfcofa_tier_2/StaticMeshes/uehjfcofa_tier_2.uehjfcofa_tier_2"}
 
 
 def drift(folder, code, density, cluster=2500.0, collision="Passable", smin=0.8, smax=1.3):
