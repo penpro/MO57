@@ -730,6 +730,15 @@ void AMOCreatureController::UpdatePursuit()
 		ChaseBestDistance = Distance;
 		ChaseLastGainTime = Now;
 	}
+	// Waiting at the edge of a fire is not failing to gain on the quarry: the chase clock waits with it. Without this the torch went out and
+	// the still-angry wolf gave up at its next check -- its last gain was before half a minute of holding off (Oct 22, found when the
+	// harness re-provoked it a second sooner than before).
+	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Creature->IsWaryOfFireAt(Quarry->GetActorLocation()))
+	{
+		ChaseBestDistance = Distance;
+		ChaseLastGainTime = Now;
+		return;
+	}
 	if (const TCHAR* Reason = JudgeChase(Distance, FVector::Dist2D(ControlledPawn->GetActorLocation(), HomeLocation), Now, AttackRange * 1.5f,
 		ChaseLeashRadius, ChaseNoGainSeconds, ChaseBestDistance, ChaseLastGainTime))
 	{

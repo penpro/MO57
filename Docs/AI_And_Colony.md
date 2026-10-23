@@ -138,6 +138,8 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   and fails ("[MOCreature] Wolf_C_0 holds off from X: fire within N cm"); the tree wanders it and tries again, so it circles; and
   `BTTask_CreatureAttack` makes no bite within the radius of a flame. Wolf01 400 cm; the deer 0 (prey flees threats anyway). Proof:
   `nettest actions` `_host_wolf_holds_off_fire` (control: the torch put out, the same wolf bites).
+  While it holds off, its chase clock waits (`AMOCreatureController::UpdatePursuit`): circling a fire is not failing to gain, so when
+  the flame goes out the still-angry creature closes in instead of giving up at once (Oct 22).
 - Creature ABP state machines (locomotion / rest / sleep / death) and EQS query assets (`EQ_FindHarvestableItems`,
   `EQ_FindHarvestTargets`, `EQ_FindEscapeRoute`) still need Blueprint setup (C++ complete).
 - Only deer and wolf exist; the animal pack has fox / pig / crow assets but new fauna needs ABP work. Creature footsteps need foot
