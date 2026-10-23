@@ -1410,3 +1410,8 @@ C++ touched (uncommitted until verified): MOWorldFeature*, MOPCGBiomeSpawnerSett
 Status: PROGRESS (BR23 batch 2 committed: e78e0ab0 world formations / biome tuning / rainforest WidthScale, f189a631 height bands, 50448648 instance menus hold the real cursor; suite 351 / 0, nettest 261 / 2 -- both failures the test world, fixes queued)
 References: CL-0151
 Live tables touched: DT_Biomes (Rainforest tree scales + WidthScale), DT_WorldFeatures. The build window stays CLAIMED for batch 3 (world creation settings, footstep weather layer, save-list boot cost); the `ui` instance is taking review shots now.
+
+### 2026-10-23 02:49 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0153
+Status: RELEASE build window + instances (night of Oct 22-23 done: world creation settings + New Game panel, footstep weather layer, boot save-list fix, forage search 137 -> 46 ms, wolf fire hold-off fix, harness 36 -> 28 min, review tools; all committed and pushed)
+References: CL-0152
+Live tables touched: DT_Biomes (PreviewImage for 11 biomes), DT_MOSound (SFX.Footsteps.Snow1-4 / Puddle1-4). New assets: /MOFramework/UI/BiomePreviews/*, WBP_WorldKnobRow, WBP_BiomeCard; WBP_NewGamePanel rebuilt (spec Content/Python/ui_specs/world_creation.py). The editor is closed; no instance is running.

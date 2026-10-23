@@ -16,6 +16,8 @@
 Since Oct 22 (Wes: "collect a few screen shots and i can review them and give thumbs up/thumbs down") each row that a still can show also
 gets before / after shots on a review page with a vote per row (`Tools/review_shots.py`, `Tools/review_from_reports.py` for a bug report's
 own camera, `Tools/review_page.py`); the votes are read back and the rows ticked or reopened from them. Motion stays a text row.
+First page (Oct 23, 12 checks: rainforest trees, BR23-3..19 looks, the starting-biome cards, the New Game panel):
+https://claude.ai/artifact/3ue2oC7RYLjPuH2rHUq1z7 (votes in its `verdicts` collection).
 
 | What to look at | Where / how | Fixed looks like | From |
 |---|---|---|---|
