@@ -119,8 +119,12 @@ NEW_GAME = {
                     {"type": "VerticalBox", "name": "PaceKnobsBox", "var": True},
                     {"type": "HorizontalBox", "name": "ResetRow", "slot": {"padding": [0, 12, 0, 8]}, "children": [
                         K.button("ResetCreationButton", "Defaults", "Tertiary")]}]}]),
-            button_row([K.button("BackButton", "Back", "SecondaryLg", slot={"padding": [0, 0, 12, 0]}), K.button("StartGameButton", "Start", "PrimaryLg")])]}]},
-    "class_defaults": {"knob_row_class": f"{MM}/WBP_WorldKnobRow", "biome_card_class": f"{MM}/WBP_BiomeCard"},
+            # Not button_row(): its Fill column split the panel's height with the scroll box (the fields got 402 of 860 px, cards clipped).
+            {"type": "HorizontalBox", "name": "ButtonRow", "slot": {"padding": [0, 16, 0, 0]}, "children": [
+                {"type": "Spacer", "name": "RowSpacer", "slot": FILL_SIZE},
+                K.button("BackButton", "Back", "SecondaryLg", slot={"padding": [0, 0, 12, 0]}), K.button("StartGameButton", "Start", "PrimaryLg")]}]}]},
+    "class_defaults": {"knob_row_class": f"{MM}/WBP_WorldKnobRow", "biome_card_class": f"{MM}/WBP_BiomeCard",
+                       "coast_preview_image": "/MOFramework/UI/BiomePreviews/T_BiomePreview_Coast"},   # import_biome_previews.py first
 }
 
 # ---------------------------------------------------------------- host co-op
