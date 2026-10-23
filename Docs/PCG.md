@@ -103,6 +103,14 @@ saved graphs keep their meaning.
   tuning: diff plan vs `ue.py rows get` first, or edit live rows directly (rows set with the FULL live species arrays; `rows list`
   output has CRLF). The Oct 16 alder burial (+25 cm `SinkMinCm` on Forest_ / Field_ alders, Wes) was done that way and is also in
   the script's `species()`; Oct 23 (BR23-7, "still floating, drop them about 25cm"): 50 cm, the same 42 entries.
+- **World features keep their core, not their footprint, bare** (Oct 23, BR23-3): inside a composition's footprint only ground cover,
+  shrubs and bushes grow, outside its core (`CoreFraction`, `Docs/World_Features_Architecture.md`).
+- **Cliff slabs cluster** (Oct 23, BR23-12, "cluster together to overlap ... scaling them up by about 200%"): the HugeSandstoneCliff
+  species of RockyHighland / AlpineRock share clump group 7 (core 0.75: they stand in clumps, overlapping), scale 1.4-2.6 (was
+  0.7-1.3), SinkFraction 0.3 (was 0.2). Data only; Wes's own idea, a cliff composition (its own graph clustering slabs round a centre)
+  is the next step if this does not read as one face.
+- **Lake shores in dry scrub** (Oct 23, BR23-16d): DryScrub's water-edge species are the Meadow's (reeds, grasses, flowers, alder
+  saplings, hazel) over an 8 m band (`WaterEdgeBandCm` 800, was 120: a 1.2 m strip of half-density grass).
 - **A scan that is an item's mesh must be the ITEM'S mesh** (Oct 23, BR23-9 "small sticks not interactable"): `UMOPCGInteractionSubsystem`
   maps meshes to items by the item's mesh PATH, and the debris branches / sticks (paErt, uehjfcofa) were scattered from their Megascans
   originals while Branch01 / Stick01 use copies under `/MOFramework/Items/`: they looked like the items and could not be picked up. Their

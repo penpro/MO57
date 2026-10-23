@@ -206,6 +206,27 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="0.1"))
 	float ClusterScaleBias = 1.0f;
 
+	/**
+	 * The composition's solid part, as a fraction of its footprint radius. A cluster packs its members by it (nearly touching: Wes, Oct 23 2026,
+	 * BR23-6, "push them all much closer together so they almost overlap"), and the biome scatter keeps it clear; between it and the footprint only
+	 * ground cover grows -- grass, flowers, debris, shrubs and bushes, not trees or rocks (BR23-3: "a huge swath of completely blank terrain all
+	 * around it"). 1 = the whole footprint is solid (the default: nothing grows inside a footprint).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.05", ClampMax="1.0"))
+	float CoreFraction = 1.0f;
+
+	/**
+	 * Placed only NEAR sites of these features (higher priority rows): within NearWithinCm of one's footprint, never on it. Empty = anywhere.
+	 * Electric Dreams' small assemblies dress the cliffs and embankments instead of standing alone (Wes, Oct 23 2026, BR23-5).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement")
+	TArray<FName> NearFeatureIds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.0"))
+	float NearWithinCm = 0.0f;
+
+	float GetCoreRadiusCm(float Scale) const { return FootprintRadiusCm * Scale * FMath::Clamp(CoreFraction, 0.05f, 1.0f); }
+
 	bool IsCluster() const { return ClusterCountMax > 1 || ClusterRadiusCm > 0.0f; }
 
 	/** The farthest any part of one of this row's sites can reach from its centre (cm): overlap and query margins. */

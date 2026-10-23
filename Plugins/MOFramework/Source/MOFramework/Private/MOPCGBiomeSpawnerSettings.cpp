@@ -341,8 +341,17 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		TArray<int32> FilteredSpecies;
 		TArray<bool> GroundCoverScaled;          // parallel to Row->Species
 		TArray<bool> EdgeGroundCoverScaled;      // parallel to Row->WaterEdgeSpecies
+		TArray<bool> FeatureRingOk;              // parallel to Row->Species: may grow between a world feature's core and its footprint
+		TArray<bool> EdgeFeatureRingOk;          // parallel to Row->WaterEdgeSpecies
 	};
 	auto ScalesWithGroundCover = [](const FMOBiomeSpeciesEntry& Sp) { return !IsLargeSpecies(Sp) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp); };
+	// Round a world feature, between its solid core and its footprint, only low growth: ground cover, shrubs, bushes -- no trees, no rocks
+	// (UMOWorldFeatureSubsystem::FFootprint; Wes, Oct 23 2026, BR23-3: "a huge swath of completely blank terrain all around it").
+	auto GrowsInFeatureRing = [](const FMOBiomeSpeciesEntry& Sp)
+	{
+		static const FName Shrub(TEXT("MOBiomeCover_Shrub")), Bush(TEXT("MOResource_Bush"));
+		return (!IsLargeSpecies(Sp) || Sp.HISMTag == Shrub || Sp.HISMTag == Bush) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp) && !IsFarCanopy(Sp);
+	};
 	TArray<FBiomeEntry> Biomes;
 	for (const FName& Id : BiomeIds)
 	{
@@ -363,6 +372,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				}
 				E.LoadedMeshes.Add(Loaded);
 				E.GroundCoverScaled.Add(ScalesWithGroundCover(Sp));
+				E.FeatureRingOk.Add(GrowsInFeatureRing(Sp));
 				if (i < 64 && PassesSpeciesFilter(Settings->SpeciesFilter, Sp))
 				{
 					E.FilteredSpecies.Add(i);
@@ -377,6 +387,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				}
 				E.LoadedEdgeMeshes.Add(Loaded);
 				E.EdgeGroundCoverScaled.Add(ScalesWithGroundCover(Sp));
+				E.EdgeFeatureRingOk.Add(GrowsInFeatureRing(Sp));
 			}
 		}
 	}
@@ -488,7 +499,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	TotalIn = Points.Num();
 	// World features (POIs) are self-contained, hand-tuned compositions: the scatter plants nothing inside one's footprint (UMOWorldFeatureSubsystem,
 	// a pure function of the seed -- the same exclusion on every machine, whether or not the feature's actor is spawned yet). Gathered once, here on the game thread.
-	TArray<FVector3f> FeatureFootprints;
+	TArray<UMOWorldFeatureSubsystem::FFootprint> FeatureFootprints;
 	if (UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(TargetActor); Features && InputBounds.IsValid)
 	{
 		Features->GetFootprints(FBox2D(FVector2D(InputBounds.Min), FVector2D(InputBounds.Max)), FeatureFootprints);
@@ -531,13 +542,16 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				Result.Outcome = EPointOutcome::Suppressed;
 				return;
 			}
-			for (const FVector3f& Footprint : FeatureFootprints)
+			bool bFeatureRing = false;   // inside a world feature's footprint but outside its core: low growth only
+			for (const UMOWorldFeatureSubsystem::FFootprint& Footprint : FeatureFootprints)
 			{
-				if (FMath::Square(Location.X - Footprint.X) + FMath::Square(Location.Y - Footprint.Y) < Footprint.Z)
+				const double DistSq = FMath::Square(Location.X - Footprint.X) + FMath::Square(Location.Y - Footprint.Y);
+				if (DistSq < Footprint.CoreSq)
 				{
 					Result.Outcome = EPointOutcome::Suppressed;
 					return;
 				}
+				bFeatureRing |= DistSq < Footprint.RadiusSq;
 			}
 
 			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,
@@ -643,7 +657,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				for (const int32 i : Chosen->FilteredSpecies)
 				{
 					const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[i];
-					if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg)   // the species' own slope band (a plate on gentle ground, a cliff slab on steep)
+					if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg && (!bFeatureRing || Chosen->FeatureRingOk[i]))   // the species' own slope band (a plate on gentle ground, a cliff slab on steep)
 					{
 						Candidates.Add({ &Sp, Chosen->LoadedMeshes[i], EdgeScale, Chosen->GroundCoverScaled[i] });
 					}
@@ -658,7 +672,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					for (int32 i = 0; i < NumEdge; ++i)
 					{
 						const FMOBiomeSpeciesEntry& Sp = Chosen->Row->WaterEdgeSpecies[i];
-						if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg)
+						if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg && (!bFeatureRing || Chosen->EdgeFeatureRingOk[i]))
 						{
 							Candidates.Add({ &Sp, Chosen->LoadedEdgeMeshes[i], Shore, Chosen->EdgeGroundCoverScaled[i] });
 						}
@@ -736,7 +750,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 
 			FTransform Xf = Point.Transform;
 			const float Scale = RandomStream.FRandRange(Sp.MinScale, Sp.MaxScale);
-			Xf.SetScale3D(FVector(Scale));
+			const float Width = Scale * Sp.WidthScale;
+			Xf.SetScale3D(FVector(Width, Width, Scale));
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
 			const FVector SurfaceNormal = Point.Transform.GetRotation().GetUpVector();
 			if (Sp.bFaceDownhill)

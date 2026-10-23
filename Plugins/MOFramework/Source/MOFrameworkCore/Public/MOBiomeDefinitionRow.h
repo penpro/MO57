@@ -172,6 +172,13 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.01"))
 	float MaxScale = 1.25f;
+
+	/**
+	 * Widens the species on top of its random scale: X and Y are Scale x WidthScale, Z (its height, and so its burial) is Scale. Wes, Oct 22 2026, of the
+	 * rainforest: "bigger FATTER trees with more canopy cover" -- a trunk and crown wider than the scan's, not just taller. 1 = the mesh's own proportions.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.1", ClampMax="5.0"))
+	float WidthScale = 1.0f;
 };
 
 /**

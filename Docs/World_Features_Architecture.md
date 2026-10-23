@@ -74,6 +74,22 @@ Only the `Many` policy with composition actors exists. Everything else below is 
 - **ED_RockSpire is 4x** (Wes, Oct 14: "about 4 times larger", base cliffs spread 1.3x, embedded): scale 3.6-4.4 (~140 m tall), footprint 16 m x scale,
   600 m spacing, 1 / km2, spawn 1.5 km, slope <= 12 deg, sink 0 (the node grounds it).
 - **Dev:** `poi` / `biome` pickers, `MO.WorldFeatures.Dump`. Traps are in the handoff (`Docs/Handoff_2026-10-13.md`, Oct 14 sections).
+- **Formations, cores and neighbours (Oct 23, Wes's BR23-3..6):**
+  - `CoreFraction` (row): the solid part of a composition as a fraction of its footprint. A cluster's members pack by it: the scales are
+    drawn first and placed largest first, the largest anywhere in the disc that takes it (24 tries) and every later one beside one already
+    standing (cores touching x 1-1.25), never inside another's core (0.9 x the summed cores). The biome scatter plants nothing in a member's
+    core and only low growth between its core and its footprint (ground cover, shrubs, bushes; no trees or rocks:
+    `UMOWorldFeatureSubsystem::FFootprint`, the spawner's `FeatureRingOk`). 1 = the old rule (the whole footprint bare).
+  - `NearFeatureIds` / `NearWithinCm` (row): placed only within that distance of a higher-priority row's site footprint, never on it.
+  - Rows now: ED_RockSpire clusters 3-10 (core 0.5); ED_CliffAssembly 3-10 within 120 m (1 site / km2, was 3, core 0.5);
+    ED_EmbankmentAssembly 3-10 within 120 m (2 / km2, was 6, core 0.5) -- the site densities cut so the assembly count stays near 2x;
+    ED_SmallAssembly only within 60 m of a cliff / embankment site (spacing 60 m, 120 / km2), no longer a POI of its own. The spire graphs
+    (`PCG_PL_LargeCliff_01b/01c`) bury the formation 125 cm x scale (was 50: 1 m at 0.8x, 5 m at 4x; the MO Conform To Ground node's
+    `EmbedCm` decides it, not the row's SinkCm).
+  - Tests `WorldFeatures.Cluster` (largest first, every member beside an earlier one, a 0.5 core packs members at 0.54 of the summed
+    footprints against 1.08), `WorldFeatures.NearOthers` (727 sites, none far or on a cliff; control without the rule: 14,959 of 15,686
+    far). Seen on Wes's world (seed 3014) at his spire: a 7-member formation (3.58x down to 0.59x), forest up to the rock, 60 ground-cover
+    plants in the nearest member's ring, none in its core; a small assembly 179 m from an embankment's centre (inside its reach).
 
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need
 the same behavior, build one abstraction — not N copies") and #9

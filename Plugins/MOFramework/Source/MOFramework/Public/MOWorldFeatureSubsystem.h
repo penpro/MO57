@@ -81,9 +81,18 @@ public:
 	/** A seed is active and the catalog loaded: sites can be computed. */
 	bool IsReady();
 
-	/** Footprints touching Bounds, as (X, Y, radius^2), one per composition (a cluster's members each have their own, so the scatter grows
-	 *  between them) -- the biome scatter's exclusion list. Game thread. Empty when not ready. */
-	void GetFootprints(const FBox2D& Bounds, TArray<FVector3f>& Out);
+	/** One composition's ground for the biome scatter: nothing within the core, only ground cover between the core and the footprint. */
+	struct FFootprint
+	{
+		float X = 0.0f;
+		float Y = 0.0f;
+		float RadiusSq = 0.0f;
+		float CoreSq = 0.0f;
+	};
+
+	/** Footprints touching Bounds, one per composition (a cluster's members each have their own, so the scatter grows between them) -- the biome
+	 *  scatter's exclusion list. Game thread. Empty when not ready. */
+	void GetFootprints(const FBox2D& Bounds, TArray<FFootprint>& Out);
 
 	/** Sites whose footprint touches Bounds. Game thread. */
 	void GetSites(const FBox2D& Bounds, TArray<FMOWorldFeatureSite>& Out);

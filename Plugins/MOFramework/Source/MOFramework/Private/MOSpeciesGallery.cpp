@@ -133,7 +133,7 @@ int32 AMOSpeciesGallery::Build(FName InBiomeId)
 			P.Expected = FMOSpeciesPlacement::ExpectedContact(Species, Resource, P.Profile);
 			P.Scale = 0.5f * (Species.MinScale + Species.MaxScale) * FMath::Max(0.1f, CVarGalleryScale.GetValueOnGameThread());
 			P.Bounds = Mesh->GetBounds();
-			P.Radius = FMath::Max(100.0f, static_cast<float>(FMath::Max(P.Bounds.BoxExtent.X, P.Bounds.BoxExtent.Y)) * P.Scale);
+			P.Radius = FMath::Max(100.0f, static_cast<float>(FMath::Max(P.Bounds.BoxExtent.X, P.Bounds.BoxExtent.Y)) * P.Scale * Species.WidthScale);
 			Pending.Add(P);
 		};
 		for (const FMOBiomeSpeciesEntry& Species : Def.Species)
@@ -178,7 +178,8 @@ int32 AMOSpeciesGallery::Build(FName InBiomeId)
 			Instances->SetCollisionProfileName(P.Profile);
 			Instances->SetupAttachment(RootComponent);
 			Instances->RegisterComponent();
-			Instances->AddInstance(FTransform(FQuat::Identity, Center + FVector(0.0, 0.0, Offset), FVector(P.Scale)), /*bWorldSpace=*/true);
+			const float Width = P.Scale * P.Species->WidthScale;   // as the spawner widens it
+			Instances->AddInstance(FTransform(FQuat::Identity, Center + FVector(0.0, 0.0, Offset), FVector(Width, Width, P.Scale)), /*bWorldSpace=*/true);
 			BuiltComponents.Add(Instances);
 
 			UTextRenderComponent* Text = NewObject<UTextRenderComponent>(this);

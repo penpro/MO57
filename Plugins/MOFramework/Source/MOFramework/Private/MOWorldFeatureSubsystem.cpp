@@ -179,24 +179,57 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 		const int32 CountMin = FMath::Max(1, R.ClusterCountMin);
 		const int32 CountMax = FMath::Max(CountMin, R.ClusterCountMax);
 		const int32 Count = CountMin + FMath::Min(CountMax - CountMin, static_cast<int32>(WorldFeatureU01(H, 5) * (CountMax - CountMin + 1)));
+		// The scales first, largest first: the largest stands at the centre and the rest pack round the ones already standing, their solid cores
+		// (CoreFraction) nearly touching -- one formation, not scattered singles (Wes, Oct 23 2026, BR23-6: "the large ones are central ... and the
+		// smaller ones are scattered around the larger ones ... push them all much closer together so they almost overlap"). Every member passes the
+		// row's terrain rules over its core.
+		TArray<float, TInlineAllocator<32>> Scales;
+		for (int32 I = 0; I < Count; ++I)
+		{
+			Scales.Add(FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), FMath::Pow(static_cast<float>(WorldFeatureU01(H, 16 + static_cast<uint64>(I))), R.ClusterScaleBias)));
+		}
+		Scales.Sort(TGreater<float>());
 		float Reach = 0.0f;
 		for (int32 I = 0; I < Count; ++I)
 		{
-			for (int32 Try = 0; Try < 6; ++Try)
+			const float Scale = Scales[I];
+			const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
+			const double Core = R.GetCoreRadiusCm(Scale);
+			const int32 Tries = Out.Members.IsEmpty() ? 24 : 8;   // the first to stand looks over the whole disc: the formation grows round it
+			for (int32 Try = 0; Try < Tries; ++Try)
 			{
-				const uint64 K = 16 + static_cast<uint64>(I * 6 + Try) * 5;
-				const double Radius = R.ClusterRadiusCm * FMath::Sqrt(WorldFeatureU01(H, K));   // even over the disc
-				const double Angle = 2.0 * UE_DOUBLE_PI * WorldFeatureU01(H, K + 1);
-				const float Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), FMath::Pow(static_cast<float>(WorldFeatureU01(H, K + 2)), R.ClusterScaleBias));
-				const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
-				const double Mx = X + Radius * FMath::Cos(Angle), My = Y + Radius * FMath::Sin(Angle);
-				// Members may touch, not stand inside each other.
-				const bool bCrowded = Out.Members.ContainsByPredicate([Mx, My, Footprint](const FMOWorldFeatureMember& M)
+				const uint64 K = 300 + static_cast<uint64>(I * 24 + Try) * 4;
+				double Mx = X, My = Y;
+				if (!Out.Members.IsEmpty())
 				{
-					return FVector2D::Distance(FVector2D(M.Location), FVector2D(Mx, My)) < 0.6 * (Footprint + M.FootprintRadiusCm);
+					// Beside one already standing (the earlier, larger ones more often): cores touching, a small gap.
+					const int32 A = FMath::Min(Out.Members.Num() - 1, static_cast<int32>(FMath::Square(WorldFeatureU01(H, K)) * Out.Members.Num()));
+					const FMOWorldFeatureMember& Anchor = Out.Members[A];
+					const double AnchorCore = R.GetCoreRadiusCm(Anchor.Scale);
+					const double Dist = (AnchorCore + Core) * (1.0 + 0.25 * WorldFeatureU01(H, K + 1));
+					const double Angle = 2.0 * UE_DOUBLE_PI * WorldFeatureU01(H, K + 2);
+					Mx = Anchor.Location.X + Dist * FMath::Cos(Angle);
+					My = Anchor.Location.Y + Dist * FMath::Sin(Angle);
+				}
+				else if (Try > 0)
+				{
+					// The centre would not take the largest: anywhere in the disc (the flatter ground the old scatter found), nearer first.
+					const double Radius = R.ClusterRadiusCm * FMath::Min(1.0, (Try / static_cast<double>(Tries - 1))) * FMath::Sqrt(WorldFeatureU01(H, K + 1));
+					const double Angle = 2.0 * UE_DOUBLE_PI * WorldFeatureU01(H, K + 2);
+					Mx = X + Radius * FMath::Cos(Angle);
+					My = Y + Radius * FMath::Sin(Angle);
+				}
+				if (R.ClusterRadiusCm > 0.0f && FVector2D::Distance(FVector2D(Mx, My), FVector2D(X, Y)) > R.ClusterRadiusCm)
+				{
+					continue;
+				}
+				// Cores may touch, not stand inside each other.
+				const bool bCrowded = Out.Members.ContainsByPredicate([&R, Mx, My, Core](const FMOWorldFeatureMember& M)
+				{
+					return FVector2D::Distance(FVector2D(M.Location), FVector2D(Mx, My)) < 0.9 * (Core + R.GetCoreRadiusCm(M.Scale));
 				});
 				float Ground = 0.0f, Slope = 0.0f;
-				if (bCrowded || !PassesRules(Mx, My, Footprint, Ground, Slope) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg || !ReliefOk(Mx, My, Footprint, Ground))
+				if (bCrowded || !PassesRules(Mx, My, Core, Ground, Slope) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg || !ReliefOk(Mx, My, Core, Ground))
 				{
 					continue;
 				}
@@ -206,7 +239,7 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 				Member.Scale = Scale;
 				Member.FootprintRadiusCm = static_cast<float>(Footprint);
 				Member.Seed = static_cast<int32>(WorldFeatureMix64(H ^ (0x5EEDULL + K)) & 0x7fffffff);
-				Reach = FMath::Max(Reach, static_cast<float>(Radius + Footprint));
+				Reach = FMath::Max(Reach, static_cast<float>(FVector2D::Distance(FVector2D(Mx, My), FVector2D(X, Y)) + Footprint));
 				break;
 			}
 		}
@@ -299,6 +332,34 @@ bool FMOWorldFeaturePlacer::SiteAt(int32 FeatureIndex, const FIntPoint& Slot, FM
 	}
 	FMOWorldFeatureSite Site;
 	bool bOk = Candidate(FeatureIndex, Slot, Site);
+	// Placed only near sites of the features it names (BR23-5): within NearWithinCm of one's footprint (the overlap rule below keeps it off it).
+	// Only higher-precedence features count, so the search never recurses into this feature.
+	const FMOWorldFeatureDefinitionRow& Mine = Features[FeatureIndex].Row;
+	if (bOk && Mine.NearFeatureIds.Num() > 0)
+	{
+		bool bNear = false;
+		for (int32 G = 0; G < FeatureIndex && !bNear; ++G)
+		{
+			if (!Mine.NearFeatureIds.Contains(Features[G].Id))
+			{
+				continue;
+			}
+			const FMOWorldFeatureDefinitionRow& Other = Features[G].Row;
+			const double Reach = Site.FootprintRadiusCm + Mine.NearWithinCm + Other.GetMaxSiteRadiusCm();
+			const int32 X0 = FMath::FloorToInt((Site.Location.X - Reach) / Other.SpacingCm), X1 = FMath::FloorToInt((Site.Location.X + Reach) / Other.SpacingCm);
+			const int32 Y0 = FMath::FloorToInt((Site.Location.Y - Reach) / Other.SpacingCm), Y1 = FMath::FloorToInt((Site.Location.Y + Reach) / Other.SpacingCm);
+			for (int32 Sx = X0; Sx <= X1 && !bNear; ++Sx)
+			{
+				for (int32 Sy = Y0; Sy <= Y1 && !bNear; ++Sy)
+				{
+					FMOWorldFeatureSite Theirs;
+					bNear = SiteAt(G, FIntPoint(Sx, Sy), Theirs)
+						&& FVector2D::Distance(FVector2D(Theirs.Location), FVector2D(Site.Location)) < Site.FootprintRadiusCm + Theirs.FootprintRadiusCm + Mine.NearWithinCm;
+				}
+			}
+		}
+		bOk = bNear;
+	}
 	// A higher-precedence feature (earlier in the sorted list) keeps its ground: this site may not overlap its footprint.
 	for (int32 G = 0; G < FeatureIndex && bOk; ++G)
 	{
@@ -470,15 +531,21 @@ void UMOWorldFeatureSubsystem::GetSites(const FBox2D& Bounds, TArray<FMOWorldFea
 	}
 }
 
-void UMOWorldFeatureSubsystem::GetFootprints(const FBox2D& Bounds, TArray<FVector3f>& Out)
+void UMOWorldFeatureSubsystem::GetFootprints(const FBox2D& Bounds, TArray<FFootprint>& Out)
 {
 	TArray<FMOWorldFeatureSite> Sites;
 	GetSites(Bounds, Sites);
 	for (const FMOWorldFeatureSite& Site : Sites)
 	{
+		const int32 F = Placer ? Placer->GetFeatureIndex(Site.FeatureId) : INDEX_NONE;
+		const float Core = F != INDEX_NONE ? FMath::Clamp(Placer->GetFeatures()[F].Row.CoreFraction, 0.05f, 1.0f) : 1.0f;
 		for (const FMOWorldFeatureMember& Member : Site.Members)
 		{
-			Out.Add(FVector3f(static_cast<float>(Member.Location.X), static_cast<float>(Member.Location.Y), FMath::Square(Member.FootprintRadiusCm)));
+			FFootprint& Foot = Out.AddDefaulted_GetRef();
+			Foot.X = static_cast<float>(Member.Location.X);
+			Foot.Y = static_cast<float>(Member.Location.Y);
+			Foot.RadiusSq = FMath::Square(Member.FootprintRadiusCm);
+			Foot.CoreSq = FMath::Square(Member.FootprintRadiusCm * Core);
 		}
 	}
 }

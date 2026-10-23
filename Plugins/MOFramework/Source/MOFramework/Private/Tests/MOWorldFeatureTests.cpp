@@ -209,6 +209,139 @@ bool FMOWorldFeature_Cluster::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("CONTROL: single sites exist"), Singles.Num() > 0);
 	TestEqual(TEXT("CONTROL: a single site's one member is the site itself"), NotSelf, 0);
+
+	// One formation (Wes, Oct 23, BR23-6): the largest member first and at (or near) the centre, the rest packed round by their solid cores. A row
+	// with CoreFraction 0.5 stands its members closer than the full-footprint row above, and still none inside another's core.
+	auto MeanNearest = [](const TArray<FMOWorldFeatureSite>& In, int32& OutMembers)
+	{
+		double Sum = 0.0;
+		int32 N = 0;
+		OutMembers = 0;
+		for (const FMOWorldFeatureSite& S : In)
+		{
+			OutMembers += S.Members.Num();
+			for (int32 I = 0; I < S.Members.Num(); ++I)
+			{
+				double Best = TNumericLimits<double>::Max();
+				for (int32 J = 0; J < S.Members.Num(); ++J)
+				{
+					if (J != I)
+					{
+						Best = FMath::Min(Best, FVector2D::Distance(FVector2D(S.Members[I].Location), FVector2D(S.Members[J].Location)) / (S.Members[I].FootprintRadiusCm + S.Members[J].FootprintRadiusCm));
+					}
+				}
+				if (Best < TNumericLimits<double>::Max())
+				{
+					Sum += Best;
+					++N;
+				}
+			}
+		}
+		return N > 0 ? Sum / N : 0.0;
+	};
+	int32 NotLargestFirst = 0, Apart = 0;
+	for (const FMOWorldFeatureSite& S : Sites)
+	{
+		for (int32 I = 0; I < S.Members.Num(); ++I)
+		{
+			const FMOWorldFeatureMember& M = S.Members[I];
+			NotLargestFirst += M.Scale > S.Members[0].Scale + 1e-4f ? 1 : 0;
+			// every later member stands beside an earlier one: their cores at most 1.25x from touching (one formation, not scattered singles)
+			bool bBeside = I == 0;
+			for (int32 J = 0; J < I && !bBeside; ++J)
+			{
+				bBeside = FVector2D::Distance(FVector2D(M.Location), FVector2D(S.Members[J].Location))
+					<= 1.25 * (Spires.GetCoreRadiusCm(M.Scale) + Spires.GetCoreRadiusCm(S.Members[J].Scale)) + 1.0;
+			}
+			Apart += bBeside ? 0 : 1;
+		}
+	}
+	TestEqual(TEXT("the largest member is placed first"), NotLargestFirst, 0);
+	TestEqual(TEXT("every later member stands beside an earlier one (one formation)"), Apart, 0);
+	FMOWorldFeatureDefinitionRow Packed = Spires;
+	Packed.CoreFraction = 0.5f;
+	FMOWorldFeaturePlacer D(P, Seed, { { FName(TEXT("Spires")), Packed } });
+	TArray<FMOWorldFeatureSite> PackedSites;
+	D.SitesTouching(Area, PackedSites);
+	int32 FullMembers = 0, PackedMembers = 0, CoreInside = 0;
+	const double FullGap = MeanNearest(Sites, FullMembers), PackedGap = MeanNearest(PackedSites, PackedMembers);
+	for (const FMOWorldFeatureSite& S : PackedSites)
+	{
+		for (int32 I = 0; I < S.Members.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < S.Members.Num(); ++J)
+			{
+				CoreInside += FVector2D::Distance(FVector2D(S.Members[I].Location), FVector2D(S.Members[J].Location))
+					< 0.9 * (Packed.GetCoreRadiusCm(S.Members[I].Scale) + Packed.GetCoreRadiusCm(S.Members[J].Scale)) - 1.0 ? 1 : 0;
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("nearest neighbour / (sum of footprints): %.2f full, %.2f with CoreFraction 0.5 (%d / %d members)"), FullGap, PackedGap, FullMembers, PackedMembers));
+	TestTrue(TEXT("CoreFraction 0.5 packs the members closer"), PackedGap > 0.0 && PackedGap < FullGap * 0.8);
+	TestEqual(TEXT("... and none stands inside another's core"), CoreInside, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_NearOthers,
+	"MOFramework.WorldFeatures.NearOthers",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_NearOthers::RunTest(const FString& Parameters)
+{
+	// A row that names other features stands only near their sites, never on them (Wes, Oct 23 2026, BR23-5: Electric Dreams' small assemblies
+	// "scatter them around the cliffs and embankment pois", not standalone). CONTROL: the same row without the rule stands far from them too.
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(-1675528670);
+	FMOWorldFeatureDefinitionRow Cliffs;
+	Cliffs.DensityPerKm2 = 2.0f;
+	Cliffs.SpacingCm = 40000.0f;
+	Cliffs.FootprintRadiusCm = 2000.0f;
+	Cliffs.SlopeMaxDeg = 30.0f;
+	Cliffs.Priority = 10;
+	FMOWorldFeatureDefinitionRow Small;
+	Small.DensityPerKm2 = 120.0f;
+	Small.SpacingCm = 6000.0f;
+	Small.FootprintRadiusCm = 1000.0f;
+	Small.SlopeMaxDeg = 30.0f;
+	Small.Priority = 0;
+	FMOWorldFeatureDefinitionRow Near = Small;
+	Near.NearFeatureIds = { FName(TEXT("Cliffs")) };
+	Near.NearWithinCm = 6000.0f;
+
+	const FBox2D Area(FVector2D(-600000.0, -600000.0), FVector2D(600000.0, 600000.0));
+	auto Measure = [&](const FMOWorldFeatureDefinitionRow& Row, int32& OutFar, int32& OutOn, int32& OutTotal)
+	{
+		FMOWorldFeaturePlacer Placer(P, Seed, { { FName(TEXT("Cliffs")), Cliffs }, { FName(TEXT("Small")), Row } });
+		TArray<FMOWorldFeatureSite> Sites;
+		Placer.SitesTouching(Area, Sites);
+		TArray<FMOWorldFeatureSite> CliffSites;
+		Placer.SitesTouching(FBox2D(Area.Min - FVector2D(100000.0), Area.Max + FVector2D(100000.0)), CliffSites);
+		CliffSites.RemoveAll([](const FMOWorldFeatureSite& S) { return S.FeatureId != FName(TEXT("Cliffs")); });
+		OutFar = OutOn = OutTotal = 0;
+		for (const FMOWorldFeatureSite& S : Sites)
+		{
+			if (S.FeatureId != FName(TEXT("Small")))
+			{
+				continue;
+			}
+			++OutTotal;
+			double Gap = TNumericLimits<double>::Max();
+			for (const FMOWorldFeatureSite& C : CliffSites)
+			{
+				Gap = FMath::Min(Gap, FVector2D::Distance(FVector2D(S.Location), FVector2D(C.Location)) - S.FootprintRadiusCm - C.FootprintRadiusCm);
+			}
+			OutFar += Gap > Near.NearWithinCm + 1.0 ? 1 : 0;
+			OutOn += Gap < -1.0 ? 1 : 0;
+		}
+	};
+	int32 Far = 0, On = 0, Total = 0, FreeFar = 0, FreeOn = 0, FreeTotal = 0;
+	Measure(Near, Far, On, Total);
+	Measure(Small, FreeFar, FreeOn, FreeTotal);
+	AddInfo(FString::Printf(TEXT("near rule: %d sites, %d far, %d on a cliff; without it: %d sites, %d far"), Total, Far, On, FreeTotal, FreeFar));
+	TestTrue(TEXT("sites near the cliffs exist"), Total > 0);
+	TestEqual(TEXT("none stands farther than NearWithinCm from a cliff's footprint"), Far, 0);
+	TestEqual(TEXT("none stands on a cliff's footprint"), On, 0);
+	TestTrue(TEXT("CONTROL: without the rule, most stand far from any cliff"), FreeFar > FreeTotal / 2);
 	return true;
 }
 
