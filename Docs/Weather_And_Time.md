@@ -58,6 +58,12 @@
 
 ## 2a. Ground weather: wet ground, puddles, snow cover (BR18-16, Oct 19 2026)
 
+- **UDW's "Dynamic Landscape Weather Effects", where they stand (Oct 22):** the LOOK (wet, darker, glossier ground, puddles, snow
+  cover) is MO's own since Oct 19 (below: UDW's material state ran demo rates). Footsteps answer it since Oct 22 (a crunch in snow, a
+  splash in puddles: `Docs/Audio.md` section 3). Not built: UDW's DLWE INTERACTION (trails pressed into snow, ripples and splashes drawn
+  where a pawn walks: `DLWE_Interaction` components on pawns writing UDW's render target, which the terrain material would sample
+  beside MO_Weather). Backlog N-195.
+
 - **What:** the open ground's `Wetness` and `SnowCover` (0-1, `FMOGroundWeatherState`), and the terrain material showing them: soaked
   ground darker (`WetDarken` per surface) and glossier than the dry floor (`WetRoughness`), puddles on near-flat ground once soaked
   (`PuddleAmount`: sand 0, gravel 0.35, soil 1), a snow cover that comes in patchy then whole on faces up to ~45 deg, merged with the

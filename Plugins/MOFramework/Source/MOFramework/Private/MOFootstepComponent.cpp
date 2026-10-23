@@ -5,6 +5,7 @@
 #include "MOCharacterMovementComponent.h"
 #include "MOFootstepSurfaceInterface.h"
 #include "MOFramework.h"
+#include "MOGameState.h"
 #include "MOWorldGen.h"
 #include "MOWorldSeedSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -54,6 +55,27 @@ float FMOFootstepMath::StepLengthCm(EMOFootstepGait Gait)
 FName FMOFootstepMath::SoundIdFor(FName Set, int32 Variant)
 {
 	return FName(*FString::Printf(TEXT("SFX.Footsteps.%s%d"), *Set.ToString(), (Variant & 1) + 1));
+}
+
+FMOFootstepMath::FWeatherLayer FMOFootstepMath::WeatherLayerFor(float Wetness, float SnowCover, float SlopeDeg)
+{
+	FWeatherLayer L;
+	const float Snow = FMath::Clamp(FMath::IsFinite(SnowCover) ? SnowCover : 0.0f, 0.0f, 1.0f);
+	const float Wet = FMath::Clamp(FMath::IsFinite(Wetness) ? Wetness : 0.0f, 0.0f, 1.0f);
+	// A dusting is heard once it covers the ground; deep cover is all you hear (the ground beneath goes quiet).
+	L.SnowVolume = FMath::SmoothStep(0.1f, 0.6f, Snow);
+	L.BaseScale = 1.0f - 0.75f * FMath::SmoothStep(0.1f, 0.8f, Snow);
+	// Puddles stand on the flats of soaked ground (the material's rule), never under snow.
+	if (SlopeDeg <= PuddleMaxSlopeDeg)
+	{
+		L.SplashVolume = 0.8f * FMath::SmoothStep(0.35f, 0.9f, Wet) * (1.0f - L.SnowVolume);
+	}
+	return L;
+}
+
+FName FMOFootstepMath::WeatherSoundIdFor(FName Layer, int32 Variant)
+{
+	return FName(*FString::Printf(TEXT("SFX.Footsteps.%s%d"), *Layer.ToString(), FMath::Abs(Variant) % WeatherVariants + 1));
 }
 
 FMOFootstepMath::EGround FMOFootstepMath::ClassifyGround(float FloorZ, float GeneratedSurfaceZ)
@@ -320,6 +342,8 @@ void UMOFootstepComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 
 FName UMOFootstepComponent::ResolveSet(const FHitResult& FloorHit, const FVector& FootLocation, FString* OutDescription)
 {
+	bLastSetOpenGround = false;
+
 	// 1. The thing stood on names its own surface.
 	if (const AActor* Ground = FloorHit.GetActor())
 	{
@@ -384,6 +408,7 @@ FName UMOFootstepComponent::ResolveSet(const FHitResult& FloorHit, const FVector
 		CachedCell = Cell;
 	}
 	if (OutDescription) { *OutDescription = FString::Printf(TEXT("biome %s"), *CachedBiomeId.ToString()); }
+	bLastSetOpenGround = true;
 	return CachedBiomeSet;
 }
 
@@ -418,8 +443,30 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 
 	const float Speed2D = Character->GetVelocity().Size2D();
 	const EMOFootstepGait Gait = FMOFootstepMath::GaitFor(Move && Move->IsCrouching(), Speed2D, RunSpeedThresholdCm);
-	const float Volume = FMOFootstepMath::VolumeFor(Gait) * VolumeScale * StepVolumeScale * FMath::FRandRange(0.9f, 1.1f);
+	const float StepVolume = FMOFootstepMath::VolumeFor(Gait) * VolumeScale * StepVolumeScale * FMath::FRandRange(0.9f, 1.1f);
 	const float Pitch = FMath::FRandRange(0.94f, 1.06f);
+
+	// The ground's weather (the host's wetness / snow cover, AMOGameState) on open ground only: not on a floor, a rock, a log or in a cave.
+	FMOFootstepMath::FWeatherLayer Weather;
+	if (bLastSetOpenGround)
+	{
+		if (const AMOGameState* State = World->GetGameState<AMOGameState>())
+		{
+			const float SlopeDeg = FloorHit.bBlockingHit ? FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp((float)FloorHit.ImpactNormal.Z, -1.0f, 1.0f))) : 0.0f;
+			Weather = FMOFootstepMath::WeatherLayerFor(State->GetGroundWeather().Wetness, State->GetGroundWeather().SnowCover, SlopeDeg);
+		}
+	}
+	const float Volume = StepVolume * Weather.BaseScale;
+	if (Weather.SnowVolume > 0.01f)
+	{
+		Audio->PlayOneShotAtLocationAttenuated(this, FMOFootstepMath::WeatherSoundIdFor(TEXT("Snow"), FMath::Rand()), Sole, StepVolume * Weather.SnowVolume, Pitch,
+			Audio->GetFootstepAttenuation());
+	}
+	if (Weather.SplashVolume > 0.01f)
+	{
+		Audio->PlayOneShotAtLocationAttenuated(this, FMOFootstepMath::WeatherSoundIdFor(TEXT("Puddle"), FMath::Rand()), Sole, StepVolume * Weather.SplashVolume, Pitch,
+			Audio->GetFootstepAttenuation());
+	}
 
 	FName Played = Set;
 	FName Id = FMOFootstepMath::SoundIdFor(Set, NextVariant);
@@ -442,9 +489,9 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 
 	if (bDebugLog)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP step %s foot=%s set=%s%s gait=%d speed=%.0f vol=%.2f (%s) %s pawn=%s"),
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FOOTSTEP step %s foot=%s set=%s%s gait=%d speed=%.0f vol=%.2f snow=%.2f splash=%.2f (%s) %s pawn=%s"),
 			Source == EStepSource::Plant ? TEXT("plant") : Source == EStepSource::Stride ? TEXT("stride") : TEXT("landing"),
-			FootIndex == 0 ? TEXT("L") : TEXT("R"), *Played.ToString(), Played == Set ? TEXT("") : TEXT(" (fallback)"), (int32)Gait, Speed2D, Volume, *Why, bOk ? TEXT("") : TEXT("NOT PLAYED"),
-			*Character->GetName());
+			FootIndex == 0 ? TEXT("L") : TEXT("R"), *Played.ToString(), Played == Set ? TEXT("") : TEXT(" (fallback)"), (int32)Gait, Speed2D, Volume,
+			Weather.SnowVolume, Weather.SplashVolume, *Why, bOk ? TEXT("") : TEXT("NOT PLAYED"), *Character->GetName());
 	}
 }

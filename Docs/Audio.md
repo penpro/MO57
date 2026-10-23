@@ -99,6 +99,12 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
 - Biome sets (DT_Biomes `FootstepSet`; Temperate / Locust had drifted to SandTrail in the data, restored Oct 18, BR18-8): Temperate / Locust LeafCrunch, Meadow GrassTread, Rocky RockScuff, Shore / DryScrub SandTrail, AlpineHeath MossPad,
   Rainforest MossPad (MuddyStep until Oct 23: Wes, BR23-8, "rainforest footsteps sound stupid, remove the sound altogether"; nothing uses
   MuddyStep now), AlpineRock StoneStep.
+- **The ground's weather underfoot** (Oct 22, Wes: "im not sure if the DLWE and footsteps and everything from the UDW/UDS ever got
+  implemented"): on open ground (the biome answered, not a floor, a prop or a cave) a step reads the host's `FMOGroundWeatherState`
+  (`AMOGameState`, Weather_And_Time 2a) and `FMOFootstepMath::WeatherLayerFor` adds a snow crunch (from a 0.1 cover, full at 0.6) that
+  muffles the ground's own step to a quarter in deep snow, and a puddle splash on soaked flat ground (wetness 0.35-0.9, slope up to 8 deg:
+  where the material draws puddles; never under snow). Sounds: UDS's own `Snow_Compress_1-4` / `Puddle_01-04` as bank rows
+  `SFX.Footsteps.Snow1-4` / `Puddle1-4`. `MO.Footstep.Log` prints `snow=` / `splash=` per step. Test `MOFramework.Footstep.WeatherLayer`.
 - **Loudness** (`FMOFootstepMath::VolumeFor`): sneak 0.175, walk 0.35, run 0.5 -- half the first values (Wes, Oct 23, BR23-2: "footsteps
   are still really loud, need to drop them by about half"); a creature's `StepVolumeScale` multiplies it.
 - **Props underfoot** (N-132, Oct 20): a placed mesh stood on (PCG rocks and logs, props) names its set by its asset path,

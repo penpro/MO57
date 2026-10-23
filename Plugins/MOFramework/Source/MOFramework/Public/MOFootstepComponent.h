@@ -81,6 +81,25 @@ struct MOFRAMEWORK_API FMOFootstepMath
 
 	/** Rocks, boulders, cliffs and cobbles ring as stone; stumps, fallen trees, branches, logs and sticks as wood; ground patches defer to the biome. */
 	static TArray<FMOFootstepPropRule> DefaultPropRules();
+
+	/**
+	 * The weather on open ground under a step (Wes, Oct 22 2026: "im not sure if the DLWE and footsteps and everything from the UDW/UDS ever got
+	 * implemented"): the ground's own state (FMOGroundWeatherState, BR18-16: what the terrain material draws as wet ground, puddles and snow).
+	 * Snow crunches and muffles the ground beneath it; soaked flat ground splashes (puddles form on the flats, as the material draws them).
+	 * Volumes are fractions of the step's own; BaseScale multiplies the ground's own sound.
+	 */
+	struct FWeatherLayer
+	{
+		float SnowVolume = 0.0f;
+		float SplashVolume = 0.0f;
+		float BaseScale = 1.0f;
+	};
+	static FWeatherLayer WeatherLayerFor(float Wetness, float SnowCover, float SlopeDeg);
+	static constexpr float PuddleMaxSlopeDeg = 8.0f;
+
+	/** Bank id of a weather layer's variant: "SFX.Footsteps.<Layer><1..WeatherVariants>" (Snow, Puddle). */
+	static FName WeatherSoundIdFor(FName Layer, int32 Variant);
+	static constexpr int32 WeatherVariants = 4;
 };
 
 /**
@@ -221,6 +240,8 @@ private:
 	FName CachedBiomeId;
 
 	TSet<FName> MissingSets;   // sets with no bank rows: warned about once, then the fallback set plays
+
+	bool bLastSetOpenGround = false;   // ResolveSet's last answer came from the generated surface (the biome), where the ground weather lies
 
 	bool bDebugLog = false;
 	double HeightsLogUntil = 0.0;

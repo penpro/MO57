@@ -244,4 +244,42 @@ bool FMOFootstep_PropRules::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOFootstep_WeatherLayer,
+	"MOFramework.Footstep.WeatherLayer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOFootstep_WeatherLayer::RunTest(const FString& Parameters)
+{
+	// The ground's own weather under a step (Oct 22 2026): snow crunches and muffles the ground, soaked flats splash, nothing on dry ground.
+	using M = FMOFootstepMath;
+	const M::FWeatherLayer Dry = M::WeatherLayerFor(0.0f, 0.0f, 0.0f);
+	TestEqual(TEXT("dry ground: no snow"), Dry.SnowVolume, 0.0f);
+	TestEqual(TEXT("dry ground: no splash"), Dry.SplashVolume, 0.0f);
+	TestEqual(TEXT("dry ground: the ground's own step at full volume"), Dry.BaseScale, 1.0f);
+
+	const M::FWeatherLayer Damp = M::WeatherLayerFor(0.3f, 0.0f, 2.0f);
+	TestEqual(TEXT("damp ground (no puddles yet): no splash"), Damp.SplashVolume, 0.0f);
+
+	const M::FWeatherLayer Soaked = M::WeatherLayerFor(1.0f, 0.0f, 3.0f);
+	TestTrue(TEXT("soaked flat ground splashes"), FMath::IsNearlyEqual(Soaked.SplashVolume, 0.8f, 1e-4f));
+	TestEqual(TEXT("soaked ground keeps its own step"), Soaked.BaseScale, 1.0f);
+
+	const M::FWeatherLayer Slope = M::WeatherLayerFor(1.0f, 0.0f, M::PuddleMaxSlopeDeg + 4.0f);
+	TestEqual(TEXT("no puddles on a slope"), Slope.SplashVolume, 0.0f);
+
+	const M::FWeatherLayer Deep = M::WeatherLayerFor(0.0f, 1.0f, 0.0f);
+	TestTrue(TEXT("deep snow crunches at full volume"), FMath::IsNearlyEqual(Deep.SnowVolume, 1.0f, 1e-4f));
+	TestTrue(TEXT("deep snow muffles the ground to a quarter"), FMath::IsNearlyEqual(Deep.BaseScale, 0.25f, 1e-4f));
+
+	const M::FWeatherLayer WetSnow = M::WeatherLayerFor(1.0f, 1.0f, 0.0f);
+	TestEqual(TEXT("no splash under snow"), WetSnow.SplashVolume, 0.0f);
+
+	const M::FWeatherLayer Bad = M::WeatherLayerFor(NAN, NAN, 0.0f);
+	TestEqual(TEXT("NaN weather reads as dry"), Bad.BaseScale, 1.0f);
+
+	TestEqual(TEXT("weather sound id"), M::WeatherSoundIdFor(TEXT("Snow"), 6), FName(TEXT("SFX.Footsteps.Snow3")));
+	TestEqual(TEXT("weather sound id wraps negatives"), M::WeatherSoundIdFor(TEXT("Puddle"), -1), FName(TEXT("SFX.Footsteps.Puddle2")));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
