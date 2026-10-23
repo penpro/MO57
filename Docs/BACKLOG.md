@@ -13,6 +13,10 @@
 
 ## Wes: check by eye (look-and-feel results deferred to Wes, Oct 18; add a line, he ticks them off)
 
+Since Oct 22 (Wes: "collect a few screen shots and i can review them and give thumbs up/thumbs down") each row that a still can show also
+gets before / after shots on a review page with a vote per row (`Tools/review_shots.py`, `Tools/review_from_reports.py` for a bug report's
+own camera, `Tools/review_page.py`); the votes are read back and the rows ticked or reopened from them. Motion stays a text row.
+
 | What to look at | Where / how | Fixed looks like | From |
 |---|---|---|---|
 | Megascans tree wind far from the world origin | Wes's world (seed 670711536), several km from spawn; any Megascans tree in wind | leaves and branches move smoothly; no ~0.75 s move / 0.25 s freeze / snap cycle | N-166 / N-167 (4e349e37, 6d956730) |
@@ -24,6 +28,10 @@
 | Black alder trees (Oct 23) | Any temperate / rain forest, on flat ground and on a slope | trunks and root flares sit in the ground (50 cm down now) | BR23-7 |
 | Lakes (Oct 23) | `MO.Water.GoToLake` (or any lake) | almost still: short small ripples, little surface noise; the water sound much quieter | BR23-16 |
 | Breath meter (Oct 23) | Dive under water and hold | the meter reads at a glance (bigger segments, brighter label) | BR23-17 |
+| Electric Dreams POIs (Oct 23) | `poi` to a rock spire, a cliff and an embankment assembly in ElectricForest (or Wes's spire on seed 3014) | spires stand as one formation (big ones central, small ones round them, nearly touching, deep in the ground); cliffs / embankments in groups of 3-10 with small assemblies round them; plants and shrubs right up to the rock, not a bare ring | BR23-3..6 |
+| Cliff faces (Oct 23) | RockyHighland / AlpineRock steep slopes | the sandstone slabs twice the size, in overlapping clumps, tucked into the slope | BR23-12 |
+| Dry scrub and its lakes (Oct 23) | A DryScrub area and a lake in it | dry scrub much rarer (meadow instead); a green band of reeds, grass, saplings round the lake | BR23-14, BR23-16 |
+| Height bands (Oct 23) | Look from a hill at the Alpine Heath / Electric Forest / Alpine Rock edges, near and at 1-3 km | the change of ground fades over 25-50 m of height and wanders; no straight contour line | BR23-19 |
 | Grass cleared on a building site | Place a campfire (or any building) in tall grass, host and joiner | a cleared circle around it on both screens, still clear after a reload; trees and bushes untouched | N-079 (Oct 18) |
 | Build site menu's material sources | Right-click a placed ghost | Inventory / Nearby containers / Surrounding area labels sit left, next to their boxes | N-083 |
 | Item icons with no checkerboard | Inventory with sticks and stones | clean icons on the dark slot, no grey checker pattern | N-075 |
@@ -244,23 +252,23 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 |---|---|---|---|---|---|
 | BR23-1 | OPEN | Claude | Cave entrances: rocks float round them (the scatter runs before the cave stamp edits the ground); the bowl round the mouth too big; biome vegetation at the entrance; caves that meander, split, have small chambers | `Docs/Caves_And_Geology.md` | b9bf5174 |
 | BR23-2 | DONE-2026-10-23 | Claude | Footsteps half as loud (`FMOFootstepMath::VolumeFor` 0.175 / 0.35 / 0.5); by ear on Wes's list | Audio §3 | f0073cd4 |
-| BR23-3 | OPEN | Claude | ED rock spire POI: bare ground round it; 3-10 spire assemblies instead of one | World_Features_Architecture | 54ae9d0e |
-| BR23-4 | OPEN | Claude | ED embankment POI: bare round it; batches of 3-10 | World_Features_Architecture | 4d0ab8cf |
-| BR23-5 | OPEN | Claude | ED small assemblies: no standalone POIs, scattered round the cliffs / embankments instead | World_Features_Architecture | 42f7b3dd |
-| BR23-6 | OPEN | Claude | Rock spires with vines: 1 m (small) / 5 m (huge) deeper; large ones central, small ones round them, closer; ground not bare; interaction on their flowers / berry bushes / vines | World_Features_Architecture | 1ea3d80b |
+| BR23-3 | DONE-2026-10-23 | Claude | ED rock spire POI: clusters of 3-10 packed round the largest (`CoreFraction` 0.5); the scatter keeps only each member's core bare, ground cover / shrubs grow in its ring. Wes's world: a 7-member formation at his spire, forest up to the rock | World_Features_Architecture | 54ae9d0e |
+| BR23-4 | DONE-2026-10-23 | Claude | ED embankment and cliff assemblies: clusters of 3-10 within 120 m (site densities cut to 2 and 1 / km2 so the count stays near 2x), the same ring rule | World_Features_Architecture | 4d0ab8cf |
+| BR23-5 | DONE-2026-10-23 | Claude | ED small assemblies only within 60 m of a cliff / embankment site (`NearFeatureIds`), no longer standalone; test `WorldFeatures.NearOthers` | World_Features_Architecture | 42f7b3dd |
+| BR23-6 | OPEN | Claude | Rock spires with vines -- DONE Oct 23: 1 m (0.8x) to 5 m (4x) deeper (spire graphs' `EmbedCm` 125 x scale), large central and small round them, packed nearly touching, ground not bare. Left: interaction on their flowers / berry bushes / vines (composition meshes carry no resource / item mapping) | World_Features_Architecture | 1ea3d80b |
 | BR23-7 | DONE-2026-10-23 | Claude | Black alder trees 50 cm into the ground (25 since Oct 16; still floating: untilted trees show the downhill root flare); 42 live entries | `Docs/PCG.md` §5 | d035208d |
 | BR23-8 | DONE-2026-10-23 | Claude | Rainforest footsteps MossPad (MuddyStep unused) | Audio §3 | f754e929 |
 | BR23-9 | DONE-2026-10-23 | Claude | Scattered branches / sticks not interactable: their species used the Megascans originals, the items use copies (path-mapped); now the item meshes (6 entries, 3 biomes). Checked on seed 3014 at Wes's spot: the branch he aimed at is picked up as Branch01 | `Docs/PCG.md` §5 | 0224c839 |
 | BR23-10 | OPEN | Claude | Small flowers ghost / fade / shimmer (masked foliage under TSR? LOD dither?) | PCG / rendering | 89300267 |
 | BR23-11 | OPEN | Claude | Grass too bright, no shadows under canopy (Wes may have had shadows off) | PCG / rendering | 7b08a28c |
-| BR23-12 | OPEN | Claude | Cliff faces: tucked in, clustered to overlap (their own PCG graph round a centre), scaled x2 | `Docs/PCG.md` | 420fc8b8 |
+| BR23-12 | DONE-2026-10-23 | Claude | Cliff slabs: x2 scale, clumped together (shared clump group, core 0.75), buried deeper (SinkFraction 0.3); data only -- a cliff composition graph is the next step if it does not read as one face | `Docs/PCG.md` | 420fc8b8 |
 | BR23-13 | OPEN | Claude | Lakes as POIs; lakes are perfect circles: overlapping voxel stamps | `Docs/Water.md` | 43d0479d |
-| BR23-14 | OPEN | Claude | DryScrub biome about 1/4 of its area | DT_Biomes climate ranges | de5ef930 |
+| BR23-14 | DONE-2026-10-23 | Claude | DryScrub a quarter of its area: moisture 0-0.15 (was 0.4), Meadow takes the rest; BiomeStats 16.7 -> 4.4 % (seed 3014), 15.2 -> 4.2 % (670711536); older saves load with "GENERATOR CHANGED" | Terrain_Generation_Exploration | de5ef930 |
 | BR23-15 | DONE-2026-10-23 | Claude | A harvest with a full pack lays what does not fit at the harvester's feet (it was refused whole); `_client_harvest_full_pack` | Crafting §3 | db5aeede |
 | BR23-16 | OPEN | Claude | Lakes: (a) water sound x0.2, (b) waves 0.1 high / 0.2 long (speed by dispersion), (c) surface noise x0.1 -- DONE Oct 23; left: (d) vegetation round lakes even in dry scrub, and a still-water sound bed for lakes (the Water ambience is moving water) | `Docs/Water.md`, Audio §3 | 926ca09e |
 | BR23-17 | DONE-2026-10-23 | Claude | Breath meter readable: 56 x 18 segments, strong primary label | UI §3 | 9970cb4b |
 | BR23-18 | OPEN | Claude | Cave mix: ~2/4 small overhangs (a fire, partial shelter), 1/4 deep branching caves, 1/4 shallow caves as now | `Docs/Caves_And_Geology.md` | c4aa1cdb |
-| BR23-19 | OPEN | Claude | Height bands read as straight lines at distance: blend over 25-50 m of elevation (not at the water line) | `Docs/Terrain_Generation_Exploration.md` | 1680cdbf |
+| BR23-19 | DONE-2026-10-23 | Claude | Height bands blend over 25-50 m of elevation inland (`FMOWorldGen::HeightBlendBandCm`: AlpineHeath 38 m, ElectricForest's top 36 m, AlpineRock 50 m; beaches 1.2 m as before); ground material and foliage only (not in the world hash: no land changes) | `Docs/Terrain_Generation_Exploration.md` | 1680cdbf |
 
 ## UI
 

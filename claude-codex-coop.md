@@ -1400,3 +1400,13 @@ For CODEX (UI retirement, N-126): WBP_RecipeDetail / WBP_RecipeEntry / WBP_Recip
 Status: PROGRESS (Wes's 19 Oct 23 bug reports triaged: Docs/BugReports_2026-10-23.md, BACKLOG "Wes's Oct 23 reports" BR23-n; batch 1 committed: 059d416f world data, f5f6032b audio, a7158465 lakes, 32210e78 harvest with a full pack, f7bd3c12 breath meter) + CLAIM (batch 2: DT_Biomes, the PCG / world-feature graphs and palettes for the ED POIs, cliffs, lake shores, DryScrub size)
 References: CL-0149
 Live tables touched: DT_Biomes (alder SinkMinCm 50, Rainforest footstepSet MossPad, debris species on the item meshes), DT_AmbientLayers (Ambient.Water x0.2).
+
+### 2026-10-22 22:50 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0151
+Status: CLAIM build window + instances (BR23 batch 2: world features, height bands, context-menu hold for test instances, species WidthScale)
+References: CL-0150
+C++ touched (uncommitted until verified): MOWorldFeature*, MOPCGBiomeSpawnerSettings, MOWorldGen (Core), MOBiomeDefinitionRow (Core, new species field WidthScale), MOContextMenuBase (+ MOInventoryUIController forage warp), MOSpeciesGallery, MOCoopInstanceCheats. Harness: instances now launch with -MOHoldContextMenus (menus no longer warp the real cursor or close when it moves).
+
+### 2026-10-22 23:41 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0152
+Status: PROGRESS (BR23 batch 2 committed: e78e0ab0 world formations / biome tuning / rainforest WidthScale, f189a631 height bands, 50448648 instance menus hold the real cursor; suite 351 / 0, nettest 261 / 2 -- both failures the test world, fixes queued)
+References: CL-0151
+Live tables touched: DT_Biomes (Rainforest tree scales + WidthScale), DT_WorldFeatures. The build window stays CLAIMED for batch 3 (world creation settings, footstep weather layer, save-list boot cost); the `ui` instance is taking review shots now.
