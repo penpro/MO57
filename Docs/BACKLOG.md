@@ -20,6 +20,10 @@
 | Bark container in the world | Drop one on the ground next to a stick | about 14 x 13 x 12 cm: a small, real 1 L folded-bark vessel (deliberate) | BR18-29 |
 | The 12 new image-to-3D items (Oct 22) | `MO.Player.GiveItem <Id>` and drop: AnimalBladder01, AnimalBrain01, BoneNeedle01, CopperBead01, DeadfallTrap01, FlintKnife01, Sinew01, Splint01, SutureKit01, Tourniquet01, WoodenShield01, DugoutCanoe01 (4.5 m); and their inventory icons; equip WoodenShield01 (a held item: how it sits in the hand) | each reads as the real thing at its real size; icons clean | N-076 |
 | Sound after a menu load (Oct 22) | Launch the game (or PIE) and listen through the intro, the menu and the first minute of a new game | no buzz and no stretch of silence; at most the reverb sounds dry for ~20 s after a load | N-189 |
+| Footsteps (by ear, Oct 23) | Walk, run and sneak anywhere; then in the Rainforest | about half as loud as before; rainforest steps soft (MossPad), not the muddy squelch | BR23-2, BR23-8 |
+| Black alder trees (Oct 23) | Any temperate / rain forest, on flat ground and on a slope | trunks and root flares sit in the ground (50 cm down now) | BR23-7 |
+| Lakes (Oct 23) | `MO.Water.GoToLake` (or any lake) | almost still: short small ripples, little surface noise; the water sound much quieter | BR23-16 |
+| Breath meter (Oct 23) | Dive under water and hold | the meter reads at a glance (bigger segments, brighter label) | BR23-17 |
 | Grass cleared on a building site | Place a campfire (or any building) in tall grass, host and joiner | a cleared circle around it on both screens, still clear after a reload; trees and bushes untouched | N-079 (Oct 18) |
 | Build site menu's material sources | Right-click a placed ghost | Inventory / Nearby containers / Surrounding area labels sit left, next to their boxes | N-083 |
 | Item icons with no checkerboard | Inventory with sticks and stones | clean icons on the dark slot, no grey checker pattern | N-075 |
@@ -233,6 +237,30 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR18-29 | DONE-2026-10-18 | Claude | Bark container: a 1 L water vessel at its real size (14 x 13 x 12 cm); teaching it is fork F28 |
 | BR18-31 | DONE-2026-10-18 | Claude | Joiner UI kept removed stacks / jobs / conditions: FastArray notifications moved to PostReplicatedReceive | `Docs/BugReports_2026-10-18.md` | | `Docs/BugReports_2026-10-18.md` | |
 | BR18-30 | DONE-2026-10-18 | Claude | Survivor job typos in DT_SurvivorJobs fixed | `Docs/BugReports_2026-10-18.md` | |
+
+## Wes's Oct 23 reports (BR23; tracker `Docs/BugReports_2026-10-23.md`)
+
+| ID | Status | Owner | Item | Ref | Aliases |
+|---|---|---|---|---|---|
+| BR23-1 | OPEN | Claude | Cave entrances: rocks float round them (the scatter runs before the cave stamp edits the ground); the bowl round the mouth too big; biome vegetation at the entrance; caves that meander, split, have small chambers | `Docs/Caves_And_Geology.md` | b9bf5174 |
+| BR23-2 | DONE-2026-10-23 | Claude | Footsteps half as loud (`FMOFootstepMath::VolumeFor` 0.175 / 0.35 / 0.5); by ear on Wes's list | Audio §3 | f0073cd4 |
+| BR23-3 | OPEN | Claude | ED rock spire POI: bare ground round it; 3-10 spire assemblies instead of one | World_Features_Architecture | 54ae9d0e |
+| BR23-4 | OPEN | Claude | ED embankment POI: bare round it; batches of 3-10 | World_Features_Architecture | 4d0ab8cf |
+| BR23-5 | OPEN | Claude | ED small assemblies: no standalone POIs, scattered round the cliffs / embankments instead | World_Features_Architecture | 42f7b3dd |
+| BR23-6 | OPEN | Claude | Rock spires with vines: 1 m (small) / 5 m (huge) deeper; large ones central, small ones round them, closer; ground not bare; interaction on their flowers / berry bushes / vines | World_Features_Architecture | 1ea3d80b |
+| BR23-7 | DONE-2026-10-23 | Claude | Black alder trees 50 cm into the ground (25 since Oct 16; still floating: untilted trees show the downhill root flare); 42 live entries | `Docs/PCG.md` §5 | d035208d |
+| BR23-8 | DONE-2026-10-23 | Claude | Rainforest footsteps MossPad (MuddyStep unused) | Audio §3 | f754e929 |
+| BR23-9 | DONE-2026-10-23 | Claude | Scattered branches / sticks not interactable: their species used the Megascans originals, the items use copies (path-mapped); now the item meshes (6 entries, 3 biomes). Checked on seed 3014 at Wes's spot: the branch he aimed at is picked up as Branch01 | `Docs/PCG.md` §5 | 0224c839 |
+| BR23-10 | OPEN | Claude | Small flowers ghost / fade / shimmer (masked foliage under TSR? LOD dither?) | PCG / rendering | 89300267 |
+| BR23-11 | OPEN | Claude | Grass too bright, no shadows under canopy (Wes may have had shadows off) | PCG / rendering | 7b08a28c |
+| BR23-12 | OPEN | Claude | Cliff faces: tucked in, clustered to overlap (their own PCG graph round a centre), scaled x2 | `Docs/PCG.md` | 420fc8b8 |
+| BR23-13 | OPEN | Claude | Lakes as POIs; lakes are perfect circles: overlapping voxel stamps | `Docs/Water.md` | 43d0479d |
+| BR23-14 | OPEN | Claude | DryScrub biome about 1/4 of its area | DT_Biomes climate ranges | de5ef930 |
+| BR23-15 | DONE-2026-10-23 | Claude | A harvest with a full pack lays what does not fit at the harvester's feet (it was refused whole); `_client_harvest_full_pack` | Crafting §3 | db5aeede |
+| BR23-16 | OPEN | Claude | Lakes: (a) water sound x0.2, (b) waves 0.1 high / 0.2 long (speed by dispersion), (c) surface noise x0.1 -- DONE Oct 23; left: (d) vegetation round lakes even in dry scrub, and a still-water sound bed for lakes (the Water ambience is moving water) | `Docs/Water.md`, Audio §3 | 926ca09e |
+| BR23-17 | DONE-2026-10-23 | Claude | Breath meter readable: 56 x 18 segments, strong primary label | UI §3 | 9970cb4b |
+| BR23-18 | OPEN | Claude | Cave mix: ~2/4 small overhangs (a fire, partial shelter), 1/4 deep branching caves, 1/4 shallow caves as now | `Docs/Caves_And_Geology.md` | c4aa1cdb |
+| BR23-19 | OPEN | Claude | Height bands read as straight lines at distance: blend over 25-50 m of elevation (not at the water line) | `Docs/Terrain_Generation_Exploration.md` | 1680cdbf |
 
 ## UI
 
