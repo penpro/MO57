@@ -124,6 +124,14 @@ review shots ~1.5 min a spot (a 75 s settle each).
   by a wait on the thing itself (`wait_log`, a polled probe).
 - **Test-world flakes are named, not retried:** a case that depends on world content checks its precondition first (the ground-item E
   case skips a candidate whose line hits a plant; the ground-build case counts cobbles inside the build range), so a FAIL is the game's.
+  Cases that lay something in front of a pawn, aim a click, walk straight ahead or need a wolf to reach a pawn stand on clear ground first (`_to_clear_ground`: dry,
+  flat, nothing solid within 12 m; `_clear_around_host` calls it for the host; moving the joiner brings the host along), and the gait
+  runs and the 150 s long run face the clearest heading (`_face_clear_heading`; the long run turns again when a 10 s sample shows under
+  10 m) (Oct 24: the larger rock tiers put boulders round the coastal test site -- 9 cases ran into them, the long run stood 49 m out).
+  The test site moves from run to run (the joiner's start differed by 19 m between two passes of one seed), so a case that picks a node or a
+  bank has a fallback: the harvest cases skip a node that is used up (a loose-stone node can roll none), out of season or refused as out of
+  the joiner's sight; the drink case names what blocks the view of the water and tries the sea's bank. An AI that must reach a pawn (the
+  wolf's bite, the colony medic) logs `_nav_between` (both on the navmesh? a full path?), so a miss names the navmesh or the AI (N-205).
 - **Real-cursor isolation:** harness instances launch with `-MOHoldContextMenus` (menus neither warp nor close on the real cursor): a
   person at the machine no longer fails a run, and the run no longer moves their mouse.
 - **Bridge round trips** (measured Oct 22 on a running instance): `console()` cost 1.8 s, of which ~1 s waited for a `MOQUERY` line

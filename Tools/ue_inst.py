@@ -1060,7 +1060,7 @@ def _joiner_long_run(rep, host, client):
     if not rep.step("host: located the joiner", bool(m)):
         return
     jx, jy = float(m.group(1)), float(m.group(2))
-    heading = None
+    land = []   # every heading with land 0.3, 0.7 and 1.1 km out
     for k in range(8):
         a = k * math.pi / 4.0
         ok = True
@@ -1072,26 +1072,32 @@ def _joiner_long_run(rep, host, client):
                 ok = False
                 break
         if ok:
-            heading = (jx + 150000.0 * math.cos(a), jy + 150000.0 * math.sin(a))
-            break
-    if not rep.step("a heading with 1.1 km of land ahead of the joiner", heading is not None, str(heading)):
+            land.append(a)
+    if not rep.step("a heading with 1.1 km of land ahead of the joiner", bool(land), f"{len(land)} of 8 headings: " + ", ".join(f"{math.degrees(a):.0f}" for a in land)):
         return
     pawn_name = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + (p.get_name() if p else 'none'))")) or [None, "none"])[1]
-    console(client, f"MO.Player.Face {heading[0]:.0f} {heading[1]:.0f}")
+    # Of those, the one whose first 100 m is clearest; a run that stalls (under 10 m in a sample) turns to the clearest again from where it stands,
+    # as a player steps round a rock (Oct 24: the run stopped at 49 m against one for all 150 s). Where it runs does not matter: that it gets far.
+    _face_clear_heading(host, client, land, 10000.0)
     console(client, "MO.Test.Input ToggleJog")
     console(client, "MO.Test.Input SprintStart")
     off = log_size(host)
     console(client, "MO.Test.MoveFor 0 1 150")
-    rows, worst = [], 0.0
+    rows, worst, turns, last = [], 0.0, 0, None
     for _ in range(15):
         time.sleep(10)
         sm = re.search(r"JX=(-?\d+) JY=(-?\d+) JZ=(-?\d+)", _probe(host, pxy))
         cz = _num(_probe(client, PROBE_Z), "Z")
         if sm and cz is not None:
             sz = float(sm.group(3))
-            dist = math.hypot(float(sm.group(1)) - jx, float(sm.group(2)) - jy) / 100.0
+            here = (float(sm.group(1)), float(sm.group(2)))
+            dist = math.hypot(here[0] - jx, here[1] - jy) / 100.0
             worst = max(worst, abs(sz - cz))
             rows.append(f"{dist:.0f}m:{sz:.0f}/{cz:.0f}")
+            if last and math.hypot(here[0] - last[0], here[1] - last[1]) < 1000.0:
+                _face_clear_heading(host, client, land, 10000.0)
+                turns += 1
+            last = here
     console(client, "MO.Test.Input SprintEnd")
     console(client, "MO.Test.Input ToggleJog")
     rescued = len(re.findall(rf"\[MOCharacter\] {re.escape(pawn_name)}: Fall-through detected!", read_log_from(host, off)))
@@ -1107,7 +1113,8 @@ def _joiner_long_run(rep, host, client):
     rest_gap = abs(int(rm.group(1)) - int(rm.group(2))) if rm else 9999
     rep.step("the joiner sprinted away for 150 s on ground the server has: server and client agree, no fall-through",
              bool(rows) and far > 400.0 and worst <= 500.0 and rest_gap <= 60 and rescued == 0,
-             f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}")
+             f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}; "
+             f"turned past an obstacle {turns}x")
 
 
 def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False, seed=None):
@@ -1500,7 +1507,21 @@ def _client_press_e(rep, host, client):
     """CLIENT presses E on a low object it aims at, through the real input path (TryInteract -> ServerRequestInteract -> the
     server's check of the claimed target). Until Oct 15 2026 the server re-derived the target with its own 12 cm sweep while the
     client aims with a 30 cm one, and refused E on low objects the crosshair covered (a built campfire, a stick on the ground).
-    _client_pickup cannot catch that: MO.Test.PickupNearest uses the separate distance-only pickup RPC."""
+    _client_pickup cannot catch that: MO.Test.PickupNearest uses the separate distance-only pickup RPC.
+    The joiner works on clear ground (Oct 24: on a slope by a rock the camera's spring arm swung with every turn and the aim never settled,
+    15.9 cm off after 7 tries) and goes back where it was after, where the next cases expect it."""
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_E_HOME = p.get_actor_location(); out('E_HOME_SAVED')")
+    _to_clear_ground(host, 1, bring_host=False)
+    try:
+        _client_press_e_here(rep, host, client)
+    finally:
+        _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_E_HOME', None); "
+                     "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('E_HOME')")
+        time.sleep(2)
+
+
+def _client_press_e_here(rep, host, client):
+    """_client_press_e where the joiner stands (its caller moves it to clear ground and back)."""
     setup = _probe(host,
         "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
         "inv = p.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_E_GUID = g; "
@@ -1531,8 +1552,9 @@ def _client_press_e(rep, host, client):
         return
     # On a slope the bark rolls on (3.6 m downhill, 545 cm from the camera: out of the 515 cm reach -- a run that tested nothing). Stand the
     # joiner 170 cm from where it came to rest, on the side it came from; the move is the server's (it owns the pawn) and replicates.
-    # Put back afterwards (E_HOME): the next steps walk the joiner forward, and where the bark stopped rolling there is usually something it hit.
-    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_E_HOME = p.get_actor_location(); "
+    # The caller puts it back afterwards (E_HOME): the next steps walk the joiner forward, and where the bark stopped rolling there is
+    # usually something it hit.
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
                  "l = unreal.Vector(%s, %s, %s); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); " % rm.group(3, 4, 5) +
                  "p.set_actor_location(l + d * 170.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('E_STAND')")
     time.sleep(3)
@@ -1579,9 +1601,6 @@ def _client_press_e(rep, host, client):
             "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); "
             "out('pawn=%s cam=%s' % (p.get_actor_location(), pc.player_camera_manager.get_camera_location()))").strip()[-300:]
     console(client, "mo.Interact.Debug 0")
-    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_E_HOME', None); "
-                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('E_HOME')")
-    time.sleep(2)
     rep.step("client E on a stick it aims at: the host picks it up for the joiner (no 'Reject')", got and not reject,
              ("picked up" if got else (reject.group(0) if reject else "no pickup and no Reject line on the host")) + diag)
 
@@ -1795,7 +1814,8 @@ def _client_harvest(rep, host, client):
     Wes's Steam test, Oct 18 2026: every harvest a joiner made said "Inventory Full!" -- it ran in the joiner's UI on the joiner's own copy of the
     bush, and the joiner's inventory is not the authority. Proof on the HOST: a yield of the action arrives in the joiner's inventory there; and the
     joiner's UI gets the outcome. Controls: the node is at the same place on the host; the counts before. A node whose yields are out of season or
-    used up proves nothing either way, so the next one is tried."""
+    used up (a loose-stone node can roll none), or one the server refuses as out of sight from the joiner's view (Oct 24: a rock between),
+    proves nothing either way, so the next one is tried."""
     if not _worlds_built(rep, host, client):
         return
     off = log_size(client)
@@ -1811,7 +1831,7 @@ def _client_harvest(rep, host, client):
         return
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_H_HOME = p.get_actor_location(); out('H_HOME_SAVED')")
     tried = []
-    for mesh, x, y, z, d, action, yields, secs in nodes[:3]:
+    for mesh, x, y, z, d, action, yields, secs in nodes[:4]:
         before = {i: _joiner_item_count(host, i) for i in yields}
         # Stand the joiner a metre from the node (the server owns its pawn; the move replicates).
         _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
@@ -1838,6 +1858,8 @@ def _client_harvest(rep, host, client):
                      f"client: {outcome.group(0) if outcome else 'no outcome'}")
         if outcome and outcome.group(1) == "0" and (outcome.group(3) == "1" or outcome.group(4) == "1"):
             continue  # used up / out of season: inconclusive, try the next node
+        if began and "out of sight" in began.group(0):
+            continue  # the server's line from the joiner's view to the node is blocked (a rock or a plant between): the world's content, the next node
         rep.step(f"client harvest ({action} on {mesh}): a yield arrives in the joiner's inventory on the HOST", got, tried[-1])
         for i in yields:
             _joiner_remove(host, i, after[i] - before[i])
@@ -1869,15 +1891,16 @@ def _client_harvest_full_pack(rep, host, client):
             nodes.append((mesh, x, y, z, action, yields.split(","), float(secs)))
     if not rep.step("CONTROL: a resource node the joiner can work exists on both machines", bool(nodes), f"{nodes[0][0]} {nodes[0][4]}" if nodes else "none"):
         return
-    mesh, x, y, z, action, yields, secs = nodes[0]
-    filler = next(i for i in ("Dirt01", "Bark01", "Stick02") if i not in yields)   # not a yield: a yield would stack onto it and fit
-    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_HF_HOME = p.get_actor_location(); "
-                 f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
-                 "p.set_actor_location(l + d * 100.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); out('HF_STAND')")
-    # Fill every free slot with a one-off filler (no stacking), then check the yield's kinds no longer fit.
+    # Up to 4 nodes: one used up (a loose-stone node can roll none) or out of the joiner's sight proves nothing, as in _client_harvest (Oct 24:
+    # the first node was a Beach Boulder with no loose stones, the only one tried, and the case failed for the world's content).
+    cands = nodes[:4]
+    kinds = sorted({i for c in cands for i in c[5]})
+    filler = next(i for i in ("Dirt01", "Bark01", "Stick02") if i not in kinds)   # not a yield: a yield would stack onto it and fit
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_HF_HOME = p.get_actor_location(); out('HF_HOME_SAVED')")
+    # Fill every free slot with a one-off filler (no stacking), then check the yields' kinds no longer fit.
     fill = ("import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
             f"n = sum(1 for _ in range(max(0, inv.get_slot_count() - inv.get_entry_count()) + 2) if inv.add_item_by_guid_no_stack(unreal.GuidLibrary.new_guid(), '{filler}', 1)); "
-            f"builtins.MO_HF_FILLED = n; out('FILLED %d fits=%s' % (n, ','.join('%s:%d' % (i, inv.can_add_item_by_definition_id(i, 1)) for i in {yields!r})))")
+            f"builtins.MO_HF_FILLED = n; out('FILLED %d fits=%s' % (n, ','.join('%s:%d' % (i, inv.can_add_item_by_definition_id(i, 1)) for i in {kinds!r})))")
     filled = _probe(host, fill)
     m = re.search(r"FILLED (\d+) fits=(\S*)", filled)
     full = bool(m) and all(part.endswith(":0") for part in m.group(2).split(","))
@@ -1885,23 +1908,36 @@ def _client_harvest_full_pack(rep, host, client):
         _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
                      f"out('TOOK=%s' % inv.remove_item_by_definition_id('{filler}', getattr(builtins, 'MO_HF_FILLED', 0)))")
         return
-    before = {i: _joiner_item_count(host, i) for i in yields}
-    time.sleep(2)
-    hoff, coff = log_size(host), log_size(client)
-    console(client, f"MO.Test.Harvest {x} {y} {z} {mesh} {action}")
-    laid = wait_log(host, r"\[MOHarvest\] '(\w+)' x\d+: no room in \S+ pack \(reason \d+\) -- (\d+) laid on the ground", since=hoff, timeout=secs + 15)
-    outcome = wait_log(client, HARVEST_OUTCOME_RE + r" dropped=(\d)", since=coff, timeout=10)
-    near = ""
-    if laid:
-        near = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
-                            f"out('NEAR %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) "
-                            f"if (a.get_actor_location() - pl).length() < 300 and str(a.get_component_by_class(unreal.MOItemComponent).get_editor_property('item_definition_id')) == '{laid.group(1)}']))")
-    after = {i: _joiner_item_count(host, i) for i in yields}
-    rep.step(f"client harvest with a full pack ({action} on {mesh}): the yield lies on the ground by the joiner (host)",
-             bool(laid) and laid.group(2) != "0" and bool(re.search(r"NEAR [1-9]", near)) and after == before,
-             (laid.group(0) if laid else "no 'laid on the ground' line on the host") + f" | {(re.search(r'NEAR \d+', near) or re.search(r'$', near)).group(0)} within 3 m | pack {before} -> {after}")
-    rep.step("... and the joiner is told it lies at its feet (not 'Inventory Full')", bool(outcome) and outcome.group(5) == "1" and outcome.group(2) == "0",
-             outcome.group(0) if outcome else "no outcome line on the client")
+    tried = []
+    for mesh, x, y, z, action, yields, secs in cands:
+        _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                     f"l = unreal.Vector({x}, {y}, {z}); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); "
+                     "p.set_actor_location(l + d * 100.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); out('HF_STAND')")
+        before = {i: _joiner_item_count(host, i) for i in yields}
+        time.sleep(2)
+        hoff, coff = log_size(host), log_size(client)
+        console(client, f"MO.Test.Harvest {x} {y} {z} {mesh} {action}")
+        laid = wait_log(host, r"\[MOHarvest\] '(\w+)' x\d+: no room in \S+ pack \(reason \d+\) -- (\d+) laid on the ground", since=hoff, timeout=secs + 15)
+        outcome = wait_log(client, HARVEST_OUTCOME_RE + r" dropped=(\d)", since=coff, timeout=10)
+        refused = re.search(r"\[MOHarvest\] [^\n]*refused[^\n]*", read_log_from(host, hoff))
+        tried.append(f"{action} on {mesh}: " + (refused.group(0)[-160:] if refused else outcome.group(0) if outcome else "no outcome"))
+        if not laid and ((outcome and outcome.group(1) == "0" and (outcome.group(3) == "1" or outcome.group(4) == "1"))
+                         or (refused and "out of sight" in refused.group(0))):
+            continue  # inconclusive: the next node
+        near = ""
+        if laid:
+            near = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
+                                f"out('NEAR %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) "
+                                f"if (a.get_actor_location() - pl).length() < 300 and str(a.get_component_by_class(unreal.MOItemComponent).get_editor_property('item_definition_id')) == '{laid.group(1)}']))")
+        after = {i: _joiner_item_count(host, i) for i in yields}
+        rep.step(f"client harvest with a full pack ({action} on {mesh}): the yield lies on the ground by the joiner (host)",
+                 bool(laid) and laid.group(2) != "0" and bool(re.search(r"NEAR [1-9]", near)) and after == before,
+                 (laid.group(0) if laid else "no 'laid on the ground' line on the host") + f" | {(re.search(r'NEAR \d+', near) or re.search(r'$', near)).group(0)} within 3 m | pack {before} -> {after}")
+        rep.step("... and the joiner is told it lies at its feet (not 'Inventory Full')", bool(outcome) and outcome.group(5) == "1" and outcome.group(2) == "0",
+                 outcome.group(0) if outcome else "no outcome line on the client")
+        break
+    else:
+        rep.step("client harvest with a full pack: a node with something to give in season, in the joiner's sight", False, " || ".join(tried))
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
                  f"took = inv.remove_item_by_definition_id('{filler}', getattr(builtins, 'MO_HF_FILLED', 0)); pl = p.get_actor_location(); "
                  "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if (a.get_actor_location() - pl).length() < 500]; "
@@ -2038,26 +2074,38 @@ def _client_drink(rep, host, client):
     who = _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_D_HOME = p.get_actor_location(); "
                        "out('PAWNNAME=' + p.get_name())")
     pawn = (re.search(r"PAWNNAME=(\S+)", who) or [None, "?"])[1]
-    shore = None
+    # The nearest fresh bank, else the sea's. A bank whose view of the water is blocked (the crosshair's line meets a rock or the bank itself
+    # first: FindWaterAtCrosshair sees no water) is the world's content, not the game: it is named and the sea's bank is tried (Oct 24).
+    found, blocked, shore, look, here = "", [], None, None, None
     for kind, metres in (("fresh", 500), ("sea", 2500)):
         shore = _motest(client, f"MO.Water.GoToShore {kind} {metres}",
                         r"\[MOQUERY\] WATER GoToShore:? ?(?:(\w+): water at [^\r\n]*standing at \((-?\d+), (-?\d+), (-?\d+)\)|[^\r\n]*no \w+ water)", timeout=40)
-        if shore and shore.group(1):
-            break
-    found = bool(shore and shore.group(1))
-    if rep.step("CONTROL: open water with a bank near the joiner (fresh within 500 m, else sea within 2.5 km)", found,
-                shore.group(0)[:220] if shore else "no GoToShore line"):
+        if not (shore and shore.group(1)):
+            continue
+        found = found or shore.group(0)[:220]
         x, y, z = shore.group(2), shore.group(3), shore.group(4)
         _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({x}, {y}, {float(z) + 120.0}), False, True); out('D_STAND')")
-        look = None
         for _ in range(10):   # the bank's terrain and collision come up on both machines first
             time.sleep(2)
             look = _motest(client, "MO.Water.LookAtWater", r"\[MOQUERY\] WATER LookAtWater: ([^\r\n]*)")
             if look and look.group(1).startswith("water"):
                 break
         here = _motest(client, "MO.Water.Here", r"\[MOQUERY\] WATER Here ([^\r\n]*)")
+        if look and look.group(1).startswith("water") and here and "(in reach)" in here.group(1):
+            break
+        hit = re.search(r"VIEWHIT [^\r\n]*", _probe(client,
+            "pc = unreal.GameplayStatics.get_player_controller(world, 0); me = pc.get_controlled_pawn(); "
+            "cam = pc.player_camera_manager.get_camera_location(); fwd = pc.player_camera_manager.get_camera_rotation().get_forward_vector(); "
+            "r = unreal.SystemLibrary.line_trace_single(world, cam, cam + fwd * 1200.0, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [me], unreal.DrawDebugTrace.NONE, True); "
+            "hr = r[1] if isinstance(r, tuple) else r; t = hr.to_tuple() if hr else None; "
+            "out('VIEWHIT %s' % (('%s/%s %.0f cm from the camera' % (t[9].get_name() if t[9] else '?', t[10].get_name() if t[10] else '?', t[3])) if (t and t[0]) else 'nothing within 12 m'))"))
+        blocked.append(f"{kind} bank at ({x}, {y}): " + (hit.group(0) if hit else "no VIEWHIT answer"))
+        print(f"[nettest] drink: the joiner's view of the {kind} water is blocked -- {blocked[-1]}", flush=True)
+    if rep.step("CONTROL: open water with a bank near the joiner (fresh within 500 m, else sea within 2.5 km)", bool(found),
+                found or (shore.group(0)[:220] if shore else "no GoToShore line")):
         if rep.step("client: on the bank, looking at the water within reach", bool(look and look.group(1).startswith("water") and here and "(in reach)" in here.group(1)),
-                    (look.group(0) if look else "no LookAtWater line") + " | " + (here.group(1)[:160] if here else "no Here line")):
+                    (look.group(0) if look else "no LookAtWater line") + " | " + (here.group(1)[:160] if here else "no Here line")
+                    + (" | blocked: " + " // ".join(blocked) if blocked else "")):
             time.sleep(1.5)   # the new view reaches the server with the next moves
             hoff = log_size(host)
             console(client, "MO.Test.PressKey E")
@@ -2417,6 +2465,20 @@ def _client_forage(rep, host, client):
              f"host: {n_dug} dig(s) accepted, {n_refused} refused")
 
 
+def _host_beside_joiner_building(host):
+    """Stand the host right beside the building nearest the JOINER: MO.Test.Build state on the host reads the building nearest the HOST's pawn,
+    and with the pawns moved to clear ground an older building (a stick floor laid in front of the host by an earlier case) was nearer than the
+    joiner's new campfire (Oct 24)."""
+    out = _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                       "bs = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), key=lambda a: (a.get_actor_location() - j.get_actor_location()).length()); "
+                       "b = bs[0] if bs else None; "
+                       "b and h.set_actor_location(b.get_actor_location() + unreal.Vector(0.0, 150.0, 100.0), False, True); "
+                       "out('HOSTBESIDE %s' % (b.get_name() if b else 'none'))")
+    time.sleep(1.0)
+    m = re.search(r"HOSTBESIDE \S+", out)
+    return m.group(0) if m else "HOSTBESIDE no answer"
+
+
 def _build_state(name):
     """What `name` sees of the placed building nearest its pawn: dict(state, elapsed, deposited) from MO.Test.Build state, or None."""
     off = log_size(name)
@@ -2455,6 +2517,7 @@ def _client_build(rep, host, client):
     base, after = place(300)
     if not rep.step("client build: a campfire ghost the joiner placed exists on the host", after == (base or 0) + 1, f"buildings {base} -> {after}"):
         return
+    _host_beside_joiner_building(host)
     hs, cs = _build_state(host), _build_state(client)
     rep.step("client build: host and client see the same empty ghost (state Ghost, nothing deposited)",
              bool(hs and cs) and hs["state"] == 0 == cs["state"] and hs["deposited"] == "-" == cs["deposited"], f"host: {hs and hs['line']} | client: {cs and cs['line']}")
@@ -2634,7 +2697,9 @@ def _client_sees_creature_flinch(rep, host, client):
     through AMOCreature::PlayAnimationEverywhere (a reliable cue event). The host spawns a wolf beside the joiner and hurts it in the joiner's
     name a tick later (MO.Test.HitCreature: from editor Python the flinch cue never left the host): the host plays the flinch for the side the
     blow came from, and the joiner's own log shows it played there; then the angry wolf bites someone, and the joiner's log shows the bite.
-    Runs late (the bite wounds the joiner), before the cases that end the joiner."""
+    Runs late (the bite wounds the joiner), before the cases that end the joiner. The joiner first moves to clear ground (Oct 24: by the
+    joiner's earlier builds and the larger rock tiers the angry wolf stuck 5 m off for 19 s, backing up, and gave up without a bite)."""
+    _to_clear_ground(host, 1, bring_host=False)
     hoff = log_size(host)
     console(host, "MO.AI.StressSpawn 1 500 800")
     spawned = wait_log(host, r"\[MO.AI.StressSpawn\] Done[^\r\n]*", since=hoff, timeout=20)
@@ -2675,12 +2740,28 @@ def _client_sees_creature_flinch(rep, host, client):
     side_ok = bool(hit) and (hit.group(2) == "ANIM_Wolf_GetHit" + hit.group(1) or (hit.group(1) == "Back" and hit.group(2) == "ANIM_Wolf_GetHitFront"))
     rep.step("host: the wolf flinches with the reaction for the side the blow came from (ANIM_Wolf_GetHit<side>)",
              side_ok and float(hit.group(3)) > 0.0, hit.group(0) if hit else "no hit-reaction line on the host")
+    wolf_code = ("min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), "
+                 "key=lambda w: (w.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length())")
+    nav_at_hit = _nav_between(host, wolf_code, "unreal.GameplayStatics.get_player_pawn(world, 1)")
+    print(f"[nettest] wolf at the blow: {nav_at_hit}", flush=True)
     seen = wait_log(client, r"\[MOCreature\] \S+: anim cue \d+ on this client: ANIM_Wolf_GetHit\w+ \(([\d.]+) s\)", since=coff, timeout=10)
     rep.step("client: ... and the flinch plays on the JOINER's copy of the wolf", bool(seen) and float(seen.group(1)) > 0.0,
              seen.group(0) if seen else "no anim cue line on the client")
     bite = wait_log(client, r"\[MOCreature\] \S+: anim cue \d+ on this client: AM_WolfBite \(([\d.]+) s\)", since=coff, timeout=40)
+    why = ""
+    if not bite:   # a wolf that never reached the joiner fails for its ground, not the cue: say how far it got and what stands round it
+        chase = re.findall(r"\[(?:BTChaseTarget|MOCreatureController)\] [^\r\n]*", read_log_from(host, hoff))
+        near = re.search(r"WOLFNEAR [^\r\n]*", _probe(host,
+            "j = unreal.GameplayStatics.get_player_pawn(world, 1); jl = j.get_actor_location(); "
+            "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - jl).length()); "
+            "res = unreal.SystemLibrary.sphere_overlap_components(world, w.get_actor_location(), 400.0, [unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY1, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY2], None, [w, j]); "
+            "cs = [c for c in (res[1] if isinstance(res, tuple) else []) if 'Voxel' not in c.get_class().get_name()]; "
+            "out('WOLFNEAR %s %.0f m from the joiner; within 4 m: %s' % (w.get_name(), (w.get_actor_location() - jl).length() / 100.0, "
+            "sorted({'%s/%s' % (c.get_owner().get_name() if c.get_owner() else '?', c.get_name()) for c in cs})[:6]))"))
+        why = (" | " + (" // ".join(c[:140] for c in chase[-4:]) if chase else "no chase line") + " | " + (near.group(0) if near else "no WOLFNEAR answer")
+               + " | at the blow: " + nav_at_hit)
     rep.step("client: the angry wolf's bite plays on the joiner's copy too", bool(bite) and float(bite.group(1)) > 0.0,
-             bite.group(0) if bite else "no bite cue on the client within 40 s")
+             bite.group(0) if bite else "no bite cue on the client within 40 s" + why)
     # A killed wolf leaves a carcass to skin and butcher (DT_Carcasses "Wolf", Oct 20; before, only the deer had one and a wolf left nothing).
     # The wolf is stood 5 m from the joiner first: after its bite it can be anywhere (Oct 22: 178 m off, past the joiner's 150 m net cull
     # distance, so the joiner never got the carcass and the case failed for its setup, not the game).
@@ -2858,7 +2939,10 @@ def _host_wolf_holds_off_fire(rep, host, client):
         if int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "0"])[1]) > w1:
             bitten = True
             break
-    rep.step("CONTROL: with the torch out, the wolf closes and bites", bitten, "a new wound on the host" if bitten else "no bite in 40 s")
+    rep.step("CONTROL: with the torch out, the wolf closes and bites", bitten, "a new wound on the host" if bitten else "no bite in 40 s | " + _nav_between(host,
+             "min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), "
+             "key=lambda w: (w.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 0).get_actor_location()).length())",
+             "unreal.GameplayStatics.get_player_pawn(world, 0)"))
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
                  "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - h.get_actor_location()).length() < 4000]; import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); "
@@ -2866,10 +2950,113 @@ def _host_wolf_holds_off_fire(rep, host, client):
     time.sleep(2)
 
 
+def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True):
+    """Move a player pawn (0 the host's, 1 the joiner's) to flat ground near it with nothing solid within `radius_cm` (Oct 24: the larger rock tiers
+    put boulders round the test site, and cases that lay things in front of a pawn, aim a click or walk straight ahead hit them: a joiner pinned
+    against a rock, a click that opened a Beach Boulder's menu, cobbles rolling off a stone). Rings of 8 spots out to 80 m; a spot passes when the
+    ground there is dry, its relief within 2 m under 50 cm, and an overlap at chest height finds only the voxel terrain. Stays put if none does.
+    Moving the joiner brings the host along, 3 m to its side (`bring_host`): host-side checks read the building / item nearest the HOST's pawn
+    (MO.Test.Build state), and a joiner moved 15 m away left the host reading an older one."""
+    out = _probe(host, "import math\n"
+                       f"p = unreal.GameplayStatics.get_player_pawn(world, {pawn})\n"
+                       "o = p.get_actor_location()\n"
+                       "ign = list(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter))\n"
+                       "def ground(x, y):\n"
+                       "    r = unreal.SystemLibrary.line_trace_single(world, unreal.Vector(x, y, o.z + 5000.0), unreal.Vector(x, y, o.z - 5000.0), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ign, unreal.DrawDebugTrace.NONE, True)\n"
+                       "    hr = r[1] if isinstance(r, tuple) else r\n"
+                       "    t = hr.to_tuple() if hr else None\n"
+                       "    return t[5].z if (t and t[0]) else None\n"
+                       "found = None\n"
+                       "for rad in (0.0, 1500.0, 3000.0, 4500.0, 6000.0, 8000.0):\n"
+                       "    for k in range(1 if rad == 0.0 else 8):\n"
+                       "        a = k * math.pi / 4.0\n"
+                       "        x, y = o.x + rad * math.cos(a), o.y + rad * math.sin(a)\n"
+                       "        gz = ground(x, y)\n"
+                       "        if gz is None or gz < 50.0:\n"
+                       "            continue\n"
+                       "        around = [ground(x + 200.0 * math.cos(b * math.pi / 2.0), y + 200.0 * math.sin(b * math.pi / 2.0)) for b in range(4)]\n"
+                       "        if any(g is None for g in around) or max(around + [gz]) - min(around + [gz]) > 50.0:\n"
+                       "            continue\n"
+                       f"        res = unreal.SystemLibrary.sphere_overlap_components(world, unreal.Vector(x, y, gz + 150.0), {radius_cm}, [unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY1, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY2], None, ign)\n"
+                       "        comps = res[1] if isinstance(res, tuple) else []\n"
+                       "        solid = [c for c in comps if 'Voxel' not in c.get_class().get_name() and not (c.get_owner() and 'Voxel' in c.get_owner().get_class().get_name())]\n"
+                       "        if not solid:\n"
+                       "            found = (x, y, gz)\n"
+                       "            break\n"
+                       "    if found:\n"
+                       "        break\n"
+                       "if found:\n"
+                       "    p.set_actor_location(unreal.Vector(found[0], found[1], found[2] + 100.0), False, True)\n"
+                       f"    if {pawn} == 1 and {bring_host}:\n"
+                       "        h = unreal.GameplayStatics.get_player_pawn(world, 0)\n"
+                       "        h.set_actor_location(unreal.Vector(found[0], found[1] + 300.0, found[2] + 100.0), False, True)\n"
+                       "    out('CLEARGROUND moved %.0f m to x=%.0f y=%.0f z=%.0f' % (((found[0] - o.x) ** 2 + (found[1] - o.y) ** 2) ** 0.5 / 100.0, found[0], found[1], found[2]))\n"
+                       "else:\n"
+                       "    out('CLEARGROUND none within 80 m: stays')\n")
+    m = re.search(r"CLEARGROUND [^\r\n]*", out)
+    print(f"[nettest] {m.group(0) if m else 'CLEARGROUND no answer'} (pawn {pawn})", flush=True)
+    time.sleep(2.0)   # the move replicates; the ground under a new spot streams in
+    return bool(m) and "moved" in m.group(0)
+
+
+def _face_clear_heading(host, client, angles=None, reach_cm=7000.0):
+    """Turn the joiner to the heading (of `angles`, radians; default the 8 compass points) whose first `reach_cm` at chest height is clearest
+    (a sphere trace from its pawn on the host), as a player looks for a way past a rock. Returns the clear distance in cm, -1 with no answer.
+    A case that walks or runs straight ahead starts with it (Oct 24: the larger rock tiers stopped the gait's walk at ~30 m and a long run at 49 m)."""
+    angles = list(angles) if angles else [k * math.pi / 4.0 for k in range(8)]
+    out = _probe(host, "import math\n"
+                       "p = unreal.GameplayStatics.get_player_pawn(world, 1)\n"
+                       "l = p.get_actor_location() + unreal.Vector(0.0, 0.0, 30.0)\n"
+                       "best = (-1.0, l.x, l.y)\n"
+                       f"for a in {angles!r}:\n"
+                       f"    e = l + unreal.Vector({reach_cm} * math.cos(a), {reach_cm} * math.sin(a), 0.0)\n"
+                       "    r = unreal.SystemLibrary.sphere_trace_single(world, l, e, 45.0, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [p], unreal.DrawDebugTrace.NONE, True)\n"
+                       "    hr = r[1] if isinstance(r, tuple) else r\n"
+                       "    t = hr.to_tuple() if hr else None\n"
+                       f"    d = (t[2] * {reach_cm}) if (t and t[0]) else {reach_cm}\n"
+                       "    if d > best[0]:\n"
+                       "        best = (d, e.x, e.y)\n"
+                       "out('CLEARHEADING clear=%.0f x=%.0f y=%.0f' % best)\n")
+    m = re.search(r"CLEARHEADING clear=(\d+) x=(-?\d+) y=(-?\d+)", out)
+    if m:
+        console(client, f"MO.Player.Face {m.group(2)} {m.group(3)}")
+        time.sleep(0.5)
+    return int(m.group(1)) if m else -1
+
+
+def _nav_between(host, a_code, b_code):
+    """On the host: is each of two actors on the navmesh, and is there a full path from a to b? `a_code` / `b_code` are Python expressions over
+    `world` naming the actors. An AI that does not close on a pawn (a wolf "stuck while chasing", a medic that "can't reach") fails for the
+    navmesh round them (tiles exist only round navigation invokers and build after a teleport) or for the AI; this tells them apart."""
+    out = _probe(host,
+        "def on(x):\n"
+        "    r = unreal.NavigationSystemV1.project_point_to_navigation(world, x.get_actor_location(), None, None, unreal.Vector(100.0, 100.0, 250.0))\n"
+        "    r = r[0] if isinstance(r, tuple) else r\n"
+        "    return 0 if (r is None or r is False) else 1\n"
+        "def under(x):\n"   # what it stands on: a boulder's top is a navmesh island of its own (N-205)
+        "    l = x.get_actor_location()\n"
+        "    r = unreal.SystemLibrary.line_trace_single(world, l, l - unreal.Vector(0.0, 0.0, 400.0), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [x], unreal.DrawDebugTrace.NONE, True)\n"
+        "    hr = r[1] if isinstance(r, tuple) else r\n"
+        "    t = hr.to_tuple() if hr else None\n"
+        "    return ('%s/%s' % (t[9].get_name() if t[9] else '?', t[10].get_name() if t[10] else '?')) if (t and t[0]) else 'nothing within 4 m'\n"
+        "try:\n"
+        f"    a = {a_code}; b = {b_code}\n"
+        "    p = unreal.NavigationSystemV1.find_path_to_actor_synchronously(world, a.get_actor_location(), b, 100.0, a) if (a and b) else None\n"
+        "    out('NAVBETWEEN %s onNav=%d -> %s onNav=%d: %.0f m apart, path %s; standing on %s / %s' % (a.get_name() if a else 'none', on(a) if a else 0, b.get_name() if b else 'none', on(b) if b else 0, "
+        "(a.get_actor_location() - b.get_actor_location()).length() / 100.0 if (a and b) else -1, "
+        "('none' if not p or not p.is_valid() else ('PARTIAL' if p.is_partial() else 'full') + ' %.0f m' % (p.get_path_length() / 100.0)), "
+        "under(a) if a else '-', under(b) if b else '-'))\n"
+        "except Exception as e:\n"
+        "    out('NAVBETWEEN error %s: %s' % (type(e).__name__, str(e)[:200]))\n")
+    m = re.search(r"NAVBETWEEN [^\r\n]*", out)
+    return m.group(0) if m else "NAVBETWEEN no answer: " + out.strip()[-200:]
+
+
 def _clear_around_host(host, keep="", within=600):
     """Earlier cases leave people where the next one works: the joiner and a survivor both stood 1.5 m in front of the host, so a medic
-    stalled 2 m short and a joiner's line hit the survivor (Oct 20). The joiner goes 20 m aside, any other person (not `keep`) within
-    `within` cm of the host 12 m away."""
+    stalled 2 m short and a joiner's line hit the survivor (Oct 20). The host first moves to clear flat ground (_to_clear_ground: rocks round
+    the test site took clicks, Oct 24); then the joiner goes 20 m aside, any other person (not `keep`) within `within` cm of the host 12 m away."""
+    _to_clear_ground(host, 0)
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); hl = h.get_actor_location(); "
                  "j.set_actor_location(hl + h.get_actor_right_vector() * 2000.0 + unreal.Vector(0.0, 0.0, 200.0), False, True); "
                  f"o = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a not in (h, j) and a.get_name() != '{keep}' "
@@ -3120,6 +3307,7 @@ def _host_colony_medic(rep, host, client):
     """A colony villager dresses a bleeding player's wound (N-061 medic job, Oct 20 2026): the colony's upkeep pass (every 10 s) sends the
     nearest idle villager that has the skill and the supplies -- here a bandage in its own pack -- to the bleeding host; it walks over and runs
     the same server treatment a player would (FMOMedicalTreatmentActions::Begin). Founds a settlement, so it runs last. Host-side."""
+    _to_clear_ground(host, 0)   # the medic walks 6 m to the host: no boulder between them (Oct 24)
     off = log_size(host)
     # A 10 m settlement, everyone else moved out of it below: the medic treats the worst bleeder in the settlement, and an earlier case left
     # the host's previous pawn bleeding from a wolf's bite (Oct 21: the medic went to it, and the host was never treated)
@@ -3155,7 +3343,11 @@ def _host_colony_medic(rep, host, client):
     told = wait_log(host, r"\[MONotification\] Queued: [^\r\n]*is coming to dress your wound[^\r\n]*", since=off, timeout=5)
     rep.step("... and the bleeding host is told help is coming", bool(told), told.group(0) if told else "no notification line")
     done = wait_log(host, r"\[MOSurvivorController\] Treat job (?:done|FAILED|refused|WEDGED)[^\r\n]*", since=off, timeout=90)
-    rep.step("... the villager walks over and finishes the treatment", bool(done) and " done:" in done.group(0), done.group(0) if done else "no Treat job outcome")
+    nav = ""
+    if not (done and " done:" in done.group(0)):   # a path that failed: the navmesh round them, or the medic (Oct 24: "can't reach", 610 cm off)
+        nav = " | " + _nav_between(host, f"[a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]",
+                                   "unreal.GameplayStatics.get_player_pawn(world, 0)")
+    rep.step("... the villager walks over and finishes the treatment", bool(done) and " done:" in done.group(0), (done.group(0) if done else "no Treat job outcome") + nav)
     after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
     rep.step("... and the host's cut bleeds less", bool(after) and 0 <= float(after.group(1)) < float(before.group(1)),
              f"bleed {before.group(1)} -> {after.group(1) if after else '?'}")
@@ -3170,9 +3362,15 @@ def _client_gait(rep, host, client):
         m = re.search(r"HSPEED (\d+)", out)
         return int(m.group(1)) if m else -1
 
+    def face_clear_heading():
+        # The runs walk straight ahead ~40-65 m each: into a rock they stop and the gait reads 0 (Oct 24: the walk hit one of the new large boulders
+        # after ~30 m and the jog and sprint stood pinned against it).
+        return _face_clear_heading(host, client)
+
     def run_and_measure(setup):
         for cmd in setup:
             console(client, cmd)
+        face_clear_heading()
         console(client, "MO.Test.MoveFor 0 1 9.0")   # each host probe takes ~1.5 s: 9 s keeps all four samples inside the move (5 s caught only the first, N-184)
         time.sleep(1.5)
         samples = []
@@ -3246,6 +3444,7 @@ def _client_carcass(rep, host, client):
     target (IMOWorldActionProvider): right-click lists its parts on the JOINER (CarcassDefinition replicates), a choice goes to the server
     (AMOPlayerController::ServerWorldAction) and runs on the joiner's pawn's timed action there. Butchering used to run in the client's UI, so a
     joiner's cut never progressed."""
+    _to_clear_ground(host, 1)   # the carcass is laid in front of the joiner: not behind a boulder (Oct 24)
     hoff = log_size(host)
     console(host, "MO.Test.Carcass Deer 1")
     laid = wait_log(host, r"\[MOQUERY\] CARCASS (\S+) \(Deer\) at \((-?\d+), (-?\d+), (-?\d+)\)", since=hoff, timeout=10)
@@ -3587,6 +3786,7 @@ def _remote_pawn_stays_put(rep, host, client):
     and a pawn that stands still gets no position updates to correct that -- it fell at terminal velocity for ever (z=-498790 after a minute). Gravity is never simulated on a
     proxy with no floor under it on the client (Oct 19, N-160: one WITH a floor simulates it, so it keeps its velocity -- _remote_pawn_velocity).
     No local floor is made by switching the client's voxel collision off. CONTROL: MO.RemotePawn.SimGravity 1 (the stock engine behaviour) must make the copy fall, so the check can fail."""
+    _to_clear_ground(host, 0)   # a rock under the host holds the copy up with the voxels off (Oct 24: the larger rock tiers by the test site)
     p = _pawn_xyz(host, 0)
     if not rep.step("host: located its own pawn", bool(p), str(p)):
         return
@@ -3644,6 +3844,8 @@ def _client_build_from_ground(rep, host, client):
     have = lambda: int((re.search(r"COBBLES=(-?\d+)", _probe(host, inv + "out('COBBLES=%d' % inv.get_item_count_by_definition_id('RiverCobble01'))")) or re.search("(-1)", "-1")).group(1))
     ground = ("items = [w for w in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if str(w.get_item_component().get_editor_property('item_definition_id')) == 'RiverCobble01' "
               "and not w.get_editor_property('hidden') and (w.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 1500]; ")
+    # Flat clear ground for the ghost and the cobbles round it: on a slope or by a stone they rolled out of build range (Oct 24: 8 of 10 in range).
+    _to_clear_ground(host, 1)
     # A fresh ghost nearer than any earlier building (MO.Test.Build acts on the nearest one).
     base = _count_buildables(host)
     console(client, "MO.Test.PlaceBuildingRPC BuildCampfire 120")
@@ -3652,6 +3854,7 @@ def _client_build_from_ground(rep, host, client):
         if (_count_buildables(host) or 0) > (base or 0):
             break
     time.sleep(3)
+    _host_beside_joiner_building(host)
     hs = _build_state(host)
     if not rep.step("ground build: a fresh campfire ghost from the joiner, nothing deposited yet", bool(hs) and hs["state"] == 0 and hs["deposited"] == "-",
                     hs and hs["line"] or "no build state on the host"):
@@ -3774,7 +3977,15 @@ def _trust_pickup_far(rep, host, client):
         # its OWN stack: an added item merges into one the joiner already holds (sticks, and stones since _client_inventory_requests), so its GUID would not exist to drop.
         # The drop itself is only accepted near the owner (a good thing): drop beside the pawn, then carry the world item 45 m away.
         "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(120.0, 0.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
-        "w and w.set_actor_location(p.get_actor_location() + unreal.Vector(4500.0, 0.0, 10.0), False, True); "
+        # 45 m out over DRY ground, set on it: straight along +X from a joiner on the coast it fell into the sea and the joiner's world had nothing to ask for (Oct 24)
+        "import math; o = p.get_actor_location(); ign = list(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter)); far = None\n"
+        "for k in range(8):\n"
+        "    a = k * math.pi / 4.0; x, y = o.x + 4500.0 * math.cos(a), o.y + 4500.0 * math.sin(a)\n"
+        "    r = unreal.SystemLibrary.line_trace_single(world, unreal.Vector(x, y, o.z + 5000.0), unreal.Vector(x, y, o.z - 5000.0), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ign, unreal.DrawDebugTrace.NONE, True)\n"
+        "    hr = r[1] if isinstance(r, tuple) else r; t = hr.to_tuple() if hr else None\n"
+        "    if t and t[0] and t[5].z > 50.0:\n"
+        "        far = unreal.Vector(x, y, t[5].z + 15.0); break\n"
+        "w and w.set_actor_location(far if far else o + unreal.Vector(4500.0, 0.0, 10.0), False, True)\n"
         "out('FARDROP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
     m = re.search(r"FARDROP gave=(\w+) item=(\S+)", setup)
     if not rep.step("host: dropped an item 45 m from the joiner (out of the server's 30 m reach)", bool(m) and m.group(1) == "True" and m.group(2) != "none",
