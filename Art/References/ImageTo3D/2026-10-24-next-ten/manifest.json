@@ -1,0 +1,75 @@
+{
+  "image_count": 10,
+  "images": [
+    {
+      "file": "StoneSickle01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "9ad48dd37488d7e3056049e1a71538ad199459b4a766c5038ff85a0e413ed38b"
+    },
+    {
+      "file": "Quiver01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "7ac814269ab92d5e7745145f93ccb71900f6ae2fbdfd4c2dcef112ac1893cc83"
+    },
+    {
+      "file": "PottersWheel01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "0fab079bf67deb3e9c67c741d509a7347e71300fff82d9b143c0da81a74d5326"
+    },
+    {
+      "file": "RawGlass01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "7a41dbb57c027d30a976cb2e90225a5354a9d367e4fa2d2ee7200e6556292eda"
+    },
+    {
+      "file": "GlassBeads01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "8d85defc6af53780fd21bc7e8a0a4a5d955642c23d26f90bd6b45dc24e2e161e"
+    },
+    {
+      "file": "BronzeAxe01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "1398df8551e9c1cf4e41c4abd96774dd8aff76bfd3f36043f73b473e47699163"
+    },
+    {
+      "file": "BronzeKnife01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "ca03e6b6aa8716b8a54ffddfc0e7afa9c05c528638f8bf556d50097bb41b72d0"
+    },
+    {
+      "file": "BronzeSpearhead01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "557617b437d84d5fb41845ca9549360a9038fbc45c57961ca585a0f6ae1797dc"
+    },
+    {
+      "file": "BronzeSword01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "efa55d00ab67ee04832d5326d9a8751b58e9be18cd65c3d9bfdd93762997c929"
+    },
+    {
+      "file": "BronzeShield01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "sha256": "e2e002aee1020776254af8a34e25ad1fb27ed7d354553ddae4f38956d9ef8d9e"
+    }
+  ]
+}
