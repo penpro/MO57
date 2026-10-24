@@ -65,6 +65,20 @@ Production-ready software: fix systems, not symptoms. These override convenience
   `python -m graphify query "..."`, `explain "Symbol"`, `path "A" "B"`, `affected "X"`).
 - Local / free / offline by default; paid APIs only with Wes's yes; downloads need his yes unless already authorized (`Docs/DECISIONS.md`).
 
+## The second PC: DARKTOWER (GPU worker)
+
+- DARKTOWER (192.168.1.169, Windows 10, RTX 3090 24 GB, user Wes) takes heavy model work off this PC (DARKSIDE, 192.168.1.73):
+  image-to-3D (TRELLIS), ComfyUI, WanGP (`D:\WanGP` there). Unreal, builds and game instances stay here.
+- Run commands with `ssh darktower "<powershell>"` (key login, `~/.ssh/config` alias; the remote shell is PowerShell 5.1). Copy files
+  with `scp darktower:C:/path/file ./dest` (and back). An SSH session there cannot see the share (a key login carries no network
+  credentials: `Access is denied`), so ssh commands move files with scp. DARKTOWER's own desktop Claude session sees this PC's `D:\`
+  as `Z:\` (`\\DARKSIDE\DarksideProduction`). DARKTOWER's free disk (2026-10-24): C: 245 GB, D: 19 GB.
+- Hand work to its Claude session through `D:\ClaudeMeetClaude\` (`README.md` there): requests in `inbox-for-darktower\`, results in
+  `inbox-for-darkside\`, each with a short `*.md` saying what it is and what to do. DARKTOWER writes only inside `ClaudeMeetClaude\` on
+  the share, never into this tree: results come back through the inbox and a DARKSIDE agent imports them.
+- Start long GPU jobs there with `Start-Process` or a scheduled task so they outlive the SSH session; `ssh darktower "nvidia-smi"` before
+  assuming its VRAM is free. ComfyUI's API: http://192.168.1.169:8188 once it is installed and running (not yet, 2026-10-24).
+
 ## Traps that bite every session (full list: `Docs/TRAPS.md`)
 
 1. Engine = UE **5.8.3 launcher install** at `D:\UnrealEngine\UE_5.8`: build with its UBT (`ue.py build`); the UE_5.7 path fails in ~5 s.
