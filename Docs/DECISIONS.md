@@ -60,6 +60,19 @@
 
 ## Decisions, newest first
 
+### 2026-10-24
+Wes's reports from his PIE check of round 2 (`Docs/BugReports_2026-10-24.md`). The calls in them:
+- **Cliff slabs lie on the slope** ("maybe try laying them down and alligning them to the slope?"): done as asked; closed-geometry cliff
+  variants are his art ("i may need to create some 'closed' geometry version of these cliffs").
+- **Open plates need a flat spot** ("placement math for determining flatness of a spot versus the size of these open geometry assets").
+- **Bigger rocks, buried by size** ("2-20 time larger ... 10-25% of mesh bounds deep"): size tiers, a quarter of the height buried.
+- **Enclosed light: a little unnaturally bright over a light switch.** Caves dim to 0.35 of the sky light instead of black.
+- **Water movement sounds removed** until better ones are found.
+- **Lakes almost still; shore wetness not metallic.**
+- Claude, small calls (noted): the rock tiers use each biome's 3 densest closed rocks at a tenth / a fiftieth the density (the first
+  draft's fifth / twenty-fifth put two house-sized boulders on every RockyHighland hectare); the high height bands widen with height (190 m
+  at 950 m) rather than everywhere; ground displacement keeps rock's relief and flattens soil, litter, grass and sand to 0.3-0.5.
+
 ### 2026-10-23
 Wes's votes on the first review page (notes word for word: `Docs/BugReports_2026-10-23.md` § Wes's votes). The calls in them:
 - **Starting biomes: no high-elevation starts.** "let's gate the higher elevation biomes, so no alpine heath, or alpine rock or highlands";
@@ -72,6 +85,17 @@ Wes's votes on the first review page (notes word for word: `Docs/BugReports_2026
   should lighten it is checked first (N-201, N-202).
 - **Height bands:** the rock-to-below edge gets the snow / rock edge's noise (BR23-19).
 - Thumbs up: the New Game panel, the dry-scrub size, the still lake look.
+- Claude, small calls in the batch that answered them (noted):
+  - "Lowland" for a start = the band's floor within 50 m of the sea and no minimum slope (`FMOWorldCreation::IsStartingBand`): the rule
+    names Wes's three and keeps out any later summit biome; any start with the sea within 300 m faces it, not only the strands.
+  - "Average slope" made exact: a spire's base pieces rest on the lowest ground under their own footprint, an ED assembly sinks by the drop to
+    the lowest ground round its solid core; "another meter on the larger ones" = spire `EmbedCm` 125 -> 150 (1.2 m at 0.8x, 6 m at 4x) and the
+    cliff / embankment assemblies' `SinkCm` + 100 cm.
+  - Trees up to a POI: only low growth out to 1.25 core radii (a crown just outside the core stands in the rock's overhang), forest beyond.
+  - The "black alder" Wes saw floating in ElectricForest are hornbeams (their resource row is BlackAlder, so the game names them that):
+    both earlier burial changes went to the real alders and never reached them. They get the alders' 50 cm, and every upright tree with a
+    measured `BaseRadiusCm` sinks by the slope's drop across its base (the alders and hornbeams measured so far).
+  - Rainforest canopy x2 wide (Wes's "between"), height x1.25 kept.
 
 ### 2026-10-22
 - **Wes: per-world creation settings** -- "implement a suite of 'global multipliers' for terraforming, crafting, gatherings, inspecting, etc

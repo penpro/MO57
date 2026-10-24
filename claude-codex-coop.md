@@ -1420,3 +1420,18 @@ Live tables touched: DT_Biomes (PreviewImage for 11 biomes), DT_MOSound (SFX.Foo
 Status: PROGRESS (docs only: Wes's 12 review-page votes recorded -- Docs/BugReports_2026-10-23.md § Wes's votes, BACKLOG BR23-3/4/5/6/7/12/19 reopened, N-201 rainforest canopy, N-202 canopy darkness / Lumen, N-203 starting-biome gating, DECISIONS 2026-10-23)
 References: CL-0153
 No code, no assets, no live tables; the editor and instances are not in use.
+
+### 2026-10-23 20:41 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0155
+Status: CLAIM build window + editor + instances (Wes's vote batch: the alder / cliff-slab instrumentation first, then the ED sink and forest cover, height bands, rainforest x2 + a Lumen check, starting-biome gating)
+References: CL-0154
+C++ touched (uncommitted until verified): MOCheatSubsystem (MO.PCG.Grounding probe), MOWorldCreationTypes (IsStartingBand) + MONewGamePanel + MOGameMode (start gating, a strand start faces the sea), MOWorldGen / MOWorldGenSpawn (Core: FindWaterFacingYaw), Tests/MOWorldCreationTests.
+
+### 2026-10-23 21:07 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0156
+Status: PROGRESS (vote batch: measured, then fixed; build window + editor + instances still CLAIMED)
+References: CL-0155
+Found with MO.PCG.Grounding (new probe verb): the "black alders" floating in ElectricForest are the hornbeams (resource row BlackAlder), never sunk; the x3 rainforest alders float on slopes; the cliff slabs are absent, not buried (0.9 / ha packed into clump cores). C++ also touched (uncommitted until verified): MOSpeciesPlacement + MOPCGBiomeSpawnerSettings (slope sink), MOBiomeDefinitionRow (Core: BaseRadiusCm), MOWorldFeatureSubsystem / MOWorldFeatureTypes / MOFeatureTerrain (assembly slope sink, trees up to the core), MOPCGConformToGround (lowest ground under a base piece), MOWorldGen (Core: high height edges wander). Live tables next: DT_Biomes (BaseRadiusCm, hornbeam sink, rainforest x2, slab density), DT_WorldFeatures (assembly SinkCm, small assemblies near spires), the spire graphs' EmbedCm.
+
+### 2026-10-24 03:07 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0157
+Status: RELEASE build window + editor + instances (the vote batch and Wes's Oct 24 reports: built, verified, committed; the editor is closed, no instance is running)
+References: CL-0156
+Commits: 97122e38 dev probes (MO.PCG.Grounding, exposure dump, review views by ground height), 06b21f4f ED POIs sink by slope with forest round them, cdf35c91 slabs / plates / rock size tiers / tree slope sink + rainforest canopy x2, a03d0a4d height bands fade + ground displacement per surface, 9aa01123 sky light leak + interior floor 0.35, calm lakes, shore wetness, water sounds muted, 93059235 lowland starting biomes + strand starts face the sea (N-203), 185bcf41 harness (clear ground, steering, fallbacks, nav probe), then the docs commit. Live tables touched: DT_Biomes, DT_WorldFeatures, DT_MOSound; the MI_* ground materials (displacement). Suite 358 / 0; host + joiner pass 5 261 / 3, the 3 an AI that never closes on a pawn (N-205, instrumented). Not mine, left alone: the uncommitted PCG placement edits that appeared in the tree on Oct 24 (MOSpeciesPlacement, MOPCGBiomeSpawnerSettings, MOBiomeDefinitionRow, Tests/MOFrameworkTests, Docs/PCG.md).
