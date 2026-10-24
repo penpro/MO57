@@ -77,7 +77,15 @@ Production-ready software: fix systems, not symptoms. These override convenience
   `inbox-for-darkside\`, each with a short `*.md` saying what it is and what to do. DARKTOWER writes only inside `ClaudeMeetClaude\` on
   the share, never into this tree: results come back through the inbox and a DARKSIDE agent imports them.
 - Start long GPU jobs there with `Start-Process` or a scheduled task so they outlive the SSH session; `ssh darktower "nvidia-smi"` before
-  assuming its VRAM is free. ComfyUI's API: http://192.168.1.169:8188 once it is installed and running (not yet, 2026-10-24).
+  assuming its VRAM is free.
+- ComfyUI runs there at http://192.168.1.169:8188.
+  - If `/system_stats` stops answering, restart it with `ssh darktower "D:\ComfyUI\start-comfyui-detached.ps1"`.
+  - Image-to-3D jobs:
+    1. Upload the image with `POST /upload/image`.
+    2. Submit `D:\ClaudeMeetClaude\inbox-for-darkside\2026-10-24-copperawl\workflow_trellis2_api.json` to `POST /prompt`, with node 122's
+       `image` set to the uploaded name.
+    3. Copy the GLB back from `D:/ComfyUI/output/3d/` with scp.
+  - Node 316 must be `true`, which picks TRELLIS.2. The template's default, `false`, picks Pixal3D, whose licence isn't cleared.
 
 ## Traps that bite every session (full list: `Docs/TRAPS.md`)
 
