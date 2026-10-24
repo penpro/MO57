@@ -88,6 +88,8 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
 
 ## 3. Footsteps and water sounds
 
+**Muted Oct 24 (Wes, BR24-16: "lake movement/footsteps/swimming sounds still sound like shit, just remove them until we find some that don't sound like shit"):** `SFX.Footsteps.WaterSplash1/2` volume 0 in DT_MOSound -- every water movement sound plays one of them (`AMOCharacter::UpdateWaterSounds`: the step in, the plunge, wading steps, swim strokes). The rows stay: a better sound and its volume back is the whole fix.
+
 **Footsteps** (`UMOFootstepComponent`, one per `AMOCharacter`, dormant without `ball_l` / `ball_r`; TECHNICAL_REFERENCE Oct 2026, verbatim):
 - **When**: the animation decides. A foot's WORLD horizontal speed against the body's: swing = faster than 0.65 x max(body speed, 100) cm/s
   for at least 0.2 s, plant = back under 0.30 x. Measured on the MO walk / sprint / crouch clips (walk 2.65 steps/s alternating L-R; a height

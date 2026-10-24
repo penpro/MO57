@@ -144,6 +144,29 @@ Close-ups at dusk set the side carry: `HeldVisual.RightHandTransform` gripped ne
 - Adaptation speed: UDS uses UE's 3 EV/s up, 1 EV/s down. Real dark adaptation takes minutes (pupil in seconds, cones 5-10 min, rods 20-30 min),
   and light adaptation takes seconds. A slower speed down would be more faithful; that changes every shade transition, so it is Wes's call.
 
+## Under a closed canopy (Oct 23, N-202)
+
+Wes, on the x3 rainforest: "now it's BLACK in the rain forest, this also makes me wonder if lumen is working properly as it should lighten it
+up a bit, or we need to adjust HDR post processing". Measured on seed 3014 (`MO.Light.Exposure` now prints the sky light's live intensity
+and UDS's player-occlusion component; mean brightness of 1280x720 shots, 0-255):
+
+- **Lumen works.** `r.DynamicGlobalIlluminationMethod` 1. With it off the same view went from 88 to 108: without Lumen the sky light reaches
+  the shade unshadowed. With it, a closed canopy is a roof: the sky cannot reach the floor and the bounce from sunlit gaps is little.
+- **UDS does not take the forest for a cave.** Its interior adjustment trims the sky light under trees, not to zero: 0.89 open, 0.78 in a
+  temperate stand, 0.71 under the rainforest canopy (a cave reads 0.03).
+- **The fix is Lumen's Skylight Leaking**, a share of the sky light that reaches occluded places anyway (the light through and between the
+  leaves): `UMOSceneLightingSubsystem` puts one unbound post process component (priority -1: under the sky's, the water's and any level
+  volume) in every game world, `mo.Light.SkylightLeaking` (live). The pawn's view under the rainforest canopy: 0 -> 24, 0.02 -> 30,
+  0.05 -> 36, 0.1 -> 46; at 0.1 (the default) the stand reads (trunks, leaves, ferns) and is still darker than the clearing. The leak alone
+  left a cave black (155 m inside the cave behind `poi CaveEntrance`: sky light 0.000, the view 0.0 at both 0 and 0.1); since the interior
+  floor below (Oct 24) a cave gets 0.35 of the sky light and reads dim blue-grey.
+
+- **Oct 24 (Wes, BR24-13: "do more adjustment to 'enclosed' light levels, i'd rather things be a little unnaturally bright than to have
+  it being like a lgiht switch turning off and on"):** UDS's interior adjustment cut the sky light to 0 wherever its occlusion test read
+  enclosed, and in dense forest that test flips as you walk. Its *Sky Light Intensity Multiplier in Interiors* is now 0.35 (set at runtime by
+  `UMOSceneLightingSubsystem`, `mo.Light.InteriorSkyLight`): enclosed places dim to about a third of the sky light instead of going black.
+  Caves are no longer pitch black either -- Wes's call: a little unnaturally bright over a switch.
+
 ## Sun and moon below the horizon (cave walls lit from below)
 
 Measured Oct 10 with `MO.Light.Test <pitch> <yaw> <lux>` in a sinkhole chamber: a light from ABOVE leaves enclosed tunnels pitch black

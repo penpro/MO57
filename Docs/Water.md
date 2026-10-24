@@ -103,6 +103,16 @@
   saplings were added by `Tools/shore_dressing.py` (bug #29). The reeds are stand-ins; real reed / rush / cattail meshes need a
   source (DECISIONS F5). Electric Dreams has Taro / ferns / mud-bank assemblies but no reed asset.
 
+## 5a. Lakes and the shore look (Oct 24, Wes's BR24-15 / 18)
+
+- **Lakes nearly still:** "still huge swaths of water material rolling across the lake surface, dial them down a LOT still, they should be
+  almost still". Waves 0.03 of the lake preset's height (`mo.Lakes.WaveScale`, was 0.1; length 0.2, noise 0.1 as before) and the surface's
+  animated normal maps (Oceanology Flipbook: near / mid / far strength and frame rate) a quarter (`mo.Lakes.NormalScale`), set as each lake
+  spawns (`UMOUplandLakeSubsystem`). The round lakes are BR23-13.
+- **Shore wetness:** the ocean lays a 1 km shoreline wetness decal; its preset made everything within 4 m of the water 75 % metallic at
+  roughness 0.1 -- beach rocks and wet skin read as chrome ("looks metallic instead of wet"). `UMOSceneLightingSubsystem` sets it a tick after
+  the ocean loads its preset: metallic 0, roughness 0.25, a 1 m band (`mo.Water.ShoreWetMetallic` / `ShoreWetRoughness` / `ShoreWetRadius`).
+
 ## 6. Superseded
 
 - Epic Water era (Oct 10-11): a dedicated `WaterTrace` channel (`ECC_GameTraceChannel2`) + `WaterBodyCollision` profile fixed the
