@@ -39,6 +39,18 @@ double UMOPCGConformToGroundSettings::LowestZ(const FBox& LocalBox, const FTrans
 	return Lowest;
 }
 
+double UMOPCGConformToGroundSettings::LowestGroundUnder(const FBox& LocalBox, const FTransform& Transform, const TFunctionRef<double(double X, double Y)>& GroundZ)
+{
+	const FVector Pivot = Transform.GetLocation();
+	double Lowest = GroundZ(Pivot.X, Pivot.Y);
+	for (int32 Corner = 0; Corner < 4; ++Corner)
+	{
+		const FVector World = Transform.TransformPosition(FVector((Corner & 1) ? LocalBox.Max.X : LocalBox.Min.X, (Corner & 2) ? LocalBox.Max.Y : LocalBox.Min.Y, LocalBox.Min.Z));
+		Lowest = FMath::Min(Lowest, GroundZ(World.X, World.Y));
+	}
+	return Lowest;
+}
+
 bool FMOPCGConformToGroundElement::ExecuteInternal(FPCGContext* Context) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGConformToGroundElement::Execute);
@@ -138,8 +150,11 @@ bool FMOPCGConformToGroundElement::ExecuteInternal(FPCGContext* Context) const
 			if (bGround)
 			{
 				FBox Box;
-				const double Lowest = LocalBounds(I, Box) ? UMOPCGConformToGroundSettings::LowestZ(Box, T) : L.Z;
-				const double Ground = FMOWorldGen::SampleHeightCm(*Params, L.X, L.Y, TerrainSeed, Params->Tuning.VoxelSizeCm);
+				const auto GroundZ = [&Params, TerrainSeed](double X, double Y) { return (double)FMOWorldGen::SampleHeightCm(*Params, X, Y, TerrainSeed, Params->Tuning.VoxelSizeCm); };
+				const bool bBox = LocalBounds(I, Box);
+				const double Lowest = bBox ? UMOPCGConformToGroundSettings::LowestZ(Box, T) : L.Z;
+				// The lowest ground under the piece's footprint, not under its pivot: on a slope its downhill side would show its bottom.
+				const double Ground = bBox ? UMOPCGConformToGroundSettings::LowestGroundUnder(Box, T, GroundZ) : GroundZ(L.X, L.Y);
 				Corrections[I] = (Ground - Embed) - Lowest;
 				if (W >= 0.999f)
 				{

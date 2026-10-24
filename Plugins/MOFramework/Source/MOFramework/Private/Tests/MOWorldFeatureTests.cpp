@@ -454,6 +454,15 @@ bool FMOWorldFeature_ConformBaseWeight::RunTest(const FString& Parameters)
 	TestEqual(TEXT("middle of the fade"), UMOPCGConformToGroundSettings::BaseWeight(450.0f, 400.0f, 100.0f), 0.5f);
 	TestEqual(TEXT("above the fade"), UMOPCGConformToGroundSettings::BaseWeight(500.0f, 400.0f, 100.0f), 0.0f);
 	TestEqual(TEXT("no fade: a hard cut"), UMOPCGConformToGroundSettings::BaseWeight(401.0f, 400.0f, 0.0f), 0.0f);
+
+	// Wes's vote, Oct 23: the downhill side of a base piece showed its bottom. A 10 m piece on a 30 deg slope rests on the lowest ground under its footprint.
+	const FBox Piece(FVector(-500.0, -500.0, 0.0), FVector(500.0, 500.0, 800.0));
+	const double Tan30 = FMath::Tan(FMath::DegreesToRadians(30.0));
+	const auto Slope = [Tan30](double X, double) { return X * Tan30; };
+	TestEqual(TEXT("its downhill corners' ground, 500 x tan 30 below the pivot's"), UMOPCGConformToGroundSettings::LowestGroundUnder(Piece, FTransform::Identity, Slope), -500.0 * Tan30, 0.01);
+	TestEqual(TEXT("turned 45 deg: the corner reaches 707 cm downhill"), UMOPCGConformToGroundSettings::LowestGroundUnder(Piece, FTransform(FRotator(0.0, 45.0, 0.0)), Slope), -707.107 * Tan30, 0.05);
+	// CONTROL (can fail): on flat ground the pivot's ground is the lowest.
+	TestEqual(TEXT("CONTROL: flat ground"), UMOPCGConformToGroundSettings::LowestGroundUnder(Piece, FTransform(FVector(0.0, 0.0, 300.0)), [](double, double) { return 120.0; }), 120.0, 0.01);
 	float Last = 1.0f;
 	bool bMonotonic = true;
 	for (float H = 400.0f; H <= 500.0f; H += 5.0f)

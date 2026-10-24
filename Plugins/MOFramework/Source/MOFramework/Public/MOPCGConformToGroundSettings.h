@@ -65,6 +65,11 @@ public:
 	/** The lowest world Z of a local box placed by Transform (its 8 corners). Pure. */
 	static double LowestZ(const FBox& LocalBox, const FTransform& Transform);
 
+	/** The lowest ground under a piece: GroundZ at its pivot and under the four corners of its box's footprint. On a slope the downhill side of a
+	 *  wide base reaches lower ground than its pivot stands on; resting it there keeps its bottom out of sight (Wes's vote, Oct 23 2026: "an
+	 *  'average slope' over the area it's being pushed down into ... so the lower side of the slope doesn't expose the bottom"). Pure. */
+	static double LowestGroundUnder(const FBox& LocalBox, const FTransform& Transform, const TFunctionRef<double(double X, double Y)>& GroundZ);
+
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override { return Super::DefaultPointInputPinProperties(); }
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override { return Super::DefaultPointOutputPinProperties(); }

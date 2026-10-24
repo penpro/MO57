@@ -547,7 +547,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				Result.Outcome = EPointOutcome::Suppressed;
 				return;
 			}
-			bool bFeatureRing = false;   // inside a world feature's footprint but outside its core: low growth only
+			bool bFeatureRing = false;   // just outside a world feature's core: low growth only (FFootprint: the forest grows up to the rock beyond it)
+			bool bNearFeature = false;   // round it: denser, unclumped trees (FeatureTreeBoost)
 			for (const UMOWorldFeatureSubsystem::FFootprint& Footprint : FeatureFootprints)
 			{
 				const double DistSq = FMath::Square(Location.X - Footprint.X) + FMath::Square(Location.Y - Footprint.Y);
@@ -556,7 +557,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					Result.Outcome = EPointOutcome::Suppressed;
 					return;
 				}
-				bFeatureRing |= DistSq < Footprint.RadiusSq;
+				bFeatureRing |= DistSq < Footprint.LowGrowthSq;
+				bNearFeature |= DistSq < Footprint.NearSq;
 			}
 
 			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,
@@ -703,7 +705,12 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				{
 					P *= GroundCoverScale;
 				}
-				if (P > 0.0f && Sp.ClusterGroup >= 0)
+				const bool bBoostedTree = bNearFeature && !bFeatureRing && Sp.HISMTag == NAME_MOResourceTree;
+				if (bBoostedTree)
+				{
+					P *= UMOWorldFeatureSubsystem::FeatureTreeBoost;   // round a POI: denser, and not in clumps (the clump field would leave its gaps)
+				}
+				else if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
 					// Shared field per (biome, group): offsets depend on the GROUP, not the species, so group members co-locate. Compensated by the
 					// field's MEASURED coverage above the core (ClumpCompensation), so the authored per-hectare rate holds.

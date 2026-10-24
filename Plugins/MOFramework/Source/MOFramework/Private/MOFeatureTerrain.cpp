@@ -149,8 +149,9 @@ bool FMOFeatureTerrain::HasShapingRows()
 
 FTransform FMOFeatureTerrain::MemberRootTransform(const FMOWorldFeatureDefinitionRow& Row, const FMOWorldFeatureMember& Member)
 {
-	// The sink grows with the composition: a gap under a 4x outcrop is 4x the gap under the authored one.
-	return FTransform(FRotator(0.0f, Member.YawDegrees, 0.0f), Member.Location - FVector(0.0, 0.0, Row.SinkCm * Member.Scale), FVector(Member.Scale));
+	// The sink grows with the composition: a gap under a 4x outcrop is 4x the gap under the authored one. On a slope it also goes down to the
+	// lowest ground round its core (SlopeSinkCm).
+	return FTransform(FRotator(0.0f, Member.YawDegrees, 0.0f), Member.Location - FVector(0.0, 0.0, Row.SinkCm * Member.Scale + Member.SlopeSinkCm), FVector(Member.Scale));
 }
 
 float FMOFeatureTerrain::Apply(const FMOWorldGenParamsRef& Params, int32 TerrainSeed, double X, double Y, float BaseHeightCm)

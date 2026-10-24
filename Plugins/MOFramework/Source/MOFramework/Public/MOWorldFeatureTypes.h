@@ -253,6 +253,12 @@ struct MOFRAMEWORK_API FMOWorldFeatureMember
 	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
 	float FootprintRadiusCm = 0.0f;
 
+	/** How far the ground falls from the centre to the lowest point round the member's solid core: the composition sinks that much more, so on a
+	 *  slope its downhill side does not show its bottom (Wes's vote, Oct 23 2026: "an 'average slope' over the area it's being pushed down into").
+	 *  0 on flat ground and for hillside compositions (bAlignToSlope: authored for the slope). */
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	float SlopeSinkCm = 0.0f;
+
 	/** Seed for this member's own PCG variation. */
 	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
 	int32 Seed = 0;

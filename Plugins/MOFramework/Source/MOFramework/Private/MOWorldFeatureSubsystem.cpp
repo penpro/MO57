@@ -164,6 +164,18 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 		return true;
 	};
 
+	// How far the ground falls from Ground at (Px, Py) to the lowest of 8 points round a core of CoreCm: the member sinks that much more.
+	auto SlopeSink = [this](double Px, double Py, double CoreCm, float Ground) -> float
+	{
+		float Lowest = Ground;
+		for (int32 K = 0; K < 8 && CoreCm > 0.0; ++K)
+		{
+			Lowest = FMath::Min(Lowest, FMOWorldGen::SampleHeightCm(*Params, Px + CoreCm * FMath::Cos(K * UE_PI / 4.0), Py + CoreCm * FMath::Sin(K * UE_PI / 4.0),
+				TerrainSeed, Params->Tuning.VoxelSizeCm));
+		}
+		return Ground - Lowest;
+	};
+
 	Out.FeatureId = F.Id;
 	Out.Slot = Slot;
 	Out.Members.Reset();
@@ -238,6 +250,7 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 				Member.YawDegrees = static_cast<float>(WorldFeatureU01(H, K + 3) * 360.0);
 				Member.Scale = Scale;
 				Member.FootprintRadiusCm = static_cast<float>(Footprint);
+				Member.SlopeSinkCm = SlopeSink(Mx, My, Core, Ground);
 				Member.Seed = static_cast<int32>(WorldFeatureMix64(H ^ (0x5EEDULL + K)) & 0x7fffffff);
 				Reach = FMath::Max(Reach, static_cast<float>(FVector2D::Distance(FVector2D(Mx, My), FVector2D(X, Y)) + Footprint));
 				break;
@@ -310,6 +323,7 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	Member.YawDegrees = Out.YawDegrees;
 	Member.Scale = Out.Scale;
 	Member.FootprintRadiusCm = Out.FootprintRadiusCm;
+	Member.SlopeSinkCm = bAlign ? 0.0f : SlopeSink(X, Y, R.GetCoreRadiusCm(Scale), Ground);
 	Member.Seed = Out.Seed;
 	return true;
 }
@@ -544,8 +558,9 @@ void UMOWorldFeatureSubsystem::GetFootprints(const FBox2D& Bounds, TArray<FFootp
 			FFootprint& Foot = Out.AddDefaulted_GetRef();
 			Foot.X = static_cast<float>(Member.Location.X);
 			Foot.Y = static_cast<float>(Member.Location.Y);
-			Foot.RadiusSq = FMath::Square(Member.FootprintRadiusCm);
+			Foot.LowGrowthSq = FMath::Square(FMath::Min(Member.FootprintRadiusCm, Member.FootprintRadiusCm * Core * TreeClearanceCores));
 			Foot.CoreSq = FMath::Square(Member.FootprintRadiusCm * Core);
+			Foot.NearSq = FMath::Square(Member.FootprintRadiusCm * TreeBoostFootprints);
 		}
 	}
 }

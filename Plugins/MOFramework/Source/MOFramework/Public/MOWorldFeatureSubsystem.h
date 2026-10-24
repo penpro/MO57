@@ -81,14 +81,24 @@ public:
 	/** A seed is active and the catalog loaded: sites can be computed. */
 	bool IsReady();
 
-	/** One composition's ground for the biome scatter: nothing within the core, only ground cover between the core and the footprint. */
+	/** One composition's ground for the biome scatter: nothing within the core, only low growth just outside it (LowGrowthSq), the biome's own
+	 *  forest beyond -- trees right up to the rock (Wes, Oct 23 2026: "have the trees go right up to the poi"). */
 	struct FFootprint
 	{
 		float X = 0.0f;
 		float Y = 0.0f;
-		float RadiusSq = 0.0f;
+		float LowGrowthSq = 0.0f;
 		float CoreSq = 0.0f;
+		float NearSq = 0.0f;   // out to TreeBoostFootprints x the footprint: the biome's trees grow denser and unclumped (FeatureTreeBoost)
 	};
+
+	/** Trees stand from this many core radii out (never past the footprint): a crown just outside the core would stand in the rock's overhang. */
+	static constexpr float TreeClearanceCores = 1.25f;
+
+	/** Round a POI (out to this many footprints) the biome's trees grow FeatureTreeBoost times as dense and not in clumps: forest right up to the rock,
+	 *  not a clearing of ferns (Wes, Oct 24 2026: "still need a lot more trees around the pois instead of just ferns"; "add a lot more trees"). */
+	static constexpr float TreeBoostFootprints = 2.0f;
+	static constexpr float FeatureTreeBoost = 2.5f;
 
 	/** Footprints touching Bounds, one per composition (a cluster's members each have their own, so the scatter grows between them) -- the biome
 	 *  scatter's exclusion list. Game thread. Empty when not ready. */

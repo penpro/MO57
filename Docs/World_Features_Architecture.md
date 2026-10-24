@@ -78,14 +78,28 @@ Only the `Many` policy with composition actors exists. Everything else below is 
   - `CoreFraction` (row): the solid part of a composition as a fraction of its footprint. A cluster's members pack by it: the scales are
     drawn first and placed largest first, the largest anywhere in the disc that takes it (24 tries) and every later one beside one already
     standing (cores touching x 1-1.25), never inside another's core (0.9 x the summed cores). The biome scatter plants nothing in a member's
-    core and only low growth between its core and its footprint (ground cover, shrubs, bushes; no trees or rocks:
-    `UMOWorldFeatureSubsystem::FFootprint`, the spawner's `FeatureRingOk`). 1 = the old rule (the whole footprint bare).
+    core and only low growth just outside it (ground cover, shrubs, bushes; no trees or rocks), out to 1.25 cores (never past the
+    footprint): beyond that the biome's own forest, trees right up to the rock (Wes's vote, Oct 23: "have the trees go right up to the
+    poi"; it was the whole footprint, an odd clearing of ferns round every POI). `UMOWorldFeatureSubsystem::FFootprint::LowGrowthSq`,
+    `TreeClearanceCores`, the spawner's `FeatureRingOk`. 1 = the old rule (the whole footprint bare).
   - `NearFeatureIds` / `NearWithinCm` (row): placed only within that distance of a higher-priority row's site footprint, never on it.
   - Rows now: ED_RockSpire clusters 3-10 (core 0.5); ED_CliffAssembly 3-10 within 120 m (1 site / km2, was 3, core 0.5);
     ED_EmbankmentAssembly 3-10 within 120 m (2 / km2, was 6, core 0.5) -- the site densities cut so the assembly count stays near 2x;
     ED_SmallAssembly only within 60 m of a cliff / embankment site (spacing 60 m, 120 / km2), no longer a POI of its own. The spire graphs
     (`PCG_PL_LargeCliff_01b/01c`) bury the formation 125 cm x scale (was 50: 1 m at 0.8x, 5 m at 4x; the MO Conform To Ground node's
     `EmbedCm` decides it, not the row's SinkCm).
+  - **Sink by the slope (Oct 23, Wes's vote: "an 'average slope' over the area ... so the lower side of the slope doesn't expose the
+    bottom"):** a spire's base pieces rest on the LOWEST ground under their own footprint, not under their pivot
+    (`UMOPCGConformToGroundSettings::LowestGroundUnder`, test in `WorldFeatures.ConformBaseWeight`); every other composition sinks by the
+    drop from its centre to the lowest of 8 points round its solid core (`FMOWorldFeatureMember::SlopeSinkCm`, applied in the one root
+    transform `FMOFeatureTerrain::MemberRootTransform`, so the spawn and the terrain shaping agree; hillside rows with `bAlignToSlope` keep
+    0). "Another meter on the larger ones": spire `EmbedCm` 150 (1.2 m at 0.8x, 6 m at 4x), ED_CliffAssembly / ED_EmbankmentAssembly
+    `SinkCm` 190 (was 90). ED_SmallAssembly now also stands near the spires (`NearFeatureIds` + ED_RockSpire): small assemblies lead up
+    to them too.
+  - **Oct 24 (Wes: "push the cliffs together closer ... overlapping the bases slightly"; "still need a lot more trees around the pois
+    instead of just ferns"):** ED_CliffAssembly / ED_EmbankmentAssembly `CoreFraction` 0.35 (was 0.5): members pack with their bases
+    overlapping; and round every POI out to 2 footprints (`UMOWorldFeatureSubsystem::TreeBoostFootprints`) the biome's trees grow 2.5x as
+    dense (`FeatureTreeBoost`) and not in clumps (the clump field left gaps of ferns), from 1.25 core radii out as before.
   - Tests `WorldFeatures.Cluster` (largest first, every member beside an earlier one, a 0.5 core packs members at 0.54 of the summed
     footprints against 1.08), `WorldFeatures.NearOthers` (727 sites, none far or on a cliff; control without the rule: 14,959 of 15,686
     far). Seen on Wes's world (seed 3014) at his spire: a 7-member formation (3.58x down to 0.59x), forest up to the rock, 60 ground-cover
