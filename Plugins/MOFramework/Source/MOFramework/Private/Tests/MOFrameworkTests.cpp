@@ -1528,4 +1528,40 @@ bool FMOSpecies_TreesSinkOnSlopes::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSpecies_ScaleBiasKeepsGiantsRare,
+	"MOFramework.PCG.ScaleBiasKeepsGiantsRare",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSpecies_ScaleBiasKeepsGiantsRare::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 24 2026, of the x8-16 boulder tier: "make fewer of them that large, bias the sizes away from all being that large". ScaleBias 3 draws
+	// MinScale + range x u^3: over an even spread of draws 91 in 1000 land in the top quarter (x14-16), not 250, and the mean is x10, not x12.
+	FMOBiomeSpeciesEntry Boulder;
+	Boulder.MinScale = 8.0f;
+	Boulder.MaxScale = 16.0f;
+	Boulder.ScaleBias = 3.0f;
+	FMOBiomeSpeciesEntry Even = Boulder;
+	Even.ScaleBias = 1.0f;
+	const int32 N = 1000;
+	int32 BiasedTop = 0;
+	int32 EvenTop = 0;
+	double BiasedSum = 0.0;
+	for (int32 I = 0; I < N; ++I)
+	{
+		const float U = (static_cast<float>(I) + 0.5f) / static_cast<float>(N);
+		const float S = FMOSpeciesPlacement::DrawScale(Boulder, U);
+		BiasedTop += S >= 14.0f ? 1 : 0;
+		BiasedSum += S;
+		EvenTop += FMOSpeciesPlacement::DrawScale(Even, U) >= 14.0f ? 1 : 0;
+	}
+	TestEqual(TEXT("bias 3: 91 in 1000 in the top quarter"), BiasedTop, 91);
+	TestEqual(TEXT("bias 3: the mean scale is x10"), BiasedSum / N, 10.0, 0.01);
+	TestEqual(TEXT("bias 3 still reaches MinScale"), FMOSpeciesPlacement::DrawScale(Boulder, 0.0f), 8.0f);
+	TestEqual(TEXT("bias 3 still reaches MaxScale"), FMOSpeciesPlacement::DrawScale(Boulder, 1.0f), 16.0f);
+	// CONTROL (can fail): bias 1 is the old even draw, FRandRange's MinScale + range x u, so every existing world keeps its layout.
+	TestEqual(TEXT("CONTROL: bias 1, a quarter in the top quarter"), EvenTop, 250);
+	TestEqual(TEXT("CONTROL: bias 1 is FRandRange's draw"), FMOSpeciesPlacement::DrawScale(Even, 0.37f), 8.0f + (16.0f - 8.0f) * 0.37f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

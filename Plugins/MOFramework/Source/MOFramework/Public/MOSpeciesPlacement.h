@@ -30,6 +30,10 @@ struct MOFRAMEWORK_API FMOSpeciesPlacement
 	 *  a resource node, and the species' own Collision say over both (Passable / Solid). */
 	static FName CollisionProfile(EMOSpeciesCollision SpeciesCollision, const FMOResourceNodeDefinitionRow* Resource, FName DecorativeProfile);
 
+	/** An instance's scale from the spawner's uniform draw U01 (0-1): MinScale to MaxScale, spread by ScaleBias (1 = evenly, the old draw; 3 = mostly
+	 *  small, a few giants). */
+	static float DrawScale(const FMOBiomeSpeciesEntry& Species, float U01);
+
 	/** Offset along the instance's own up axis (cm) the spawner buries it by: species aligned to the ground are first lifted so the mesh BOTTOM touches the surface,
 	 *  then every species sinks SinkFraction of its scaled height (auto: 0.25 aligned, 0 upright) plus SinkMinCm. */
 	static float BurialOffsetCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale);

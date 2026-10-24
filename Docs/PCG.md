@@ -142,6 +142,10 @@ saved graphs keep their meaning.
   - Closed rocks in size tiers (`Content/Python` patch, live in DT_Biomes): per biome its 3 densest closed rocks get a large tier (x3-6, a
     tenth the density) and an xlarge tier (x8-16, a fiftieth, slopes up to 30 deg), decorative and a quarter of their height buried; AlpineRock's
     rocks are x3. Wes: "make a lot of the closed geometry rocks larger, like 2-20 time larger ... set into the ground in a dynamic depth".
+    Within a tier most are small and few giant (Wes, Oct 24: "make fewer of them that large, bias the sizes away from all being that large"):
+    a species' `ScaleBias` spreads its scale as MinScale + range x u^bias (`FMOSpeciesPlacement::DrawScale`, test
+    `PCG.ScaleBiasKeepsGiantsRare`). xlarge 3: 9 % in the top quarter of the range, mean x10 (was 25 %, x12); large 2: mean x4. 1 (the
+    default) is the old even draw, so every other species and every world's layout are unchanged.
   - The spawner planted only a biome's first 64 species (a leftover of an old fixed loop): the Rainforest and ElectricForest have 72, and
     their far stand-ins and canopy proxies (rows 64-71) never grew. The cap is gone.
 

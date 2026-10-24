@@ -205,6 +205,14 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	float MaxScale = 1.25f;
 
 	/**
+	 * How instance scales spread over [MinScale, MaxScale]: 1 = evenly, above 1 = mostly near MinScale with a few toward MaxScale (the draw is
+	 * MinScale + (MaxScale - MinScale) x u^ScaleBias), as the world features' ClusterScaleBias. Wes, Oct 24 2026, of the x8-16 boulder tier: "make fewer
+	 * of them that large, bias the sizes away from all being that large".
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.1", ClampMax="10.0"))
+	float ScaleBias = 1.0f;
+
+	/**
 	 * Widens the species on top of its random scale: X and Y are Scale x WidthScale, Z (its height, and so its burial) is Scale. Wes, Oct 22 2026, of the
 	 * rainforest: "bigger FATTER trees with more canopy cover" -- a trunk and crown wider than the scan's, not just taller. 1 = the mesh's own proportions.
 	 */

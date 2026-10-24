@@ -104,6 +104,12 @@ float FMOSpeciesPlacement::GroundReliefCm(const float (&Heights)[8], float Centr
 	return static_cast<float>(MaxDev);
 }
 
+float FMOSpeciesPlacement::DrawScale(const FMOBiomeSpeciesEntry& Species, float U01)
+{
+	const float Bias = FMath::Max(Species.ScaleBias, 0.1f);
+	return FMath::Lerp(Species.MinScale, Species.MaxScale, Bias == 1.0f ? U01 : FMath::Pow(U01, Bias));
+}
+
 float FMOSpeciesPlacement::SlopeDropCm(const FMOBiomeSpeciesEntry& Species, float Width, float SlopeRad)
 {
 	if (Species.bAlignToSurfaceNormal || Species.bFaceDownhill || Species.BaseRadiusCm <= 0.0f || SlopeRad <= 0.0f)

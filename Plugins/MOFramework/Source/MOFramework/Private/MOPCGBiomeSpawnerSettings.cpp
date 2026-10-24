@@ -762,7 +762,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			}
 
 			FTransform Xf = Point.Transform;
-			const float Scale = RandomStream.FRandRange(Sp.MinScale, Sp.MaxScale);
+			const float Scale = FMOSpeciesPlacement::DrawScale(Sp, RandomStream.FRand());   // one draw, as FRandRange: ScaleBias 1 keeps every world's layout
 			const float Width = Scale * Sp.WidthScale * WidthMultiplier;
 			Xf.SetScale3D(FVector(Width, Width, Scale));
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
