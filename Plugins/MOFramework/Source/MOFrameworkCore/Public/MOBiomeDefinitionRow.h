@@ -141,6 +141,35 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	float SinkMinCm = 0.0f;
 
 	/**
+	 * An UPRIGHT plant's footprint on the ground (cm at scale 1, before WidthScale): the radius of its trunk and root flare, as `MO.PCG.Grounding` prints it
+	 * ("base r"). On a slope the plant sinks by the ground's drop across it, so its downhill side does not stand in the air (BR23-7, Oct 23 2026: the x3
+	 * rainforest alders' flares stood up to 76 cm up on 10-20 deg ground). 0 = no slope sink. Rocks have their own rules (bAlignToSurfaceNormal, bFaceDownhill).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="1000.0"))
+	float BaseRadiusCm = 0.0f;
+
+	/**
+	 * An open-backed slab LAID ON the slope: its face (FaceYawDeg) turned out of the ground along the surface normal, its height running up the slope,
+	 * sunk until the face stands LieShowFraction of its thickness proud -- a rock outcrop instead of a wall stood on the hill (Wes, Oct 24 2026, the x2
+	 * HugeSandstoneCliff slabs: "larger cliffs are WAAAAAAYYYYYY out of the ground... maybe try laying them down and alligning them to the slope?").
+	 * Wins over bFaceDownhill and bAlignToSurfaceNormal.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	bool bLieOnSlope = false;
+
+	/** How much of a laid slab's thickness (along its face) stands out of the ground. Used with bLieOnSlope. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(EditCondition="bLieOnSlope", ClampMin="0.0", ClampMax="1.0"))
+	float LieShowFraction = 0.15f;
+
+	/**
+	 * Open geometry that must lie on flat ground (rock plates, rocky-ground scans): placed only where the ground under its footprint departs from a
+	 * plane by at most this share of its thickness; elsewhere an edge stands up and shows the open underside (Wes, Oct 24 2026: "these rocks need a flat
+	 * spot to land on ... placement math for determining flatness of a spot versus the size of these open geometry assets"). 0 = no check.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="5.0"))
+	float MaxGroundReliefFraction = 0.0f;
+
+	/**
 	 * The ground slope this species grows on (degrees), on top of its biome's band. Open-backed rock PLATES lie flush only on gentle ground -- on a steep slope the
 	 * aligned plate stands on its edge and shows its hollow back (playtest 2026-10-14 #1 / #26); cliff SLABS read as cliffs only on steep ground -- on a meadow they
 	 * are monoliths. Default 0..90 = anywhere.

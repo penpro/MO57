@@ -54,6 +54,65 @@ float FMOSpeciesPlacement::FaceDropCm(const FMOBiomeSpeciesEntry& Species, const
 	return FMath::Max(0.0f, Reach) * FMath::Tan(FMath::Min(SlopeRad, FMath::DegreesToRadians(70.0f)));
 }
 
+FQuat FMOSpeciesPlacement::LieOnSlopeRotation(const FMOBiomeSpeciesEntry& Species, const FVector& SurfaceNormal, float JitterRad, float FallbackYawRad)
+{
+	const FVector Normal = SurfaceNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	// The slope's uphill line: world up with its part along the normal taken out. Flat ground has none: the fallback yaw lays the slab's up along it.
+	FVector Uphill = FVector::UpVector - Normal * FVector::DotProduct(FVector::UpVector, Normal);
+	if (!Uphill.Normalize(1.0e-4f))
+	{
+		Uphill = FVector(FMath::Cos(FallbackYawRad), FMath::Sin(FallbackYawRad), 0.0f);
+		Uphill = (Uphill - Normal * FVector::DotProduct(Uphill, Normal)).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	}
+	// Map the mesh's (face, up) onto the world's (normal, uphill), both frames right-handed with Y = Z x X.
+	const float FaceRad = FMath::DegreesToRadians(Species.FaceYawDeg);
+	const FVector LocalX(FMath::Cos(FaceRad), FMath::Sin(FaceRad), 0.0f), LocalZ = FVector::UpVector;
+	const FVector WorldX = Normal, WorldZ = Uphill;
+	const FQuat Local(FMatrix(LocalX, FVector::CrossProduct(LocalZ, LocalX), LocalZ, FVector::ZeroVector));
+	const FQuat World(FMatrix(WorldX, FVector::CrossProduct(WorldZ, WorldX), WorldZ, FVector::ZeroVector));
+	return FQuat(Normal, JitterRad) * World * Local.Inverse();
+}
+
+float FMOSpeciesPlacement::LieOffsetCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale)
+{
+	// Along the face axis the mesh reaches from Origin - Half to Origin + Half; the face is the far end. Sink it until LieShowFraction of the whole stands out.
+	const float FaceRad = FMath::DegreesToRadians(Species.FaceYawDeg);
+	const FVector Face(FMath::Cos(FaceRad), FMath::Sin(FaceRad), 0.0f);
+	const float Half = FMath::Abs(Face.X) * MeshBounds.BoxExtent.X + FMath::Abs(Face.Y) * MeshBounds.BoxExtent.Y;
+	const float Reach = (FVector::DotProduct(MeshBounds.Origin, Face) + Half) * Scale;
+	const float Thickness = 2.0f * Half * Scale;
+	return -(Reach - FMath::Clamp(Species.LieShowFraction, 0.0f, 1.0f) * Thickness);
+}
+
+float FMOSpeciesPlacement::GroundReliefCm(const float (&Heights)[8], float CentreHeight)
+{
+	// Least squares over 8 evenly spaced points: the cos / sin sums cancel, so the plane is closed form (as FMOWorldFeaturePlacer::MeasureFootprintPlane).
+	double Mean = 0.0, Gx = 0.0, Gy = 0.0;
+	for (int32 K = 0; K < 8; ++K)
+	{
+		Mean += Heights[K] / 8.0;
+		Gx += Heights[K] * FMath::Cos(K * UE_PI / 4.0);
+		Gy += Heights[K] * FMath::Sin(K * UE_PI / 4.0);
+	}
+	Gx /= 4.0;   // the plane's rise across the footprint's radius, per axis
+	Gy /= 4.0;
+	double MaxDev = FMath::Abs(CentreHeight - Mean);
+	for (int32 K = 0; K < 8; ++K)
+	{
+		MaxDev = FMath::Max(MaxDev, FMath::Abs(Heights[K] - (Mean + Gx * FMath::Cos(K * UE_PI / 4.0) + Gy * FMath::Sin(K * UE_PI / 4.0))));
+	}
+	return static_cast<float>(MaxDev);
+}
+
+float FMOSpeciesPlacement::SlopeDropCm(const FMOBiomeSpeciesEntry& Species, float Width, float SlopeRad)
+{
+	if (Species.bAlignToSurfaceNormal || Species.bFaceDownhill || Species.BaseRadiusCm <= 0.0f || SlopeRad <= 0.0f)
+	{
+		return 0.0f;
+	}
+	return Species.BaseRadiusCm * Width * FMath::Tan(FMath::Min(SlopeRad, FMath::DegreesToRadians(50.0f)));
+}
+
 bool FMOSpeciesPlacement::ProfileBlocks(FName Profile)
 {
 	return Profile != UCollisionProfile::NoCollision_ProfileName && Profile != FName(TEXT("OverlapAllDynamic")) && Profile != FName(TEXT("OverlapAll"))

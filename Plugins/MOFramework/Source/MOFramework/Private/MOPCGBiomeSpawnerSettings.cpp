@@ -339,7 +339,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		const FMOBiomeDefinitionRow* Row = nullptr;
 		TArray<UStaticMesh*> LoadedMeshes;       // parallel to Row->Species
 		TArray<UStaticMesh*> LoadedEdgeMeshes;   // parallel to Row->WaterEdgeSpecies
-		// Classified ONCE per execution (the node's filter does not change between points): the species indices this node plants (first 64, in row order), and per species whether
+		// Classified ONCE per execution (the node's filter does not change between points): the species indices this node plants (in row order; a leftover cap at the first
+		// 64 dropped the Rainforest's and ElectricForest's far stand-ins and canopy proxies, rows 64-71, until Oct 24), and per species whether
 		// its density follows mo.PCG.GroundCoverScale. The per-point loop reads these instead of re-deriving them from tags and mesh paths for every point.
 		TArray<int32> FilteredSpecies;
 		TArray<bool> GroundCoverScaled;          // parallel to Row->Species
@@ -376,7 +377,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				E.LoadedMeshes.Add(Loaded);
 				E.GroundCoverScaled.Add(ScalesWithGroundCover(Sp));
 				E.FeatureRingOk.Add(GrowsInFeatureRing(Sp));
-				if (i < 64 && PassesSpeciesFilter(Settings->SpeciesFilter, Sp))
+				if (PassesSpeciesFilter(Settings->SpeciesFilter, Sp))
 				{
 					E.FilteredSpecies.Add(i);
 				}
@@ -766,7 +767,32 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			Xf.SetScale3D(FVector(Width, Width, Scale));
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
 			const FVector SurfaceNormal = Point.Transform.GetRotation().GetUpVector();
-			if (Sp.bFaceDownhill)
+			// Open geometry that needs flat ground (MaxGroundReliefFraction): the ground under its footprint, against its best plane, may depart by at most
+			// that share of the mesh's thickness -- on a bump or in a dip an edge stands up and shows the open underside (Wes, Oct 24: "these rocks need a
+			// flat spot to land on"). Eight generator samples round the footprint, only for the species that ask.
+			if (Sp.MaxGroundReliefFraction > 0.0f && Settings->bUseWorldGenerator)
+			{
+				const FBoxSphereBounds MeshBounds = Mesh->GetBounds();
+				const double Radius = FMath::Max(MeshBounds.BoxExtent.X, MeshBounds.BoxExtent.Y) * Width;
+				float Heights[8];
+				for (int32 K = 0; K < 8; ++K)
+				{
+					Heights[K] = FMOWorldGen::SampleHeightCm(*GenParams, Location.X + Radius * FMath::Cos(K * UE_PI / 4.0), Location.Y + Radius * FMath::Sin(K * UE_PI / 4.0),
+						TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+				}
+				const float Centre = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+				if (FMOSpeciesPlacement::GroundReliefCm(Heights, Centre) > Sp.MaxGroundReliefFraction * 2.0f * MeshBounds.BoxExtent.Z * Scale)
+				{
+					return;   // not flat enough for it: the slot stays empty
+				}
+			}
+			if (Sp.bLieOnSlope)
+			{
+				// A slab laid on the slope, its face out of the ground (BR24-4, Wes: "try laying them down and alligning them to the slope").
+				const float Jitter = FMath::DegreesToRadians(RandomStream.FRandRange(-15.0f, 15.0f));
+				Xf.SetRotation(FMOSpeciesPlacement::LieOnSlopeRotation(Sp, SurfaceNormal, Jitter, Yaw));
+			}
+			else if (Sp.bFaceDownhill)
 			{
 				// Open-backed cliff slabs (BR18-14 / BR18-19): upright, the rock face turned down the slope (a little jitter so a cluster is not a fence).
 				const float Jitter = FMath::DegreesToRadians(RandomStream.FRandRange(-10.0f, 10.0f));
@@ -790,9 +816,16 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			}
 
 			// Burial (FMOSpeciesPlacement: the gallery places the same way): along the instance's own up axis, so a rock on a slope goes into the slope, not into the air below it.
+			// A laid slab sinks along the surface normal instead, until only its face stands out.
+			if (Sp.bLieOnSlope)
+			{
+				Xf.AddToTranslation(SurfaceNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector) * FMOSpeciesPlacement::LieOffsetCm(Sp, Mesh->GetBounds(), Scale));
+			}
+			else
 			{
 				const float SlopeRad = FMath::Acos(FMath::Clamp(static_cast<float>(SurfaceNormal.Z), -1.0f, 1.0f));
-				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale) - FMOSpeciesPlacement::FaceDropCm(Sp, Mesh->GetBounds(), Scale, SlopeRad);
+				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale) - FMOSpeciesPlacement::FaceDropCm(Sp, Mesh->GetBounds(), Scale, SlopeRad)
+					- FMOSpeciesPlacement::SlopeDropCm(Sp, Width, SlopeRad);
 				if (!FMath::IsNearlyZero(Offset))
 				{
 					Xf.AddToTranslation(Xf.GetRotation().GetUpVector() * Offset);

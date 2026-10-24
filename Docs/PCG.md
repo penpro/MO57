@@ -10,7 +10,7 @@
 > `/Game/Penumbra/Maps/LoadingLevel`); `UMOPCGBiomeSpawnerSettings`, `UMOPCGElevationBandsSettings`, `FMOPCGWaterMask`
 > (`MOPCGWaterMask.h`), `UMOPCGCaveSpawnerSettings`, `UMOWorldRemovalSubsystem`, `FMOHISMHarvestHelper`,
 > `UMOWorldReadinessSubsystem`; palettes `Content/Python/biome_palettes.py` + `Docs/Ground_Coverage_2026-10-14.plan.json`.
-> **Dev verbs:** `MO.PCG.Census [r]`, `.Rings`, `.MeshSurvey [top]`, `.HideTag <tag> [0|1]`, `.HideMesh <substr> [0|1]`,
+> **Dev verbs:** `MO.PCG.Census [r]`, `.Grounding <mesh substr> [r]` (does each base touch the ground: worst point of its base outline, by slope), `.Rings`, `.MeshSurvey [top]`, `.HideTag <tag> [0|1]`, `.HideMesh <substr> [0|1]`,
 > `.WaterAudit [r]`, `.ResourceCensus <r>`, `MO.WorldGen.FindBiomeSpot <id> [km] [rough] [go]`, `.BiomeStats`,
 > `MO.Readiness.Dump|Restart|Force`, `MO.Test.RemovalPersists`, `MO.Test.WorldRemovalAudit`; cvars `mo.PCG.BiomeSoftPick`,
 > `mo.PCG.BiomeSpawnerProfile`, `mo.Readiness.*`, `mo.Foliage.RigidShadows`, `pcg.RuntimeGeneration.GlobalRadiusMultiplier`.
@@ -103,6 +103,15 @@ saved graphs keep their meaning.
   tuning: diff plan vs `ue.py rows get` first, or edit live rows directly (rows set with the FULL live species arrays; `rows list`
   output has CRLF). The Oct 16 alder burial (+25 cm `SinkMinCm` on Forest_ / Field_ alders, Wes) was done that way and is also in
   the script's `species()`; Oct 23 (BR23-7, "still floating, drop them about 25cm"): 50 cm, the same 42 entries.
+  **Oct 23 evening (Wes's vote: "still floating ... they still look exactly like they did"), measured with `MO.PCG.Grounding`:** the
+  temperate alders were buried as set (pivot 50 cm down, the base 10-45 cm under), and every sapling / seedling mesh starts at its pivot.
+  The trees Wes saw were ElectricForest's **hornbeams**: their resource row is BlackAlder, so the game names them "Black Alder", and both
+  burial changes went to the real alders. They stood on the ground unsunk: 4-26 cm of air under their root ends on flat ground, more on
+  slopes. And the x3-wide rainforest alders' bases stood up to 76 cm up on 10-20 deg slopes (a wider base reaches lower ground downhill).
+  Fixed: the hornbeam forest / field trees get the alders' 50 cm, and an upright tree with a measured `BaseRadiusCm` sinks by the slope's
+  drop across its base (`FMOSpeciesPlacement::SlopeDropCm`, test `PCG.TreesSinkOnSlopes`; radii in DT_Biomes and `biome_palettes.py`
+  `BASE_RADIUS_CM`). The probe's gap reads the lowest vertex at the outer edge of a mesh's bottom 30 cm: right for a trunk and its flare,
+  but a leafy low plant (sapling, seedling, berry bush) reads its lowest leaves (~25 cm), not air under its stem.
 - **World features keep their core, not their footprint, bare** (Oct 23, BR23-3): inside a composition's footprint only ground cover,
   shrubs and bushes grow, outside its core (`CoreFraction`, `Docs/World_Features_Architecture.md`).
 - **Cliff slabs cluster** (Oct 23, BR23-12, "cluster together to overlap ... scaling them up by about 200%"): the HugeSandstoneCliff
@@ -122,6 +131,19 @@ saved graphs keep their meaning.
   ~72 "VERY dense": don't push past ~110), Meadow copses ~5. Full table: `Docs/Archive/Ground_Coverage_2026-10-14.md`.
 - **Measure before tuning:** `MO.PCG.Census 4000` (0.5 ha) at a `FindBiomeSpot` spot, by RADIUS (not `MeshSurvey` totals, which
   depend on how many far cells finished); the spawner log lines per tier.
+
+- **Wes's Oct 24 reports (BR24, `Docs/BugReports_2026-10-24.md`):**
+  - Sandstone slabs (HugeSandstoneCliff 04 / 07) LIE on the slope now (`bLieOnSlope`, `FMOSpeciesPlacement::LieOnSlopeRotation` /
+    `LieOffsetCm`, test `PCG.SlabsLieOnTheSlope`): the rock face looks out of the ground along the surface normal, the slab's height runs up
+    the slope, sunk until 15 % of its thickness stands proud (`LieShowFraction`) -- a rock outcrop. Stood upright at x2 they were walls and
+    pillars on steep ground ("larger cliffs are WAAAAAAYYYYYY out of the ground... maybe try laying them down and alligning them to the slope?").
+  - Open plates / rocky-ground scans need flat ground (`MaxGroundReliefFraction` 0.5): the ground under the footprint is sampled at 8 points,
+    and a spot whose relief against its best plane (`FMOSpeciesPlacement::GroundReliefCm`) is more than half the mesh's thickness stays empty.
+  - Closed rocks in size tiers (`Content/Python` patch, live in DT_Biomes): per biome its 3 densest closed rocks get a large tier (x3-6, a
+    tenth the density) and an xlarge tier (x8-16, a fiftieth, slopes up to 30 deg), decorative and a quarter of their height buried; AlpineRock's
+    rocks are x3. Wes: "make a lot of the closed geometry rocks larger, like 2-20 time larger ... set into the ground in a dynamic depth".
+  - The spawner planted only a biome's first 64 species (a leftover of an old fixed loop): the Rainforest and ElectricForest have 72, and
+    their far stand-ins and canopy proxies (rows 64-71) never grew. The cap is gone.
 
 ## 6. Performance rules (what keeps it fast)
 

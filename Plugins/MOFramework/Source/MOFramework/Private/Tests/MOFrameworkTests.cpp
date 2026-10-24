@@ -1463,4 +1463,69 @@ bool FMOSpecies_CliffSlabsFaceDownhill::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSpecies_SlabsLieOnTheSlope,
+	"MOFramework.PCG.SlabsLieOnTheSlope",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSpecies_SlabsLieOnTheSlope::RunTest(const FString& Parameters)
+{
+	// BR24-4 (Oct 24 2026): the x2 sandstone slabs stood on steep slopes as walls and pillars. Laid on the slope, the rock face looks out of the ground
+	// along its normal, the slab's height runs up the slope, and it sinks until only its face stands proud.
+	FMOBiomeSpeciesEntry Slab;
+	Slab.bLieOnSlope = true;
+	Slab.FaceYawDeg = 90.0f;   // the HugeSandstoneCliff slabs face +Y
+	Slab.LieShowFraction = 0.15f;
+	const float Slope = FMath::DegreesToRadians(35.0f);
+	const FVector Normal(-FMath::Sin(Slope), 0.0f, FMath::Cos(Slope));   // ground rising toward +X
+	const FQuat Rot = FMOSpeciesPlacement::LieOnSlopeRotation(Slab, Normal, 0.0f, 0.0f);
+	TestTrue(FString::Printf(TEXT("the face looks along the normal, got %s"), *Rot.RotateVector(FVector(0, 1, 0)).ToCompactString()), Rot.RotateVector(FVector(0, 1, 0)).Equals(Normal, 1.0e-3f));
+	const FVector Uphill(FMath::Cos(Slope), 0.0f, FMath::Sin(Slope));
+	TestTrue(FString::Printf(TEXT("its up runs up the slope, got %s"), *Rot.GetUpVector().ToCompactString()), Rot.GetUpVector().Equals(Uphill, 1.0e-3f));
+	// SM_HugeSandstoneCliff_07's bounds: origin (5, 45, 318), extent (1108, 420, 335): the face 465 cm out from the pivot, 840 cm thick.
+	const FBoxSphereBounds Bounds(FVector(5.0f, 45.0f, 318.0f), FVector(1108.0f, 420.0f, 335.0f), 1200.0f);
+	TestEqual(TEXT("sunk until 15 % of its thickness shows: -(465 - 126) at scale 1"), FMOSpeciesPlacement::LieOffsetCm(Slab, Bounds, 1.0f), -(465.0f - 126.0f), 0.5f);
+	TestEqual(TEXT("... twice that at scale 2"), FMOSpeciesPlacement::LieOffsetCm(Slab, Bounds, 2.0f), -2.0f * (465.0f - 126.0f), 1.0f);
+	// CONTROL (can fail): flat ground has no uphill line -- the fallback yaw lays it out, the face still straight up.
+	const FQuat Flat = FMOSpeciesPlacement::LieOnSlopeRotation(Slab, FVector::UpVector, 0.0f, 0.0f);
+	TestTrue(TEXT("CONTROL: on flat ground the face looks straight up"), Flat.RotateVector(FVector(0, 1, 0)).Equals(FVector::UpVector, 1.0e-3f));
+
+	// BR24-1: open plates need flat ground. A plane (however steep) has no relief; a bump does.
+	float OnPlane[8], OnBump[8];
+	for (int32 K = 0; K < 8; ++K)
+	{
+		const float C = FMath::Cos(K * UE_PI / 4.0f);
+		OnPlane[K] = 100.0f + 300.0f * C;               // a 300 cm rise across the radius
+		OnBump[K] = OnPlane[K];
+	}
+	TestTrue(TEXT("a tilted plane has no relief"), FMOSpeciesPlacement::GroundReliefCm(OnPlane, 100.0f) < 0.01f);
+	OnBump[2] += 60.0f;
+	// one raised point pulls the fitted plane up 22.5 cm there (60 / 8 on the mean + 60 / 4 on the tilt): 37.5 cm left
+	TestEqual(TEXT("a 60 cm bump at one edge reads as 37.5 cm of relief"), FMOSpeciesPlacement::GroundReliefCm(OnBump, 100.0f), 37.5f, 0.1f);
+	TestTrue(TEXT("a dip under the centre reads as relief"), FMOSpeciesPlacement::GroundReliefCm(OnPlane, 40.0f) > 55.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSpecies_TreesSinkOnSlopes,
+	"MOFramework.PCG.TreesSinkOnSlopes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSpecies_TreesSinkOnSlopes::RunTest(const FString& Parameters)
+{
+	// BR23-7 vote (Oct 23 2026): an upright tree is not tilted to the slope, so the downhill side of a wide base stood in the air -- the x3 rainforest
+	// alders' flares up to 76 cm on 10-20 deg ground (MO.PCG.Grounding). It sinks by the ground's drop across its base.
+	FMOBiomeSpeciesEntry Sapling;   // no measured base
+	FMOBiomeSpeciesEntry Tree;
+	Tree.BaseRadiusCm = 57.0f;   // SM_BlackAlder_Forest_01, measured
+	const float Slope15 = FMath::DegreesToRadians(15.0f);
+	TestEqual(TEXT("a 57 cm base three times as wide, 15 deg: 171 x tan 15"), FMOSpeciesPlacement::SlopeDropCm(Tree, 3.0f, Slope15), 171.0f * FMath::Tan(Slope15), 0.1f);
+	TestEqual(TEXT("flat ground: no slope sink"), FMOSpeciesPlacement::SlopeDropCm(Tree, 3.0f, 0.0f), 0.0f);
+	TestEqual(TEXT("a cliff wall is capped at 50 deg"), FMOSpeciesPlacement::SlopeDropCm(Tree, 1.0f, FMath::DegreesToRadians(80.0f)), 57.0f * FMath::Tan(FMath::DegreesToRadians(50.0f)), 0.1f);
+	// CONTROL (can fail): a rock resting on the ground has its own rule, and a plant with no measured base gets none.
+	FMOBiomeSpeciesEntry Boulder = Tree;
+	Boulder.bAlignToSurfaceNormal = true;
+	TestEqual(TEXT("CONTROL: an aligned rock gets no slope sink"), FMOSpeciesPlacement::SlopeDropCm(Boulder, 1.0f, Slope15), 0.0f);
+	TestEqual(TEXT("CONTROL: no base radius, no slope sink"), FMOSpeciesPlacement::SlopeDropCm(Sapling, 1.0f, Slope15), 0.0f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -34,6 +34,21 @@ struct MOFRAMEWORK_API FMOSpeciesPlacement
 	 *  then every species sinks SinkFraction of its scaled height (auto: 0.25 aligned, 0 upright) plus SinkMinCm. */
 	static float BurialOffsetCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale);
 
+	/** bLieOnSlope: the slab laid on the slope -- its face (FaceYawDeg in the mesh's XY) along SurfaceNormal, its up along the slope's uphill line, turned
+	 *  JitterRad about the normal. Flat ground has no uphill: FallbackYawRad picks the slab's direction. */
+	static FQuat LieOnSlopeRotation(const FMOBiomeSpeciesEntry& Species, const FVector& SurfaceNormal, float JitterRad, float FallbackYawRad);
+
+	/** bLieOnSlope: the offset ALONG THE SURFACE NORMAL (cm, negative = into the ground) that leaves LieShowFraction of the slab's thickness above it. */
+	static float LieOffsetCm(const FMOBiomeSpeciesEntry& Species, const FBoxSphereBounds& MeshBounds, float Scale);
+
+	/** The ground's departure from its best plane under a footprint: Heights are 8 samples evenly round the footprint's edge (index K at angle
+	 *  K x 45 deg), CentreHeight the ground at its centre. Pure (MaxGroundReliefFraction compares it to the mesh's thickness). */
+	static float GroundReliefCm(const float (&Heights)[8], float CentreHeight);
+
+	/** An upright plant on a slope (BaseRadiusCm > 0): how much deeper it goes so the downhill edge of its base meets the ground -- the base's radius at its
+	 *  width (WidthCm: scale x WidthScale) times the slope's tangent (capped at 50 deg). 0 for rocks, on flat ground, or with no base radius. */
+	static float SlopeDropCm(const FMOBiomeSpeciesEntry& Species, float Width, float SlopeRad);
+
 	/** bFaceDownhill: the instance rotation -- world up, the mesh's face (FaceYawDeg) turned toward the downhill direction of SurfaceNormal, plus JitterRad.
 	 *  Flat ground has no downhill: FallbackYawRad. */
 	static FQuat FaceDownhillRotation(const FMOBiomeSpeciesEntry& Species, const FVector& SurfaceNormal, float JitterRad, float FallbackYawRad);

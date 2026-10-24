@@ -33,6 +33,15 @@ ROCK = GAME + "/Fab/Megascans/3D/%s/Medium/%s_tier_2/StaticMeshes/%s_tier_2.%s_t
 
 
 ALDER_TREE_EXTRA_SINK_CM = 50.0   # see species(); 25 (Oct 16), 50 (Oct 23, BR23-7: "still floating, drop them about 25cm")
+# An upright tree's footprint on the ground (cm at scale 1: trunk + root flare, the outer radius of the mesh's bottom 30 cm, MO.PCG.Grounding "base r"):
+# on a slope it sinks by the ground's drop across it (BaseRadiusCm, BR23-7 Oct 23 vote). Black Alder forest trees and the ElectricForest hornbeams.
+BASE_RADIUS_CM = {"SM_BlackAlder_Forest_01_PP": 57, "SM_BlackAlder_Forest_02_PP": 47, "SM_BlackAlder_Forest_03_PP": 78, "SM_BlackAlder_Forest_04_PP": 34,
+                  "SM_BlackAlder_Forest_05_PP": 31, "SM_BlackAlder_Forest_06_PP": 15, "SM_BlackAlder_Forest_07_PP": 21, "SM_BlackAlder_Forest_08_PP": 12,
+                  "SM_BlackAlder_Forest_09_PP": 22, "SM_EuropeanHornbeam_Forest_01": 36, "SM_EuropeanHornbeam_Forest_02": 84,
+                  "SM_EuropeanHornbeam_Forest_03": 62, "SM_EuropeanHornbeam_Forest_04": 75, "SM_EuropeanHornbeam_Forest_05": 39,
+                  "SM_EuropeanHornbeam_Forest_06": 39, "SM_EuropeanHornbeam_Forest_07": 76, "SM_EuropeanHornbeam_Forest_08": 55,
+                  "SM_EuropeanHornbeam_Forest_09": 41, "SM_EuropeanHornbeam_Forest_10": 4, "SM_EuropeanHornbeam_Field_01": 61,
+                  "SM_EuropeanHornbeam_Field_02": 85, "SM_EuropeanHornbeam_Field_03": 64, "SM_EuropeanHornbeam_Field_04": 65}
 
 
 def ba(name):
@@ -82,6 +91,9 @@ def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, 
         # under its pivot -- but trees are not tilted to the slope, so the downhill side of the wide root flare shows. Not the saplings / seedlings (0.4 - 4 m):
         # 25 cm buries too much of them.
         sink_cm += ALDER_TREE_EXTRA_SINK_CM
+    if "EuropeanHornbeam" in path and ("_Forest_" in path or "_Field_" in path):
+        # The ElectricForest hornbeams are "Black Alder" in game (their resource row): Wes's floating "alders" (BR23-7 vote, Oct 23) were these, never sunk.
+        sink_cm += ALDER_TREE_EXTRA_SINK_CM
     if tag == "MOResource_Tree":
         # Trees of one species stood as one even wall (playtest 2026-10-14 #14: "more variation in the sizes ... like 75% to 125%"): every tree spans at least
         # 75 - 125 % of its mid size (a wider authored range is kept; far stand-ins derive from these and inherit it).
@@ -91,7 +103,8 @@ def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, 
             "ResourceNodeId": res, "bAlignToSurfaceNormal": align, "MaxRandomTiltDeg": tilt, "bAutoSweepOnTerraform": sweep, "MinScale": smin, "MaxScale": smax, "Collision": collision,
             "SinkFraction": sink, "SinkMinCm": sink_cm, "MinSlopeDeg": min_slope, "MaxSlopeDeg": max_slope,
             # face_yaw (degrees, where the mesh's rock face looks): stand upright and turn that face DOWN the slope (bFaceDownhill; open-backed cliff slabs, BR18-14 / BR18-19)
-            "bFaceDownhill": face_yaw is not None, "FaceYawDeg": 0.0 if face_yaw is None else float(face_yaw)}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
+            "bFaceDownhill": face_yaw is not None, "FaceYawDeg": 0.0 if face_yaw is None else float(face_yaw),
+            "BaseRadiusCm": float(BASE_RADIUS_CM.get(path.split(".")[-1], 0.0))}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
 
 
 def tree(name, density, group=0, core=0.7, res="BlackAlder", smin=0.8, smax=1.3):
