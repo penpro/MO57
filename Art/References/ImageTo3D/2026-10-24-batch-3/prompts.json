@@ -1,0 +1,103 @@
+{
+  "batch": "2026-10-24-batch-3",
+  "generator": "built-in image_gen",
+  "use_case": "product-mockup",
+  "background": "light-gray",
+  "transparent_background": false,
+  "source_brief": "README.md",
+  "notes": "Initial prompts used verbatim from the supplied brief. Acorns01 and IronSword01 each received one targeted correction after visual inspection; exact edit prompts and initial source paths are recorded below. No CLI/API fallback or image post-processing.",
+  "items": [
+    {
+      "order": 1,
+      "id": "Acorns01",
+      "output": "Acorns01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA small heap of seven ripe oak acorns, about 8 cm across, each acorn about 2.5 cm long: glossy brown shells, some still in their scaly cups, two loose cups beside them, one acorn cracked open showing the pale kernel. The acorns touch each other in one compact pile.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [
+        {
+          "reason": "Initial output contained six acorns instead of seven.",
+          "prompt": "Edit this product reference photo only to correct the acorn count. It currently shows six acorns. Add exactly ONE more whole uncapped glossy brown oak acorn, clearly visible, at the front-left edge of the compact pile, touching the other acorns without obscuring the cracked acorn or either empty cup. The final image must contain exactly SEVEN acorns total (six whole acorns plus the existing cracked-open acorn showing its pale kernel), plus exactly TWO empty scaly cups. Preserve the current acorns, materials, scale, composition, light-gray background, diffuse studio lighting, square framing and photorealism. No text or markings. Keep all pieces fully within the frame.",
+          "input_image": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-8d75a442-2b73-4e44-bdf2-3c4ebe1b8af1.png"
+        }
+      ],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-a99e73d6-6e9a-4cbf-918f-70f826bc1ae4.png"
+    },
+    {
+      "order": 2,
+      "id": "BoneHook01",
+      "output": "BoneHook01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA prehistoric fish hook carved from animal bone, about 4.5 cm long: a J-shaped curve with a sharp barbless point, a thicker straight shank ending in a small knob with a carved groove where a line would be tied (no line attached). Polished ivory-white bone with fine carving marks and a faint yellow patina. Shown lying flat.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-93b4dbd3-0d76-45c2-981a-833e14e8f328.png"
+    },
+    {
+      "order": 3,
+      "id": "MicrolithSickle01",
+      "output": "MicrolithSickle01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA Natufian-style microlith sickle, about 32 cm long: a straight haft cut from a red-deer antler beam, smoothed and hand-polished, the grip end rounded. A slot along one edge holds a row of five small grey flint microliths set end to end in black birch tar, forming one serrated cutting edge about 14 cm long; the flint edges show a glossy polish from cutting grass stems. Shown lying flat, the cutting edge toward the camera's side.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-814cbe4e-1b1c-402c-bdb3-f068e18255e5.png"
+    },
+    {
+      "order": 4,
+      "id": "OilLamp01",
+      "output": "OilLamp01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA simple prehistoric oil lamp, about 11 cm across: a hand-pinched open bowl of fired reddish-brown clay with one pinched spout at the rim, half filled with pale congealed animal fat, a short twisted plant-fibre wick lying in the spout, the spout lip blackened with soot. Unlit: no flame, no smoke. Rough, thick-walled and slightly lopsided.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-53cc6833-63f6-49d7-ab7d-03b9dcd9a6a3.png"
+    },
+    {
+      "order": 5,
+      "id": "BronzeChisel01",
+      "output": "BronzeChisel01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA Bronze Age chisel cast in bronze, about 18 cm long: a straight bar of rectangular section, the working end flaring slightly to a bright, sharpened edge, the striking end mushroomed from hammer blows. Golden-brown bronze with hammer marks and light green patina in the hollows. Shown lying flat.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-06b77e36-ced1-4099-9a69-5d188cecac02.png"
+    },
+    {
+      "order": 6,
+      "id": "BronzeSaw01",
+      "output": "BronzeSaw01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA Bronze Age saw, about 32 cm overall: a narrow cast and hammered bronze blade about 22 cm long and 4 cm wide with fine filed teeth along one edge, its tang fixed between two wooden handle plates about 10 cm long by two round bronze rivets. Golden-brown bronze with green patina near the handle, the teeth bright. Shown lying flat with the blade's face toward the camera.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-5d4a0d8b-5676-4ef1-aaaa-77ff4b5abd21.png"
+    },
+    {
+      "order": 7,
+      "id": "IronKnife01",
+      "output": "IronKnife01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nAn Iron Age knife, about 24 cm long: a forged iron blade about 14 cm long with a straight back and a curved, brightly honed edge, dark grey with forge scale, hammer marks and a few small rust spots; its tang set in a carved antler handle with a thin iron collar where blade meets handle. Shown lying flat with the blade's face toward the camera.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-67f8ce00-3c8d-499e-b873-e45c0bc91174.png"
+    },
+    {
+      "order": 8,
+      "id": "IronSpearhead01",
+      "output": "IronSpearhead01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA forged iron spearhead on its own, about 28 cm long, no shaft: a long leaf-shaped blade with a raised midrib that runs into a hollow round socket about 2.5 cm across, with one small nail hole through the socket. Dark grey forged iron with hammer marks, the edges ground brighter, light orange rust in the hollows. The open end of the socket is visible. Shown floating, point up and to the side.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-236da945-b498-42d6-bc10-7239516c4aea.png"
+    },
+    {
+      "order": 9,
+      "id": "IronSword01",
+      "output": "IronSword01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nAn Iron Age (La Tene style) iron sword, about 85 cm long, without a scabbard: a straight double-edged forged iron blade about 70 cm long with a shallow central fuller and a rounded point, dark grey with forge marks and a brighter ground edge; a bell-shaped iron guard, a grip wrapped in dark brown leather, a small round iron pommel. Shown floating diagonally, lying flat with the blade's face toward the camera.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [
+        {
+          "reason": "Initial blade ended in a pointed taper rather than the brief's rounded tip.",
+          "prompt": "Edit this exact product-reference image of an Iron Age sword. Correct ONLY the distal blade-tip profile: replace the long pointed taper at the bottom-right with the broad smoothly rounded, almost semicircular spatulate end requested for this La Tene-style cutting sword. Keep the double-edged blade nearly parallel-sided until its final short rounded end; it must visibly end in a rounded curve, with no acute stabbing point. End the shallow central fuller just before the rounded tip. Preserve the same sword, blade length and narrow proportions, bell-shaped iron guard, brown leather grip, small round pommel, forge-scale material, brighter honed edges, diagonal orientation, photoreal lighting, square frame, entire object visible and light-gray studio background. No scabbard, no text, no extra objects.",
+          "input_image": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-ccd00fac-9b91-46f3-a116-8c8abbcee483.png"
+        }
+      ],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-ea2ca05d-cce7-4ae8-81c5-8ecbe613f56b.png"
+    },
+    {
+      "order": 10,
+      "id": "IronShield01",
+      "output": "IronShield01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA round Iron Age shield about 70 cm across: wooden planks with visible joins, faced with brown leather, a domed forged iron boss about 15 cm across at the centre held by four iron rivets, and a narrow iron rim binding the edge, fixed with clinched nails. Worn and scratched, the iron dark grey with light rust. Seen from the front at three-quarters so the face and boss show; the back is not visible.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-6e500486-3a71-4f7d-a8ee-e51ae7986dd4.png"
+    }
+  ]
+}

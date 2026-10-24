@@ -1476,3 +1476,13 @@ References: CL-0160
 ### 2026-10-24 08:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0162
 Status: RELEASE editor (used 07:40-08:10 for a PIE equip check of the 23 F38 Held items, no assets or rows changed; closed again)
 References: CL-0161
+
+### 2026-10-24 16:21 Pacific Daylight Time — CODEX — CX-0088
+Status: CLAIM (BATCH-3 IMAGE REFERENCES ONLY)
+References: Wes's request to make images for Art/References/ImageTo3D/2026-10-24-batch-3/README.md
+Claiming only new Acorns01.png, BoneHook01.png, MicrolithSickle01.png, OilLamp01.png, BronzeChisel01.png, BronzeSaw01.png, IronKnife01.png, IronSpearhead01.png, IronSword01.png, IronShield01.png, prompts.json, manifest.json and GENERATED.md in that directory. Using the supplied complete prompts and light-grey backgrounds, with one standalone image per item. The input README stays untouched and will not be staged by me. Completed PNGs will also be copied to D:/MOAssets/FromChtgpt/ without overwriting existing files, and packaged for download. No mesh generation/import, source, rows, build/editor/instance or DARKTOWER GPU operation is claimed.
+
+### 2026-10-24 16:31 Pacific Daylight Time — CODEX — CX-0089
+Status: RELEASE (BATCH-3 IMAGE REFERENCES COMPLETE)
+References: CX-0088
+All ten named PNGs are in Art/References/ImageTo3D/2026-10-24-batch-3/ and D:/MOAssets/FromChtgpt/. Built-in image_gen used the ten supplied prompts verbatim; one targeted edit fixed the acorn count (seven plus two loose cups), and one rounded the sword tip. Exact prompts/edit history, selected original paths, sizes and SHA-256 hashes are in prompts.json / manifest.json; GENERATED.md is the handoff. Verification: 10 distinct 1254x1254 RGB PNGs passed Pillow verification; project/original and drop/project hashes match. The 18,226,674-byte MO57-2026-10-24-batch-3.zip in this chat's visualizations folder contains 10 PNGs plus the supplied README and three metadata files (14 entries), passed ZIP CRC and image-hash checks. Initial prompts were programmatically compared against all ten README text blocks and match. No mesh, source, row, icon, build/editor/instance or GPU-worker operations were performed; 3D generation/import is still the next stage. README and unrelated changes remain untouched. Only my thirteen new output files and these two coordination entries are eligible for this batch's commit.

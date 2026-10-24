@@ -1,0 +1,114 @@
+{
+  "batch": "2026-10-24-batch-3",
+  "generated_at_utc": "2026-10-24 23:29:51 UTC",
+  "generator": "built-in image_gen",
+  "source_brief": "README.md",
+  "project_directory": "D:/UEProjects/MO57/Art/References/ImageTo3D/2026-10-24-batch-3/",
+  "drop_directory": "D:/MOAssets/FromChtgpt/",
+  "archive": "C:/Users/penum/.codex/visualizations/2026/10/13/01a134bd-d8ba-7d62-bec2-59138e3ee28a/MO57-2026-10-24-batch-3.zip",
+  "image_count": 10,
+  "files": [
+    {
+      "id": "Acorns01",
+      "file": "Acorns01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2249609,
+      "sha256": "75c7cb93975739929730af7a531d8aa0562a69cb91402cfa36f4389f66218be1"
+    },
+    {
+      "id": "BoneHook01",
+      "file": "BoneHook01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1917694,
+      "sha256": "6052cce5c38e2f39ab0df75ae7b0bfffa7e3b43a9e199b647b51a8c9f5f3bca2"
+    },
+    {
+      "id": "MicrolithSickle01",
+      "file": "MicrolithSickle01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1902274,
+      "sha256": "95322b33ed05245217bdef267cf4ad4f0e803005e55e3faa8c38bd66af045a08"
+    },
+    {
+      "id": "OilLamp01",
+      "file": "OilLamp01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2035516,
+      "sha256": "bb120ded5c616f4285e8f6444213ce78bc1ac564b00365f36acece29539fc4cc"
+    },
+    {
+      "id": "BronzeChisel01",
+      "file": "BronzeChisel01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1670514,
+      "sha256": "6f054f1bd86a1783fe628423516356a9224e893f3da9fe6fbf6756ae3b1ac8b1"
+    },
+    {
+      "id": "BronzeSaw01",
+      "file": "BronzeSaw01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1957523,
+      "sha256": "39a76e825c8cbca3db9a2fe90ef054e81918af6ba2da1b651b72e1e651ad9550"
+    },
+    {
+      "id": "IronKnife01",
+      "file": "IronKnife01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2118717,
+      "sha256": "6ff782b11ef44a3faeb492255320c1a50db0109b22406a5218169e0591d86d5c"
+    },
+    {
+      "id": "IronSpearhead01",
+      "file": "IronSpearhead01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1615514,
+      "sha256": "ade6c8a3e7274f8ff854f31d60366ca336ca67fef497e02028f32cbcebfdf96c"
+    },
+    {
+      "id": "IronSword01",
+      "file": "IronSword01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 1674368,
+      "sha256": "2f9de869e3fc2051daacc8fcf403f3f4690d7eafe83b7835fa08feeeeabc3cbf"
+    },
+    {
+      "id": "IronShield01",
+      "file": "IronShield01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2683949,
+      "sha256": "45a603472c7bf5839f291b41f18fd78495812ef1275733ee1a189775f209b55c"
+    }
+  ],
+  "original_copies_verified": true,
+  "unique_images": true
+}
