@@ -529,6 +529,14 @@ struct MOFRAMEWORKCORE_API FMOItemDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags", meta=(EditCondition="bEquippable"))
 	EMOEquipmentSlotType EquipmentSlotType = EMOEquipmentSlotType::None;
 
+	/** Equippable, yet no slot takes it (EquipmentSlotType None): UMOEquipmentComponent::CanEquipInSlot refuses it everywhere while the info panel says
+	 *  "Equippable". 28 rows were like that until Oct 24 2026 (DECISIONS F38, Wes: "go with A"); IsDataValid rejects it. */
+	bool IsEquippableWithoutSlot() const { return bEquippable && EquipmentSlotType == EMOEquipmentSlotType::None; }
+
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bQuestItem = false;
 

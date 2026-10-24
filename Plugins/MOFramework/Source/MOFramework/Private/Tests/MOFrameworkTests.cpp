@@ -28,6 +28,7 @@
 #include "MOBugReport.h"
 #include "MOBugReportBundle.h"
 #include "Components/EditableTextBox.h"
+#include "Misc/DataValidation.h"
 #include "Components/MultiLineEditableTextBox.h"
 #include "Misc/Compression.h"
 #include "HAL/PlatformProcess.h"
@@ -1561,6 +1562,71 @@ bool FMOSpecies_ScaleBiasKeepsGiantsRare::RunTest(const FString& Parameters)
 	// CONTROL (can fail): bias 1 is the old even draw, FRandRange's MinScale + range x u, so every existing world keeps its layout.
 	TestEqual(TEXT("CONTROL: bias 1, a quarter in the top quarter"), EvenTop, 250);
 	TestEqual(TEXT("CONTROL: bias 1 is FRandRange's draw"), FMOSpeciesPlacement::DrawScale(Even, 0.37f), 8.0f + (16.0f - 8.0f) * 0.37f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOData_EquippableItemsHaveASlot,
+	"MOFramework.Data.EquippableItemsHaveASlot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOData_EquippableItemsHaveASlot::RunTest(const FString& Parameters)
+{
+	// DECISIONS F38 (Wes, Oct 24 2026: "go with A"): an equippable item with no EquipmentSlotType can be equipped nowhere
+	// (UMOEquipmentComponent::CanEquipInSlot) while the info panel says "Equippable" -- 28 DT_Items rows were like that.
+	TArray<FName> Ids;
+	UMOItemDatabaseSettings::GetAllItemIds(Ids);
+	if (!TestTrue(TEXT("DT_Items has its rows"), Ids.Num() > 100))
+	{
+		return false;
+	}
+	TArray<FString> NoSlot;
+	FMOItemDefinitionRow Def;
+	for (const FName Id : Ids)
+	{
+		if (UMOItemDatabaseSettings::GetItemDefinition(Id, Def) && Def.IsEquippableWithoutSlot())
+		{
+			NoSlot.Add(Id.ToString());
+		}
+	}
+	TestEqual(FString::Printf(TEXT("equippable items with no slot: [%s]"), *FString::Join(NoSlot, TEXT(", "))), NoSlot.Num(), 0);
+	// Wes's A: hand tools, weapons and shields are Held; the tunic is Chest; the pouch, waterskin, quiver and beads are not equippable.
+	auto SlotOf = [](const TCHAR* Id, EMOEquipmentSlotType Expected)
+	{
+		FMOItemDefinitionRow Row;
+		return UMOItemDatabaseSettings::GetItemDefinition(Id, Row) && Row.bEquippable && Row.EquipmentSlotType == Expected;
+	};
+	auto NotEquippable = [](const TCHAR* Id)
+	{
+		FMOItemDefinitionRow Row;
+		return UMOItemDatabaseSettings::GetItemDefinition(Id, Row) && !Row.bEquippable;
+	};
+	TestTrue(TEXT("StoneSickle01 is Held"), SlotOf(TEXT("StoneSickle01"), EMOEquipmentSlotType::Held));
+	TestTrue(TEXT("BronzeSword01 is Held"), SlotOf(TEXT("BronzeSword01"), EMOEquipmentSlotType::Held));
+	TestTrue(TEXT("SimpleBow01 is Held"), SlotOf(TEXT("SimpleBow01"), EMOEquipmentSlotType::Held));
+	TestTrue(TEXT("IronShield01 is Held"), SlotOf(TEXT("IronShield01"), EMOEquipmentSlotType::Held));
+	TestTrue(TEXT("ClothTunic01 is Chest"), SlotOf(TEXT("ClothTunic01"), EMOEquipmentSlotType::Chest));
+	for (const TCHAR* Carried : { TEXT("SimplePouch01"), TEXT("WaterSkin01"), TEXT("Quiver01"), TEXT("GlassBeads01") })
+	{
+		TestTrue(FString::Printf(TEXT("%s is carried, not equippable"), Carried), NotEquippable(Carried));
+	}
+	// CONTROL (can fail): the rule on a made-up row, and the editor's data validation rejecting it.
+	FMOItemDefinitionRow Broken;
+	Broken.ItemId = TEXT("BrokenEquip");
+	Broken.bEquippable = true;
+	TestTrue(TEXT("CONTROL: equippable with slot None is caught"), Broken.IsEquippableWithoutSlot());
+#if WITH_EDITOR
+	{
+		FDataValidationContext Context;
+		TestTrue(TEXT("CONTROL: IsDataValid rejects it"), Broken.IsDataValid(Context) == EDataValidationResult::Invalid);
+		TestEqual(TEXT("CONTROL: with one error"), Context.GetNumErrors(), 1u);
+	}
+	{
+		FMOItemDefinitionRow Held = Broken;
+		Held.EquipmentSlotType = EMOEquipmentSlotType::Held;
+		FDataValidationContext Context;
+		TestTrue(TEXT("a Held item passes"), Held.IsDataValid(Context) == EDataValidationResult::Valid);
+	}
+#endif
 	return true;
 }
 

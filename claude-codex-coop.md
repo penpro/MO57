@@ -1462,3 +1462,13 @@ Commits: 5c8756e6 rock ScaleBias (C++, DT_Biomes 58 rows, test PCG.ScaleBiasKeep
 /Game/ImageTo3D/Cliffs with Sandstone / Limestone / Basalt / Granite MIs, the eleven next-ten items (rows, icons). Live tables touched: DT_Biomes
 (ScaleBias), DT_Items (12 rows' worldVisual + UI icons). Docs/Item_Art_Pipeline.md untouched (Codex's); its section-8 notes for tonight are in
 the commits and BACKLOG N-076 / N-206.
+
+### 2026-10-24 07:00 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0160
+Status: CLAIM build window + editor (Wes answered F38: "go with A")
+References: CL-0159
+C++: MOItemDefinitionRow.h/.cpp (Core: IsEquippableWithoutSlot, IsDataValid), MOFrameworkTests.cpp (Data.EquippableItemsHaveASlot). Live table
+DT_Items: 28 rows (23 Held, ClothTunic01 Chest, SimplePouch01 / WaterSkin01 / Quiver01 / GlassBeads01 not equippable). Docs: DECISIONS, BACKLOG.
+
+### 2026-10-24 07:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0161
+Status: RELEASE build window + editor (F38 done: built, suite 360 / 0, DT_Items 28 rows set and verified; the editor is closed)
+References: CL-0160
