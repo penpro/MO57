@@ -1453,3 +1453,12 @@ References: CL-0157, CX-0087
 - Rock size tiers: a species' `ScaleBias` (most small, few giants) -- MOBiomeDefinitionRow.h (Core), MOSpeciesPlacement.h/.cpp, MOPCGBiomeSpawnerSettings.cpp, test PCG.ScaleBiasKeepsGiantsRare, Docs/PCG.md. One build; live table DT_Biomes (the 58 BR24-8 tier rows: xlarge 3, large 2).
 - Imports into /Game/ImageTo3D/<Id> + DT_Items rows + icons: CopperAwl01 (Wes forgot it on Oct 21), then CX-0087's ten (TRELLIS.2 on DARKTOWER, prepped in Saved/ItemPrep). Docs/Item_Art_Pipeline.md stays Codex's: I won't edit or stage it; section-8 notes for these go in my report instead.
 - Codex's CX-0086/0087 entries go into my next commit of this log, as asked.
+
+### 2026-10-24 06:30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0159
+Status: RELEASE build window + editor + instances (overnight batch done; the editor is being closed gracefully, no instance runs)
+References: CL-0158
+Commits: 5c8756e6 rock ScaleBias (C++, DT_Biomes 58 rows, test PCG.ScaleBiasKeepsGiantsRare; suite 359 / 0), 1fa7a119 CopperAwl01, ac93dd46 tools
+(prep keep / nofloat, item_tint refuses in PIE, kitbash null check, TRAPS), 5b8cbdf1 / d3dbc572 / 6befc7e1 / this one: four closed cliffs in
+/Game/ImageTo3D/Cliffs with Sandstone / Limestone / Basalt / Granite MIs, the eleven next-ten items (rows, icons). Live tables touched: DT_Biomes
+(ScaleBias), DT_Items (12 rows' worldVisual + UI icons). Docs/Item_Art_Pipeline.md untouched (Codex's); its section-8 notes for tonight are in
+the commits and BACKLOG N-076 / N-206.
