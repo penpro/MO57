@@ -373,7 +373,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	 * coastal plain. Shore edge -> 1.2 m band (~60 m across a 2 % beach), AlpineHeath (320 m) -> 26 m, AlpineRock -> 40 m.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="1"))
-	float SurfaceHeightBlendFraction = 0.12f;
+	float SurfaceHeightBlendFraction = 0.2f;
 
 	/** The narrowest band of a SHORE height edge (cm): the beaches end ~4 m above the sea. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
@@ -382,11 +382,12 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	/**
 	 * The narrowest band of an INLAND height edge (cm), one more than SurfaceHeightBlendShoreLimitCm above the sea (Wes, Oct 23 2026, BR23-19: "blend the
 	 * height splits over 25-50m of elevation change for everything except beaches etc at water level, they're basically straight lines in the distance").
-	 * With the fraction 0.12 (was 0.08) and the widest band 50 m (was 40): ElectricForest's top (300 m) 36 m (was 24), AlpineHeath (320 m) 38 m (was 26),
-	 * AlpineRock (950 m) 50 m (was 40); the shore edges keep 1.2 m.
+	 * Oct 24 (BR24-14, Wes: "height split not faded at all at a distance still"): a 50 m band is under one far-LOD triangle on a mountain 5 km away, a
+	 * hard edge there. The fraction 0.2 (was 0.12), the widest band 200 m (was 50) and the narrowest inland 40 m (was 25): ElectricForest's top (300 m)
+	 * 60 m, AlpineHeath (320 m) 64 m, AlpineRock (950 m) 190 m; the shore edges keep 1.2 m.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
-	float SurfaceHeightBlendInlandMinCm = 2500.0f;
+	float SurfaceHeightBlendInlandMinCm = 4000.0f;
 
 	/** Height edges up to this far above the sea (cm) are shore edges (see SurfaceHeightBlendMinCm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
@@ -394,7 +395,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 
 	/** The widest height band (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
-	float SurfaceHeightBlendCm = 5000.0f;
+	float SurfaceHeightBlendCm = 20000.0f;
 
 	/**
 	 * Every biome species' density, x this (the world's Vegetation knob, MOWorldCreationTypes.h; the biome spawner multiplies by it). 1 = as authored.
@@ -421,6 +422,21 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	/** Wavelength (cm) of the edge-breakup noise's first octave (two finer ones follow at 1/2.6 and 1/6.8 of it). 90 m -> 300 m with the wider band. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="100"))
 	float SurfaceBreakupWavelengthCm = 30000.0f;
+
+	/**
+	 * An INLAND height edge also wanders on a mountain's scale, as the material's snow line does (M_QuixelBase: +-160 m on 4.7 km / 1.1 km noise): this
+	 * fraction of the edge's height above the sea, either way. The band's own breakup (above) frays the edge by tens of metres, which a mountain seen from
+	 * 5 km shows as a level line (Wes, Oct 23 2026, BR23-19 vote: "the snow cap to rocks looks better but the rocks to whatever is below that is unchanged
+	 * ... it should probably match the noise between the snow and the rocks"). At most AlpineRock's floor (950 m) +-143 m, AlpineHeath's (320 m) +-48 m,
+	 * on top of the band's own breakup (+-0.75 band); shore edges none. 0 = the band's breakup only.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="0.5"))
+	float SurfaceHeightWanderFraction = 0.15f;   // 0.3 with the 50 m bands (Wes, Oct 24: "the variation looks much better"); the wider bands' own breakup now adds as much
+
+	/** Wavelength (cm) of that wander's first octave; the second at 1/3 of it. 1.5 km / 0.5 km: a mountain face 3-5 km wide sees several turns (4.7 km
+	 *  / 1.1 km, the snow line's own reads, moved a whole face up or down and left a level line, Oct 23). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="1000"))
+	float SurfaceHeightWanderWavelengthCm = 150000.0f;
 
 	/**
 	 * A biome's hill scale below 1 also flattens the CONTINENT relief: the land above this height (metres, before VerticalScale) is pulled toward it by (1 - scale), so a prairie is a low

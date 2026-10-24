@@ -141,6 +141,20 @@ The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lat
   temperature units); `SurfaceBreakup` 0.6 of the band, noise wavelength `SurfaceBreakupWavelengthCm` 90 m. The slope split is the material's (M_QuixelBase's slope window, already a smoothstep that widens with distance); slope-banded biomes still never apply
   to the column surface. **Oct 23 (BR23-19, Wes: "blend the height splits over 25-50m of elevation change for everything accept beaches"):** one rule, `FMOWorldGen::HeightBlendBandCm` -- 0.12 of the edge's height above the sea, at least 25 m inland (`SurfaceHeightBlendInlandMinCm`, an edge more than `SurfaceHeightBlendShoreLimitCm` 20 m up), 1.2 m at the shore, at most 50 m: ElectricForest's top 36 m (was 24), AlpineHeath 38 m (was 26), AlpineRock 50 m (was 40), the beaches unchanged (test `MOFramework.WorldGen.HeightBlendBand`). Tests: `MOFramework.WorldGen.SoftThreshold`, `MOFramework.WorldGen.SurfaceBlendBands` (weights are a partition and deterministic over 3000 columns; of 30 hard `ResolveBiome` boundaries found by walking lines, 30 have a mixed band
   of 3 m or more, mean 58 m). Seen in the packaged game: at 300 m the grass thins out into the dirt instead of stopping at a line; at 3 km the boundary is softer but the far-LOD vertex step still shows.
+  **Oct 23 evening (Wes's vote: "the snow cap to rocks looks better but the rocks to whatever is below that is unchanged ... it should probably
+  match the noise between the snow and the rocks"):** from 5 km the band's own breakup (tens of metres at a 300 m wavelength) still read as a
+  level line under the snow line, which wanders +-160 m on the material's 4.7 km / 1.1 km noise. Inland height edges now also wander on that
+  scale: `SurfaceHeightWanderFraction` 0.13 of the edge's height above the sea (AlpineRock's 950 m floor +-124 m, AlpineHeath's +-42 m, the
+  shore none), `SurfaceHeightWanderWavelengthCm` 4.7 km + a 1.1 km octave, two reads on turned grids, the same shift for the biome above and
+  below the edge. Looks only, not in the world hash. Test `MOFramework.WorldGen.HighEdgesWander` (where AlpineRock begins, over many columns).
+  **Oct 24 (Wes, BR24-14: "height split not faded at all at a distance still, but the variation looks much better"):** a 25-50 m band is less
+  than one far-LOD triangle on a mountain 5 km away, so it read as a hard edge. The band is now 0.2 of the edge's height above the sea
+  (`SurfaceHeightBlendFraction`), 40-200 m inland (`SurfaceHeightBlendInlandMinCm` / `SurfaceHeightBlendCm`): ElectricForest's top 60 m,
+  AlpineHeath 64 m, AlpineRock 190 m. The wander is 0.15 (it was 0.3 on the 50 m bands: the wider bands' own breakup now adds as much).
+  **Ground displacement per surface (Oct 24, BR24-17: "the nanite world position offset ... is really high, which is great for the nordic
+  strand rocks, but looks odd in some other ones"):** M_QuixelBase displaces by its height map x the instance's `HeightMultiplier` (12 cm
+  about 0.5). `Content/Python/surface_displacement.py` sets it per surface: rock 0.7-1.0 (DarkPebbles, Cliff, IcelandicQuarryRock,
+  MossyRockyGround), soil / litter / grass / sand 0.3-0.5 (MuddyLeaves, ForestLitter, JungleFloor 0.35, AlpineHeath 0.4, Gravel 0.5, ...).
   **Foliage follows the same band:** `FMOWorldGen::PickSurfaceBiome` rolls each PCG point's biome against those weights (a seeded hash of the point's 10 cm cell; a slope-banded biome that `ResolveBiome` picks still wins outright, and a biome
   whose slope range excludes the point is dropped from the roll). The biome spawner uses it in generator mode (`mo.PCG.BiomeSoftPick`, default 1; 0 = the old hard first match + 4-tap climate feather) and so does `FMOPCGWaterMask::BiomeAt`
   (the elevation-bands node's `AllowedBiomeIds` filter), so both biomes' plants interleave and thin out where their ground does. `DT_Biomes.EdgeBlendWidth` now only matters with the cvar off / outside generator mode. Packaged A/B, same nine shots

@@ -38,14 +38,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_HeightBlendBand,
 
 bool FMOWorldGen_HeightBlendBand::RunTest(const FString& Parameters)
 {
-	// Wes, Oct 23 2026 (BR23-19): "blend the height splits over 25-50m of elevation change for everything except beaches etc at water level". The shipped
-	// tuning, against every height edge DT_Biomes has: the inland edges (300 m, 320 m, 950 m) blend over 25-50 m, the shore edges (4 and 4.5 m) stay narrow.
+	// Wes, Oct 23 2026 (BR23-19): "blend the height splits over 25-50m of elevation change for everything except beaches etc at water level"; Oct 24
+	// (BR24-14): "not faded at all at a distance still" -- the band grows with the edge's height: the low inland edges (300 m, 320 m) over 40-80 m, the
+	// summit rock (950 m) over 150-200 m, the shore edges (4 and 4.5 m) still narrow.
 	const FMOWorldGenTuning T;
 	const float Sea = T.SeaLevelCm;
-	for (const float Edge : { 30000.0f, 32000.0f, 95000.0f })
+	for (const float Edge : { 30000.0f, 32000.0f })
 	{
 		const float Band = FMOWorldGen::HeightBlendBandCm(T, Sea + Edge);
-		TestTrue(FString::Printf(TEXT("an inland edge %.0f m above the sea blends over 25-50 m (%.1f m)"), Edge / 100.0f, Band / 100.0f), Band >= 2500.0f && Band <= 5000.0f);
+		TestTrue(FString::Printf(TEXT("an inland edge %.0f m above the sea blends over 40-80 m (%.1f m)"), Edge / 100.0f, Band / 100.0f), Band >= 4000.0f && Band <= 8000.0f);
+	}
+	{
+		const float Band = FMOWorldGen::HeightBlendBandCm(T, Sea + 95000.0f);
+		TestTrue(FString::Printf(TEXT("the summit rock's edge (950 m) blends over 150-200 m (%.1f m)"), Band / 100.0f), Band >= 15000.0f && Band <= 20000.0f);
 	}
 	for (const float Edge : { 400.0f, 450.0f })
 	{
@@ -212,6 +217,60 @@ bool FMOWorldGen_PickSurfaceBiome::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("the pick follows the ground's mix (weight %.3f, picked %.3f)"), Mixed > 0 ? Expected / Mixed : 0.0, Mixed > 0 ? Observed / Mixed : 0.0),
 		Mixed > 0 && FMath::Abs(Expected - Observed) / Mixed < 0.05);
 	TestEqual(TEXT("a cliff (slope band) wins outright"), CliffWrong, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_HighEdgeWanders,
+	"MOFramework.WorldGen.HighEdgesWander",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_HighEdgeWanders::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 23 2026 (BR23-19 vote): AlpineRock's floor read as a level line on a mountain 5 km away while the snow line above it wandered. Over many
+	// columns, the height where the ground turns to AlpineRock must spread over well over 100 m around its 950 m edge (SurfaceHeightWanderFraction),
+	// with its mean still near the edge.
+	const FMOWorldGenParamsRef P = UMOWorldGenSettings::RefreshPublishedParams();
+	const int32 Rock = P->FindBiomeIndex(TEXT("AlpineRock"));
+	if (!TestTrue(TEXT("DT_Biomes has AlpineRock"), Rock != INDEX_NONE))
+	{
+		return false;
+	}
+	const float Edge = P->Biomes[Rock].HeightMin;
+	const int32 Seed = 1029024224;
+	FRandomStream R(31);
+	TArray<float> Crossings;
+	for (int32 Column = 0; Column < 400 && Crossings.Num() < 120; ++Column)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		FMOClimateSample Climate;
+		FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, P->Tuning.VoxelSizeCm, &Climate);
+		for (float V = Edge - 50000.0f; V <= Edge + 50000.0f; V += 500.0f)   // the column's climate, at every height +-500 m round the edge
+		{
+			FMOWorldGen::FBiomeWeight W[3];
+			const int32 N = FMOWorldGen::SampleSurfaceBiomeWeights(*P, X, Y, Seed, V, Climate.Moisture, FMOWorldGen::TemperatureAtHeight(*P, Climate.TemperatureSeaLevel, V), W, 3);
+			if (N > 0 && W[0].Biome == Rock)
+			{
+				Crossings.Add(V);
+				break;
+			}
+		}
+	}
+	if (!TestTrue(FString::Printf(TEXT("columns reach AlpineRock (%d)"), Crossings.Num()), Crossings.Num() >= 50))
+	{
+		return false;
+	}
+	float Lo = TNumericLimits<float>::Max(), Hi = -TNumericLimits<float>::Max();
+	double Sum = 0.0;
+	for (const float C : Crossings)
+	{
+		Lo = FMath::Min(Lo, C);
+		Hi = FMath::Max(Hi, C);
+		Sum += C;
+	}
+	const float Mean = static_cast<float>(Sum / Crossings.Num());
+	AddInfo(FString::Printf(TEXT("AlpineRock begins between %.0f and %.0f m (mean %.0f m; the edge %.0f m)"), Lo / 100.0f, Hi / 100.0f, Mean / 100.0f, Edge / 100.0f));
+	TestTrue(FString::Printf(TEXT("the floor wanders over more than 120 m (%.0f m)"), (Hi - Lo) / 100.0f), Hi - Lo > 12000.0f);
+	TestTrue(FString::Printf(TEXT("its mean stays within 60 m of the edge (%.0f m)"), (Mean - Edge) / 100.0f), FMath::Abs(Mean - Edge) < 6000.0f);
 	return true;
 }
 

@@ -761,13 +761,25 @@ int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, do
 	const float NoiseC = Breakup(X * 0.7 + 13.7 / Inv, Y * 0.7 - 5.3 / Inv, SaltSurfaceBreakup + 1u);
 	const float WC = T.SurfaceClimateBlend;
 	const float BreakC = NoiseC * T.SurfaceBreakup * 0.5f * WC;
-	// A height edge's band scales with how high above the sea it lies (HeightBlendBandCm); its breakup scales with its band.
+	// A height edge's band scales with how high above the sea it lies (HeightBlendBandCm); its breakup scales with its band. An inland edge also wanders on a
+	// mountain's scale (SurfaceHeightWanderFraction of its height above the sea; two reads on grids turned against each other, like the snow line's): the
+	// same shift for the same edge in one column, so the biome above an edge and the one below it still meet.
+	constexpr uint32 SaltHeightWander = 0x5A07u;
+	const double InvW = 1.0 / FMath::Max((double)T.SurfaceHeightWanderWavelengthCm, 1000.0);
+	const float NoiseW = 0.55f * MOWorldGenNoise::GradientNoise2((0.8 * X - 0.6 * Y) * InvW, (0.6 * X + 0.8 * Y) * InvW, (uint32)HashSeed(Seed, SaltHeightWander)).Value
+		+ 0.45f * MOWorldGenNoise::GradientNoise2((0.28 * X + 0.96 * Y) * InvW * 3.0 + 7.1, (-0.96 * X + 0.28 * Y) * InvW * 3.0 - 3.3, (uint32)HashSeed(Seed, SaltHeightWander + 1u)).Value;
 	const auto HeightBand = [&T](float Edge) { return HeightBlendBandCm(T, Edge); };
+	const auto HeightShift = [&T, NoiseH, NoiseW](float Edge, float Band)
+	{
+		const float Above = Edge - T.SeaLevelCm;
+		const float Wander = Above > T.SurfaceHeightBlendShoreLimitCm ? NoiseW * T.SurfaceHeightWanderFraction * Above : 0.0f;
+		return NoiseH * T.SurfaceBreakup * 0.5f * Band + Wander;
+	};
 	const auto HeightInside = [&](float V, float Lo, float Hi, bool bLoOpen, bool bHiOpen)
 	{
 		const float WLo = HeightBand(Lo), WHi = HeightBand(Hi);
-		const float AboveLo = bLoOpen ? 1.0f : SoftThreshold(V, Lo, WLo, NoiseH * T.SurfaceBreakup * 0.5f * WLo);
-		const float BelowHi = bHiOpen ? 1.0f : 1.0f - SoftThreshold(V, Hi, WHi, NoiseH * T.SurfaceBreakup * 0.5f * WHi);
+		const float AboveLo = bLoOpen ? 1.0f : SoftThreshold(V, Lo, WLo, HeightShift(Lo, WLo));
+		const float BelowHi = bHiOpen ? 1.0f : 1.0f - SoftThreshold(V, Hi, WHi, HeightShift(Hi, WHi));
 		return AboveLo * BelowHi;
 	};
 
