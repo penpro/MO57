@@ -21,6 +21,9 @@ CVARS = {"Interchange.FeatureFlags.Import.FBX": "0", "Interchange.FeatureFlags.I
 
 def export(mesh_path, fbx_path):
     mesh = unreal.load_asset(mesh_path)
+    if not isinstance(mesh, unreal.StaticMesh):
+        # A null object reaches UExporter's check(Object) and takes the editor down (Oct 24): refuse here instead.
+        raise ValueError("kitbash.export: no static mesh at %s (got %r)" % (mesh_path, mesh))
     options = unreal.FbxExportOption()
     options.collision = False
     options.level_of_detail = False

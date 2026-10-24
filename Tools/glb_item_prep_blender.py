@@ -1,14 +1,17 @@
 """Blender (headless): make a raw image-to-3D GLB (TRELLIS.2 in ComfyUI, Tripo, ...) import-ready as an MO57 item mesh.
 
-    "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Tools/glb_item_prep_blender.py -- <in.glb> Saved/ItemPrep/<ItemId>.glb <longest_cm> <pca|tilt> <target_tris> <tex_px>
+    "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Tools/glb_item_prep_blender.py -- <in.glb> Saved/ItemPrep/<ItemId>.glb <longest_cm> <pca|tilt|keep> <target_tris> <tex_px> [nofloat]
 
 Why (2026-10-17): TRELLIS.2 output is ~700k triangles, 4K textures, ~0.9 m whatever the object, tilted the way the reference photo
 was shot (camera ~30 deg above), with generic names. Unreal names imported assets after the GLB's names and renaming assets from
 editor Python hangs the editor, so the names are fixed here. This script:
   - joins the meshes and decimates to target_tris (15-40k is plenty for a hand-held item; the baked normal map keeps the detail);
   - orients it. pca: smallest extent -> up, largest -> X (flat things lie flat, long things lie along X). tilt: undoes only the
-    reference camera's ~37 deg tilt, for upright objects whose opening must stay up (a container);
+    reference camera's ~37 deg tilt, for upright objects whose opening must stay up (a container). keep: no rotation, for the world-scale
+    cliffs and boulders TRELLIS already stands upright (Oct 24: the closed-geometry cliffs, 2M tris and 8K kept: target_tris 2000000, tex_px 8192);
   - scales so the longest side is longest_cm (real size: no row scale needed) and puts the pivot at the bottom centre;
+  - drops floating shards (below); `nofloat` skips that for a 2M-triangle cliff, where the per-part neighbour search ran 25 min on one
+    core without finishing (Oct 24) and TRELLIS left none to drop;
   - downsizes textures to tex_px (2048; 1024 for things under ~8 cm);
   - names the mesh SM_<ItemId>, the material M_<ItemId>, the textures T_<ItemId>_BaseColor / _Normal / _ORM.
 Then: ue.py asset import (MSYS_NO_PATHCONV=1!) -> item_mesh_prepare -> ue.py rows set -> icon_studio.py. Docs/Item_Art_Pipeline.md section 8.
@@ -19,6 +22,7 @@ from mathutils import Matrix
 
 a = sys.argv[sys.argv.index("--") + 1:]
 src, dst, longest_cm, orient, target, tex_px = a[0], a[1], float(a[2]), a[3], int(a[4]), int(a[5])
+drop_floaters = not (len(a) > 6 and a[6] == "nofloat")
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
@@ -48,61 +52,62 @@ if tris0 > target:
 # shield 34 cm tall, and the scale is fitted to the bounding box).
 # Parts within 3 % of the object's diagonal of each other are one cluster; the largest cluster stays, and any holding 5 % of the vertices. (Box rules failed: "small and clear of the big
 # parts' box", took a decimated shield's rim: the mesh is hundreds of islands and the big ones do not span the object.)
-import bmesh
-bm = bmesh.new()
-bm.from_mesh(ob.data)
-bm.verts.ensure_lookup_table()
-seen, parts = set(), []
-for v in bm.verts:
-    if v.index in seen:
-        continue
-    stack, comp = [v], []
-    seen.add(v.index)
-    while stack:
-        u = stack.pop()
-        comp.append(u)
-        for e in u.link_edges:
-            w = e.other_vert(u)
-            if w.index not in seen:
-                seen.add(w.index)
-                stack.append(w)
-    parts.append(comp)
-from mathutils import kdtree
-A = np.array([u.co[:] for u in bm.verts])
-reach = 0.03 * float(np.linalg.norm(A.max(0) - A.min(0)))
-part_of = {}
-for i, p in enumerate(parts):
-    for u in p:
-        part_of[u.index] = i
-kd = kdtree.KDTree(len(bm.verts))
-for u in bm.verts:
-    kd.insert(u.co, u.index)
-kd.balance()
-parent = list(range(len(parts)))
-def root(i):
-    while parent[i] != i:
-        parent[i] = parent[parent[i]]
-        i = parent[i]
-    return i
-for i, p in enumerate(parts):                               # parts within `reach` of each other are one cluster
-    for u in p[::max(1, len(p) // 24)]:
-        for _co, j, _d in kd.find_range(u.co, reach):
-            a, b = root(i), root(part_of[j])
-            if a != b:
-                parent[a] = b
-size = {}
-for i, p in enumerate(parts):
-    size[root(i)] = size.get(root(i), 0) + len(p)
-keep = {c for c, n in size.items() if n == max(size.values()) or n >= 0.05 * len(bm.verts)}
-dropped = []
-for i, p in enumerate(parts):
-    if root(i) not in keep:
-        dropped.append(len(p))
-        bmesh.ops.delete(bm, geom=p, context="VERTS")
-bm.to_mesh(ob.data)
-bm.free()
-if dropped:
-    print("PREP dropped %d floating part(s) of %s vertices" % (len(dropped), dropped))
+if drop_floaters:
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    seen, parts = set(), []
+    for v in bm.verts:
+        if v.index in seen:
+            continue
+        stack, comp = [v], []
+        seen.add(v.index)
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for e in u.link_edges:
+                w = e.other_vert(u)
+                if w.index not in seen:
+                    seen.add(w.index)
+                    stack.append(w)
+        parts.append(comp)
+    from mathutils import kdtree
+    A = np.array([u.co[:] for u in bm.verts])
+    reach = 0.03 * float(np.linalg.norm(A.max(0) - A.min(0)))
+    part_of = {}
+    for i, p in enumerate(parts):
+        for u in p:
+            part_of[u.index] = i
+    kd = kdtree.KDTree(len(bm.verts))
+    for u in bm.verts:
+        kd.insert(u.co, u.index)
+    kd.balance()
+    parent = list(range(len(parts)))
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i, p in enumerate(parts):                               # parts within `reach` of each other are one cluster
+        for u in p[::max(1, len(p) // 24)]:
+            for _co, j, _d in kd.find_range(u.co, reach):
+                a, b = root(i), root(part_of[j])
+                if a != b:
+                    parent[a] = b
+    size = {}
+    for i, p in enumerate(parts):
+        size[root(i)] = size.get(root(i), 0) + len(p)
+    keep = {c for c, n in size.items() if n == max(size.values()) or n >= 0.05 * len(bm.verts)}
+    dropped = []
+    for i, p in enumerate(parts):
+        if root(i) not in keep:
+            dropped.append(len(p))
+            bmesh.ops.delete(bm, geom=p, context="VERTS")
+    bm.to_mesh(ob.data)
+    bm.free()
+    if dropped:
+        print("PREP dropped %d floating part(s) of %s vertices" % (len(dropped), dropped))
 
 P = np.array([v.co[:] for v in ob.data.vertices])
 c = P.mean(0)
@@ -115,6 +120,8 @@ if orient == "pca":
     y = np.cross(small, x)
     R = np.array([x, y, small])                              # rows: new X, Y, Z in old coordinates
     rot = Matrix([list(R[0]) + [0], list(R[1]) + [0], list(R[2]) + [0], [0, 0, 0, 1]])
+elif orient == "keep":                                      # keep: TRELLIS already stood it upright (a cliff or boulder: world-scale, no reference tilt)
+    rot = Matrix.Identity(4)
 else:                                                       # tilt: the references' camera looked ~37 deg down from the front (-Y)
     rot = Matrix.Rotation(math.radians(-36.87), 4, "X")
 ob.data.transform(rot)

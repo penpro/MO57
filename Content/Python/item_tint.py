@@ -28,6 +28,10 @@ def params(material_path):
 
 def make(path, parent_path, tint=None, **scalars):
     """Create or update the MI at <path> as a child of <parent_path>. Scalar names may use _ for spaces (Max_Roughness)."""
+    if unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).is_in_play_in_editor():
+        # EditorAssetLibrary refuses every call in PIE ("The Editor is currently in a play mode"): does_asset_exist said no, create_asset then
+        # opened a modal "Overwrite Existing Object" dialog per call and the editor stopped ticking (Oct 24). Refuse instead.
+        raise RuntimeError("item_tint.make: end PIE first (ue.py pie end); the asset library refuses in PIE")
     parent = unreal.load_asset(parent_path)
     if parent is None:
         raise ValueError("no material at " + parent_path)
