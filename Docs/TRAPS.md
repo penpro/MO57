@@ -120,6 +120,9 @@
 - **One driver per instance** (Oct 22): the bridge is a command FILE each call appends to (`ue_cmd.txt`). Two processes sending to one
   instance at once (a probe from a shell while `review_shots.py` drives it) can interleave their lines: a `HighResShot` never ran and the
   shot was lost. While a tool drives an instance, start your own (`ue.py inst start <other name>`) instead of sending to its.
+  A driver script started with `&` from an agent's shell is NOT stopped when the shell returns (Oct 23): it lived on untracked, its instance
+  "already running" refused the rerun, and once the rerun started both drove the instance and fought over one screenshot. Start drivers as
+  tracked background tasks; to find a stray one, its command line (`Get-CimInstance Win32_Process`), and stop it by that PID.
 - **`MO.Test.HitTest` says BLOCKED by `WBP_LoadingOverlay` right after `MO.Test.State` reports `inGame=YES`** -> the overlay holds until
   readiness is READY (tens of seconds after the pawn is possessed) -> wait for `[MOReadiness] READY` in the log before hit-tests and clicks. (Oct 17)
 - **`MO.Save.LoadFrom <slot>` typed at the main menu loads the save INTO the menu level** (it reloads in place, no travel) -> to load

@@ -5,8 +5,9 @@
 //   MO.Light.Carried light               light what is in the hand without a fire (tests)
 //   MO.Light.Carried out                 put it out
 //   MO.Light.Exposure                    every exposure setting that can apply to the view: post process volumes and components (enabled, unbound, priority,
-//                                        weight, and their auto exposure overrides), the camera's own, the sky actor's exposure / interior properties, and the
-//                                        renderer defaults -- what decides whether a torch-lit cave reads or is black
+//                                        weight, and their auto exposure overrides), the camera's own, the sky actor's exposure / interior properties (and its
+//                                        player-occlusion numbers now, the sky light's intensity now), and the renderer defaults -- what decides whether a torch-lit
+//                                        cave reads or is black, and whether a forest is taken for a cave
 
 #include "CoreMinimal.h"
 
@@ -14,6 +15,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/PostProcessComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -195,6 +197,32 @@ namespace MOLightCheats
 				{
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT sky %s"), *It->GetName());
 					LogMatchingProperties(*It);
+					// What the sky does NOW: its player-occlusion component's live numbers (how enclosed the view reads: a cave, or a forest taken for one,
+					// Wes's "BLACK" rainforest, Oct 23) and the sky light's current intensity, which the interior adjustment scales.
+					TArray<UActorComponent*> Components;
+					It->GetComponents(Components);
+					for (UActorComponent* Component : Components)
+					{
+						if (Component->GetClass()->GetName().Contains(TEXT("Occlusion")))
+						{
+							for (TFieldIterator<FProperty> Prop(Component->GetClass()); Prop; ++Prop)
+							{
+								if (Prop->IsA<FFloatProperty>() || Prop->IsA<FDoubleProperty>() || Prop->IsA<FBoolProperty>() || Prop->IsA<FIntProperty>())
+								{
+									FString Value;
+									Prop->ExportTextItem_Direct(Value, Prop->ContainerPtrToValuePtr<void>(Component), nullptr, Component, PPF_None);
+									UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT   %s.%s = %s"), *Component->GetClass()->GetName(), *Prop->GetName(), *Value.Left(80));
+								}
+							}
+						}
+					}
+				}
+			}
+			for (TObjectIterator<USkyLightComponent> Sky; Sky; ++Sky)
+			{
+				if (Sky->GetWorld() == World)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT sky light %s.%s intensity %.3f"), *GetNameSafe(Sky->GetOwner()), *Sky->GetName(), Sky->Intensity);
 				}
 			}
 		}));

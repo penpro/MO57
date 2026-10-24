@@ -50,6 +50,7 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/App.h"
 #include "Engine/StaticMesh.h"
+#include "StaticMeshResources.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "MOHISMHarvestHelper.h"
 #include "MOWorldRemovalSubsystem.h"
@@ -4550,6 +4551,140 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			{
 				const FRow& R = Sorted[I].Value;
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CENSUS %6d (<130m %5d, <400m %5d, far %5d) | tilt %5.1f | sink %6.1f | thin %.2f | ext (%.0f,%.0f,%.0f) | %s"), R.Count, R.Band[0], R.Band[1], R.Band[2], R.TiltSum / R.Count, R.SinkSum / R.Count, R.Thin, R.Extent.X, R.Extent.Y, R.Extent.Z, *Sorted[I].Key);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.Grounding <mesh substring> [radius_cm] ----------
+	// Does a planted mesh's BASE touch the ground (BR23-7, Wes Oct 23: the alders "still floating" after two burial changes)? The census above knows only the pivot.
+	// Per mesh: the outline of its base (in each of 16 directions the outermost vertex of the bottom 30 cm, from the CPU copy of LOD0 an uncooked -game keeps); per
+	// instance: every outline point against the generator's ground under it. Worst gap = the most exposed point of the base (positive = air under it), by slope band.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.Grounding"),
+		TEXT("Dev: how far the base of each instance of the matching meshes stands above the ground (worst point of its base outline), by slope. Usage: MO.PCG.Grounding <mesh name substring> [radius_cm=6000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (Args.Num() < 1 || !Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING FAILED: needs a mesh name substring, a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 1 ? FMath::Clamp((double)FCString::Atof(*Args[1]), 500.0, 100000.0) : 6000.0;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const float Vox = P->Tuning.VoxelSizeCm;
+			const FVector C = Pawn->GetActorLocation();
+			constexpr int32 Sectors = 16;
+			constexpr float BaseSliceCm = 30.0f;
+			struct FBase { TArray<FVector3f> Outline; float RadiusCm = 0.0f; float BottomCm = 0.0f; bool bValid = false; };
+			struct FBand { int32 N = 0; double GapSum = 0.0; };
+			struct FRow { FBase Base; int32 N = 0, Floating = 0; double SinkSum = 0.0, GapSum = 0.0; float GapMax = -1.0e9f; FBand Bands[4]; FVector Worst = FVector::ZeroVector; };
+			TMap<const UStaticMesh*, FRow> Rows;
+			auto MakeBase = [](const UStaticMesh* Mesh)
+			{
+				FBase Base;
+				const FStaticMeshRenderData* RD = Mesh->GetRenderData();
+				if (!RD || RD->LODResources.Num() == 0 || !RD->LODResources[0].VertexBuffers.PositionVertexBuffer.GetVertexData())
+				{
+					return Base;   // cooked, or released: no CPU copy to read
+				}
+				const FPositionVertexBuffer& Pos = RD->LODResources[0].VertexBuffers.PositionVertexBuffer;
+				float MinZ = TNumericLimits<float>::Max();
+				for (uint32 I = 0; I < Pos.GetNumVertices(); ++I) { MinZ = FMath::Min(MinZ, Pos.VertexPosition(I).Z); }
+				// Per direction: the outer radius of the bottom slice, then the LOWEST vertex at that outer edge (within 85 % of it) -- where the base meets the
+				// ground in that direction (the outermost vertex alone can sit anywhere up the slice and would read as a gap that is not there).
+				auto SectorOf = [](const FVector3f& V) { return FMath::Clamp(FMath::FloorToInt((FMath::Atan2(V.Y, V.X) + UE_PI) / (2.0f * UE_PI) * Sectors), 0, Sectors - 1); };
+				float OuterR[Sectors];
+				for (int32 S = 0; S < Sectors; ++S) { OuterR[S] = -1.0f; }
+				for (uint32 I = 0; I < Pos.GetNumVertices(); ++I)
+				{
+					const FVector3f V = Pos.VertexPosition(I);
+					if (V.Z <= MinZ + BaseSliceCm) { OuterR[SectorOf(V)] = FMath::Max(OuterR[SectorOf(V)], FMath::Sqrt(V.X * V.X + V.Y * V.Y)); }
+				}
+				FVector3f Low[Sectors];
+				bool bHas[Sectors] = {};
+				for (uint32 I = 0; I < Pos.GetNumVertices(); ++I)
+				{
+					const FVector3f V = Pos.VertexPosition(I);
+					const int32 S = SectorOf(V);
+					if (V.Z <= MinZ + BaseSliceCm && FMath::Sqrt(V.X * V.X + V.Y * V.Y) >= 0.85f * OuterR[S] && (!bHas[S] || V.Z < Low[S].Z)) { Low[S] = V; bHas[S] = true; }
+				}
+				for (int32 S = 0; S < Sectors; ++S)
+				{
+					if (bHas[S]) { Base.Outline.Add(Low[S]); Base.RadiusCm = FMath::Max(Base.RadiusCm, OuterR[S]); }
+				}
+				Base.BottomCm = MinZ;
+				Base.bValid = Base.Outline.Num() > 0;
+				return Base;
+			};
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					if (!Mesh || Ism->GetInstanceCount() == 0 || !Mesh->GetName().Contains(Args[0]) || Ism->Bounds.GetBox().ComputeSquaredDistanceToPoint(C) > Radius * Radius)
+					{
+						continue;
+					}
+					FRow* Row = Rows.Find(Mesh);
+					if (!Row)
+					{
+						Row = &Rows.Add(Mesh);
+						Row->Base = MakeBase(Mesh);
+					}
+					if (!Row->Base.bValid)
+					{
+						continue;
+					}
+					for (int32 I = 0; I < Ism->GetInstanceCount(); ++I)
+					{
+						FTransform Xf;
+						if (!Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true) || FVector2D::DistSquared(FVector2D(Xf.GetLocation()), FVector2D(C)) > Radius * Radius)
+						{
+							continue;
+						}
+						const FVector L = Xf.GetLocation();
+						const float Step = 120.0f;
+						const float Hx0 = FMOWorldGen::SampleHeightCm(*P, L.X - Step, L.Y, TerrainSeed, Vox), Hx1 = FMOWorldGen::SampleHeightCm(*P, L.X + Step, L.Y, TerrainSeed, Vox);
+						const float Hy0 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y - Step, TerrainSeed, Vox), Hy1 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y + Step, TerrainSeed, Vox);
+						const float SlopeDeg = FMath::RadiansToDegrees(FMath::Acos(FVector(-(Hx1 - Hx0), -(Hy1 - Hy0), 2.0f * Step).GetSafeNormal().Z));
+						float Gap = -1.0e9f;
+						for (const FVector3f& V : Row->Base.Outline)
+						{
+							const FVector W = Xf.TransformPosition(FVector(V));
+							Gap = FMath::Max(Gap, static_cast<float>(W.Z) - FMOWorldGen::SampleHeightCm(*P, W.X, W.Y, TerrainSeed, Vox));
+						}
+						++Row->N;
+						Row->SinkSum += FMOWorldGen::SampleHeightCm(*P, L.X, L.Y, TerrainSeed, Vox) - L.Z;
+						Row->GapSum += Gap;
+						Row->Floating += Gap > 10.0f ? 1 : 0;
+						if (Gap > Row->GapMax) { Row->GapMax = Gap; Row->Worst = L; }
+						FBand& Band = Row->Bands[SlopeDeg < 10.0f ? 0 : SlopeDeg < 20.0f ? 1 : SlopeDeg < 30.0f ? 2 : 3];
+						++Band.N;
+						Band.GapSum += Gap;
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING '%s' radius=%.0f centre=(%.0f, %.0f, %.0f): %d mesh(es) (gap = cm the most exposed point of the base outline stands above the ground; sink = cm the pivot is under it)"),
+				*Args[0], Radius, C.X, C.Y, C.Z, Rows.Num());
+			for (const TPair<const UStaticMesh*, FRow>& Pair : Rows)
+			{
+				const FRow& R = Pair.Value;
+				if (!R.Base.bValid)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING %s: no CPU vertex data (cooked build?)"), *Pair.Key->GetName());
+					continue;
+				}
+				if (R.N == 0) { continue; }
+				auto BandText = [&R](int32 B) { return R.Bands[B].N > 0 ? FString::Printf(TEXT("%d @ %.0f"), R.Bands[B].N, R.Bands[B].GapSum / R.Bands[B].N) : FString(TEXT("-")); };
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING %s: n=%d base r=%.0f cm, bottom %+.0f cm from the pivot (scale 1) | sink %.1f | gap mean %.1f max %.1f at (%.0f, %.0f, %.0f) | floating(>10) %d | by slope 0-10: %s, 10-20: %s, 20-30: %s, 30+: %s"),
+					*Pair.Key->GetName(), R.N, R.Base.RadiusCm, R.Base.BottomCm, R.SinkSum / R.N, R.GapSum / R.N, R.GapMax, R.Worst.X, R.Worst.Y, R.Worst.Z, R.Floating,
+					*BandText(0), *BandText(1), *BandText(2), *BandText(3));
 			}
 		}),
 		ECVF_Default));

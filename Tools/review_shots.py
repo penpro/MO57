@@ -16,7 +16,8 @@ Spec:
      "views": {"rainforest": [{"name": "eye", "yaw": 0, "pitch": -4, "up": 170},   # camera at the spot + up cm, turned yaw / pitch degrees
                               {"name": "aerial", "yaw": 45, "pitch": -30, "up": 4000, "back": 3000}],
                "spire": [{"name": "wes", "lookat": [cx, cy, cz, tx, ty, tz], "fov": 90, "res": "2858x1027"}]}}   # an exact camera
-A spot with no views of its own gets two eye-level views (yaw 0 and 180). A spot may carry its own "hour"; {"here": true} stays where
+A view with "ground_up": <cm> stands that far above the ground under the camera (MO.WorldGen.Sample), not `up` above the spot: use it for low
+views on a hillside and for spots taken from a buried pivot. A spot with no views of its own gets two eye-level views (yaw 0 and 180). A spot may carry its own "hour"; {"here": true} stays where
 the new game put the pawn (with {"pawn": true} views: the pawn's own camera); {"feature": "<FeatureId>", "near": [x, y, z]} stands at the
 nearest site of that world feature (MO.WorldFeatures.Dump). A bug report's LookAt.Reproduce
 line is an exact camera: Tools/review_from_reports.py builds the spots and views from a folder of reports.
@@ -74,12 +75,26 @@ def wait_log(pattern, since, timeout):
     return None
 
 
+def ground_at(x, y):
+    """The generator's ground height (cm) at x, y in the instance's world (MO.WorldGen.Sample), or None."""
+    off = log_size()
+    run("MO.WorldGen.Sample %d %d" % (x, y))
+    m = wait_log(r"WORLDGEN Sample x=-?\d+ y=-?\d+ seed=-?\d+ z=(-?[\d.]+)", off, 20)
+    return float(m.group(1)) if m else None
+
+
 def camera(spot, view):
-    """MO.Cam.LookAt arguments: from the spot, `back` cm behind along the view's yaw and `up` cm up, aimed along yaw / pitch."""
+    """MO.Cam.LookAt arguments: from the spot, `back` cm behind along the view's yaw and `up` cm up, aimed along yaw / pitch. With `ground_up`
+    the height is that far above the ground under the CAMERA instead: on a hillside `up` from the spot's height put a low camera under the terrain
+    (Oct 23: a formation's base view looked at the underside of the hill), and a spot taken from an instance's pivot can itself be buried."""
     yaw, pitch = math.radians(view.get("yaw", 0)), math.radians(view.get("pitch", -4))
     fx, fy = math.cos(yaw), math.sin(yaw)
     back, up = view.get("back", 0), view.get("up", 170)
     cx, cy, cz = spot[0] - fx * back, spot[1] - fy * back, spot[2] + up
+    if "ground_up" in view:
+        ground = ground_at(cx, cy)
+        if ground is not None:
+            cz = ground + view["ground_up"]
     reach = 30000.0
     tx, ty, tz = cx + fx * math.cos(pitch) * reach, cy + fy * math.cos(pitch) * reach, cz + math.sin(pitch) * reach
     return [round(v) for v in (cx, cy, cz, tx, ty, tz)] + [view.get("fov", 70)]
