@@ -5,6 +5,7 @@
 #include "MOWorldCreationTypes.h"
 #include "MOWorldGen.h"
 #include "MOWorldGenSettings.h"
+#include "MOBiomeDatabaseSettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -93,6 +94,37 @@ bool FMOWorldCreation_Knobs::RunTest(const FString& Parameters)
 	FMOWorldCreation::Sanitize(Wild);
 	TestEqual(TEXT("sanitize: mountains back to 0"), Wild.Shape.Mountains, 0.0f);
 	TestEqual(TEXT("sanitize: inspecting back to 4"), Wild.Pace.Inspecting, 4.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldCreation_StartingBiomes,
+	"MOFramework.WorldCreation.StartingBiomesAreLowland",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldCreation_StartingBiomes::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 23: "gate the higher elevation biomes, so no alpine heath, or alpine rock or highlands". The rule reads the band; the table is checked
+	// too, so a retuned band that would let a summit biome back in (or shut a lowland one out) fails here.
+	TestTrue(TEXT("a climate band is a start"), FMOWorldCreation::IsStartingBand(-100000.0f, 0.0f));
+	TestTrue(TEXT("a strand band (floor under the sea) is a start"), FMOWorldCreation::IsStartingBand(-300.0f, 0.0f));
+	TestFalse(TEXT("a band from 320 m up is not"), FMOWorldCreation::IsStartingBand(32000.0f, 0.0f));
+	TestFalse(TEXT("a steep-slope band is not"), FMOWorldCreation::IsStartingBand(-100000.0f, 25.0f));
+	for (const TCHAR* Id : { TEXT("AlpineHeath"), TEXT("AlpineRock"), TEXT("RockyHighland") })
+	{
+		const FMOBiomeDefinitionRow* Row = UMOBiomeDatabaseSettings::GetBiomeDefinition(Id);
+		if (TestNotNull(FString::Printf(TEXT("%s in DT_Biomes"), Id), Row))
+		{
+			TestFalse(FString::Printf(TEXT("%s is not a start"), Id), FMOWorldCreation::IsStartingBand(Row->HeightMin, Row->SlopeMinDeg));
+		}
+	}
+	for (const TCHAR* Id : { TEXT("Meadow"), TEXT("TemperateForest"), TEXT("Rainforest"), TEXT("ElectricForest"), TEXT("ShoreStrand"), TEXT("NordicStrand") })
+	{
+		const FMOBiomeDefinitionRow* Row = UMOBiomeDatabaseSettings::GetBiomeDefinition(Id);
+		if (TestNotNull(FString::Printf(TEXT("%s in DT_Biomes"), Id), Row))
+		{
+			TestTrue(FString::Printf(TEXT("%s is a start"), Id), FMOWorldCreation::IsStartingBand(Row->HeightMin, Row->SlopeMinDeg));
+		}
+	}
 	return true;
 }
 

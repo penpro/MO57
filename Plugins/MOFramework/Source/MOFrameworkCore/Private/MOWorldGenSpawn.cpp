@@ -424,3 +424,42 @@ int32 FMOWorldGen::MeasureLandmassCells(const FMOWorldGenParams& Params, int32 S
 	}
 	return Count;
 }
+
+bool FMOWorldGen::FindWaterFacingYaw(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float MaxDistanceCm, float& OutYawDegrees)
+{
+	// Of 16 directions, the one where the sea comes nearest (ties: the one with more water along the ray, the wider view). Cosmetic like the coastal
+	// spawn's yaw: it decides where the first view looks, never where anyone stands.
+	constexpr int32 Dirs = 16;
+	constexpr float StepCm = 1000.0f;
+	const float Sea = Params.Tuning.SeaLevelCm;
+	const float Vox = Params.Tuning.VoxelSizeCm;
+	float BestFirst = TNumericLimits<float>::Max();
+	int32 BestWet = -1, BestDir = INDEX_NONE;
+	for (int32 D = 0; D < Dirs; ++D)
+	{
+		const float Angle = 2.0f * UE_PI * D / Dirs;
+		const float Dx = FMath::Cos(Angle), Dy = FMath::Sin(Angle);
+		float First = -1.0f;
+		int32 Wet = 0;
+		for (float R = StepCm; R <= MaxDistanceCm; R += StepCm)
+		{
+			if (IsWater(SampleHeightCm(Params, X + Dx * R, Y + Dy * R, Seed, Vox), Sea))
+			{
+				First = First < 0.0f ? R : First;
+				++Wet;
+			}
+		}
+		if (First >= 0.0f && (First < BestFirst || (First == BestFirst && Wet > BestWet)))
+		{
+			BestFirst = First;
+			BestWet = Wet;
+			BestDir = D;
+		}
+	}
+	if (BestDir == INDEX_NONE)
+	{
+		return false;
+	}
+	OutYawDegrees = 360.0f * BestDir / Dirs;
+	return true;
+}

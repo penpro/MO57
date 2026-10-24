@@ -1820,6 +1820,11 @@ FVector AMOGameMode::FindNewGameSpawn(FRotator& OutFacing) const
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome '%s' is not a biome of DT_Biomes -- the coast instead"), *StartBiome.ToString());
 		}
+		else if (!FMOWorldCreation::IsStartingBand(Params->Biomes[Index].HeightMin, Params->Biomes[Index].SlopeMinDeg))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s is high or rough ground, not a start (FMOWorldCreation::IsStartingBand) -- the coast instead"),
+				*StartBiome.ToString());
+		}
 		else
 		{
 			const FMOBiomeFinder Finder(Params, Seeds->GetActiveTerrainSeed());
@@ -1830,9 +1835,17 @@ FVector AMOGameMode::FindNewGameSpawn(FRotator& OutFacing) const
 			const bool bFound = bFlat || Finder.FindNearest(FVector2D::ZeroVector, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/true, Spot, &Samples);
 			if (bFound)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: (%.0f, %.0f) ground z=%.0f%s, %.1f km from the origin (%d samples, %.0f ms)"),
+				// Beside the sea (a strand start), look at it, as the coastal start does (Wes, Oct 23: "shore strand and nordic strand should face the water").
+				constexpr float StartFacesWaterWithinCm = 30000.0f;   // the sea within 300 m
+				float WaterYaw = 0.0f;
+				const bool bFacesWater = FMOWorldGen::FindWaterFacingYaw(*Params, Spot.X, Spot.Y, Seeds->GetActiveTerrainSeed(), StartFacesWaterWithinCm, WaterYaw);
+				if (bFacesWater)
+				{
+					OutFacing = FRotator(-6.0f, WaterYaw, 0.0f);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: (%.0f, %.0f) ground z=%.0f%s, %.1f km from the origin (%d samples, %.0f ms)%s"),
 					*StartBiome.ToString(), Spot.X, Spot.Y, Spot.Z, bFlat ? TEXT("") : TEXT(" (rough ground)"), FVector2D(Spot).Size() / 100000.0, Samples,
-					(FPlatformTime::Seconds() - T0) * 1000.0);
+					(FPlatformTime::Seconds() - T0) * 1000.0, bFacesWater ? *FString::Printf(TEXT(", facing the sea (yaw %.0f)"), WaterYaw) : TEXT(""));
 				return FVector(Spot.X, Spot.Y, Spot.Z + SpawnHeightOffset);
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: no dry spot of it in this world (%d samples) -- the coast instead"),

@@ -196,6 +196,14 @@ struct MOFRAMEWORK_API FMOWorldCreation
 
 	/** One line for logs and bug reports: "shape biome=1 height=1 ... pace gather=1 ... start=Rainforest". */
 	static FString Describe(const FMOWorldCreationSettings& Settings);
+
+	/** A biome's band floor must reach within this of sea level for a game to start in it. */
+	static constexpr float StartingBiomeMaxFloorCm = 5000.0f;
+
+	/** Can a new game start in a biome with this band (Wes, Oct 23: "gate the higher elevation biomes, so no alpine heath, or alpine rock or
+	 *  highlands")? Only lowland ground: the band reaches down to within StartingBiomeMaxFloorCm of the sea (not AlpineHeath, AlpineRock) and
+	 *  asks no minimum slope (not RockyHighland). The New Game panel's cards and AMOGameMode::FindNewGameSpawn both ask this. */
+	static bool IsStartingBand(float HeightMinCm, float SlopeMinDeg) { return HeightMinCm < StartingBiomeMaxFloorCm && SlopeMinDeg <= 0.0f; }
 };
 
 /** The world's pace at runtime (AMOGameState::GetWorldPace on every machine). */

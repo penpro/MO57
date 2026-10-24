@@ -1151,6 +1151,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 */
 	static bool FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, FMOCoastalSpawn& Out, const FMOCoastalSearch& Search = FMOCoastalSearch());
 
+	/** The yaw (degrees) from (X, Y) toward the nearest open sea within MaxDistanceCm, of 16 directions; false when there is none. A start on a
+	 *  strand faces the water (Wes, Oct 23). Cosmetic: never decides a position. */
+	static bool FindWaterFacingYaw(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float MaxDistanceCm, float& OutYawDegrees);
+
 	/**
 	 * How much connected land (8-connected cells of CellCm -- a land strip running diagonally between lattice points must not read as cut -- ground not under water; rivers and ponds do not cut land, they can be waded) is reachable from (X, Y) -- the size of the
 	 * landmass the point stands on, in cells, counting at most MaxCells (it stops there: "big enough" is all a caller needs). 0 if (X, Y) is water. The world border ends land.

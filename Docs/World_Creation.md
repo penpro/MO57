@@ -43,7 +43,10 @@ it is a property of the world chosen before its first step, not a mid-game skip.
 - **Pace** is read where the time is decided, on the server, through one call: `FMOWorldRules::ScaleSeconds(Context, EMOWorldPace::X,
   Seconds)`. The UI's times use the same call, so a shown time is the real one. A new activity = one `EMOWorldPace` entry + its call.
 - **Starting biome:** `AMOGameMode::FindNewGameSpawn` asks `FMOBiomeFinder::FindNearest` for the spot deep inside that biome nearest the
-  origin (flat, else rough ground); none in the world = the coast, as before.
+  origin (flat, else rough ground); none in the world = the coast, as before. Only lowland biomes are starts (Wes, Oct 23: "gate the higher
+  elevation biomes"): `FMOWorldCreation::IsStartingBand` -- the band's floor within 50 m of the sea and no minimum slope, so AlpineHeath,
+  AlpineRock and RockyHighland are offered neither as cards nor by the spawn (test `WorldCreation.StartingBiomesAreLowland`). A start with
+  the sea within 300 m faces it (`FMOWorldGen::FindWaterFacingYaw`; the strands), as the coastal start does.
 - **New knob:** a field in `FMOWorldShape` / `FMOWorldPace` + one entry in `BuildKnobs()` (`MOWorldCreationTypes.cpp`); the panel, the
   console and the clamps follow from the table.
 
@@ -62,7 +65,6 @@ instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePrevi
   this world's settings (`[MOQUERY] WORLDCREATION`).
 - Open: the Host Game panel starts a new world with the defaults (it has no creation settings of its own yet): how it should get them is
   fork F37 in `Docs/DECISIONS.md` (N-198). A joiner always gets the host's.
-- Open (Wes's vote, Oct 23): no high-elevation starts (AlpineHeath, AlpineRock, RockyHighland come off the cards and out of the spawn
-  search), and a ShoreStrand / NordicStrand start faces the water (N-203). The panel itself: thumbs up.
+- Wes's vote, Oct 23: no high-elevation starts and a strand start faces the water (N-203, built: section 2). The panel itself: thumbs up.
 - End to end: `python Tools/world_creation_check.py` (host + joiner: the shape reaches the joiner's terrain, a pace scales an
   inspection, the start lands in the biome, save / load keeps it all with no GENERATOR CHANGED).

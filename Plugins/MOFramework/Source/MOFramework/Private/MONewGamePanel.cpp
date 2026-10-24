@@ -376,7 +376,7 @@ void UMONewGamePanel::BuildWorldCreationControls()
 		}
 	}
 
-	// The starting biomes: the coast (the default), then every DT_Biomes row that has a preview picture, in the table's order.
+	// The starting biomes: the coast (the default), then every lowland DT_Biomes row (FMOWorldCreation::IsStartingBand) that has a preview picture, in the table's order.
 	BiomeCards.Reset();
 	UClass* CardClass = BiomeCardsBox ? BiomeCardClass.LoadSynchronous() : nullptr;
 	if (CardClass)
@@ -403,7 +403,7 @@ void UMONewGamePanel::BuildWorldCreationControls()
 		for (const FName& Id : BiomeIds)
 		{
 			const FMOBiomeDefinitionRow* Row = UMOBiomeDatabaseSettings::GetBiomeDefinition(Id);
-			if (Row && !Row->PreviewImage.IsNull())
+			if (Row && !Row->PreviewImage.IsNull() && FMOWorldCreation::IsStartingBand(Row->HeightMin, Row->SlopeMinDeg))
 			{
 				AddCard(Id, Row->DisplayName.IsEmpty() ? FText::FromName(Id) : Row->DisplayName, Row->PreviewImage.LoadSynchronous());
 			}
