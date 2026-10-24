@@ -73,6 +73,8 @@ Production-ready software: fix systems, not symptoms. These override convenience
   with `scp darktower:C:/path/file ./dest` (and back). An SSH session there cannot see the share (a key login carries no network
   credentials: `Access is denied`), so ssh commands move files with scp. DARKTOWER's own desktop Claude session sees this PC's `D:\`
   as `Z:\` (`\\DARKSIDE\DarksideProduction`). DARKTOWER's free disk (2026-10-24): C: 245 GB, D: 19 GB.
+- Remote Desktop works both ways (NLA on): `mstsc /v:192.168.1.169` from here, `192.168.1.73` from there. DARKTOWER's listener only came up
+  after a reboot (stale session-manager state after 44 days up, Oct 24); ComfyUI restarts by itself when Wes logs in.
 - Hand work to its Claude session through `D:\ClaudeMeetClaude\` (`README.md` there): requests in `inbox-for-darktower\`, results in
   `inbox-for-darkside\`, each with a short `*.md` saying what it is and what to do. DARKTOWER writes only inside `ClaudeMeetClaude\` on
   the share, never into this tree: results come back through the inbox and a DARKSIDE agent imports them.
