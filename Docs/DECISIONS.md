@@ -60,6 +60,19 @@
 
 ## Decisions, newest first
 
+### 2026-10-23
+Wes's votes on the first review page (notes word for word: `Docs/BugReports_2026-10-23.md` § Wes's votes). The calls in them:
+- **Starting biomes: no high-elevation starts.** "let's gate the higher elevation biomes, so no alpine heath, or alpine rock or highlands";
+  "shore strand and nordic strand should face the water" (N-203).
+- **Electric Dreams POIs stand in the forest, not a clearing:** "have the trees go right up to the poi, probably just use the electric
+  dreams assets to give more ground cover, plus more small assemblies leading up to them" (BR23-3).
+- **ED assemblies sink by their slope:** "maybe another meter on the larger ones ... an 'average slope' over the area it's being pushed down
+  into ... so the lower side of the slope doesn't expose the bottom" (BR23-4).
+- **Rainforest canopy between x1 and x3 wide:** "somewhere between the new and the old because now it's BLACK"; whether Lumen / exposure
+  should lighten it is checked first (N-201, N-202).
+- **Height bands:** the rock-to-below edge gets the snow / rock edge's noise (BR23-19).
+- Thumbs up: the New Game panel, the dry-scrub size, the still lake look.
+
 ### 2026-10-22
 - **Wes: per-world creation settings** -- "implement a suite of 'global multipliers' for terraforming, crafting, gatherings, inspecting, etc
   so we can configure those on a per world basis and add those to the world generation menu, along with some knobs to adjust stuff like biome

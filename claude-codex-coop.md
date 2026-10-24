@@ -1415,3 +1415,8 @@ Live tables touched: DT_Biomes (Rainforest tree scales + WidthScale), DT_WorldFe
 Status: RELEASE build window + instances (night of Oct 22-23 done: world creation settings + New Game panel, footstep weather layer, boot save-list fix, forage search 137 -> 46 ms, wolf fire hold-off fix, harness 36 -> 28 min, review tools; all committed and pushed)
 References: CL-0152
 Live tables touched: DT_Biomes (PreviewImage for 11 biomes), DT_MOSound (SFX.Footsteps.Snow1-4 / Puddle1-4). New assets: /MOFramework/UI/BiomePreviews/*, WBP_WorldKnobRow, WBP_BiomeCard; WBP_NewGamePanel rebuilt (spec Content/Python/ui_specs/world_creation.py). The editor is closed; no instance is running.
+
+### 2026-10-23 20:33 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0154
+Status: PROGRESS (docs only: Wes's 12 review-page votes recorded -- Docs/BugReports_2026-10-23.md § Wes's votes, BACKLOG BR23-3/4/5/6/7/12/19 reopened, N-201 rainforest canopy, N-202 canopy darkness / Lumen, N-203 starting-biome gating, DECISIONS 2026-10-23)
+References: CL-0153
+No code, no assets, no live tables; the editor and instances are not in use.

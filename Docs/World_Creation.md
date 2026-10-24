@@ -62,5 +62,7 @@ instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePrevi
   this world's settings (`[MOQUERY] WORLDCREATION`).
 - Open: the Host Game panel starts a new world with the defaults (it has no creation settings of its own yet): how it should get them is
   fork F37 in `Docs/DECISIONS.md` (N-198). A joiner always gets the host's.
+- Open (Wes's vote, Oct 23): no high-elevation starts (AlpineHeath, AlpineRock, RockyHighland come off the cards and out of the spawn
+  search), and a ShoreStrand / NordicStrand start faces the water (N-203). The panel itself: thumbs up.
 - End to end: `python Tools/world_creation_check.py` (host + joiner: the shape reaches the joiner's terrain, a pace scales an
   inspection, the start lands in the biome, save / load keeps it all with no GENERATOR CHANGED).
