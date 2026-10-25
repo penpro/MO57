@@ -158,7 +158,7 @@ saved graphs keep their meaning.
   - `FMOBiomeSpeciesEntry::MaterialOverride`: a material for every slot (a recoloured scan); the bucket (one HISM per mesh, biome and material)
     takes it, as the cave spawner's ore tints always did.
   - **The crags**, a sub-biome of RockyHighland, AlpineHeath and AlpineRock: the four TRELLIS cliff formations (`/Game/ImageTo3D/Cliffs`, their
-    Granite variant, 15-31 m) share clump group 8 (period 480 m) and grow only in its cores (core 0.72, ~7 % of the ground; the capped x8
+    Granite variant; 24-48 m since Oct 25, x0.8-1.6 of their 23-30 m meshes, was 15-31 m -- Wes: "they're also not very large compared to what i thought", the rock detail layer keeps them crisp) share clump group 8 (period 480 m) and grow only in its cores (core 0.72, ~7 % of the ground; the capped x8
     compensation packs ~10 a hectare there, so they overlap into one formation). The biome's large boulders strew the ring round them
     (core 0.6). Upright (a closed formation does not lean with the slope), any yaw, sunk 22 % of their height, solid, landmarks. The heath gets
     0.6x, the alpine rock 1.2x.

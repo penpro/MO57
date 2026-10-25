@@ -34,6 +34,10 @@ CRAG_RADIUS_CM = 12000.0
 CRAG_BIOMES = {"RockyHighland": 1.0, "AlpineHeath": 0.6, "AlpineRock": 1.2}
 CLIFF_DENSITY = 0.3          # per hectare per formation mesh, authored (realised ~0.56x of it on average; ~2.4 / ha each inside a core)
 BOULDER_RING_DENSITY = 0.3   # per hectare per boulder mesh round the crags
+# The formations' size (their meshes are 23-30 m): x0.5-1.05 until Oct 25, then x0.8-1.6, 24-48 m (Wes: "they're also not very large
+# compared to what i thought they were going to be"; the rock detail layer keeps them crisp up close at any size: rock_detail_layer.py).
+CRAG_MIN_SCALE = 0.8
+CRAG_MAX_SCALE = 1.6
 CLIFFS = ["Cliff_BroadCliffBlock01", "Cliff_SheerBlockTower01", "Cliff_LeaningSlabStack01", "Cliff_OverhangingButtress01"]
 NORDIC_CLIFF = "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/SM_venrdcgga_RM_N1.SM_venrdcgga_RM_N1"
 COAST_GROUP = 9
@@ -79,7 +83,7 @@ def main():
                 e.update({"Mesh": mesh, "DensityPerHectare": round(CLIFF_DENSITY * k, 3), "ClusterRadius": CRAG_RADIUS_CM, "ClusterGroup": CRAG_GROUP, "ClusterCore": 0.72,
                           "HISMTag": "MOBiomeCover_Rock", "ResourceNodeId": "None", "bAlignToSurfaceNormal": False, "bFaceDownhill": False, "FaceYawDeg": 0, "SinkFraction": 0.22,
                           "SinkMinCm": 0, "BaseRadiusCm": 0, "bLieOnSlope": False, "LieShowFraction": 0.15, "MaxGroundReliefFraction": 0, "MinSlopeDeg": 0, "MaxSlopeDeg": 70,
-                          "MaxRandomTiltDeg": 6, "bAutoSweepOnTerraform": False, "Collision": "Solid", "MinScale": 0.5, "MaxScale": 1.05, "ScaleBias": 1.5, "WidthScale": 1,
+                          "MaxRandomTiltDeg": 6, "bAutoSweepOnTerraform": False, "Collision": "Solid", "MinScale": CRAG_MIN_SCALE, "MaxScale": CRAG_MAX_SCALE, "ScaleBias": 1.5, "WidthScale": 1,
                           "bLandmark": True, "MaterialOverride": granite})
                 crags.append(e)
             e = copy.deepcopy(crags[0])   # the Dark Ruins cliff: a fifth formation, its own (Smart) material, 11-22 m
