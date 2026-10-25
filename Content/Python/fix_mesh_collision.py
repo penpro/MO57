@@ -74,6 +74,8 @@ def solid_meshes():
         for m in re.finditer(r'Mesh="([^"]+)"[^()]*?Collision=Solid', r[si]):
             name = m.group(1).rsplit(".", 1)[-1]
             kind = "Sapling" if "Sapling" in name or "Seedling" in name else worldfeature_kind(name)
+            if kind == "?":
+                kind = worldfeature_kind(megascans_folder(m.group(1)))
             if kind in ("Composition", "Tree", "Sapling", "Bush"):
                 found.setdefault(m.group(1), (kind, "biome:" + r[0] + " (Collision=Solid)"))
     # The cave scatter (DT_CaveScatter, the MO Cave Spawner): fallen blocks marked Solid and ore lumps (a solid-kind resource) block the pawn -- convex hulls like any rock.
@@ -117,6 +119,13 @@ def worldfeature_kind(name):
     if any(k in name for k in WF_ROCK):
         return "Composition"
     return "?"
+
+
+def megascans_folder(mesh_path):
+    """The asset's folder name: a Megascans 'Smart' scan is named by its id alone (SM_venrdcgga_RM_N1), its folder says what it is
+    (/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/...)."""
+    parts = mesh_path.split(".")[0].split("/")
+    return parts[-3] if len(parts) >= 3 and parts[-2] == "Smart" else parts[-2]
 
 
 def worldfeature_meshes():

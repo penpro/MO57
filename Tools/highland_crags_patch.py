@@ -18,7 +18,12 @@ What it writes (every biome row it changes is sent whole: rows set replaces nest
   4. THE HUGE NORDIC COASTAL CLIFF (Oct 24 night, from Wes's Dark Ruins Megascans sample: /Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart, 14 x 8 x
      9 m, open only underneath -- "we can handle the larger taller ones that have only the bottom open"): a fifth crag formation in its own Smart
      material, and NordicStrand's rocky coast gets clusters of it (ClusterGroup 9). Landmarks, solid, upright, the open base buried.
-Idempotent: a rerun replaces the crag group (ClusterGroup 8) and the coastal group (9) instead of adding them twice.
+  5. THE WESTERN CLIFF FACES (Oct 24 night; Wes: "the big western cliffs are ENORMOUS and could help really get some good looking cliffs without a shit
+     ton of cpu calls"): the Dark Ruins Desert Western Cliff Sheer XL 04 (218 x 103 x 81 m, grey sheer rock, open behind and below) on the steep
+     ground of AlpineRock and RockyHighland, x0.4-0.7, its face (+Y, FaceYawDeg 90) turned downhill: the spawner sinks it by the ground's drop to its
+     face edge (FaceDropCm), so the back and the open base go into the hill and the front stands as a 30-55 m cliff. Landmarks, solid (real
+     surface: Content/Python/fix_mesh_collision.py), rare (one a square kilometre or two).
+Idempotent: a rerun replaces the crag group (ClusterGroup 8), the coastal group (9) and the western cliff entries instead of adding them twice.
 """
 import copy
 import json
@@ -33,6 +38,8 @@ CLIFFS = ["Cliff_BroadCliffBlock01", "Cliff_SheerBlockTower01", "Cliff_LeaningSl
 NORDIC_CLIFF = "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/SM_venrdcgga_RM_N1.SM_venrdcgga_RM_N1"
 COAST_GROUP = 9
 COAST_BIOMES = {"NordicStrand": 0.35}   # per hectare, authored (in clusters: ~2-3 a hectare inside one)
+WESTERN_CLIFF = "/Game/MS/3D/Desert_Western_Cliff_Sheer_Xl_04_xgknben/Smart/SM_Desert_Western_Cliff_Sheer_Xl_04_xgknben_RM_N1.SM_Desert_Western_Cliff_Sheer_Xl_04_xgknben_RM_N1"
+WESTERN_BIOMES = {"AlpineRock": 0.012, "RockyHighland": 0.008}   # per hectare, authored
 GRANITE_GROUND = "/Game/VoxelExamples/NaniteMaterials/Materials/Cliff/VST_Cliff.VST_Cliff"
 
 
@@ -99,6 +106,18 @@ def main():
             row["species"] = kept + [e]
             changed = True
             report.append("%s: Nordic coastal cliffs (group %d, %.2f / ha)" % (biome, COAST_GROUP, COAST_BIOMES[biome]))
+        # 5. the western cliff faces
+        if biome in WESTERN_BIOMES:
+            kept = [e for e in row["species"] if e["Mesh"] != WESTERN_CLIFF]
+            e = copy.deepcopy(template)
+            e.update({"Mesh": WESTERN_CLIFF, "DensityPerHectare": WESTERN_BIOMES[biome], "ClusterRadius": 0, "ClusterGroup": -1, "ClusterCore": 0.5,
+                      "HISMTag": "MOBiomeCover_Rock", "ResourceNodeId": "None", "bAlignToSurfaceNormal": False, "bFaceDownhill": True, "FaceYawDeg": 90,
+                      "SinkFraction": 0.2, "SinkMinCm": 0, "BaseRadiusCm": 0, "bLieOnSlope": False, "LieShowFraction": 0.15, "MaxGroundReliefFraction": 0,
+                      "MinSlopeDeg": 32, "MaxSlopeDeg": 65, "MaxRandomTiltDeg": 0, "bAutoSweepOnTerraform": False, "Collision": "Solid", "MinScale": 0.4,
+                      "MaxScale": 0.7, "ScaleBias": 1, "WidthScale": 1, "bLandmark": True, "MaterialOverride": "None"})
+            row["species"] = kept + [e]
+            changed = True
+            report.append("%s: western cliff faces (%.3f / ha)" % (biome, WESTERN_BIOMES[biome]))
         if changed:
             patch.setdefault(biome, {})["species"] = row["species"]
         report.append("%s: %d landmark entries outside the crags" % (biome, marks))

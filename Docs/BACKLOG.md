@@ -35,6 +35,11 @@ word in `Docs/BugReports_2026-10-23.md` § Wes's votes): thumbs up = row removed
 | TRELLIS cliff Cliff_BroadCliffBlock01 and its rock variants (Oct 24) | `D:/MOAssets/previews/cliff_variants_wide2.png` and `_sandstone2 / _limestone2 / _basalt2 / _granite2.png` (PIE, seed 777 strand, beside a Megascans HugeSandstoneCliff); `Rock03_large_closeup.png` vs `Rock03_std_closeup.png` (2048 / 8K vs 1536 / 4K) | a 30 m closed sea stack; sandstone reads as sandstone (it is paler than the Megascans one: say warmer / redder if wanted) | N-206 |
 | The stone-ring campfire (Oct 24) | Build a campfire (10 river cobbles), watch it build, add firewood, light it, let it burn, refuel it. Shots: `D:/MOAssets/previews/stonering_midbuild.png`, `_fuel50`, `_lit50`, `_mixed`, `_full` | the stones turn real one by one round the ring; 1 firewood = 2 sticks, full = 20; burnt sticks black, fresh wood on top stays fresh. Rebuilt after Wes's first look (Oct 24): stones at random yaw / tilt / size (`stonering_v2_empty.png`), the decor sticks gone so an empty fire is an empty ring, all 20 fuel sticks inside it (`stonering_v2_full.png`). Possible tweak: the full teepee is dense and the split firewood reads a little like boards | Building.md §3 |
 | Stick walls / floor / roof going up (Oct 24) | Build a stick wall, half wall, floor and roof; watch each build | the uprights appear left to right, then the rails (probe: 1 of 16 at 10 %, 4 at 26 %, 6 at 41 %, all at the end) | Building.md §3 |
+| The western cliff faces (Oct 25) | `MO.WorldGen.FindBiome AlpineRock go`; rare (5 within 2.8 km in seed 777), steep alpine / highland slopes. Shot: `D:/MOAssets/previews/western_cliff_face.png` | a grey sheer cliff face set into the hill, face downhill, back and base buried, no hollow showing | Docs/DarkRuins_Assets.md |
+| The Huge Nordic Coastal Cliff in the crags and on the Nordic coast (Oct 24 night) | `MO.WorldGen.FindBiome AlpineRock go` (crags), NordicStrand coast. Shot: `D:/MOAssets/previews/nordic_cliff_crag_near.png` | a scanned rock among the granite formations, seated, not out of place | Docs/PCG.md |
+| Hair with the water depth prepass off (BR25-3) | Any character with hair near a lake, and the building ghosts near water | hair keeps its depth (no vanishing strands); the lakes still look right to you | BR25-3 |
+| Building ghosts dimmer (BR25-4) | Enter build mode near your planned buildings | the planned parts read as faint pale-blue glass, not glowing | BR25-4 |
+| Campfire wood (BR25-8) | Build the stone-ring campfire, add firewood | sticks sunk in the ash, each its own length and lean; not cartoon-perfect | BR25-8 |
 | Sound after a menu load (Oct 22) | Launch the game (or PIE) and listen through the intro, the menu and the first minute of a new game | no buzz and no stretch of silence; at most the reverb sounds dry for ~20 s after a load | N-189 |
 | Footsteps (by ear, Oct 23) | Walk, run and sneak anywhere; then in the Rainforest | about half as loud as before; rainforest steps soft (MossPad), not the muddy squelch | BR23-2, BR23-8 |
 | Lakes in motion, by ear (Oct 23) | `MO.Water.GoToLake` (or any lake) | almost still: short small ripples, little surface noise; the water sound much quieter (the still look: thumbs up Oct 23) | BR23-16 |
@@ -316,13 +321,13 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 |---|---|---|---|---|---|
 | BR25-1 | DONE 58cba8be | Claude | Rocks capped at x5 ("they start to look pretty crappy when they're huge") | `Docs/BugReports_2026-10-25.md` | be34c7b8 |
 | BR25-2 | DONE 58cba8be (+ tall bottom-open kept, shallow avoided) | Claude | Open-faced geometry out of the world, listed with screenshots for a TRELLIS rebuild as closed geometry; still: textured renders, the ED world features | `Docs/BugReports_2026-10-25.md` | ba0467ab |
-| BR25-3 | OPEN | Claude | `r.Water.SingleLayer.DepthPrepass=0`: hair keeps its depth (Wes reverses the Oct 16 call; N-053) | `Docs/BugReports_2026-10-25.md` | ba03c683 |
-| BR25-4 | OPEN | Claude | Building ghosts dimmer, and drawn only while the local player is in build mode | `Docs/BugReports_2026-10-25.md` | ba03c683 |
-| BR25-5 | OPEN | Claude | Creative mode: crafting and building cost nothing | `Docs/BugReports_2026-10-25.md` | ba03c683 |
-| BR25-6 | OPEN | Claude | No big green ghost boxes on the stick walls / floors / roofs (the collision cube) | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
-| BR25-7 | OPEN | Claude | Nothing has collision until it is fully built | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
-| BR25-8 | OPEN | Claude | Campfire firewood lower and less perfect | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
-| BR25-9 | OPEN | Claude | Trees never grow through boulders (PCG tiers avoid each other's solid instances) | `Docs/BugReports_2026-10-25.md` | 7fb1e50f |
+| BR25-3 | DONE (by eye) | Claude | `r.Water.SingleLayer.DepthPrepass=0`: hair keeps its depth (Wes reverses the Oct 16 call; N-053) | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-4 | DONE | Claude | Building ghosts dimmer, and drawn only while the local player is in build mode | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-5 | DONE | Claude | Creative mode: crafting and building cost nothing | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-6 | DONE | Claude | No big green ghost boxes on the stick walls / floors / roofs (the collision cube) | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-7 | PARTIAL (staged parts: next batch) | Claude | Nothing has collision until it is fully built | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-8 | DONE (by eye) | Claude | Campfire firewood lower and less perfect | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-9 | DONE | Claude | Trees never grow through boulders (PCG tiers avoid each other's solid instances) | `Docs/BugReports_2026-10-25.md` | 7fb1e50f |
 
 ## UI
 

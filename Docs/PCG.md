@@ -168,6 +168,10 @@ saved graphs keep their meaning.
   - **The Huge Nordic Coastal Cliff** (Oct 24 night, from the Dark Ruins Megascans sample, `Docs/DarkRuins_Assets.md`: 14 x 8 x 9 m, open only
     underneath) is a fifth crag formation in its own scanned material (x0.8-1.6, sunk 20 %) and grows in clusters on NordicStrand's coast (clump
     group 9, period 320 m, core 0.65, 0.35 / ha). PIE seed 777 (AlpineRock): 333 of them against 299-341 of each TRELLIS formation, as authored.
+  - **The western cliff faces** (Oct 25, Dark Ruins' Desert Western Cliff Sheer XL 04, 218 x 103 x 81 m, open behind and below): rare
+    landmarks on 32-65 deg AlpineRock / RockyHighland ground, x0.4-0.7, face turned downhill so `FaceDropCm` buries the back and the base
+    (`Docs/DarkRuins_Assets.md`). An open-backed mesh is fine only this way (BR18-14); the open-geometry rule (below) still keeps scans out of
+    the free scatter.
 - **Open-faced scans** (BR25-2, Oct 24 night; `Docs/BugReports_2026-10-25.md`): `Content/Python/open_geometry_probe.py` measures every rock
   species' mesh (openness = |sum of area-weighted normals| / area, closed ~0, a one-sided sheet 0.3-1.0; `up` = which way the open side's
   normals point) and `Tools/remove_open_geometry.py` takes the open ones out of DT_Biomes, keeping each removed entry whole in

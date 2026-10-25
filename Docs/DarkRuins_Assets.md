@@ -10,7 +10,7 @@ can probably import a lot of the assets for more than just the world building as
 | Group (`Tools/ede_migrate.py` `DARKRUINS_GROUPS`) | Mesh | Size | Openness | Use |
 |---|---|---|---|---|
 | Huge Nordic Coastal Cliff | `/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/SM_venrdcgga_RM_N1` | 14 x 8 x 9 m | 0.25, open only underneath | a fifth formation of the highland crags (x0.8-1.6) and clusters on NordicStrand's coast (`Tools/highland_crags_patch.py` step 4; `Docs/PCG.md`) |
-| Desert Western Cliff Sheer XL 04 (Wes's migration) | `.../Desert_Western_Cliff_Sheer_Xl_04_xgknben/Smart/SM_..._RM_N1` | 218 x 103 x 81 m | 0.39: open at the back AND underneath | not placed yet: a cliff face that has to stand against a slope with its back buried (see below) |
+| Desert Western Cliff Sheer XL 04 (Wes's migration) | `.../Desert_Western_Cliff_Sheer_Xl_04_xgknben/Smart/SM_..._RM_N1` | 218 x 103 x 81 m | 0.39: open at the back AND underneath | a rare landmark cliff face on steep alpine / highland ground, its back and base buried (below) |
 | (same folder) | `SM_..._RM1_N1` | 217 x 26 x 81 m | 0.57: a backless wall | avoid (Wes: shallow / open ones do not sit in the terrain) |
 
 Every scan is Nanite (5-16k LOD0 triangles shown, the detail is in the Nanite data) on the sample's Smart master material
@@ -33,11 +33,17 @@ A machine without the sample (DARKTOWER) copies the three folders plus `Content/
 reports 46 "conflicts": the western cliff's closure and the shared Smart / Custom / Detail files came through the editor's Migrate, which re-saves
 them, so they differ byte-wise from the sample's; the copy leaves them alone (the Nordic cliff's own files are identical).
 
-## The western cliff (not placed yet)
+## The western cliff faces (placed Oct 25)
 
-218 m wide and 81 m tall, open behind and below: it can only stand where the slope buries its back, facing downhill (the BR18-14 rule for open-backed
-slabs, `bFaceDownhill`), and it needs real collision first (complex-as-simple, `Content/Python/fix_mesh_collision.py`). One instance replaces
-dozens of formation meshes at a distance. Wes dragged one into a level on Oct 24; the prototype as a landmark species is the next step.
+218 m wide and 81 m tall, open behind and below: it stands only where the slope buries its back. `Tools/highland_crags_patch.py` step 5 makes it
+a landmark species of AlpineRock (0.012 / ha) and RockyHighland (0.008 / ha) on 32-65 deg ground, x0.4-0.7 (87-153 m wide, 32-57 m tall),
+upright with its face (+Y, `FaceYawDeg` 90, measured: the area-weighted normal points +Y) turned downhill (`bFaceDownhill`). The pivot is at
+its back edge and `FMOSpeciesPlacement::FaceDropCm` reaches to the face edge (bounds origin + extent), so on a 35 deg slope at x0.6 the
+spawner sinks it ~40 m: the back and the open base go into the hill and the front stands as the cliff; `SinkFraction` 0.2 buries the rest.
+Collision: its real surface (complex as simple), set by `Content/Python/fix_mesh_collision.py`, which now classifies a Megascans 'Smart' scan
+by its folder name (`megascans_folder`: `SM_venrdcgga_RM_N1` says nothing, `Huge_Nordic_Coastal_Cliff_venrdcgga` does). The asset is
+gitignored, so re-run the fixer after `ede_migrate.py copy --source darkruins` on another machine. PIE seed 777: 5 within 2.8 km, every one
+on AlpineRock / RockyHighland ground; `D:/MOAssets/previews/western_cliff_face.png` (the look is Wes's: BACKLOG by eye).
 
 ## Candidates for later (measure before use: `Content/Python/open_geometry_probe.py`; Wes's rule: tall and open only underneath, or closed)
 

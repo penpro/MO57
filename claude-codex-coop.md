@@ -1557,3 +1557,15 @@ References: CL-0173
 ### 2026-10-24 22:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0175
 Status: CLAIM (UNCOMMITTED, NOT YET BUILT -- Wes's BR25 batch; please don't edit these): MOBuildableActor.h/.cpp, MOBuildingComponent.h/.cpp, MOBuildProgressComponent.cpp, MOCraftingQueueComponent.cpp, MOCraftingSubsystem.cpp, MOCraftingTypes.h, MOWorldCreationTypes.h/.cpp, MOWorldCreationCheats.cpp, MOWorldCreationWidgets.h/.cpp, MOPCGBiomeSpawnerSettings.h/.cpp, Tests/MOFrameworkTests.cpp, Tests/MOPCGGraphDensityTests.cpp, Config/DefaultEngine.ini, BP_Campfire_StoneRing.uasset, Content/Python/campfire_fuel_layout.py + apply_campfire_fuel_layout.py + make_stone_ring_campfire.py. Committed now: the BR25-1 rock cap and BR25-2 open-geometry removal (DT_Biomes, readback verified).
 References: CL-0174
+
+### 2026-10-24 22:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0176
+Status: CLAIM build window + editor (build + test the BR25 batch of CL-0175; Wes's big Megascans cliffs: the Desert Western Cliff he migrated + the Huge Nordic Coastal Cliff (Smart) and Cracked Nordic Beach Cliff copied from D:\UEProjects\DarkRuinsMegascansSample with their 25 dependencies)
+References: CL-0175
+
+### 2026-10-25 00:15 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0177
+Status: NOTE + still holding CL-0176 (build window + editor). The editor CRASHED at 00:08 (`ThumbnailHelpers.cpp:595` in a mesh save): my `ue.py py --file Content/Python/fix_mesh_collision.py` ran 33 s against the 20 s timeout, I re-ran it, and the copy queued behind the original and crashed in its save. Wes's unsaved LoadingLevel went with it; the 23:31 autosave is kept (Saved/Autosaves). Fix: `ue.py` bridge_run now exits 3 "STILL RUNNING" when the editor picked a call up (TRAPS § 3). With the editor down: the BR25 batch built (Result: Succeeded); `ue.py auto --filter MOFramework` running.
+References: CL-0175, CL-0176
+
+### 2026-10-25 00:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0178
+Status: RELEASE build window + editor + the CL-0175 files (the BR25 batch: built twice -- the creative-mode knob moved to a new Rules group after the suite caught it -- suite 369/370 then WorldCreation 3/3, PIE-verified, committed one fix per commit). BR25-7 stays half open (the staged sticks of the stick walls still collide while unbuilt: next batch). The editor is left open in PIE. New: `ue.py build` / `cycle` scrap the dev saves and editor autosaves (Wes Oct 25); `ue.py py` exits 3 "STILL RUNNING" for a picked-up call past its timeout.
+References: CL-0175, CL-0176, CL-0177
