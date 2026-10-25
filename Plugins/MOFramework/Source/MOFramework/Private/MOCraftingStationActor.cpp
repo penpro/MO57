@@ -49,7 +49,28 @@ AMOCraftingStationActor::AMOCraftingStationActor()
 
 void AMOCraftingStationActor::BeginPlay()
 {
+	// The fuel sticks and their own materials, before the build look (Super::BeginPlay) can put them in the ghost material.
+	TArray<UMeshComponent*> Meshes;
+	GetComponents<UMeshComponent>(Meshes);
+	for (const FName PartName : FuelStickParts)
+	{
+		UMeshComponent* const* Found = Meshes.FindByPredicate([PartName](const UMeshComponent* Mesh) { return Mesh && Mesh->GetFName() == PartName; });
+		if (!Found)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingStationActor] %s: fuel stick '%s' is not one of its mesh components"), *GetName(), *PartName.ToString());
+			continue;
+		}
+		FuelStickComponents.Add(*Found);
+		FMOBuildableSavedMaterials& Own = FuelStickOriginalMaterials.AddDefaulted_GetRef();
+		for (int32 i = 0; i < (*Found)->GetNumMaterials(); ++i)
+		{
+			Own.Materials.Add((*Found)->GetMaterial(i));
+		}
+		(*Found)->SetVisibility(false);
+	}
+
 	Super::BeginPlay();
+	UpdateFuelSticks(/*bForce=*/true);
 
 	// Every station registers; the registry skips sources whose IsHeatActive()
 	// is false, so cold stations cost one comparison per query.
@@ -73,6 +94,77 @@ void AMOCraftingStationActor::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AMOCraftingStationActor, bIsActive);
 	DOREPLIFETIME(AMOCraftingStationActor, CurrentFuel);
+	DOREPLIFETIME(AMOCraftingStationActor, CharredFuelSticks);
+}
+
+int32 AMOCraftingStationActor::CountVisibleFuelSticks(float Fuel, float MaxFuelAmount, int32 NumSticks)
+{
+	if (NumSticks <= 0 || Fuel <= 0.0f || MaxFuelAmount <= 0.0f)
+	{
+		return 0;
+	}
+	return FMath::Clamp(FMath::CeilToInt(Fuel / MaxFuelAmount * NumSticks - 1.0e-4f), 1, NumSticks);
+}
+
+void AMOCraftingStationActor::OnRep_FuelSticks()
+{
+	UpdateFuelSticks(/*bForce=*/false);
+}
+
+void AMOCraftingStationActor::RefreshBuildStateVisual()
+{
+	Super::RefreshBuildStateVisual();
+	UpdateFuelSticks(/*bForce=*/true);   // the build look may just have given the sticks their own materials back: char them again
+}
+
+void AMOCraftingStationActor::UpdateFuelSticks(bool bForce)
+{
+	if (FuelStickComponents.IsEmpty())
+	{
+		return;
+	}
+	const bool bBuilt = IsComplete();
+	const int32 Visible = bBuilt ? CountVisibleFuelSticks(CurrentFuel, MaxFuel, FuelStickComponents.Num()) : 0;
+	if (HasAuthority())
+	{
+		// Sticks in a burning fire char; when it is out, burnt-away sticks leave the count and fresh wood laid on top stays fresh.
+		const int32 Charred = bIsActive ? Visible : FMath::Min(CharredFuelSticks, Visible);
+		if (Charred != CharredFuelSticks)
+		{
+			CharredFuelSticks = Charred;
+		}
+	}
+	const int32 Charred = FMath::Min(CharredFuelSticks, Visible);
+	if (!bForce && Visible == ShownFuelSticks && Charred == ShownCharredFuelSticks)
+	{
+		return;
+	}
+	ShownFuelSticks = Visible;
+	ShownCharredFuelSticks = Charred;
+	if (!LoadedCharredFuelMaterial && !CharredFuelMaterial.IsNull())
+	{
+		LoadedCharredFuelMaterial = CharredFuelMaterial.LoadSynchronous();
+	}
+	for (int32 i = 0; i < FuelStickComponents.Num(); ++i)
+	{
+		UMeshComponent* Mesh = FuelStickComponents[i].Get();
+		if (!IsValid(Mesh))
+		{
+			continue;
+		}
+		Mesh->SetVisibility(i < Visible);
+		if (!bBuilt || !FuelStickOriginalMaterials.IsValidIndex(i))
+		{
+			continue;   // unbuilt: the build look owns its materials
+		}
+		const TArray<TObjectPtr<UMaterialInterface>>& Own = FuelStickOriginalMaterials[i].Materials;
+		for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInterface* Material = (i < Charred && LoadedCharredFuelMaterial) ? LoadedCharredFuelMaterial.Get()
+				: (Own.IsValidIndex(Slot) ? Own[Slot].Get() : nullptr);
+			Mesh->SetMaterial(Slot, Material);
+		}
+	}
 }
 
 void AMOCraftingStationActor::OnRep_IsActive()
@@ -102,6 +194,7 @@ void AMOCraftingStationActor::Tick(float DeltaTime)
 	{
 		UpdateLightFlicker(DeltaTime);
 	}
+	UpdateFuelSticks(/*bForce=*/false);   // the fire eats its sticks one by one
 }
 
 void AMOCraftingStationActor::InitializeBuilding(FName InRecipeId)
@@ -247,6 +340,7 @@ int32 AMOCraftingStationActor::AddFuel(FName ItemDefinitionId, int32 Quantity)
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Accepted %d/%d fuel item(s) '%s' (fuel now %.1f/%.1f)"),
 		Accepted, Quantity, *ItemDefinitionId.ToString(), CurrentFuel, MaxFuel);
+	UpdateFuelSticks(/*bForce=*/false);
 
 	return Accepted;
 }
@@ -341,6 +435,7 @@ void AMOCraftingStationActor::ApplyActiveVisuals()
 {
 	// Tick when active (for fuel consumption and light flicker)
 	SetActorTickEnabled(bIsActive);
+	UpdateFuelSticks(/*bForce=*/false);   // lit: the sticks in it char
 
 	// Activate/deactivate audio and visual effects
 	if (bIsActive)
@@ -666,6 +761,7 @@ void AMOCraftingStationActor::ApplySaveData(const FMOPersistedBuildingRecord& In
 	// Restore fuel state
 	CurrentFuel = InRecord.CurrentFuel;
 	bIsActive = InRecord.bIsActive;
+	UpdateFuelSticks(/*bForce=*/true);   // the charred count is not saved: a fire loaded lit chars its sticks again, a cold one shows them fresh
 
 	// Re-enable tick if station was active and requires fuel
 	if (bIsActive && bRequiresFuel)

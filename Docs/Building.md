@@ -63,6 +63,48 @@ pieces) the engine drew its default grey material instead ("Invalid material ...
 `RestoreOriginalMaterials` gives Nanite back (the component's own setting is saved with its materials). Verified: placing a campfire and
 a stick wall logs no Nanite warning (the build before logged one for each).
 
+### Staged parts: it goes up piece by piece (Oct 24)
+
+Wes: "while it's building it will switch each stone to it's proper texture as the building timer fills up" (the campfire) and "they become
+visible in order as the build timer fills up so it looks like you're actually building the things" (the stick buildings).
+
+- `AMOBuildableActor::StagedBuildParts` names mesh components in build order. Part i of N is built once progress reaches (i + 1) / N
+  (`CountBuiltStagedParts`, test `Building.StagedPartsBuildInOrder`) and wears its own materials from then on.
+- Before construction starts every part shows the plan. During it an unbuilt part keeps the ghost (`UnbuiltStagedPartStyle` Ghost: the
+  campfire's stones) or is hidden (Hidden: the stick buildings).
+- It updates on `OnConstructionProgress`, which the server ticks, a client advances between updates, and every replicated update re-sends,
+  so a joiner sees the same parts.
+- A part turned real mid-build keeps its saved materials entry, so the next ghost pass does not take the ghost for its original.
+- An empty list keeps the old look: the whole building turns real at completion.
+
+**Who uses it:**
+
+- **The stone-ring campfire.** `BuildCampfire` places `BP_Campfire_StoneRing`, made by `Content/Python/make_stone_ring_campfire.py`. It is
+  BP_Campfire with its merged Megascans campfire mesh replaced by loose parts:
+  - ten RiverCobble01 stones (the recipe deposits ten cobbles), staged round the ring;
+  - twenty Firewood01 fuel sticks (below);
+  - three fresh Stick01 sticks beside it;
+  - burnt-firewood pieces and a charred stick in the bed;
+  - BP_Campfire's fire (NFire_03), light and sounds.
+  The placement preview still shows the old merged mesh.
+- **The stick buildings.** `make_staged_stick_builds.py` orders each stick Blueprint's sticks: the main ones first (a wall's uprights, a
+  floor's boards, a roof's rafters) along the panel, then the crossing rails bottom up. This covers the wall, half wall, floor and roof.
+  Rerun it after editing a stick Blueprint.
+
+### Fuel sticks (Oct 24)
+
+Wes: "when you add wood it shows various levels of "full" by making the firewood assets visible (so like barely full is one stick visible,
+compeltely full is 20 sticks visible) and after you burnt it it turns to charred looking sticks".
+
+- `AMOCraftingStationActor::FuelStickParts` shows `CountVisibleFuelSticks(CurrentFuel, MaxFuel, N)` sticks: none when empty, one for any
+  fuel, all when full (test `Fire.FuelSticksShowTheFuel`). At the campfire's MaxFuel 100, one fuel item (10) is two sticks.
+- While the fire burns every visible stick chars (`CharredFuelMaterial`: MI_Firewood_Charred, a near-black tint of the firewood's own MI).
+  The server keeps the charred count (`CharredFuelSticks`, replicated).
+- When the fire is out, burnt-away sticks leave the count and wood added on top stays fresh until lit.
+- The charred count is not saved: a fire loaded lit chars again, a cold one shows its sticks fresh.
+- Verified in PIE (seed 777): fuel 10 showed 2 sticks; 50 showed 10; lit, 10 charred; burnt to 23, 5 charred; put out and two firewood
+  added, 9 (5 charred, 4 fresh); topped up, 19.
+
 ## 4. Using a finished station
 
 E on a finished station opens its station menu: the server checks the client's claimed target with

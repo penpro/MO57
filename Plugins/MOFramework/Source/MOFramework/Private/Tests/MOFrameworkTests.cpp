@@ -29,6 +29,8 @@
 #include "MOBugReportBundle.h"
 #include "Components/EditableTextBox.h"
 #include "Misc/DataValidation.h"
+#include "MOBuildableActor.h"
+#include "MOCraftingStationActor.h"
 #include "Components/MultiLineEditableTextBox.h"
 #include "Misc/Compression.h"
 #include "HAL/PlatformProcess.h"
@@ -1627,6 +1629,44 @@ bool FMOData_EquippableItemsHaveASlot::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a Held item passes"), Held.IsDataValid(Context) == EDataValidationResult::Valid);
 	}
 #endif
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuild_StagedPartsBuildInOrder,
+	"MOFramework.Building.StagedPartsBuildInOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuild_StagedPartsBuildInOrder::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 24 2026: the firepit's stones turn real "as the building timer fills up", the stick walls' sticks "become visible in order".
+	// Part i of N is built once progress reaches (i + 1) / N.
+	TestEqual(TEXT("not started: no stone is built"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Ghost, 0.7f, 10), 0);
+	TestEqual(TEXT("just started: none yet"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Constructing, 0.05f, 10), 0);
+	TestEqual(TEXT("a tenth: the first stone"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Constructing, 0.1f, 10), 1);
+	TestEqual(TEXT("half: five of ten (no float flicker at an exact share)"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Constructing, 0.5f, 10), 5);
+	TestEqual(TEXT("99.9 %: nine of ten"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Constructing, 0.999f, 10), 9);
+	TestEqual(TEXT("paused keeps what was built"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Paused, 0.31f, 16), 4);
+	TestEqual(TEXT("complete: all"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Complete, 0.0f, 16), 16);
+	// CONTROL (can fail): a building with no staged parts has nothing to stage.
+	TestEqual(TEXT("CONTROL: no parts, nothing built"), AMOBuildableActor::CountBuiltStagedParts(EMOBuildState::Complete, 1.0f, 0), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOFire_FuelSticksShowTheFuel,
+	"MOFramework.Fire.FuelSticksShowTheFuel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOFire_FuelSticksShowTheFuel::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 24 2026: "barely full is one stick visible, compeltely full is 20 sticks visible". MaxFuel 100, 20 sticks: 5 fuel per stick.
+	TestEqual(TEXT("empty: no sticks"), AMOCraftingStationActor::CountVisibleFuelSticks(0.0f, 100.0f, 20), 0);
+	TestEqual(TEXT("a sliver of fuel: one stick"), AMOCraftingStationActor::CountVisibleFuelSticks(0.2f, 100.0f, 20), 1);
+	TestEqual(TEXT("one stick's worth: one"), AMOCraftingStationActor::CountVisibleFuelSticks(5.0f, 100.0f, 20), 1);
+	TestEqual(TEXT("just over: two"), AMOCraftingStationActor::CountVisibleFuelSticks(5.1f, 100.0f, 20), 2);
+	TestEqual(TEXT("one fuel item (10): two sticks"), AMOCraftingStationActor::CountVisibleFuelSticks(10.0f, 100.0f, 20), 2);
+	TestEqual(TEXT("full: all twenty"), AMOCraftingStationActor::CountVisibleFuelSticks(100.0f, 100.0f, 20), 20);
+	// CONTROL (can fail): a fire with no fuel sticks shows none however full it is.
+	TestEqual(TEXT("CONTROL: no sticks configured"), AMOCraftingStationActor::CountVisibleFuelSticks(100.0f, 100.0f, 0), 0);
 	return true;
 }
 

@@ -134,6 +134,7 @@ void AMOBuildableActor::BeginPlay()
 	{
 		BuildProgressComponent->OnConstructionCompleted.AddDynamic(this, &AMOBuildableActor::OnConstructionCompleted);
 		BuildProgressComponent->OnConstructionStateChanged.AddDynamic(this, &AMOBuildableActor::HandleBuildStateChanged);
+		BuildProgressComponent->OnConstructionProgress.AddDynamic(this, &AMOBuildableActor::HandleBuildProgress);
 	}
 
 	// Apply the under-construction profile to MeshComponent + every static-mesh
@@ -617,11 +618,16 @@ void AMOBuildableActor::RefreshBuildStateVisual()
 	if (IsComplete())
 	{
 		RestoreOriginalMaterials();
+		ApplyStagedParts(GetStagedPartComponents().Num());
 		return;
 	}
 	if (ApplyGhostMaterialToAllMeshes())
 	{
 		TintGhost(PlannedColor, PlannedGlow);
+	}
+	if (!StagedBuildParts.IsEmpty() && BuildProgressComponent)
+	{
+		ApplyStagedParts(CountBuiltStagedParts(BuildProgressComponent->GetState(), BuildProgressComponent->GetProgress(), GetStagedPartComponents().Num()));
 	}
 }
 
@@ -715,23 +721,107 @@ void AMOBuildableActor::RestoreOriginalMaterials()
 {
 	for (TPair<TObjectPtr<UMeshComponent>, FMOBuildableSavedMaterials>& Pair : SavedMaterials)
 	{
-		UMeshComponent* Mesh = Pair.Key.Get();
+		RestoreOriginalMaterialsOn(Pair.Key.Get());
+	}
+	SavedMaterials.Reset();
+	GhostMaterialInstance = nullptr;
+}
+
+void AMOBuildableActor::RestoreOriginalMaterialsOn(UMeshComponent* Mesh)
+{
+	// The saved entry stays: a staged part turned real mid-build keeps it, so the next ghost pass does not take the ghost for its original.
+	const FMOBuildableSavedMaterials* Saved = IsValid(Mesh) ? SavedMaterials.Find(Mesh) : nullptr;
+	if (!Saved)
+	{
+		return;
+	}
+	const int32 Num = FMath::Min(Mesh->GetNumMaterials(), Saved->Materials.Num());
+	for (int32 i = 0; i < Num; ++i)
+	{
+		Mesh->SetMaterial(i, Saved->Materials[i]);   // a null original clears the override: the mesh asset's own material again
+	}
+	if (UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
+	{
+		StaticMesh->SetForceDisableNanite(Saved->bForceDisableNanite);   // built: Nanite again (the ghost had forced the fallback)
+	}
+}
+
+int32 AMOBuildableActor::CountBuiltStagedParts(EMOBuildState State, float Progress, int32 NumParts)
+{
+	if (NumParts <= 0 || State == EMOBuildState::Ghost)
+	{
+		return 0;
+	}
+	if (State == EMOBuildState::Complete)
+	{
+		return NumParts;
+	}
+	// A part is built once progress reaches its share; the small epsilon keeps an exact share (5 of 10 at 0.5) from flickering on float error.
+	return FMath::Clamp(FMath::FloorToInt(FMath::Clamp(Progress, 0.0f, 1.0f) * NumParts + 1.0e-4f), 0, NumParts);
+}
+
+const TArray<TWeakObjectPtr<UMeshComponent>>& AMOBuildableActor::GetStagedPartComponents()
+{
+	if (!bStagedPartsResolved)
+	{
+		bStagedPartsResolved = true;
+		TArray<UMeshComponent*> Meshes;
+		GetComponents<UMeshComponent>(Meshes);
+		for (const FName PartName : StagedBuildParts)
+		{
+			UMeshComponent* const* Found = Meshes.FindByPredicate([PartName](const UMeshComponent* Mesh) { return Mesh && Mesh->GetFName() == PartName; });
+			if (Found)
+			{
+				StagedPartComponents.Add(*Found);
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] %s: staged part '%s' is not one of its mesh components"), *GetName(), *PartName.ToString());
+			}
+		}
+	}
+	return StagedPartComponents;
+}
+
+void AMOBuildableActor::ApplyStagedParts(int32 Built)
+{
+	ShownBuiltStagedParts = Built;
+	const TArray<TWeakObjectPtr<UMeshComponent>>& Parts = GetStagedPartComponents();
+	if (Parts.IsEmpty())
+	{
+		return;
+	}
+	const EMOBuildState State = BuildProgressComponent ? BuildProgressComponent->GetState() : EMOBuildState::Complete;
+	const bool bHideUnbuilt = UnbuiltStagedPartStyle == EMOStagedPartStyle::Hidden && (State == EMOBuildState::Constructing || State == EMOBuildState::Paused);
+	for (int32 i = 0; i < Parts.Num(); ++i)
+	{
+		UMeshComponent* Mesh = Parts[i].Get();
 		if (!IsValid(Mesh))
 		{
 			continue;
 		}
-		const int32 Num = FMath::Min(Mesh->GetNumMaterials(), Pair.Value.Materials.Num());
-		for (int32 i = 0; i < Num; ++i)
+		if (i < Built)
 		{
-			Mesh->SetMaterial(i, Pair.Value.Materials[i]);   // a null original clears the override: the mesh asset's own material again
+			RestoreOriginalMaterialsOn(Mesh);
+			Mesh->SetVisibility(true);
 		}
-		if (UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
+		else
 		{
-			StaticMesh->SetForceDisableNanite(Pair.Value.bForceDisableNanite);   // built: Nanite again (the ghost had forced the fallback)
+			Mesh->SetVisibility(!bHideUnbuilt);   // the ghost pass already gave it the planned look
 		}
 	}
-	SavedMaterials.Reset();
-	GhostMaterialInstance = nullptr;
+}
+
+void AMOBuildableActor::HandleBuildProgress(float Progress)
+{
+	if (StagedBuildParts.IsEmpty() || bIsGhost || !BuildProgressComponent)
+	{
+		return;
+	}
+	if (CountBuiltStagedParts(BuildProgressComponent->GetState(), Progress, GetStagedPartComponents().Num()) != ShownBuiltStagedParts)
+	{
+		RefreshBuildStateVisual();
+	}
 }
 
 // ============================================================================

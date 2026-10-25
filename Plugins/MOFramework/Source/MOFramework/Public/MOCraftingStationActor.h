@@ -177,8 +177,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
 	bool bRequiresFuel = false;
 
-	/** Current fuel amount (0-100). Replicated: every machine's menu shows the server's fire. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|CraftingStation|Fuel")
+	/** Current fuel amount (0-100). Replicated: every machine's menu shows the server's fire, and its fuel sticks (OnRep_FuelSticks). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_FuelSticks, Category="MO|CraftingStation|Fuel")
 	float CurrentFuel = 0.0f;
 
 	/** Maximum fuel capacity. */
@@ -196,6 +196,25 @@ public:
 	/** Fuel units one fuel item is worth. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel", meta=(ClampMin="0.01"))
 	float FuelPerItemUnit = 10.0f;
+
+	/**
+	 * The fire's fuel as sticks (mesh component names, in the order they are laid): CountVisibleFuelSticks of them show -- one stick for a
+	 * sliver of fuel, all of them when full. A stick that has been in the lit fire stays charred (CharredFuelMaterial) until it burns away;
+	 * wood added to a cold fire looks fresh until it is lit. Wes, Oct 24 2026: "barely full is one stick visible, compeltely full is 20 sticks
+	 * visible ... after you burnt it it turns to charred looking sticks". Empty = no fuel sticks.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|CraftingStation|Fuel")
+	TArray<FName> FuelStickParts;
+
+	/** What a burnt fuel stick wears (every material slot). None = the sticks never char. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|CraftingStation|Fuel")
+	TSoftObjectPtr<UMaterialInterface> CharredFuelMaterial;
+
+	/** Pure: how many of NumSticks fuel sticks show for this much fuel -- none when empty, at least one with any fuel, all when full. */
+	static int32 CountVisibleFuelSticks(float Fuel, float MaxFuelAmount, int32 NumSticks);
+
+	/** The build look (AMOBuildableActor), then the fuel sticks on top of it. */
+	virtual void RefreshBuildStateVisual() override;
 
 	// ============================================================================
 	// HEAT EMISSION (IMOLocalHeatSource)
@@ -362,6 +381,29 @@ private:
 
 	/** Flames, light and sound on or off -- what every machine does when the fire starts or dies. */
 	void ApplyActiveVisuals();
+
+	/** How many of the visible fuel sticks have burnt (the first ones laid). The server keeps it: while the fire burns, every visible stick. */
+	UPROPERTY(ReplicatedUsing=OnRep_FuelSticks)
+	int32 CharredFuelSticks = 0;
+
+	UFUNCTION()
+	void OnRep_FuelSticks();
+
+	/** Show CountVisibleFuelSticks of the fuel sticks, the first CharredFuelSticks of them charred (the server first updates the count). Only
+	 *  touches materials once the building is complete: before that the build look (ghost) owns them. */
+	void UpdateFuelSticks(bool bForce);
+
+	/** FuelStickParts resolved to mesh components, with each one's own materials, captured before the build look ghosts them. */
+	TArray<TWeakObjectPtr<UMeshComponent>> FuelStickComponents;
+
+	UPROPERTY(Transient)
+	TArray<FMOBuildableSavedMaterials> FuelStickOriginalMaterials;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> LoadedCharredFuelMaterial;
+
+	int32 ShownFuelSticks = -1;
+	int32 ShownCharredFuelSticks = -1;
 
 	/** Accumulated time for flicker calculation. */
 	float FlickerTimeAccumulator = 0.0f;

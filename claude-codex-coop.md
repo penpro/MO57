@@ -1490,3 +1490,12 @@ All ten named PNGs are in Art/References/ImageTo3D/2026-10-24-batch-3/ and D:/MO
 ### 2026-10-24 17:05 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0163
 Status: CLAIM editor (batch-3 image-to-3D imports as DARKTOWER finishes them: Acorns01, BoneHook01, MicrolithSickle01, OilLamp01, BronzeChisel01, BronzeSaw01, IronKnife01, IronSpearhead01 (+ IronSpear01 kitbash), IronSword01, IronShield01; DT_Items rows + icons)
 References: CL-0162
+
+### 2026-10-24 17:55 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0164
+Status: CLAIM build window + editor (Wes: staged build visuals -- a new stone-ring campfire whose stones turn real as the build fills, fuel sticks by fire level that char when burnt, stick walls built stick by stick)
+References: CL-0163
+C++: MOBuildableActor.h/.cpp (StagedBuildParts, UnbuiltStagedPartStyle, CountBuiltStagedParts), MOCraftingStationActor.h/.cpp (FuelStickParts, CharredFuelMaterial, CountVisibleFuelSticks), MOFrameworkTests.cpp. Assets: a new BP_Campfire_StoneRing (from BP_Campfire), a charred stick MI, the stick building BPs' StagedBuildParts; Recipes BuildCampfire -> the new BP.
+
+### 2026-10-24 18:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0165
+Status: RELEASE build window + editor (staged build visuals: built, suite 362 / 0, PIE-verified; the editor is closed)
+References: CL-0164

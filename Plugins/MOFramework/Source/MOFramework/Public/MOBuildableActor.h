@@ -208,6 +208,14 @@ struct FMOBuildableSavedMaterials
 	bool bForceDisableNanite = false;
 };
 
+/** How a staged part (AMOBuildableActor::StagedBuildParts) looks while the build has not reached it yet. */
+UENUM(BlueprintType)
+enum class EMOStagedPartStyle : uint8
+{
+	Ghost UMETA(DisplayName="Ghost (the planned look until built)"),   // a firepit's stones: each turns real as the build reaches it
+	Hidden UMETA(DisplayName="Hidden (appears when built)")            // a stick wall: the sticks go up one after another
+};
+
 UCLASS()
 class MOFRAMEWORK_API AMOBuildableActor : public AActor, public IMOIdentifiableInterface
 {
@@ -302,8 +310,26 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
 	float PlannedGlow = 1.5f;
 
-	/** Show the look of the current build state (see the file header): the planned tint until Complete, the building's own materials after. */
-	void RefreshBuildStateVisual();
+	/**
+	 * Parts that get built one after another (mesh component names, in build order): part i is built once construction progress reaches
+	 * (i + 1) / N, and wears its own materials from then on. Before construction starts every part shows the planned look; during it an unbuilt
+	 * part looks as UnbuiltStagedPartStyle says. Empty = the whole building turns real at completion. Wes, Oct 24 2026: "it will switch each
+	 * stone to it's proper texture as the building timer fills up" (the firepit), "they become visible in order as the build timer fills up so
+	 * it looks like you're actually building the things" (the stick walls).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
+	TArray<FName> StagedBuildParts;
+
+	/** How a staged part not yet built looks while construction runs (before it starts, every part shows the plan). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
+	EMOStagedPartStyle UnbuiltStagedPartStyle = EMOStagedPartStyle::Ghost;
+
+	/** Pure: how many of NumParts staged parts are built at this state and overall progress (0-1). Ghost = none, Complete = all. */
+	static int32 CountBuiltStagedParts(EMOBuildState State, float Progress, int32 NumParts);
+
+	/** Show the look of the current build state (see the file header): the planned tint until Complete, the building's own materials after;
+	 *  staged parts turn real one by one as construction progresses. Subclasses extend it (a fire's fuel sticks). */
+	virtual void RefreshBuildStateVisual();
 
 	// ============================================================================
 	// STATE
@@ -541,6 +567,24 @@ private:
 
 	UFUNCTION()
 	void HandleBuildStateChanged(EMOBuildState NewState);
+
+	/** Construction progress (server ticks, a client's own advance between updates, every replicated update): re-show the staged parts when
+	 *  one more of them is built. */
+	UFUNCTION()
+	void HandleBuildProgress(float Progress);
+
+	/** Built staged parts in their own materials and visible; the rest as UnbuiltStagedPartStyle says (after the ghost pass). */
+	void ApplyStagedParts(int32 Built);
+
+	/** StagedBuildParts resolved to this actor's mesh components (once; a name with no component is logged and skipped). */
+	const TArray<TWeakObjectPtr<UMeshComponent>>& GetStagedPartComponents();
+
+	TArray<TWeakObjectPtr<UMeshComponent>> StagedPartComponents;
+	bool bStagedPartsResolved = false;
+	int32 ShownBuiltStagedParts = -1;
+
+	/** One ghosted mesh's own materials back (and its Nanite setting). */
+	void RestoreOriginalMaterialsOn(UMeshComponent* Mesh);
 
 	/** Each mesh component's own materials while it wears the ghost material. */
 	UPROPERTY(Transient)
