@@ -314,8 +314,8 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Ref | Aliases |
 |---|---|---|---|---|---|
-| BR25-1 | OPEN | Claude | Rocks capped at x5 ("they start to look pretty crappy when they're huge") | `Docs/BugReports_2026-10-25.md` | be34c7b8 |
-| BR25-2 | OPEN | Claude | Open-faced geometry out of the world, listed with screenshots for a TRELLIS rebuild as closed geometry | `Docs/BugReports_2026-10-25.md` | ba0467ab |
+| BR25-1 | DONE 58cba8be | Claude | Rocks capped at x5 ("they start to look pretty crappy when they're huge") | `Docs/BugReports_2026-10-25.md` | be34c7b8 |
+| BR25-2 | DONE 58cba8be (+ tall bottom-open kept, shallow avoided) | Claude | Open-faced geometry out of the world, listed with screenshots for a TRELLIS rebuild as closed geometry; still: textured renders, the ED world features | `Docs/BugReports_2026-10-25.md` | ba0467ab |
 | BR25-3 | OPEN | Claude | `r.Water.SingleLayer.DepthPrepass=0`: hair keeps its depth (Wes reverses the Oct 16 call; N-053) | `Docs/BugReports_2026-10-25.md` | ba03c683 |
 | BR25-4 | OPEN | Claude | Building ghosts dimmer, and drawn only while the local player is in build mode | `Docs/BugReports_2026-10-25.md` | ba03c683 |
 | BR25-5 | OPEN | Claude | Creative mode: crafting and building cost nothing | `Docs/BugReports_2026-10-25.md` | ba03c683 |

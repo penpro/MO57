@@ -165,6 +165,14 @@ saved graphs keep their meaning.
     compensation packs ~10 a hectare there, so they overlap into one formation). The biome's large boulders strew the ring round them
     (core 0.6). Upright (a closed formation does not lean with the slope), any yaw, sunk 22 % of their height, solid, landmarks. The heath gets
     0.6x, the alpine rock 1.2x.
+- **Open-faced scans** (BR25-2, Oct 24 night; `Docs/BugReports_2026-10-25.md`): `Content/Python/open_geometry_probe.py` measures every rock
+  species' mesh (openness = |sum of area-weighted normals| / area, closed ~0, a one-sided sheet 0.3-1.0; `up` = which way the open side's
+  normals point) and `Tools/remove_open_geometry.py` takes the open ones out of DT_Biomes, keeping each removed entry whole in
+  `Art/References/ImageTo3D/2026-10-25-open-geometry/removed_species.json` for a closed rebuild. The rule (Wes: "we can handle the larger
+  taller ones that have only the bottom open, the shallow depth ones are hard to get to sit properly in the terrain so avoid those ones"):
+  a scan open only underneath (`up` >= 0.7) and tall (height >= 0.4 x its narrower side) STAYS (the ground hides the base); a shallow plate
+  (rocky ground, shelves, root sheets) or a backless face is out. Out: 16 meshes / 31 entries (2 sideways-open sandstone faces to rebuild,
+  14 shallow to avoid). A new scan species: run the probe first.
 
 ## 6. Performance rules (what keeps it fast)
 
