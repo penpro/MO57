@@ -124,6 +124,22 @@ Only the `Many` policy with composition actors exists. Everything else below is 
   in; a summoned mountain built 3 + 6 cliff pieces, ~1,100 dressing instances, the clusters' rocks; downward traces hit it 57-73 m up, a
   pawn dropped on top stands at 72.7 m. Shots: `D:/MOAssets/previews/dr_cluster_wide.png`, `dr_mountain_dressed.png`, `dr_top_grass_close.png`.
   Not yet: AuthoredGround for these rows (they stand on the terrain as it is); slope-aligned cliff WALLS (these are rock all round).
+  **Oct 25: smaller, and three defects found by measuring them in PIE** (Wes: "the composite cliffs are scaled way too high and look
+  horrible close up and just look like a ball"):
+  - x0.3-0.55 (mountain, 18-33 m) and x0.35-0.6 (stack), clusters 90 / 60 m, footprint relief 15 / 12 m, embed 2 / 1.5 m.
+  - The base was pulled apart: the graphs inherited the ED spire's `BaseSpread` 1.3 (Wes's Oct 14 call for the spire), so every base piece
+    stood 1.3x farther out than the artist put it (measured: each spawned cliff mapped back through the actor's transform onto the sample's
+    layout -- upper pieces exact, base pieces 1.3x out). The DR graphs keep the authored layout (`base_spread` 1.0).
+  - The forest grew inside the rock: the footprints were the spire template's (core 3600 x 0.45, 1800 x 0.5 actor units) while the rock
+    reaches 5860 / 1650 (p90) and 7940 / 4190 (max, the talus): footprint 7500 x core 0.8 and 3500 x 0.6 now (`Tools/dr_worldfeature_rows.py`).
+  - The top dressing did not sit on the rock and is OFF (`TOP_DRESSING`): its points were created in the component's space and never took
+    the site's scale or yaw (112 of 112 plants floating, up to 77 m, at x0.33: fixed, they are copied onto the site like the assembly), and
+    even then a third hung 2-3 m over the terrain and the rest 0.6-1.4 m above the rock (points from the Nanite fallback's triangles; low
+    ledges get a base piece's terrain correction). Rebuild: BACKLOG N-211. The foot talus stays.
+  Shots: `D:/MOAssets/previews/dr_small_close.png`, `dr_small_wide.png` (trees in the rock, before the footprints), `dr_small_wide_footprint.png`.
+- **Cooking (Oct 25 2026):** the rows name their graphs and PCG data assets in TEXT, which the cooker cannot follow: no DR or ED cliff was in
+  the packaged build. `FMOWorldFeatureCook` adds every package a row reaches to the cook (`Docs/Packaging.md` section 2); a new row needs
+  no config edit. Test `MOFramework.WorldFeatures.CompositionsAreCooked`.
 
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need
 the same behavior, build one abstraction — not N copies") and #9

@@ -10,6 +10,12 @@ size. Wes, Oct 25 2026: "the huge cliffs we just imported look pretty good but w
   DR_NordicTallPath  TallPath_01: a ~52 m stack of massive Nordic cliffs with a rock arch, led up to the mountains (NearFeatureIds)
 Both in the highlands and on the Nordic coast, in clusters (several stacks together read as one massif), seen out to 2.5 km. Not aligned
 to the slope: the stacks are rock all round, any yaw stands.
+
+Oct 25 2026, Wes: "the composite cliffs are scaled way too high and look horrible close up and just look like a ball": x0.7-1.5 -> x0.3-0.55
+(mountain, 18-33 m) and x0.35-0.6 (stack, 18-31 m), clusters packed tighter, flatter ground required (their relief limits are absolute).
+Footprints MEASURED (PIE, Oct 25: every rock instance's bounds round the site, in actor units): the mountain's rock reaches 5860 (p90) / 7940
+(max, the foot talus), the stack's 1650 / 4190; the spire template's 3600 x core 0.45 and 1800 x 0.5 let the forest grow inside the rock. Now
+the core (no trees: footprint x coreFraction) covers the rock and trees start at the footprint's edge.
 """
 import copy
 import json
@@ -20,16 +26,16 @@ ROWS = {
     "DR_NordicMountain": {
         "displayName": "Nordic cliff mountain (Dark Ruins)", "graph": "PCG_DR_NordicMountain",
         "biomes": ["RockyHighland", "AlpineRock", "AlpineHeath", "NordicStrand"], "densityPerKm2": 2, "spacingCm": 45000,
-        "footprintRadiusCm": 3600, "priority": 25, "slopeMaxDeg": 28, "maxFootprintReliefCm": 3500, "minScale": 0.7, "maxScale": 1.5,
-        "spawnDistanceCm": 250000, "clusterCountMin": 2, "clusterCountMax": 5, "clusterRadiusCm": 16000, "clusterScaleBias": 1.4,
-        "coreFraction": 0.45, "nearFeatureIds": [], "nearWithinCm": 0,
+        "footprintRadiusCm": 7500, "priority": 25, "slopeMaxDeg": 28, "maxFootprintReliefCm": 1500, "minScale": 0.3, "maxScale": 0.55,
+        "spawnDistanceCm": 250000, "clusterCountMin": 2, "clusterCountMax": 5, "clusterRadiusCm": 9000, "clusterScaleBias": 1.4,
+        "coreFraction": 0.8, "nearFeatureIds": [], "nearWithinCm": 0,
     },
     "DR_NordicTallPath": {
         "displayName": "Nordic cliff stack with an arch (Dark Ruins)", "graph": "PCG_DR_NordicTallPath",
         "biomes": ["RockyHighland", "AlpineRock", "AlpineHeath", "NordicStrand"], "densityPerKm2": 3, "spacingCm": 30000,
-        "footprintRadiusCm": 1800, "priority": 22, "slopeMaxDeg": 28, "maxFootprintReliefCm": 2500, "minScale": 0.7, "maxScale": 1.4,
-        "spawnDistanceCm": 250000, "clusterCountMin": 1, "clusterCountMax": 3, "clusterRadiusCm": 10000, "clusterScaleBias": 1.4,
-        "coreFraction": 0.5, "nearFeatureIds": ["DR_NordicMountain"], "nearWithinCm": 40000,
+        "footprintRadiusCm": 3500, "priority": 22, "slopeMaxDeg": 28, "maxFootprintReliefCm": 1200, "minScale": 0.35, "maxScale": 0.6,
+        "spawnDistanceCm": 250000, "clusterCountMin": 1, "clusterCountMax": 3, "clusterRadiusCm": 6000, "clusterScaleBias": 1.4,
+        "coreFraction": 0.6, "nearFeatureIds": ["DR_NordicMountain"], "nearWithinCm": 40000,
     },
 }
 

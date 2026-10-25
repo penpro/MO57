@@ -8,12 +8,12 @@ spire graph's core (/Game/WorldFeatures/Cliffs/PCG_PL_LargeCliff_01b: DataFromAc
 Spawner by the Mesh attribute; its PCGAsset Blueprint element replaced by the native Load PCG Data Asset node) and adds:
 
   FOOT  rock clusters round the base: the sample's boulder / rocky-buildup / shelf assemblies, each copied onto a third of the foot points
-        (Content/Python/dr_dressing_points.py: the base outline pushed out 2.5 m). They join the cliff's points, so Conform To Ground seats
-        them with it and the same spawner draws them.
+        (Content/Python/dr_dressing_points.py: the base outline pushed out 2.5 m), the ring copied onto the site first (its scale and yaw,
+        like the assembly). They join the cliff's points, so Conform To Ground seats them with it and the same spawner draws them.
   TOP   grass, wild grass, dead shrubs, alder seedlings, a flower and small stones on the cliff's own top surfaces (the up-facing triangles
         that are the highest surface at their spot, 1 per 1.5 m2), walk-through. Their points (density 0.5, every other point 1) are MERGED
         into Conform To Ground's input, so they move with the composition's median shift and stay on the rock; a density filter after it
-        splits them off to their own spawner (random yaw, x0.7-1.3).
+        splits them off to their own spawner (random yaw, x0.7-1.3 absolute: the grass keeps its size whatever the site's scale).
 
     python Tools/ue.py py --file Content/Python/make_dr_compositions.py        (editor open, PIE NOT running)
 
@@ -34,8 +34,8 @@ FOOT_CLUSTERS = ["PL_BoulderAssembly_01_PCG", "PL_Buildup_Rocky_01_PCG", "PL_She
 # (the clusters' shallow ground skins are left out at the export: Tools/darkruins_assembly_export.py SKINS)
 # graph -> (assembly asset, the assembly's dressing points key, MO Conform To Ground EmbedCm)
 COMPOSITIONS = {
-    "PCG_DR_NordicMountain": ("PL_Mountain_01_PCG", "Mountain_01", 300.0),
-    "PCG_DR_NordicTallPath": ("PL_TallPath_01_PCG", "TallPath_01", 250.0),
+    "PCG_DR_NordicMountain": ("PL_Mountain_01_PCG", "Mountain_01", 200.0),
+    "PCG_DR_NordicTallPath": ("PL_TallPath_01_PCG", "TallPath_01", 150.0),
 }
 FAB = "/Game/Fab/Megascans/Plants/"
 TOP_MESHES = [   # (mesh, weight): the highland biomes' own ground cover (RockyHighland / AlpineHeath palettes)
@@ -50,6 +50,12 @@ TOP_MESHES = [   # (mesh, weight): the highland biomes' own ground cover (RockyH
     ("/Game/Megascans/3D_Assets/SmallStonesPack/SM_SmallStonesPack_12.SM_SmallStonesPack_12", 1),
 ]
 DRESSING_DENSITY = 0.5
+# OFF since Oct 25 2026: the top points do not seat. Measured in PIE (seed 4242, two mountains at x0.33): of ~290 sampled plants a third hung
+# 2-3 m (median) over the terrain beside the rock and the rest stood a median 0.6-1.4 m above the rock under them. Two causes: the points come
+# from the meshes' LOD0 sections, which for these Nanite scans are the coarse fallback, not the surface you see; and MO Conform To Ground gives
+# every point low in the composition the TERRAIN correction of a base piece, so the plants on the low ledges leave the rock. Rebuild (BACKLOG
+# N-211): points traced against the visible surface, carried with the piece they sit on. Until then the mountains are bare rock with the foot talus.
+TOP_DRESSING = False
 
 eal = unreal.EditorAssetLibrary
 log = lambda m: out("DRCOMP " + m)
@@ -74,11 +80,24 @@ def points(rows, density):
 
 
 def create_points(g, rows, density):
+    """Points in the ASSEMBLY's own space (as the data asset's are): onto_site places them."""
     n = g.add_node_of_type(unreal.PCGCreatePointsSettings)[0]
     s = n.get_settings()
     s.set_editor_property("points_to_create", points(rows, density))
-    s.set_editor_property("coordinate_space", unreal.PCGCoordinateSpace.LOCAL_COMPONENT)
+    s.set_editor_property("coordinate_space", unreal.PCGCoordinateSpace.WORLD)
     return n
+
+
+def onto_site(g, src, actor):
+    """Assembly-space points onto the site -- the actor's point: its location, yaw and SCALE -- exactly as the template copies the assembly
+    (CopyPoints_2). Until Oct 25 the foot ring and the top dressing were created in the component's space and never took the site's scale or
+    yaw: at a site's x0.3-0.6 every top plant floated (census: 112 of 112, up to 77 m above the rock)."""
+    cp = g.add_node_of_type(unreal.PCGCopyPointsSettings)[0]
+    for prop in ("apply_target_rotation_to_positions", "apply_target_scale_to_positions"):
+        cp.get_settings().set_editor_property(prop, True)
+    src.add_edge_to("Out", cp, "Source")
+    actor.add_edge_to("Out", cp, "Target")
+    return cp
 
 
 def load(g, asset_name):
@@ -131,6 +150,9 @@ def build(name, asset_name, dressing_key, embed_cm, dressing):
     copy_main.remove_edge_to("Out", conform, "In")
     conform.remove_edge_to("Out", cliff_spawner, "In")
     conform.get_settings().set_editor_property("embed_cm", embed_cm)
+    # The artist's layout, not the spire's: the template pushes its base pieces 1.3x outward (Wes, Oct 14, for the ED spire); on a Dark Ruins
+    # mountain that pulled the foot apart, and the low ledges' plants and the foot rocks with it (measured Oct 25: base pieces 1.3x out, 4-6 m down)
+    conform.get_settings().set_editor_property("base_spread", 1.0)
 
     main = load(g, asset_name)
     main.add_edge_to("Points", copy_main, "Source")
@@ -143,7 +165,7 @@ def build(name, asset_name, dressing_key, embed_cm, dressing):
         rows = foot[i::len(FOOT_CLUSTERS)]
         if not rows:
             continue
-        targets = create_points(g, rows, 1.0)
+        targets = onto_site(g, create_points(g, rows, 1.0), actor)
         src = load(g, cluster)
         cp = g.add_node_of_type(unreal.PCGCopyPointsSettings)[0]
         for prop in ("apply_target_rotation_to_positions", "apply_target_scale_to_positions"):
@@ -152,9 +174,9 @@ def build(name, asset_name, dressing_key, embed_cm, dressing):
         targets.add_edge_to("Out", cp, "Target")
         cp.add_edge_to("Out", merge, "In")
 
-    top = dressing.get("top", [])
+    top = dressing.get("top", []) if TOP_DRESSING else []
     if top:
-        create_points(g, top, DRESSING_DENSITY).add_edge_to("Out", merge, "In")
+        onto_site(g, create_points(g, top, DRESSING_DENSITY), actor).add_edge_to("Out", merge, "In")
     merge.add_edge_to("Out", conform, "In")
 
     rock = density_filter(g, 0.75, 1.0)
@@ -170,6 +192,8 @@ def build(name, asset_name, dressing_key, embed_cm, dressing):
         js.set_editor_property("scale_min", unreal.Vector(0.7, 0.7, 0.7))
         js.set_editor_property("scale_max", unreal.Vector(1.3, 1.3, 1.3))
         js.set_editor_property("uniform_scale", True)
+        # absolute: the site's own scale (x0.3-0.6 since Oct 25) must not shrink the grass with the rock
+        js.set_editor_property("absolute_scale", True)
         js.set_editor_property("offset_min", unreal.Vector(0, 0, -5))
         js.set_editor_property("offset_max", unreal.Vector(0, 0, -5))
         plants.add_edge_to("Out", jitter, "In")
