@@ -78,6 +78,9 @@ drink, and every later timed body action (fill, boil, wash) plugs into it.
    with green-stick tongs; ~20-30 min including heating; some stones crack and are lost. Or hang the bark container over coals.
    Boiled water carries no illness chance.
 4. Later: fired clay pots (Crude Pottery) boil directly on the fire.
+5. The **Water Skin** (MakeWaterSkin: an animal bladder + cordage, Leatherworking 3) carries 1.5 L (`liquidCapacityMl` 1500, Oct 25 2026, N-208;
+   it was 0, so it held nothing). Not over the fire (`bHeatableOverFire` off): hot stones boil water in it, as in the bark container
+   (paunch boiling).
 
 The container needs per-item state (its contents), carried by the inventory entry with durability -- and through world-item drop
 and pickup, which today loses durability as well.
