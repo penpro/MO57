@@ -9,6 +9,7 @@
 #if WITH_EDITOR
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Engine/World.h"
+#include "Misc/FileHelper.h"
 #endif
 
 namespace MOWorldFeatureCookPrivate
@@ -45,6 +46,64 @@ namespace MOWorldFeatureCookPrivate
 			I = End;
 		}
 	}
+
+#if WITH_EDITOR
+	/**
+	 * Every content path written in a package's FILE: its name table, soft paths and strings ("/Game/SmartAssets/AssetMeshes/SM_Cliff_02.SM_Cliff_02").
+	 * The compositions' PCG content keeps its meshes where neither the asset registry nor reflection looks: an Electric Dreams assembly
+	 * (PL_LargeCliff_01b_PCG) is a saved PCGAsset Blueprint-element instance whose points name their meshes in text, and the registry lists none
+	 * of them -- the cook took the graphs and left out every rock, the spires were missing from Wes's Shipping build ("just floating trees",
+	 * Oct 25 2026, BR25-18). Only paths of packages that exist are kept.
+	 */
+	void AddPackagesInFile(const FName Package, TSet<FName>& Out)
+	{
+		FString Filename;
+		TArray<uint8> Bytes;
+		if (!FPackageName::DoesPackageExist(Package.ToString(), &Filename) || !FFileHelper::LoadFileToArray(Bytes, *Filename))
+		{
+			return;
+		}
+		TArray<FString> Roots;   // "/Game/", "/Engine/", "/MOFramework/", ...
+		FPackageName::QueryRootContentPaths(Roots);
+		const int32 N = Bytes.Num();
+		for (int32 I = 0; I < N; ++I)
+		{
+			if (Bytes[I] != '/')
+			{
+				continue;
+			}
+			for (const FString& Root : Roots)
+			{
+				bool bMatch = I + Root.Len() <= N;
+				for (int32 C = 0; bMatch && C < Root.Len(); ++C)
+				{
+					bMatch = Bytes[I + C] == static_cast<uint8>(Root[C]);
+				}
+				if (!bMatch)
+				{
+					continue;
+				}
+				int32 End = I;
+				while (End < N && IsObjectPathChar(static_cast<TCHAR>(Bytes[End])))
+				{
+					++End;
+				}
+				FString Path = FString::ConstructFromPtrSize(reinterpret_cast<const ANSICHAR*>(Bytes.GetData() + I), End - I);
+				int32 Dot = INDEX_NONE;
+				if (Path.FindChar(TEXT('.'), Dot))
+				{
+					Path.LeftInline(Dot);
+				}
+				if (FPackageName::IsValidLongPackageName(Path) && FPackageName::DoesPackageExist(Path))
+				{
+					Out.Add(FName(*Path));
+				}
+				I = End - 1;
+				break;
+			}
+		}
+	}
+#endif
 }
 
 void FMOWorldFeatureCook::CollectNamedPackages(const UDataTable& Table, TArray<FName>& OutPackages)
@@ -55,6 +114,10 @@ void FMOWorldFeatureCook::CollectNamedPackages(const UDataTable& Table, TArray<F
 		for (const TPair<FName, uint8*>& Pair : Table.GetRowMap())
 		{
 			const FMOWorldFeatureDefinitionRow& Row = *reinterpret_cast<const FMOWorldFeatureDefinitionRow*>(Pair.Value);
+			if (!Row.bEnabled)
+			{
+				continue;   // never placed: nothing of it needs cooking
+			}
 			const FString ClassPackage = Row.ActorClass.ToSoftObjectPath().GetLongPackageName();
 			if (!ClassPackage.IsEmpty() && !FPackageName::IsScriptPackage(ClassPackage))   // a native class (AMOWorldFeatureActor) is code, not content
 			{
@@ -111,6 +174,19 @@ void FMOWorldFeatureCook::CollectCookPackages(TArray<FName>& OutPackages)
 			continue;   // not a package on disk (a stale name), or a level: an assembly's source level is editor data, never placed by a feature
 		}
 		Cook.Add(Package);
+		// PCG content (graphs, data assets, saved element settings) may name its meshes where the registry does not look (AddPackagesInFile).
+		if (Assets.ContainsByPredicate([](const FAssetData& Asset) { return Asset.AssetClassPath.GetPackageName() == FName(TEXT("/Script/PCG")); }))
+		{
+			TSet<FName> Named;
+			MOWorldFeatureCookPrivate::AddPackagesInFile(Package, Named);
+			for (const FName Referenced : Named)
+			{
+				if (!Seen.Contains(Referenced))
+				{
+					Stack.Add(Referenced);
+				}
+			}
+		}
 		TArray<FName> Dependencies;
 		Registry->GetDependencies(Package, Dependencies, UE::AssetRegistry::EDependencyCategory::Package, UE::AssetRegistry::EDependencyQuery::Game);
 		for (const FName Dependency : Dependencies)

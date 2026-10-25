@@ -489,6 +489,123 @@ bool FMOWorldFeature_ConformBaseWeight::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_ClusterLine,
+	"MOFramework.WorldFeatures.ClusterLine",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_ClusterLine::RunTest(const FString& Parameters)
+{
+	// A line cluster (bClusterLine; Wes, Oct 25 2026, of the western cliffs: "lined up clusters of 5-10") stands its members side by side along the
+	// hillside, each facing its own downhill, neighbours a pair of cores apart. The same row packed round its largest (bClusterLine off) is the
+	// control: the line check must be able to fail.
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(-1675528670);
+	FMOWorldFeatureDefinitionRow Line;
+	Line.DensityPerKm2 = 50.0f;
+	Line.SpacingCm = 80000.0f;
+	Line.FootprintRadiusCm = 6000.0f;
+	Line.CoreFraction = 0.7f;
+	Line.SlopeMinDeg = 12.0f;
+	Line.SlopeMaxDeg = 60.0f;
+	Line.MaxFootprintReliefCm = 3000.0f;
+	Line.bAlignToSlope = true;
+	Line.AuthoredDownhillYawDeg = 90.0f;
+	Line.AlignYawJitterDeg = 8.0f;
+	Line.ClusterCountMin = 5;
+	Line.ClusterCountMax = 10;
+	Line.ClusterRadiusCm = 40000.0f;
+	Line.bClusterLine = true;
+	Line.MinScale = 0.4f;
+	Line.MaxScale = 0.6f;
+	FMOWorldFeatureDefinitionRow Packed = Line;
+	Packed.bClusterLine = false;
+
+	const FBox2D Area(FVector2D(-1500000.0, -1500000.0), FVector2D(1500000.0, 1500000.0));   // 30 x 30 km
+	const FMOBiomeFinder Finder(P, Seed);
+	// Straightness of a site: how far its members stray from the line through its two farthest-apart members, as a fraction of that span.
+	auto Stray = [](const FMOWorldFeatureSite& S)
+	{
+		double Best = -1.0;
+		FVector2D A, B;
+		for (const FMOWorldFeatureMember& M : S.Members)
+		{
+			for (const FMOWorldFeatureMember& N : S.Members)
+			{
+				const double D = FVector2D::Distance(FVector2D(M.Location), FVector2D(N.Location));
+				if (D > Best)
+				{
+					Best = D;
+					A = FVector2D(M.Location);
+					B = FVector2D(N.Location);
+				}
+			}
+		}
+		const FVector2D Dir = (B - A).GetSafeNormal();
+		double Worst = 0.0;
+		for (const FMOWorldFeatureMember& M : S.Members)
+		{
+			const FVector2D V = FVector2D(M.Location) - A;
+			Worst = FMath::Max(Worst, FMath::Abs(V.X * Dir.Y - V.Y * Dir.X));
+		}
+		return Best > 0.0 ? Worst / Best : 1.0;
+	};
+	FMOWorldFeaturePlacer LinePlacer(P, Seed, { { FName(TEXT("Line")), Line } });
+	TArray<FMOWorldFeatureSite> Sites;
+	LinePlacer.SitesTouching(Area, Sites);
+	int32 Lines = 0, Members = 0, Facing = 0, Spaced = 0;
+	double StraySum = 0.0;
+	for (const FMOWorldFeatureSite& S : Sites)
+	{
+		if (S.Members.Num() < 3)
+		{
+			continue;
+		}
+		++Lines;
+		StraySum += Stray(S);
+		for (const FMOWorldFeatureMember& M : S.Members)
+		{
+			++Members;
+			FVector2D G;
+			float Dev = 0.0f;
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, M.Location.X, M.Location.Y, Seed, P->Tuning.VoxelSizeCm);
+			if (FMOWorldFeaturePlacer::MeasureFootprintPlane(*P, Seed, Finder, M.Location.X, M.Location.Y, Line.GetCoreRadiusCm(M.Scale), Ground, G, Dev))
+			{
+				const float Downhill = FMath::RadiansToDegrees(FMath::Atan2(-G.Y, -G.X));
+				Facing += FMath::Abs(FMath::FindDeltaAngleDegrees(Downhill, M.YawDegrees + Line.AuthoredDownhillYawDeg)) <= Line.AlignYawJitterDeg + 0.01f ? 1 : 0;
+			}
+			// a neighbour a pair of cores away (+15 % gap at most)
+			Spaced += S.Members.ContainsByPredicate([&](const FMOWorldFeatureMember& N)
+			{
+				return &N != &M && FVector2D::Distance(FVector2D(N.Location), FVector2D(M.Location)) <= (Line.GetCoreRadiusCm(N.Scale) + Line.GetCoreRadiusCm(M.Scale)) * 1.16;
+			}) ? 1 : 0;
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d line sites of 3+ members (%d members) in 900 km^2; mean stray %.2f of the span"), Lines, Members, Lines ? StraySum / Lines : 0.0));
+	if (!TestTrue(TEXT("line clusters form on the hillsides"), Lines >= 5))
+	{
+		return false;
+	}
+	TestEqual(TEXT("every member faces its own downhill (within the jitter)"), Facing, Members);
+	TestEqual(TEXT("every member stands a pair of cores from a neighbour"), Spaced, Members);
+
+	FMOWorldFeaturePlacer PackedPlacer(P, Seed, { { FName(TEXT("Packed")), Packed } });
+	TArray<FMOWorldFeatureSite> PackedSites;
+	PackedPlacer.SitesTouching(Area, PackedSites);
+	int32 PackedN = 0;
+	double PackedStray = 0.0;
+	for (const FMOWorldFeatureSite& S : PackedSites)
+	{
+		if (S.Members.Num() >= 3)
+		{
+			++PackedN;
+			PackedStray += Stray(S);
+		}
+	}
+	AddInfo(FString::Printf(TEXT("control, packed round the largest: %d sites, mean stray %.2f"), PackedN, PackedN ? PackedStray / PackedN : 0.0));
+	TestTrue(TEXT("lines are straighter than packed clusters (the check can fail)"), PackedN > 0 && StraySum / Lines < 0.6 * (PackedStray / PackedN));
+	return true;
+}
+
 #if WITH_EDITOR   // the cook list is editor code (the game target compiles these tests too)
 // A feature row names its graphs and PCG data assets in text (ActorProperties), which the cooker cannot follow: the packaged build had no cliffs at all
 // (Wes, Oct 25 2026). The cook asks FMOWorldFeatureCook for every package the rows reach. Every package a row names must exist (a stale path is a feature
@@ -513,7 +630,14 @@ bool FMOWorldFeature_CompositionsAreCooked::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s, named by a feature row, exists"), *Package.ToString()), FPackageName::DoesPackageExist(Package.ToString()));
 		Graphs += Package.ToString().StartsWith(TEXT("/Game/WorldFeatures/")) ? 1 : 0;
 	}
-	TestTrue(TEXT("the rows name their composition graphs (the text is parsed, the check is not vacuous)"), Graphs >= 4);
+	// (Oct 25 evening: the Dark Ruins rows are off -- disabled rows are not cooked -- so the ED spire's and the western cliff band's graphs remain.)
+	TestTrue(TEXT("the rows name their composition graphs (the text is parsed, the check is not vacuous)"), Graphs >= 2);
+	FString NamedList;
+	for (const FName Package : Named)
+	{
+		NamedList += Package.ToString() + TEXT(" ");
+	}
+	AddInfo(FString::Printf(TEXT("named: %s"), *NamedList));
 
 	TArray<FName> Cook;
 	FMOWorldFeatureCook::CollectCookPackages(Cook);
@@ -532,6 +656,9 @@ bool FMOWorldFeature_CompositionsAreCooked::RunTest(const FString& Parameters)
 	}
 	AddInfo(FString::Printf(TEXT("%d package(s) named by %d row(s); the cook list holds %d, %d of them meshes"), Named.Num(), Table->GetRowMap().Num(), Cook.Num(), Meshes));
 	TestTrue(TEXT("the cook list reaches the meshes the PCG data assets name softly"), Meshes >= 20);
+	// The Electric Dreams spire's cliff: named only inside its PCG data asset's points, in no registry dependency -- the Shipping build lost it (BR25-18).
+	TestTrue(TEXT("the cook list holds the ED spire's cliff mesh (SM_Cliff_02, named only in a PCG data asset's attributes)"),
+		Cook.Contains(FName(TEXT("/Game/SmartAssets/AssetMeshes/SM_Cliff_02"))));
 	TestFalse(TEXT("no level in the cook list (an assembly's source level is editor data)"),
 		Cook.ContainsByPredicate([](const FName Package) { return Package.ToString().Contains(TEXT("/__ExternalActors__/")); }));
 	TestTrue(TEXT("the module bound the cook hook"), FGameDelegates::Get().GetModifyCookDelegate().IsBound());

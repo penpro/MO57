@@ -50,6 +50,12 @@
   Verified Oct 25 (Development package, seed 4242, `pkg_probe` logs `Saved/Logs/pkg_probe/cliffs_pkg.log`, `ed_pkg.log`): the cook added 633
   packages; in the packaged game each DR mountain spawned 376 rock instances and each arch stack 174 (as in PIE), the ED embankments ~950
   rocks and ~300 plants per member, the spires their rock and vines; no load failure. Shot: `D:/MOAssets/previews/packaged_dr_mountain.png`.
+  **That verification missed the ED spires' cliffs** (Wes's Shipping build, BR25-18: "ED cliffs don't show, just floating trees"): their
+  "data assets" are saved PCGAsset Blueprint-element settings whose points name the meshes as TEXT, so the registry lists none of them
+  (`PL_LargeCliff_01b_PCG`: dependencies /Script/PCG and the element, no mesh) and nothing of `/Game/SmartAssets` was cooked; the census's
+  "rock" counts came from the cooked pieces. Since Oct 25 evening the hook also scans the FILE of every PCG package it reaches for content
+  paths and keeps those that exist (`AddPackagesInFile`): the cook list went from 750 packages (84 meshes) to 1343 (314); the test checks
+  `SM_Cliff_02`.
   (A packaged `MO.NewGame` keeps its start camera after a `poi` teleport: aim it with `MO.Cam.LookAt` before a `HighResShot`.)
 - **Too-wide always-cook dirs pull in assets that can't compile:** Oceanology's `NS_GerstnerWaves(_Splash)` take ddx/ddy in a GPU compute
   script; DX12/SM6 compiles it, the DX11 (SM5) fallback can't (Niagara X3662). Only `AOceanologyWaterNiagaraWavesVolume` uses them (no MO
