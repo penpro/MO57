@@ -132,10 +132,14 @@ Only the `Many` policy with composition actors exists. Everything else below is 
     layout -- upper pieces exact, base pieces 1.3x out). The DR graphs keep the authored layout (`base_spread` 1.0).
   - The forest grew inside the rock: the footprints were the spire template's (core 3600 x 0.45, 1800 x 0.5 actor units) while the rock
     reaches 5860 / 1650 (p90) and 7940 / 4190 (max, the talus): footprint 7500 x core 0.8 and 3500 x 0.6 now (`Tools/dr_worldfeature_rows.py`).
-  - The top dressing did not sit on the rock and is OFF (`TOP_DRESSING`): its points were created in the component's space and never took
-    the site's scale or yaw (112 of 112 plants floating, up to 77 m, at x0.33: fixed, they are copied onto the site like the assembly), and
-    even then a third hung 2-3 m over the terrain and the rest 0.6-1.4 m above the rock (points from the Nanite fallback's triangles; low
-    ledges get a base piece's terrain correction). Rebuild: BACKLOG N-211. The foot talus stays.
+  - The top dressing did not sit on the rock: its points were created in the component's space and never took the site's scale or yaw
+    (112 of 112 plants floating, up to 77 m, at x0.33: fixed, they are copied onto the site like the assembly), and even then a third hung
+    2-3 m over the terrain and the rest 0.6-1.4 m above the rock: the points came from the meshes' LOD0 triangles, for these Nanite scans
+    the coarse fallback, and the low ledges took a base piece's terrain correction. **Rebuilt (N-211):** `Content/Python/dr_top_points_traced.py`
+    traces the rock itself in PIE (the pieces summoned 3 km up in the transient game world, one jittered trace per 1.5 m2, the first hit from
+    above kept when it faces up and lies above the conform node's base band, z > 500): 2777 points on the mountain, 10 on the stack.
+    Measured on three mountains: 95-99 % of sampled plants stand on their own rock at a median gap of -5 cm (the jitter's sink).
+    Shots: `D:/MOAssets/previews/dr_top_traced.png`, `dr_traced_wide.png`.
   Shots: `D:/MOAssets/previews/dr_small_close.png`, `dr_small_wide.png` (trees in the rock, before the footprints), `dr_small_wide_footprint.png`.
 - **Cooking (Oct 25 2026):** the rows name their graphs and PCG data assets in TEXT, which the cooker cannot follow: no DR or ED cliff was in
   the packaged build. `FMOWorldFeatureCook` adds every package a row reaches to the cook (`Docs/Packaging.md` section 2); a new row needs

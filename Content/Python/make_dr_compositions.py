@@ -50,12 +50,10 @@ TOP_MESHES = [   # (mesh, weight): the highland biomes' own ground cover (RockyH
     ("/Game/Megascans/3D_Assets/SmallStonesPack/SM_SmallStonesPack_12.SM_SmallStonesPack_12", 1),
 ]
 DRESSING_DENSITY = 0.5
-# OFF since Oct 25 2026: the top points do not seat. Measured in PIE (seed 4242, two mountains at x0.33): of ~290 sampled plants a third hung
-# 2-3 m (median) over the terrain beside the rock and the rest stood a median 0.6-1.4 m above the rock under them. Two causes: the points come
-# from the meshes' LOD0 sections, which for these Nanite scans are the coarse fallback, not the surface you see; and MO Conform To Ground gives
-# every point low in the composition the TERRAIN correction of a base piece, so the plants on the low ledges leave the rock. Rebuild (BACKLOG
-# N-211): points traced against the visible surface, carried with the piece they sit on. Until then the mountains are bare rock with the foot talus.
-TOP_DRESSING = False
+# The top points are TRACED against the rock (Content/Python/dr_top_points_traced.py, N-211), above the conform node's base band. Off for a
+# while on Oct 25: the first points came from the meshes' LOD0 triangles -- for these Nanite scans the coarse fallback -- and a third of the
+# plants hung 2-3 m beside the rock, the rest a median 0.6-1.4 m above it.
+TOP_DRESSING = True
 
 eal = unreal.EditorAssetLibrary
 log = lambda m: out("DRCOMP " + m)

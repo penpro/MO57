@@ -9,6 +9,9 @@ same frame as its PCG data asset):
   FOOT  the base outline at the ground the assembly was made on (its root's plane, z 0: the sample's assemblies stand on it, and TallPath's
         pieces reach 55 m below it into the sample's terrain): every vertex within BASE_CM of z 0, its convex hull pushed out FOOT_OUT_CM, a
         point every FOOT_STEP_CM: where the rock clusters (talus) sit
+The TOP points it writes are replaced by Content/Python/dr_top_points_traced.py (N-211, run in PIE after this): its triangles are the meshes'
+LOD0 sections, for these Nanite scans the coarse fallback, and plants placed on them hung beside and above the rock. The FOOT ring stays this
+script's.
 Writes Content/Python/data/dr_dressing_points.json ({assembly: {"top": [[x, y, z]], "foot": [[x, y, z, yaw]]}}) for
 make_dr_compositions.py. Run in the editor (it reads the meshes' triangles); PIE not needed.
 
