@@ -35,6 +35,7 @@
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOEquipmentComponent.h"
+#include "GroomComponent.h"
 #include "MOCombatComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOPersonalityComponent.h"
@@ -222,6 +223,17 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	RightHandMesh->SetVisibility(false);
 	RightHandMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+	// Worn rigid gear (N-210): a helmet on the head, a quiver or pack on the back
+	HeadWornMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeadWornMesh"));
+	HeadWornMesh->SetupAttachment(GetMesh(), HeadWornSocketName);
+	HeadWornMesh->SetVisibility(false);
+	HeadWornMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	BackWornMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BackWornMesh"));
+	BackWornMesh->SetupAttachment(GetMesh(), BackWornSocketName);
+	BackWornMesh->SetVisibility(false);
+	BackWornMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
 	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
@@ -340,9 +352,11 @@ void AMOCharacter::BeginPlay()
 	{
 		EquipmentComponent->OnEquipmentChanged.AddDynamic(this, &AMOCharacter::HandleEquipmentChanged);
 
-		// Update held items for any already-equipped items (e.g., from save load)
-		UpdateHeldItemMesh(EMOEquipmentSlot::LeftHand, EquipmentComponent->GetEquippedItem(EMOEquipmentSlot::LeftHand));
-		UpdateHeldItemMesh(EMOEquipmentSlot::RightHand, EquipmentComponent->GetEquippedItem(EMOEquipmentSlot::RightHand));
+		// Update held and worn items for any already-equipped items (e.g., from save load)
+		for (const EMOEquipmentSlot Slot : { EMOEquipmentSlot::LeftHand, EMOEquipmentSlot::RightHand, EMOEquipmentSlot::Head, EMOEquipmentSlot::Back })
+		{
+			UpdateHeldItemMesh(Slot, EquipmentComponent->GetEquippedItem(Slot));
+		}
 	}
 
 	// Bind interactable component to recruitment system
@@ -2313,11 +2327,8 @@ bool AMOCharacter::DoTerraform()
 
 void AMOCharacter::HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)
 {
-	// Only handle hand slots for held item visuals
-	if (EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		UpdateHeldItemMesh(EquipSlot, EquippedItem);
-	}
+	// The hands (held) and Head / Back (worn rigid gear) have visuals; clothing slots do not yet (GetItemVisualTarget)
+	UpdateHeldItemMesh(EquipSlot, EquippedItem);
 }
 
 bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorController)
@@ -2414,26 +2425,9 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// Determine which mesh component to use
 	UStaticMeshComponent* TargetMesh = nullptr;
 	FName SocketName = NAME_None;
-
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
+	if (!GetItemVisualTarget(EquipSlot, TargetMesh, SocketName))
 	{
-		TargetMesh = LeftHandMesh;
-		SocketName = LeftHandSocketName;
-	}
-	else if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		TargetMesh = RightHandMesh;
-		SocketName = RightHandSocketName;
-	}
-	else
-	{
-		return; // Not a hand slot
-	}
-
-	if (!TargetMesh)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: No mesh component for slot"));
-		return;
+		return; // A slot with no visual (clothing)
 	}
 
 	// If slot is empty, hide the mesh
@@ -2494,9 +2488,10 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// Set the mesh and make it visible
 	TargetMesh->SetStaticMesh(LoadedMesh);
 
-	// Apply held transform for the appropriate hand
+	// Apply held transform for the appropriate hand; worn gear its offset from the slot's bone
+	const bool bIsHand = EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand;
 	const bool bIsLeftHand = (EquipSlot == EMOEquipmentSlot::LeftHand);
-	TargetMesh->SetRelativeTransform(ItemDef->HeldVisual.GetTransformForHand(bIsLeftHand));
+	const FTransform Offset = bIsHand ? ItemDef->HeldVisual.GetTransformForHand(bIsLeftHand) : ItemDef->HeldVisual.WornTransform;
 
 	// Apply material override: HeldVisual first, fall back to WorldVisual
 	TSoftObjectPtr<UMaterialInterface> MaterialToLoad = ItemDef->HeldVisual.MaterialOverride;
@@ -2513,10 +2508,15 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 		}
 	}
 
-	// Ensure it's attached to the correct socket
+	// Ensure it's attached to the correct socket, then its offset (attaching with SnapToTarget resets the relative transform)
 	TargetMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
+	TargetMesh->SetRelativeTransform(Offset);
 
 	TargetMesh->SetVisibility(true);
+	if (EquipSlot == EMOEquipmentSlot::Head)
+	{
+		SetScalpHairHiddenForHelmet(true);
+	}
 
 	// DEBUG (MOCharacter, disabled Oct 18): re-enable to trace verbose detail
 	// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
@@ -2525,17 +2525,41 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// 	EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 }
 
+bool AMOCharacter::GetItemVisualTarget(EMOEquipmentSlot EquipSlot, UStaticMeshComponent*& OutMesh, FName& OutSocket) const
+{
+	switch (EquipSlot)
+	{
+	case EMOEquipmentSlot::LeftHand: OutMesh = LeftHandMesh; OutSocket = LeftHandSocketName; break;
+	case EMOEquipmentSlot::RightHand: OutMesh = RightHandMesh; OutSocket = RightHandSocketName; break;
+	case EMOEquipmentSlot::Head: OutMesh = HeadWornMesh; OutSocket = HeadWornSocketName; break;
+	case EMOEquipmentSlot::Back: OutMesh = BackWornMesh; OutSocket = BackWornSocketName; break;
+	default: return false;
+	}
+	return OutMesh != nullptr;
+}
+
+void AMOCharacter::SetScalpHairHiddenForHelmet(bool bHide)
+{
+	// The MetaHuman's grooms: the scalp hair is "Hair"; eyebrows, eyelashes, beard, mustache and fuzz have their own names and stay.
+	TArray<UGroomComponent*> Grooms;
+	GetComponents<UGroomComponent>(Grooms);
+	for (UGroomComponent* Groom : Grooms)
+	{
+		if (IsValid(Groom) && Groom->GetName().StartsWith(TEXT("Hair")))
+		{
+			Groom->SetHiddenInGame(bHide);
+		}
+	}
+}
+
 void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 {
 	UStaticMeshComponent* TargetMesh = nullptr;
-
-	if (EquipSlot == EMOEquipmentSlot::LeftHand)
+	FName SocketName = NAME_None;
+	GetItemVisualTarget(EquipSlot, TargetMesh, SocketName);
+	if (EquipSlot == EMOEquipmentSlot::Head)
 	{
-		TargetMesh = LeftHandMesh;
-	}
-	else if (EquipSlot == EMOEquipmentSlot::RightHand)
-	{
-		TargetMesh = RightHandMesh;
+		SetScalpHairHiddenForHelmet(false);
 	}
 
 	if (TargetMesh)

@@ -86,6 +86,8 @@
   missing field) -> pass every field; Windows Security (pickerhost) blocking clicks: post Enter to the dialog's HWND. (dev_status, world-features)
 - **Asset saves silently don't happen** -> the editor refuses saves during PIE (save_assets still answers True); a running `inst` locks the
   .uasset files it loaded -> `ue.py` refuses saves while PIE runs; save after `pie end`; stop the instance first. (AUTONOMOUS_TOOLING, overnight-polish)
+  `rows set` reads back the editor's MEMORY, so a refused save still verified: since Oct 25 2026 its status line says "VERIFIED n/m --
+  NOT SAVED" and it exits 1 (BronzeHelmet01's WornTransform, written in PIE, never reached disk; the commit guard caught it).
 - **`save_loaded_asset` skips your change** -> it skips clean packages and a CDO change doesn't dirty them -> `only_if_is_dirty=False`; `importlib.reload(mo_ui)` after editing it. (UI_Kit)
 - **GUID / key matching silently finds nobody** -> `str()` of a wrapped unreal struct is the wrapper ADDRESS -> `to_string()` / `export_text()`. (dev_status)
 - **Python names don't match C++** -> Python strips the E prefix of enums and the b prefix of bools; `unreal.MaterialLibrary`; a b-UPROPERTY shadows a

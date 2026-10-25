@@ -1081,8 +1081,12 @@ def cmd_rows(a):
         okc, report = rows_set_safe(a.table, rows, do_save=not a.no_save)
         for l in report:
             print(l)
-        print(f"VERIFIED {okc}/{len(rows)}")
-        sys.exit(0 if okc == len(rows) else 1)
+        # The readback reads the editor's memory: a refused or failed save still verifies. Say so on the status line and fail (Oct 25
+        # 2026: BronzeHelmet01's WornTransform "VERIFIED 1/1" during PIE, never reached disk, and the commit guard found DT_Items unchanged).
+        saved = [l for l in report if l.startswith("save_assets -> ")]
+        unsaved = not a.no_save and okc and (not saved or not saved[-1].endswith("True"))
+        print(f"VERIFIED {okc}/{len(rows)}" + (" -- NOT SAVED (in memory only; see the save_assets line)" if unsaved else ""))
+        sys.exit(0 if okc == len(rows) and not unsaved else 1)
 
 
 def cmd_save(a):

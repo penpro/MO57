@@ -113,7 +113,9 @@
  * [2024-02] HELD ITEM VISUALS: LeftHandMesh/RightHandMesh are StaticMeshComponents
  *   attached to sockets (hand_l/hand_r). HandleEquipmentChanged() updates these
  *   via UpdateHeldItemMesh(). If mesh doesn't appear, verify socket names match
- *   skeleton and item definition has valid StaticMesh set.
+ *   skeleton and item definition has valid StaticMesh set. Since Oct 25 2026
+ *   (N-210) worn rigid gear too: HeadWornMesh / BackWornMesh on the head and
+ *   spine_05 bones at the item's HeldVisual.WornTransform (GetItemVisualTarget).
  *
  * [2024-02] SOFT OBJECT LOADING: DefaultMesh and DefaultAnimBlueprint are
  *   TSoftObjectPtr/TSoftClassPtr. Call LoadSynchronous() before use. BeginPlay
@@ -892,6 +894,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
 	FName RightHandSocketName = TEXT("hand_r");
 
+	/**
+	 * Worn rigid gear on the body (N-210: a helmet equipped into Head showed nothing; only the hands had visuals). The item's mesh hangs from
+	 * the slot's bone at its HeldVisual.WornTransform. Clothing (Chest / Legs / Feet / Hands) needs skinned meshes: a separate art track.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UStaticMeshComponent> HeadWornMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UStaticMeshComponent> BackWornMesh;
+
+	/** The bone a Head item (a helmet) hangs from. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
+	FName HeadWornSocketName = TEXT("head");
+
+	/** The bone a Back item (a quiver, a pack) hangs from: the upper spine. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
+	FName BackWornSocketName = TEXT("spine_05");
+
 	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================
@@ -1456,9 +1476,15 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="MO|Death")
 	void FreezeRagdoll();
 
-	/** Update the held item mesh for a specific hand slot. */
+	/** Update the item mesh of a slot with a visual: the hands (held) and Head / Back (worn rigid gear). */
 	void UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);
 
-	/** Clear the held item mesh for a specific hand slot. */
+	/** Clear the item mesh of a slot with a visual. */
 	void ClearHeldItemMesh(EMOEquipmentSlot EquipSlot);
+
+	/** The mesh component and bone a slot's item shows on (false: the slot has no visual, e.g. clothing). */
+	bool GetItemVisualTarget(EMOEquipmentSlot EquipSlot, UStaticMeshComponent*& OutMesh, FName& OutSocket) const;
+
+	/** The scalp hair hides under a worn helmet (it would poke through it); eyebrows, lashes and beard stay. */
+	void SetScalpHairHiddenForHelmet(bool bHide);
 };

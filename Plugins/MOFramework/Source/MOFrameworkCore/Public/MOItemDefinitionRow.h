@@ -301,6 +301,13 @@ struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	FTransform LeftHandTransform = FTransform::Identity;
 
+	/**
+	 * Worn rigid gear (a helmet in Head, a quiver or pack in Back; N-210): the mesh's offset from that slot's bone on the body
+	 * (AMOCharacter::HeadWornSocketName / BackWornSocketName). Clothing needs skinned meshes and does not use it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	FTransform WornTransform = FTransform::Identity;
+
 	/** Get the appropriate transform for a given hand. */
 	FTransform GetTransformForHand(bool bIsLeftHand) const
 	{

@@ -1569,3 +1569,11 @@ References: CL-0175, CL-0176
 ### 2026-10-25 00:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0178
 Status: RELEASE build window + editor + the CL-0175 files (the BR25 batch: built twice -- the creative-mode knob moved to a new Rules group after the suite caught it -- suite 369/370 then WorldCreation 3/3, PIE-verified, committed one fix per commit). BR25-7 stays half open (the staged sticks of the stick walls still collide while unbuilt: next batch). The editor is left open in PIE. New: `ue.py build` / `cycle` scrap the dev saves and editor autosaves (Wes Oct 25); `ue.py py` exits 3 "STILL RUNNING" for a picked-up call past its timeout.
 References: CL-0175, CL-0176, CL-0177
+
+### 2026-10-25 01:00 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0179
+Status: CLAIM build window + editor (next batch: BR25-7 rest -- every part of an unbuilt building trace-only, AMOBuildableActor::FinishAsBuilt for the survivor beacon fire and the dev spawns; N-210 worn gear on the body -- HeadWornMesh / BackWornMesh, FMOItemHeldVisual::WornTransform). Files: MOBuildableActor.h/.cpp, MOSpawnManagerSubsystem.cpp, MOWaterCheats.cpp, MOCheatSubsystem.cpp, MOCharacter.h/.cpp, MOItemDefinitionRow.h (MOFrameworkCore), Tests/MOFrameworkTests.cpp.
+References: CL-0178
+
+### 2026-10-25 01:25 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0180
+Status: RELEASE build window + editor + the CL-0179 files (built, suite 371/371, PIE-verified, committed). For Codex: `FMOItemHeldVisual` gained `WornTransform` (Head / Back rigid gear's offset from its bone, N-210; BronzeHelmet01 fitted) -- when you next commit Docs/Item_Art_Pipeline.md, a line there would be the right home for it (I did not touch your uncommitted file). The editor is left open in PIE.
+References: CL-0179
