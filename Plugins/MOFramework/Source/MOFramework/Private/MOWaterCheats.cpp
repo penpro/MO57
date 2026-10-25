@@ -506,18 +506,8 @@ namespace
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit FAILED: %s is not a crafting station / did not spawn"), *FireClass->GetName());
 				return;
 			}
-			static_cast<AMOBuildableActor*>(Fire)->InitializeBuilding(FName(TEXT("BuildCampfire")));   // public on the base, the station overrides it protected
-			// Finished, as promised: since the build-progress work a spawned station started as an unbuilt site (its menu was Build / Add Materials,
-			// N-182). Same route as a save restore: the progress record says Complete, then the completed state (visuals, collision).
-			if (UMOBuildProgressComponent* Progress = Fire->FindComponentByClass<UMOBuildProgressComponent>())
-			{
-				FMOBuildProgress Done;
-				Progress->BuildSaveData(Done);
-				Done.State = EMOBuildState::Complete;
-				Done.ElapsedTime = Done.TotalBuildTime;
-				Progress->ApplySaveData(Done);
-			}
-			static_cast<AMOBuildableActor*>(Fire)->EnterCompletedState();
+			// Finished, as promised: a spawned station otherwise starts as an unbuilt site (N-182). AMOBuildableActor::FinishAsBuilt.
+			Fire->FinishAsBuilt(FName(TEXT("BuildCampfire")));
 			// "laid": fuel on, cold -- to light the real way (MO.Fire.Do Light); "unlit": empty and cold.
 			if (State != TEXT("unlit"))
 			{

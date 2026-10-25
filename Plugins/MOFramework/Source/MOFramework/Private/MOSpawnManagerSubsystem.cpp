@@ -1825,6 +1825,12 @@ void UMOSpawnManagerSubsystem::MaybeSpawnSurvivorBeacon(int32 RecordIndex)
 	// SetStationActive doesn't refuse to activate at CurrentFuel=0). The
 	// CurrentFuel=MaxFuel set is cosmetic (any future UI reading fuel
 	// shows it as "full").
+	// A survivor's fire is a BUILT fire: without this it sat in the Ghost build state, walk-through and with a Build menu (BR25-7's unbuilt
+	// collision covers every part of an unfinished building).
+	if (AMOBuildableActor* Building = Cast<AMOBuildableActor>(Beacon))
+	{
+		Building->FinishAsBuilt(Building->GetRecipeId().IsNone() ? FName(TEXT("BuildCampfire")) : NAME_None);
+	}
 	if (AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(Beacon))
 	{
 		Station->bRequiresFuel = false;

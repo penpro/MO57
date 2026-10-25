@@ -35,6 +35,7 @@
 #include "MOUIContractInterface.h"
 #include "MOQuestSubsystem.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
@@ -138,10 +139,10 @@ void AMOBuildableActor::BeginPlay()
 		BuildProgressComponent->OnConstructionProgress.AddDynamic(this, &AMOBuildableActor::HandleBuildProgress);
 	}
 
-	// Apply the under-construction profile to MeshComponent + every static-mesh
-	// descendant of it. This overrides any BP-set NoCollision on the visible
-	// cube child so the right-click trace lands. OnConstructionCompleted will
-	// re-apply BlockAll via the same helper when the building is finished.
+	// Apply the unbuilt collision to every part of the building (GetBuildingMeshes).
+	// This overrides any BP-set NoCollision on the visible cube child so the
+	// right-click trace lands. EnterCompletedState makes the Mesh subtree BlockAll
+	// and gives every other part its Blueprint collision back when it is finished.
 	//
 	// Skip this for ghost mode — SetGhostMode(true) caches+disables all primitives
 	// and we'd undo its work. The ghost path restores collision via the cache
@@ -230,11 +231,10 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 	// NoCollision and the player can't right-click to manage construction.
 	RestoreGhostCollisionCache();
 
-	// Apply the under-construction collision to the structural subtree (Mesh
-	// + every static-mesh descendant). This is the single source of truth
-	// for under-construction collision — overrides any BP NoCollision on
-	// the visible cube child so right-click traces land, and nothing else
-	// collides with a plan (ApplyUnbuiltCollisionTo).
+	// Apply the unbuilt collision to every part of the building (GetBuildingMeshes).
+	// This is the single source of truth for under-construction collision --
+	// overrides any BP NoCollision on the visible cube child so right-click
+	// traces land, and nothing else collides with a plan (ApplyUnbuiltCollisionTo).
 	ApplyUnbuiltCollision();
 
 	// Enable interaction so player can configure and start build
@@ -490,6 +490,38 @@ void AMOBuildableActor::EnterCompletedState()
 	// static-mesh descendant of MeshComponent, so the visible cube child
 	// becomes solid even if its BP-defined profile was NoCollision.
 	ApplyStructuralCollisionProfile(FName("BlockAll"));
+
+	// Every other part (the stick walls' staged sticks hang off the root, BR25-7) was unbuilt too: it gets the collision its Blueprint authored.
+	TArray<UStaticMeshComponent*> Parts;
+	GetBuildingMeshes(Parts);
+	for (UStaticMeshComponent* Part : Parts)
+	{
+		if (Part != MeshComponent && !(MeshComponent && Part->IsAttachedTo(MeshComponent)))
+		{
+			RestoreAuthoredCollision(Part);
+		}
+	}
+}
+
+void AMOBuildableActor::FinishAsBuilt(FName InRecipeId)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (!InRecipeId.IsNone())
+	{
+		InitializeBuilding(InRecipeId);
+	}
+	if (BuildProgressComponent)
+	{
+		FMOBuildProgress Done;
+		BuildProgressComponent->BuildSaveData(Done);
+		Done.State = EMOBuildState::Complete;
+		Done.ElapsedTime = Done.TotalBuildTime;
+		BuildProgressComponent->ApplySaveData(Done);
+	}
+	EnterCompletedState();
 }
 
 void AMOBuildableActor::OnConstructionCompleted_Implementation()
@@ -677,22 +709,49 @@ void AMOBuildableActor::HandleLocalPlacementModeChanged()
 	}
 }
 
+void AMOBuildableActor::GetBuildingMeshes(TArray<UStaticMeshComponent*>& OutMeshes) const
+{
+	TArray<UStaticMeshComponent*> All;
+	GetComponents<UStaticMeshComponent>(All);
+	for (UStaticMeshComponent* SMC : All)
+	{
+		if (IsValid(SMC) && (SMC == MeshComponent || SMC->GetStaticMesh()))
+		{
+			OutMeshes.Add(SMC);
+		}
+	}
+}
+
 void AMOBuildableActor::ApplyUnbuiltCollision()
 {
-	if (!MeshComponent)
+	TArray<UStaticMeshComponent*> Parts;
+	GetBuildingMeshes(Parts);
+	for (UStaticMeshComponent* Part : Parts)
+	{
+		ApplyUnbuiltCollisionTo(Part);
+	}
+}
+
+void AMOBuildableActor::RestoreAuthoredCollision(UPrimitiveComponent* Primitive)
+{
+	if (!IsValid(Primitive))
 	{
 		return;
 	}
-	ApplyUnbuiltCollisionTo(MeshComponent);
-	TArray<USceneComponent*> Descendants;
-	MeshComponent->GetChildrenComponents(/*bIncludeAllDescendants=*/true, Descendants);
-	for (USceneComponent* Child : Descendants)
+	const UPrimitiveComponent* Authored = Cast<UPrimitiveComponent>(Primitive->GetArchetype());
+	if (!Authored || Authored == Primitive)
 	{
-		UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Child);
-		if (IsValid(SMC) && SMC->GetStaticMesh())
-		{
-			ApplyUnbuiltCollisionTo(SMC);
-		}
+		Primitive->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		return;
+	}
+	const FName Profile = Authored->GetCollisionProfileName();
+	Primitive->SetCollisionProfileName(Profile);
+	if (Profile == UCollisionProfile::CustomCollisionProfileName)
+	{
+		// A custom profile is its own settings: copy them (a named profile carries them with its name).
+		Primitive->SetCollisionObjectType(Authored->GetCollisionObjectType());
+		Primitive->SetCollisionResponseToChannels(Authored->GetCollisionResponseToChannels());
+		Primitive->SetCollisionEnabled(Authored->GetCollisionEnabled());
 	}
 }
 

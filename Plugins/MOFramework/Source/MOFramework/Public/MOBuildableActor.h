@@ -412,6 +412,14 @@ public:
 	 */
 	void EnterCompletedState();
 
+	/**
+	 * A building that comes into the world already finished (a survivor's beacon fire, a dev-spawned lit fire): the recipe (InRecipeId, None =
+	 * keep the class's), the progress record Complete (the save-restore route) and the completed state. Without it a spawned station sat as an
+	 * unbuilt site -- its menu Build / Add Materials (N-182), and every part walk-through since the unbuilt collision covers them all (BR25-7).
+	 * Server only.
+	 */
+	void FinishAsBuilt(FName InRecipeId = NAME_None);
+
 	// ============================================================================
 	// COLLISION
 	// ============================================================================
@@ -616,12 +624,22 @@ private:
 	 *
 	 * Contract: anything you want to be "structural" (hit-traceable, blocks
 	 * pawn when complete) goes under MeshComponent. Anything cosmetic goes
-	 * elsewhere (attached to Root or as a sibling of Mesh).
+	 * elsewhere (attached to Root or as a sibling of Mesh): it keeps the
+	 * collision its Blueprint authored once built (RestoreAuthoredCollision),
+	 * and like every part it collides with nothing but the interaction trace
+	 * until then (ApplyUnbuiltCollision).
 	 */
 	void ApplyStructuralCollisionProfile(FName ProfileName);
 
-	/** Unbuilt collision on MeshComponent and its static-mesh descendants (ApplyUnbuiltCollisionTo); completion makes them BlockAll. */
+	/**
+	 * Unbuilt collision (ApplyUnbuiltCollisionTo) on EVERY part of the building (GetBuildingMeshes), not only MeshComponent's subtree: the stick
+	 * walls' staged sticks hang off the root and still blocked pawns while unbuilt (BR25-7, PIE Oct 25 2026). Completion (EnterCompletedState) makes
+	 * the MeshComponent subtree BlockAll and gives every other part its own Blueprint collision back (RestoreAuthoredCollision).
+	 */
 	void ApplyUnbuiltCollision();
+
+	/** Every part of the building: MeshComponent and every static-mesh component on the actor with a mesh (the set the visuals tint and stage). */
+	void GetBuildingMeshes(TArray<UStaticMeshComponent*>& OutMeshes) const;
 
 	/**
 	 * The planned look is drawn only while a player of this machine is placing a building (UMOBuildingComponent::IsLocalPlayerPlacing; Wes, Oct 24 2026:
@@ -643,4 +661,10 @@ public:
 	 * physics bodies and dynamic objects pass. It was IgnoreOnlyPawn, which still blocked the camera, physics and WorldDynamic.
 	 */
 	static void ApplyUnbuiltCollisionTo(UPrimitiveComponent* Primitive);
+
+	/**
+	 * A finished part outside MeshComponent's subtree gets the collision its Blueprint authored back (its archetype: the component template), so a
+	 * staged stick blocks as designed and a cosmetic part stays as it was made. No archetype: BlockAll.
+	 */
+	static void RestoreAuthoredCollision(UPrimitiveComponent* Primitive);
 };

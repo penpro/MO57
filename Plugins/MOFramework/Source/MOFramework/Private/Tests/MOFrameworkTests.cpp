@@ -32,6 +32,8 @@
 #include "MOBuildableActor.h"
 #include "MOWorldCreationTypes.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
 #include "MOCraftingStationActor.h"
 #include "Components/MultiLineEditableTextBox.h"
 #include "Misc/Compression.h"
@@ -1690,6 +1692,73 @@ bool FMOBuilding_UnbuiltCollisionOnlyTheTrace::RunTest(const FString& Parameters
 	{
 		TestEqual(*FString::Printf(TEXT("ignores channel %d"), int32(Channel)), int32(Part->GetCollisionResponseToChannel(Channel)), int32(ECR_Ignore));
 	}
+	return true;
+}
+
+// BR25-7, the rest (PIE Oct 25 2026): the stick walls' 16 staged sticks hang off the ROOT, not MeshComponent, and the unbuilt pass walked only
+// MeshComponent's subtree -- they blocked pawns while unbuilt. Every part is unbuilt now; at completion the subtree is BlockAll and a part
+// outside it gets its own authored collision back.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuilding_EveryPartUnbuiltUntilComplete,
+	"MOFramework.Building.EveryPartUnbuiltUntilComplete",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuilding_EveryPartUnbuiltUntilComplete::RunTest(const FString& Parameters)
+{
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("the engine cube loads"), Cube))
+	{
+		return false;
+	}
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("MOBuildablePartsWorld"));
+	GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AMOBuildableActor* Building = World->SpawnActor<AMOBuildableActor>();
+	// A structural part under MeshComponent, and a staged part off the root (the stick walls' layout), authored to block.
+	UStaticMeshComponent* Inside = NewObject<UStaticMeshComponent>(Building, TEXT("InsidePart"));
+	UStaticMeshComponent* Outside = NewObject<UStaticMeshComponent>(Building, TEXT("StagedStick"));
+	Inside->SetStaticMesh(Cube);
+	Outside->SetStaticMesh(Cube);
+	Inside->SetupAttachment(Building->MeshComponent);
+	Outside->SetupAttachment(Building->GetRootComponent());
+	Outside->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	for (UStaticMeshComponent* Part : { Inside, Outside })
+	{
+		Building->AddInstanceComponent(Part);
+		Part->RegisterComponent();
+	}
+	Building->DispatchBeginPlay();   // a placed plan: BeginPlay applies the unbuilt collision
+
+	for (UStaticMeshComponent* Part : { Inside, Outside })
+	{
+		const FString Name = Part->GetName();
+		TestEqual(*FString::Printf(TEXT("%s unbuilt: a pawn walks through"), *Name), int32(Part->GetCollisionResponseToChannel(ECC_Pawn)), int32(ECR_Ignore));
+		TestEqual(*FString::Printf(TEXT("%s unbuilt: no physics body"), *Name), int32(Part->GetCollisionEnabled()), int32(ECollisionEnabled::QueryOnly));
+		TestEqual(*FString::Printf(TEXT("%s unbuilt: the interaction trace still hits"), *Name), int32(Part->GetCollisionResponseToChannel(ECC_Visibility)), int32(ECR_Block));
+	}
+
+	Building->EnterCompletedState();
+	TestEqual(TEXT("built: the structural part blocks (BlockAll)"), Inside->GetCollisionProfileName(), UCollisionProfile::BlockAll_ProfileName);
+	const UPrimitiveComponent* Authored = Cast<UPrimitiveComponent>(Outside->GetArchetype());
+	TestTrue(TEXT("built: the staged part has its authored collision back"), Authored && Outside->GetCollisionProfileName() == Authored->GetCollisionProfileName());
+	TestEqual(TEXT("built: the staged part blocks a pawn"), int32(Outside->GetCollisionResponseToChannel(ECC_Pawn)), int32(ECR_Block));
+	TestTrue(TEXT("built: the staged part has a body again"), Outside->GetCollisionEnabled() == ECollisionEnabled::QueryAndPhysics);
+
+	// A building that comes into the world finished (a survivor's beacon fire): FinishAsBuilt, not the Ghost state with every part walk-through.
+	AMOBuildableActor* Beacon = World->SpawnActor<AMOBuildableActor>();
+	UStaticMeshComponent* Stone = NewObject<UStaticMeshComponent>(Beacon, TEXT("Stone"));
+	Stone->SetStaticMesh(Cube);
+	Stone->SetupAttachment(Beacon->GetRootComponent());
+	Beacon->AddInstanceComponent(Stone);
+	Stone->RegisterComponent();
+	Beacon->DispatchBeginPlay();
+	TestFalse(TEXT("CONTROL: a spawned building starts unbuilt"), Beacon->IsComplete());
+	TestEqual(TEXT("CONTROL: ...and walk-through"), int32(Stone->GetCollisionResponseToChannel(ECC_Pawn)), int32(ECR_Ignore));
+	Beacon->FinishAsBuilt();
+	TestTrue(TEXT("FinishAsBuilt: complete"), Beacon->IsComplete());
+	TestEqual(TEXT("FinishAsBuilt: its parts block a pawn"), int32(Stone->GetCollisionResponseToChannel(ECC_Pawn)), int32(ECR_Block));
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
 	return true;
 }
 

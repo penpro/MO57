@@ -106,6 +106,21 @@ compeltely full is 20 sticks visible) and after you burnt it it turns to charred
 - Verified in PIE (seed 777): fuel 10 showed 2 sticks; 50 showed 10; lit, 10 charred; burnt to 23, 5 charred; put out and two firewood
   added, 9 (5 charred, 4 fresh); topped up, 19.
 
+### Collision: nothing solid until it is finished (BR25-7, Oct 24-25)
+
+Wes: "make sure nothing has collission until it's fully build". `AMOBuildableActor::ApplyUnbuiltCollision` puts every part of a planned or
+constructing building (`GetBuildingMeshes`: the Mesh component and every static mesh on the actor, the set the visuals tint and stage) on the
+unbuilt collision: query only, ignoring everything but `ECC_Visibility`, the interaction trace, so a plan can still be clicked and nothing else
+bumps it. Completion (`EnterCompletedState`) makes the Mesh subtree BlockAll (the structural contract) and gives every other part the
+collision its Blueprint authored (`RestoreAuthoredCollision`, from the component's archetype). The first pass walked only the Mesh subtree,
+and the stick walls' 16 staged sticks hang off the root: they blocked pawns while unbuilt. PIE: a planned stick wall's 18 parts all
+ignore pawns; built, all 18 block. Test `Building.EveryPartUnbuiltUntilComplete`.
+
+A building that comes into the world finished (a survivor's beacon fire, the dev fire and colony spawns) goes through
+`AMOBuildableActor::FinishAsBuilt`: the recipe, the progress record Complete (the save-restore route), the completed state. Before it the
+beacon fire sat in the Ghost state with a Build menu (N-182) and, with the unbuilt collision on every part, walk-through. PIE: the beacon
+is Complete, solid and lit.
+
 ## 4. Using a finished station
 
 E on a finished station opens its station menu: the server checks the client's claimed target with

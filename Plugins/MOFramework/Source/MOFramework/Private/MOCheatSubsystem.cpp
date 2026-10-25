@@ -3890,17 +3890,9 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY PlaceBuilding FAILED: spawn"));
 					return;
 				}
-				Placed->InitializeBuilding(RecipeId);
-
-				// Dev-only shortcut: restore as COMPLETE via the same path the
-				// save system uses for finished buildings. (Shipped placement
-				// always runs real construction - see CLAUDE.md sim rules.)
-				if (UMOBuildProgressComponent* Progress = Placed->FindComponentByClass<UMOBuildProgressComponent>())
-				{
-					FMOBuildProgress Done;
-					Done.State = EMOBuildState::Complete;
-					Progress->ApplySaveData(Done);
-				}
+				// Dev-only shortcut: placed COMPLETE via the save system's route for finished buildings (AMOBuildableActor::FinishAsBuilt; it used
+				// to set the record alone, leaving the unbuilt collision on). Shipped placement always runs real construction (CLAUDE.md sim rules).
+				Placed->FinishAsBuilt(RecipeId);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY PlaceBuilding %s recipe=%s at %s"),
 					*Placed->GetName(), *RecipeId.ToString(), *Loc.ToCompactString());
 			});
