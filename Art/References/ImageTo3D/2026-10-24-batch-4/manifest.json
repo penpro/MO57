@@ -1,0 +1,117 @@
+{
+  "batch": "2026-10-24-batch-4",
+  "generated_at_utc": "2026-10-25 01:28:24 UTC",
+  "generator": "built-in image_gen",
+  "source_brief": "README.md",
+  "source_brief_sha256": "51c7811f5ff1f972515898fca16420076d1dd731f0ffe015c3f1e06da8f6d7b4",
+  "project_directory": "D:/UEProjects/MO57/Art/References/ImageTo3D/2026-10-24-batch-4/",
+  "drop_directory": "D:/MOAssets/FromChtgpt/",
+  "archive": "C:/Users/penum/.codex/visualizations/2026/10/13/01a134bd-d8ba-7d62-bec2-59138e3ee28a/MO57-2026-10-24-batch-4.zip",
+  "image_count": 10,
+  "files": [
+    {
+      "id": "BirdEgg01",
+      "file": "BirdEgg01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2363283,
+      "sha256": "d0b3d3c31fdb297119bdf9b0299eece98a63f4a895668f4f9bba6ae82cc0e143"
+    },
+    {
+      "id": "Feathers01",
+      "file": "Feathers01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2154993,
+      "sha256": "f0c766e6ed0f6fff551beb5c7fe535b6d52da3bf918816bf27043d1963faabd4"
+    },
+    {
+      "id": "FlaxFiber01",
+      "file": "FlaxFiber01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2053179,
+      "sha256": "8a24fd7ef8ddd63de5bda86b98258dc830568a328b421710218cddf60ea161df"
+    },
+    {
+      "id": "WoolFleece01",
+      "file": "WoolFleece01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2160473,
+      "sha256": "ca8b185217552a04f218c2d9828c016081522c97d7db6c8cc67bc5db6c2bd054"
+    },
+    {
+      "id": "Porridge01",
+      "file": "Porridge01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2068882,
+      "sha256": "b74ad73eab4c4e3160e994e0a7f744af9345560483218ef84a7fb9d60a98887c"
+    },
+    {
+      "id": "BronzeArrowhead01",
+      "file": "BronzeArrowhead01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2162061,
+      "sha256": "e45c1fff74217c6f8949744f832bc0d5e941306f39aefd8b9efa3c2f81d72abb"
+    },
+    {
+      "id": "BronzeHelmet01",
+      "file": "BronzeHelmet01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2259902,
+      "sha256": "b400d9467250d4bf398c20579be48059add1deefed636ef978f60f955276bb0c"
+    },
+    {
+      "id": "IronArrowhead01",
+      "file": "IronArrowhead01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2030523,
+      "sha256": "b977a944ec0305d3fe32b3717c3385001ff610ab5c03e7d27a47a6c4e675c5e7"
+    },
+    {
+      "id": "IronNails01",
+      "file": "IronNails01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2189366,
+      "sha256": "bc551ed4fc0c6209e78bcca726a30377e11d7121b2d179925cf1541afb997174"
+    },
+    {
+      "id": "PlowShare01",
+      "file": "PlowShare01.png",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG",
+      "bytes": 2267557,
+      "sha256": "5e7e71361a6560c3ec2e69234095b28adef95c886cb298276b8e8735952219e2"
+    }
+  ],
+  "original_copies_verified": true,
+  "unique_images": true,
+  "readme_unchanged": true,
+  "initial_prompts_match_brief": true
+}

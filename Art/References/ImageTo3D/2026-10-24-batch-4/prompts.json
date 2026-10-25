@@ -1,0 +1,110 @@
+{
+  "batch": "2026-10-24-batch-4",
+  "generator": "built-in image_gen",
+  "use_case": "product-mockup",
+  "background": "light-gray",
+  "transparent_background": false,
+  "source_brief": "README.md",
+  "source_brief_sha256": "51c7811f5ff1f972515898fca16420076d1dd731f0ffe015c3f1e06da8f6d7b4",
+  "notes": "Initial prompts used verbatim from the supplied brief. Feathers01 and IronNails01 received one count correction each; IronArrowhead01 received one orientation edit to expose its hollow socket. Exact edit prompts and initial paths are recorded below. No CLI/API fallback or image post-processing.",
+  "items": [
+    {
+      "order": 1,
+      "id": "BirdEgg01",
+      "output": "BirdEgg01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA single wild bird egg from a ground nest, about 5 cm long: a classic oval egg, pale olive-cream shell densely speckled and blotched with dark brown, a faint matt sheen. Resting on its side.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-14bd548c-e8cf-49b1-ad4a-a71ca049ab96.png"
+    },
+    {
+      "order": 2,
+      "id": "Feathers01",
+      "output": "Feathers01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA small bundle of eight large wild-goose wing feathers, each about 28 cm long, grey-brown with paler edges and white quills, lying together flat and slightly fanned, quills aligned at one end. Clean, stiff primary feathers, no cord or binding.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [
+        {
+          "reason": "Initial output showed seven distinct feathers rather than the eight requested.",
+          "prompt": "Edit this reference photo to correct only the feather count. The bundle currently shows seven distinct feathers; add exactly one more matching wild-goose primary feather so the final bundle has exactly EIGHT complete feathers, with eight distinct visible feather tips and eight white quills aligned together at the same end. Keep them together in a slightly overlapping fan, not spread into separate objects. Preserve the grey-brown feathers with pale edges, white quills, clean stiff primary-feather shape, photorealistic texture, unbound bundle, angle and plain light-gray background. No cord, ties, binding, text or additional objects. Fit the entire eight-feather bundle inside the square frame with a clear margin, nothing cropped, using the same soft diffuse light and minimal shadows.",
+          "input_image": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-5529ec97-4f94-4772-9a41-6acaac5396d0.png"
+        }
+      ],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-2f88fb4d-0514-420c-8117-a6c6993bcde1.png"
+    },
+    {
+      "order": 3,
+      "id": "FlaxFiber01",
+      "output": "FlaxFiber01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA hank of processed flax fibre ready for spinning, about 55 cm long: long fine silvery-golden fibres combed straight and gathered into a thick soft bundle, loosely twisted into a single knot at one end, the other end fanning out slightly. Lying flat.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-2120d88a-2918-4149-a61d-29adbf60f515.png"
+    },
+    {
+      "order": 4,
+      "id": "WoolFleece01",
+      "output": "WoolFleece01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA raw sheep fleece rolled up into a loose bundle about 40 cm long: thick crimped creamy-white wool, yellowed with lanolin, the outer tips darker and greyer, a few bits of straw caught in it. Soft, lumpy, lying on its side.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-026b9f0b-75aa-46c4-a546-5c4fefc2a746.png"
+    },
+    {
+      "order": 5,
+      "id": "Porridge01",
+      "output": "Porridge01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA crude hand-made fired clay bowl about 15 cm across, filled with thick cooked grain porridge: pale beige barley and oat mush with a slightly lumpy surface and a few whole grains on top, a thin skin where it has cooled. Reddish-brown clay, thick walls, slightly lopsided. No spoon.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-81bf3869-f8e9-43ed-9781-99378bfb9cba.png"
+    },
+    {
+      "order": 6,
+      "id": "BronzeArrowhead01",
+      "output": "BronzeArrowhead01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA cast bronze arrowhead on its own, about 5 cm long: a flat leaf-shaped head with two small backward barbs and a short tang for fitting into a shaft. Golden-brown bronze, the edges ground bright, light green patina. Shown lying flat.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-fbeb9839-b0d4-491b-abea-2e9215ee0238.png"
+    },
+    {
+      "order": 7,
+      "id": "BronzeHelmet01",
+      "output": "BronzeHelmet01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA Bronze Age helmet hammered from a single bronze sheet, about 22 cm tall: a rounded conical cap with a small knob on top, a row of small rivet holes round the rim for a leather lining, faint raised ribs running up the sides. Golden-brown bronze with hammer marks and green patina. No lining, no plume. Standing upright on its rim.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-2fd6f479-05ea-441d-a75e-a578dfc41d2b.png"
+    },
+    {
+      "order": 8,
+      "id": "IronArrowhead01",
+      "output": "IronArrowhead01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA forged iron arrowhead on its own, about 7 cm long: a narrow leaf-shaped point with a small round socket at the back for the shaft. Dark grey iron with hammer marks and a little orange rust, the point ground brighter. Shown lying flat.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [
+        {
+          "reason": "The socket opening was hidden in the initial view; make the hollow fitting legible to image-to-3D.",
+          "prompt": "Edit this product-reference photo of a single small forged iron arrowhead only to show its hollow round socket clearly. Turn the same arrowhead in the frame so the narrow leaf-shaped point lies toward the upper-left and the socket mouth toward the lower-right/front, with the socket's open circular/elliptical mouth and dark hollow interior visibly facing the viewer. The socket is an open tube for receiving an arrow shaft, with a thin iron rim, never a solid cap or rod. Preserve the same small arrowhead design and proportions, about 7 cm overall, dark grey hammered iron, light orange rust and brighter ground point. Keep it lying flat in a clear three-quarter product view, entirely within the square frame, centered on the same plain light-gray background under soft diffuse lighting. No shaft, nail, cord, text or extra object.",
+          "input_image": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-00f4eefd-907f-4577-8597-c296b63a00b4.png"
+        }
+      ],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-3dce94f5-2317-4052-a8ce-08f4f20b7d97.png"
+    },
+    {
+      "order": 9,
+      "id": "IronNails01",
+      "output": "IronNails01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA small loose pile of eight hand-forged iron nails, each 5 to 8 cm long: square tapering shanks and hammered rose-shaped heads, dark grey with forge scale and spots of orange rust. The nails lie touching each other in one compact pile.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [
+        {
+          "reason": "Initial compact pile showed seven nails rather than the eight requested.",
+          "prompt": "Edit this photo only to correct the number of nails. It currently has seven hand-forged nails. Add exactly ONE more complete shorter hand-forged iron nail at the front of the pile, with its own distinct hammered rose-shaped head and a square tapering shank ending in a point. The final image must show exactly EIGHT nails, eight distinct heads, with shanks overlapping and touching as one compact loose pile. Keep all seven existing nails and their square shanks. Preserve the dark grey forge scale, modest orange rust spots, the realistic size variation (5–8 cm long), three-quarter view, plain light-gray backdrop, diffuse lighting, minimal shadows and square image. Entire pile fully within the frame with margin, no cropping or text.",
+          "input_image": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-400766a1-5913-44d5-8764-ba965693946a.png"
+        }
+      ],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-fc42dea4-8efd-4ad6-ad07-2838d91f1595.png"
+    },
+    {
+      "order": 10,
+      "id": "PlowShare01",
+      "output": "PlowShare01.png",
+      "initial_prompt": "Product-style reference photo for image-to-3D conversion. One single object, the entire object visible and centered, nothing cropped, filling about 80% of a square frame. Seamless plain light-gray background, no floor, no scenery, no other objects, no hands, no text, no labels, no watermark. Soft, even, diffuse studio lighting from all sides, minimal shadows, no harsh highlights, no reflections of a room, no depth of field: everything in sharp focus. Three-quarter view from slightly above (camera about 30 degrees above the object, turned 45 degrees), long-lens look with no perspective distortion. Photorealistic, real materials, true colors, natural wear. Square 1:1, high resolution.\n\nA forged iron plowshare about 35 cm long: a heavy triangular blade with a pointed tip and one cutting edge, its back drawn into a socket that fits over the plough's wooden sole. Dark grey forged iron, the point and edge polished bright by soil, the rest rough with scale and rust. Shown lying flat with the blade's face toward the camera.\nSingle square reference image, no collage, no alternate views or dimension markings.",
+      "edits": [],
+      "selected_original": "C:\\Users\\penum\\.codex\\generated_images\\01a134bd-d8ba-7d62-bec2-59138e3ee28a\\exec-e403ef3b-4279-4724-ad33-94037dead76c.png"
+    }
+  ]
+}
