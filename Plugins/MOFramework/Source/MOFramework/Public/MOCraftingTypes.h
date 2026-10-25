@@ -137,6 +137,10 @@ struct MOFRAMEWORK_API FMOCraftingQueueEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	bool bHasCapturedReservation = false;
 
+	/** Queued in creative mode (FMOWorldRules::IsCreative): it took no materials, so a cancel returns none and owes none. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bFree = false;
+
 	/** Captured at enqueue, combined across duplicate ingredient rows. Never reread a changed recipe to refund. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> IngredientsPerCraft;

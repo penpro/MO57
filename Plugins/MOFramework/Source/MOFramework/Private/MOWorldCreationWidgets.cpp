@@ -29,8 +29,12 @@ void UMOWorldKnobRow::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-FText UMOWorldKnobRow::FormatValue(float Value)
+FText UMOWorldKnobRow::FormatValue(float Value, bool bSwitch)
 {
+	if (bSwitch)
+	{
+		return Value >= 0.5f ? LOCTEXT("KnobOn", "On") : LOCTEXT("KnobOff", "Off");
+	}
 	FNumberFormattingOptions Two;
 	Two.MinimumFractionalDigits = 2;
 	Two.MaximumFractionalDigits = 2;
@@ -67,7 +71,7 @@ void UMOWorldKnobRow::SetValue(float Value)
 	}
 	if (ValueText)
 	{
-		ValueText->SetText(FormatValue(Value));
+		ValueText->SetText(FormatValue(Value, Knob.bSwitch));
 	}
 }
 
@@ -80,7 +84,7 @@ void UMOWorldKnobRow::HandleSliderChanged(float Value)
 	const float Snapped = FMath::Clamp(Knob.Step > 0.0f ? FMath::GridSnap(Value, Knob.Step) : Value, Knob.Min, Knob.Max);
 	if (ValueText)
 	{
-		ValueText->SetText(FormatValue(Snapped));
+		ValueText->SetText(FormatValue(Snapped, Knob.bSwitch));
 	}
 	OnKnobChanged.Broadcast(Knob.Id, Snapped);
 }

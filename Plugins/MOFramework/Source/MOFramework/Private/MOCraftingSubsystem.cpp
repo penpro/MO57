@@ -602,7 +602,8 @@ bool UMOCraftingSubsystem::HasIngredients(
 			}
 		}
 
-		const int32 Available = InventoryComponent->CountIngredient(Ingredient.ItemDefinitionId);
+		// Creative mode: the materials cost nothing (FMOWorldRules::IsCreative); the knowledge above still gates the recipe.
+		const int32 Available = FMOWorldRules::IsCreative(this) ? Ingredient.Quantity : InventoryComponent->CountIngredient(Ingredient.ItemDefinitionId);
 		if (Available < Ingredient.Quantity)
 		{
 			bHasAll = false;

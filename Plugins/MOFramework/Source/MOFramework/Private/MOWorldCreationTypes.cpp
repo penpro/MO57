@@ -53,6 +53,12 @@ namespace
 			PaceFloor, 4.0f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Pace.Inspecting; }));
 		K.Add(Knob(TEXT("SkillGain"), G::Pace, LOCTEXT("SkillGain", "Skill learning"), LOCTEXT("SkillGainHint", "How fast skills grow with use. 2 = twice as fast."),
 			PaceFloor, 4.0f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Pace.SkillGain; }));
+		FMOWorldKnob Creative = Knob(TEXT("CreativeMode"), G::Rules, LOCTEXT("CreativeMode", "Creative mode"),
+			LOCTEXT("CreativeModeHint", "Crafting and building cost no materials. The work still takes its time."),
+			0.0f, 1.0f, 1.0f, [](FMOWorldCreationSettings& S) { return &S.CreativeMode; });
+		Creative.Default = 0.0f;
+		Creative.bSwitch = true;
+		K.Add(Creative);
 		return K;
 	}
 
@@ -159,6 +165,10 @@ FString FMOWorldCreation::Describe(const FMOWorldCreationSettings& S)
 		{
 			Out += TEXT(" pace");
 		}
+		if (K.Group == EMOWorldKnobGroup::Rules && Out.Find(TEXT(" rules")) == INDEX_NONE)
+		{
+			Out += TEXT(" rules");
+		}
 		Out += FString::Printf(TEXT(" %s=%g"), *K.Id.ToString(), GetKnob(S, K.Id));
 	}
 	Out += FString::Printf(TEXT(" start=%s"), S.StartingBiome.IsNone() ? TEXT("coast") : *S.StartingBiome.ToString());
@@ -175,6 +185,13 @@ float FMOWorldRules::GetPace(const UObject* WorldContext, EMOWorldPace Activity)
 float FMOWorldRules::ScaleSeconds(const UObject* WorldContext, EMOWorldPace Activity, float Seconds)
 {
 	return Seconds * GetPace(WorldContext, Activity);
+}
+
+bool FMOWorldRules::IsCreative(const UObject* WorldContext)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr;
+	return State && State->GetWorldCreation().CreativeMode >= 0.5f;
 }
 
 #undef LOCTEXT_NAMESPACE

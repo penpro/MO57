@@ -12,7 +12,7 @@
 static FAutoConsoleCommandWithWorldAndArgs GMOWorldCreationCommand(
 	TEXT("MO.World.Creation"),
 	TEXT("The next new game's creation settings: MO.World.Creation [Knob=Value ...] [StartingBiome=<DT_Biomes row>|coast] [reset]. Knobs: BiomeSize WorldHeight Mountains ")
-	TEXT("Lakes Caves Vegetation Gathering Crafting Building Terraforming Inspecting SkillGain. No arguments: print the pending and the active settings."),
+	TEXT("Lakes Caves Vegetation Gathering Crafting Building Terraforming Inspecting SkillGain CreativeMode. No arguments: print the pending and the active settings."),
 	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 	{
 		UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
@@ -53,4 +53,31 @@ static FAutoConsoleCommandWithWorldAndArgs GMOWorldCreationCommand(
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDCREATION active (this world): %s"), *FMOWorldCreation::Describe(State->GetWorldCreation()));
 		}
+	}));
+
+// MO.World.Creative: creative mode on the RUNNING world (FMOWorldCreationSettings::CreativeMode; Wes, Oct 24 2026: "make a 'creative mode' where crafting
+// and building costs nothing"). Host / standalone only: the setting lives on the replicated game state and is saved with the world.
+static FAutoConsoleCommandWithWorldAndArgs GMOWorldCreativeCommand(
+	TEXT("MO.World.Creative"),
+	TEXT("Creative mode on this world (host): crafting and building cost no materials, the work still takes its time. Usage: MO.World.Creative [0|1] (no argument: print it)"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr;
+		if (!State)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CREATIVE no MO game state in this world"));
+			return;
+		}
+		if (Args.Num() > 0)
+		{
+			if (!State->HasAuthority())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CREATIVE only the host sets it"));
+				return;
+			}
+			FMOWorldCreationSettings Settings = State->GetWorldCreation();
+			FMOWorldCreation::SetKnob(Settings, TEXT("CreativeMode"), FCString::Atof(*Args[0]));
+			State->SetWorldCreation(Settings);
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CREATIVE %s"), FMOWorldRules::IsCreative(World) ? TEXT("on") : TEXT("off"));
 	}));

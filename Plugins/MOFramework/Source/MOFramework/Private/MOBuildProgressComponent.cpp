@@ -296,6 +296,10 @@ int32 UMOBuildProgressComponent::GetRequiredCount(FName ItemId) const
 
 bool UMOBuildProgressComponent::AreAllMaterialsDeposited() const
 {
+	if (FMOWorldRules::IsCreative(this))
+	{
+		return true;   // creative mode: a building costs no materials (the build still takes its time)
+	}
 	for (const FMOBuildPart& Part : BuildParts)
 	{
 		if (Part.IsItemPart())
@@ -822,7 +826,7 @@ void UMOBuildProgressComponent::ApplyBuilderSkill()
 	int32 Units = 0;
 	for (const FMOBuildPart& Part : BuildParts)
 	{
-		Units += Part.IsItemPart() ? Part.Quantity : 0;
+		Units += Part.IsItemPart() && !FMOWorldRules::IsCreative(this) ? Part.Quantity : 0;   // creative mode: no material, so none to spoil
 	}
 	Progress.SpoilsPlanned = FMath::RoundToInt(static_cast<float>(Units) * Penalty.WasteFraction);
 	Progress.SpoilsLeft = Progress.SpoilsPlanned;
@@ -932,6 +936,10 @@ void UMOBuildProgressComponent::CheckMaterialConsumption()
 
 bool UMOBuildProgressComponent::TryConsumeMaterial(const FMOBuildPart& Part)
 {
+	if (FMOWorldRules::IsCreative(this))
+	{
+		return true;   // creative mode: the work goes on, nothing is taken
+	}
 	if (Part.IsItemPart())
 	{
 		FName ItemId = Part.ItemDefinitionId;

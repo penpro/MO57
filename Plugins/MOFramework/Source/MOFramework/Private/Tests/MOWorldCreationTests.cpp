@@ -59,6 +59,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldCreation_Knobs,
 bool FMOWorldCreation_Knobs::RunTest(const FString& Parameters)
 {
 	TSet<FName> Ids;
+	TMap<EMOWorldKnobGroup, int32> PerGroup;
 	FMOWorldCreationSettings S;
 	for (const FMOWorldKnob& K : FMOWorldCreation::GetKnobs())
 	{
@@ -70,9 +71,17 @@ bool FMOWorldCreation_Knobs::RunTest(const FString& Parameters)
 		if (K.Group == EMOWorldKnobGroup::Pace)
 		{
 			TestTrue(*FString::Printf(TEXT("%s: a pace never reaches zero"), *K.Id.ToString()), K.Min > 0.0f);
+			TestFalse(*FString::Printf(TEXT("%s: a pace is a multiplier, not a switch"), *K.Id.ToString()), K.bSwitch);
 		}
+		if (K.Group == EMOWorldKnobGroup::Rules)
+		{
+			TestTrue(*FString::Printf(TEXT("%s: a world rule is an on / off switch"), *K.Id.ToString()), K.bSwitch);
+		}
+		++PerGroup.FindOrAdd(K.Group);
 	}
-	TestEqual(TEXT("six shape + six pace knobs"), Ids.Num(), 12);
+	TestEqual(TEXT("six shape knobs"), PerGroup.FindRef(EMOWorldKnobGroup::Shape), 6);
+	TestEqual(TEXT("six pace knobs"), PerGroup.FindRef(EMOWorldKnobGroup::Pace), 6);
+	TestEqual(TEXT("one world rule (creative mode)"), PerGroup.FindRef(EMOWorldKnobGroup::Rules), 1);
 
 	TestTrue(TEXT("set a known knob"), FMOWorldCreation::SetKnob(S, TEXT("Crafting"), 0.0f));
 	TestTrue(TEXT("crafting 0 clamps to the floor"), S.Pace.Crafting > 0.0f && S.Pace.Crafting <= 0.1f + 1e-6f);

@@ -43,8 +43,8 @@ public:
 	/** The player moved the slider: the knob's id and its snapped value. */
 	FMOWorldKnobChanged OnKnobChanged;
 
-	/** "x1.25": the panel's text for a value. */
-	static FText FormatValue(float Value);
+	/** "x1.25": the panel's text for a value; a switch knob (FMOWorldKnob::bSwitch) reads "Off" / "On". */
+	static FText FormatValue(float Value, bool bSwitch = false);
 
 protected:
 	virtual void NativeConstruct() override;

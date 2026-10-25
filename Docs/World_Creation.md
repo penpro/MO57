@@ -28,7 +28,10 @@ existing save (a save from before Oct 22 reads the defaults, which is the world 
 | Digging time | 0.1-4 | terraforming (`UMOTerraformingComponent`, after the rock-hardness factor) |
 | Study time | 0.1-4 | inspecting an item (`FMOInspectionActions`) |
 | Skill learning | 0.1-4 | a RATE: skill experience x it (`UMOSkillsComponent::AddExperience`) |
+| Creative mode (a world RULE: Off / On, default Off) | 0 / 1 | crafting and building need and consume no materials; the work still takes its time (BR25-5, Oct 24 2026: Wes, "make a 'creative mode' where crafting and building costs nothing"). Read through `FMOWorldRules::IsCreative` in `UMOCraftingSubsystem::HasIngredients`, `UMOCraftingQueueComponent` (a free entry: nothing reserved, nothing refunded on cancel) and `UMOBuildProgressComponent` (materials count as deposited). Host console: `MO.World.Creative [0\|1]` |
 
+The knobs come in three groups (`EMOWorldKnobGroup`): Shape, Pace (time multipliers) and Rules (on / off switches, `FMOWorldKnob::bSwitch`,
+shown Off / On; the pace floor does not apply to them). The panel shows Shape in one box, Pace and Rules in the other.
 Principle 11 still holds: a pace never reaches zero (a 0.1 floor, also enforced on load: `FMOWorldCreation::Sanitize`), 1 is real time, and
 it is a property of the world chosen before its first step, not a mid-game skip. Times below 1 are Wes's call for his worlds (Oct 22).
 
@@ -61,7 +64,7 @@ it is a property of the world chosen before its first step, not a mid-game skip.
     places a new site; a world saved before Oct 24 has none.
   - The props and the layout are Project Settings > MOFramework > Start Site (`UMOStartSiteSettings`, DefaultGame.ini). The defaults are
     the egg and its hatch.
-- **New knob:** a field in `FMOWorldShape` / `FMOWorldPace` + one entry in `BuildKnobs()` (`MOWorldCreationTypes.cpp`); the panel, the
+- **New knob:** a field in `FMOWorldShape` / `FMOWorldPace` (or a world rule on `FMOWorldCreationSettings`, group Rules, `bSwitch`) + one entry in `BuildKnobs()` (`MOWorldCreationTypes.cpp`); the panel, the
   console and the clamps follow from the table.
 
 ## 3. The panel

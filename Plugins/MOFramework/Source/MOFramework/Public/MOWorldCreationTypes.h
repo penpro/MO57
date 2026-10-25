@@ -129,14 +129,25 @@ struct MOFRAMEWORK_API FMOWorldCreationSettings
 	/** DT_Biomes row the first survivor starts in; None = the coast (FMOWorldGen::FindCoastalSpawn). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
 	FName StartingBiome;
+
+	/**
+	 * CREATIVE MODE (Wes, Oct 24 2026: "make a 'creative mode' where crafting and building costs nothing"): 1 = recipes and buildings need and take
+	 * no materials (FMOWorldRules::IsCreative); 0 = off. Time still runs: a craft or a build takes its full (paced) time -- Principle 11 holds, only
+	 * the cost goes. A 0 / 1 knob (the panel shows Off / On); `MO.World.Creative 0|1` switches a running world on the host.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
+	float CreativeMode = 0.0f;
 };
 
-/** Which part of the settings a knob belongs to (the panel shows them in two groups). */
+/** Which part of the settings a knob belongs to (the panel shows Shape in one box, Pace and Rules in the other). */
 UENUM(BlueprintType)
 enum class EMOWorldKnobGroup : uint8
 {
 	Shape,
-	Pace
+	/** Time multipliers: never zero (Principle 11), floored at PaceFloor. */
+	Pace,
+	/** On / off world rules (bSwitch knobs, e.g. CreativeMode): not multipliers, so the pace floor does not apply. */
+	Rules
 };
 
 /** One adjustable number of the creation settings: its range, its step and how the panel names it. */
@@ -168,6 +179,10 @@ struct MOFRAMEWORK_API FMOWorldKnob
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|World")
 	float Default = 1.0f;
+
+	/** An on / off switch rather than a multiplier (Min 0, Max 1, Step 1): the panel shows Off / On instead of "x1". */
+	UPROPERTY(BlueprintReadOnly, Category="MO|World")
+	bool bSwitch = false;
 
 	/** Get / set this knob's field (the table's accessors). */
 	float* Field(FMOWorldCreationSettings& Settings) const { return Accessor ? Accessor(Settings) : nullptr; }
@@ -214,4 +229,7 @@ struct MOFRAMEWORK_API FMOWorldRules
 
 	/** Seconds of a timed activity in this world: Seconds x the activity's pace (never below a tenth). */
 	static float ScaleSeconds(const UObject* WorldContext, EMOWorldPace Activity, float Seconds);
+
+	/** Creative mode (FMOWorldCreationSettings::CreativeMode): crafting and building cost no materials. False with no MO game state. */
+	static bool IsCreative(const UObject* WorldContext);
 };

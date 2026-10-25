@@ -1087,6 +1087,14 @@ bool UMOCraftingQueueComponent::ReserveIngredientsForCraft(FMOCraftingQueueEntry
 		Entry.IngredientsPerCraft.Add(Ingredient.ItemDefinitionId, int32(PerCraft));
 		Totals.Add(Ingredient.ItemDefinitionId, int32(PerCraft * Entry.Count));
 	}
+	if (FMOWorldRules::IsCreative(this))
+	{
+		// Creative mode: nothing leaves the inventory. Paid, with no captured lots -- completion takes the "paid at enqueue" path and a cancel owes nothing.
+		Entry.bFree = true;
+		Entry.bHasCapturedReservation = false;
+		Entry.bIngredientsConsumed = true;
+		return true;
+	}
 	const auto Result = Inventory->ReserveIngredients(Totals, Entry.ReservedIngredients);
 	if (!Result.IsComplete())
 	{
@@ -1101,6 +1109,10 @@ bool UMOCraftingQueueComponent::ReserveIngredientsForCraft(FMOCraftingQueueEntry
 
 bool UMOCraftingQueueComponent::RetainCancelledIngredients(const FMOCraftingQueueEntry& Entry)
 {
+	if (Entry.bFree)
+	{
+		return false;   // creative mode took nothing: nothing to return, no legacy refund to record
+	}
 	if (Entry.bHasCapturedReservation)
 	{
 		PendingReturns.Lots.Append(Entry.ReservedIngredients.Lots);
