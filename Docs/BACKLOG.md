@@ -310,6 +310,20 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR24-21 | OPEN | Claude | Grass gets no shadow and looks self-lit (= BR23-11) | PCG / rendering | 1a77a86f |
 | BR24-22 | OPEN | Claude | Cave mouths enormous, floating rocks at the rim (= BR23-1) | `Docs/Caves_And_Geology.md` | 94980919 |
 
+## Wes's Oct 25 reports (BR25; tracker `Docs/BugReports_2026-10-25.md`)
+
+| ID | Status | Owner | Item | Ref | Aliases |
+|---|---|---|---|---|---|
+| BR25-1 | OPEN | Claude | Rocks capped at x5 ("they start to look pretty crappy when they're huge") | `Docs/BugReports_2026-10-25.md` | be34c7b8 |
+| BR25-2 | OPEN | Claude | Open-faced geometry out of the world, listed with screenshots for a TRELLIS rebuild as closed geometry | `Docs/BugReports_2026-10-25.md` | ba0467ab |
+| BR25-3 | OPEN | Claude | `r.Water.SingleLayer.DepthPrepass=0`: hair keeps its depth (Wes reverses the Oct 16 call; N-053) | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-4 | OPEN | Claude | Building ghosts dimmer, and drawn only while the local player is in build mode | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-5 | OPEN | Claude | Creative mode: crafting and building cost nothing | `Docs/BugReports_2026-10-25.md` | ba03c683 |
+| BR25-6 | OPEN | Claude | No big green ghost boxes on the stick walls / floors / roofs (the collision cube) | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-7 | OPEN | Claude | Nothing has collision until it is fully built | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-8 | OPEN | Claude | Campfire firewood lower and less perfect | `Docs/BugReports_2026-10-25.md` | 21fb1828 |
+| BR25-9 | OPEN | Claude | Trees never grow through boulders (PCG tiers avoid each other's solid instances) | `Docs/BugReports_2026-10-25.md` | 7fb1e50f |
+
 ## UI
 
 | ID | Status | Owner | Item | Detail | Aliases |

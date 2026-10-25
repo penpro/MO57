@@ -1,0 +1,23 @@
+# Bug reports, Oct 25 2026 UTC (Wes, the evening of Oct 24 PDT; PIE in the editor, build of 40d1c8d4 + local changes)
+
+> **What this is:** the live tracker for the 5 reports Wes sent at 03:44-04:01 UTC on Oct 25 (`mo-crashes-2026-10-25.tar.gz`), split into one row per ask
+> (nine). One row per ask: what it asks, the layer responsible, the plan and the status. Backlog rows: BR25-n in `Docs/BACKLOG.md`. When every row is
+> closed or moved to the backlog, archive this file (`Docs/Archive/`).
+> **Crash in the same tarball:** 1, not a player's: `ddec177b` (Oct 24 11:23 UTC), the editor's `UExporter` `check(Object)` from editor Python's
+> `RunAssetExportTask` given a Git-Bash-mangled `/Game` path (`C:/Program Files/Git/Game/...`): the kitbash export of Oct 24 morning. Fixed that day
+> (a null check in the export + `MSYS_NO_PATHCONV=1`, TRAPS).
+> **Read with:** `python -I Tools/crash_triage.py <crash-dumps dir>`; full texts and screenshots: `ue_crash_bundle.parse_bundle`.
+
+## Reports
+
+| Row | Report | Title (Wes) | Ask / diagnosis (layer) | Plan | Status |
+|---|---|---|---|---|---|
+| BR25-1 | be34c7b8 | huge rocks | "a lot of the rocks in the rocky alpine area are still way oversized ... let's limit the oversizing to like.... 5times? they start to look pretty crappy when they're huge". AlpineRock's rocks were x3 (BR24-7) and its size tiers x3 on top: large x12.6-25.2, xlarge x16.8-33.6 even after the Oct 24 halving (data, DT_Biomes) | every rock species capped at x5: a range whose top passes 5 is scaled down so it tops out at 5 (`Tools/rock_scale_cap.py`) | OPEN |
+| BR25-2 | ba0467ab | remove all open faced geometry assets | "log them for rebuilding in trellis to be closed geometry ... give screen shots of all the open geometry assets so we can have them cleaned up by chatgpt and then rebuilt with closed geometry in trellis" (data: the scattered meshes and the world-feature compositions) | measure every scattered mesh for openness (area-weighted normal), take the open ones out of the palettes, list them with screenshots under `Art/References/ImageTo3D/` | OPEN |
+| BR25-3 | ba03c683 | enable/disable the prerender setting that makes the hair dissappear | "i thought it was making the lakes look horrible but that wasn't the issue, so let's revisit whatever engine setting it was that makes it so hair isn't fucky ... it's also causing issues if you're looking at the building ghosts". The setting: `r.Water.SingleLayer.DepthPrepass` (on = hair strands lose their scene depth whenever Single Layer Water is in view: Engine Patch #1, N-053); Wes rejected turning it off on Oct 16 for the water's look, and now reverses that | `r.Water.SingleLayer.DepthPrepass=0` in DefaultEngine.ini; check the hair, the ghosts and the water | OPEN |
+| BR25-4 | ba03c683 | (same report) building ghosts | "make the building ghosts less bright and make them not visible if you're not in build mode trying to place an item" (the ghost material, and the planned buildings' visibility per local player) | a dimmer ghost; planned / unbuilt parts drawn only while the LOCAL player is in build mode | OPEN |
+| BR25-5 | ba03c683 | (same report) creative mode | "make a 'creative mode' where crafting and building costs nothing" (a new world rule; the craft and build cost paths) | a creative-mode world rule: recipes and buildings need and consume no materials (time still runs: Principle 11) | OPEN |
+| BR25-6 | 21fb1828 | get rid of the big green boxes for walls and roofs | the stick Blueprints' collision Cube takes the ghost material while planned: a big green box round the sticks (LookAt: `/Engine/BasicShapes/Cube` on BP_BuildableFloorBase) | the ghost pass leaves collision-only components alone; the cubes hidden in game | OPEN |
+| BR25-7 | 21fb1828 | (same report) no collision until built | "make sure nothing has collission until it's fully build" (AMOBuildableActor: planned / constructing buildings block pawns) | an unbuilt building blocks only the interaction trace, nothing else, until Complete | OPEN |
+| BR25-8 | 21fb1828 | (same report) firewood | "drop the wood in the fireplace a little so it's more 'in' the ground and give it some randomness so it doesn't look so cartoonishly perfect" (BP_Campfire_StoneRing's FuelStick parts) | sticks lower and jittered (yaw, lean, spacing), edited in place | OPEN |
+| BR25-9 | 7fb1e50f | boulders and trees overlapping in pcg | "make sure trees aren't growing through rocks" (the biome spawner: the tiers never see each other's instances) | a big tier's solid instances become obstacles for the smaller tiers planted after it (landmarks for trees; landmarks and trees for rocks) | OPEN |

@@ -1553,3 +1553,7 @@ C++: MOBiomeDefinitionRow.h (FMOBiomeSpeciesEntry: bLandmark, MaterialOverride),
 ### 2026-10-24 21:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0174
 Status: RELEASE build window + editor (highland crags / landmark tier / granite summits: built, suite 367 / 0, PIE-verified; PIE ended, the editor left open)
 References: CL-0173
+
+### 2026-10-24 22:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0175
+Status: CLAIM (UNCOMMITTED, NOT YET BUILT -- Wes's BR25 batch; please don't edit these): MOBuildableActor.h/.cpp, MOBuildingComponent.h/.cpp, MOBuildProgressComponent.cpp, MOCraftingQueueComponent.cpp, MOCraftingSubsystem.cpp, MOCraftingTypes.h, MOWorldCreationTypes.h/.cpp, MOWorldCreationCheats.cpp, MOWorldCreationWidgets.h/.cpp, MOPCGBiomeSpawnerSettings.h/.cpp, Tests/MOFrameworkTests.cpp, Tests/MOPCGGraphDensityTests.cpp, Config/DefaultEngine.ini, BP_Campfire_StoneRing.uasset, Content/Python/campfire_fuel_layout.py + apply_campfire_fuel_layout.py + make_stone_ring_campfire.py. Committed now: the BR25-1 rock cap and BR25-2 open-geometry removal (DT_Biomes, readback verified).
+References: CL-0174
