@@ -81,12 +81,13 @@ visible in order as the build timer fills up so it looks like you're actually bu
 
 - **The stone-ring campfire.** `BuildCampfire` places `BP_Campfire_StoneRing`, made by `Content/Python/make_stone_ring_campfire.py`. It is
   BP_Campfire with its merged Megascans campfire mesh replaced by loose parts:
-  - ten RiverCobble01 stones (the recipe deposits ten cobbles), staged round the ring;
-  - twenty Firewood01 fuel sticks (below);
-  - three fresh Stick01 sticks beside it;
-  - burnt-firewood pieces and a charred stick in the bed;
+  - ten RiverCobble01 stones (the recipe deposits ten cobbles), staged round the ring, each at a random yaw, tilt (±18°), size (x0.85-1.25)
+    and sink (1-4.5 cm), seeded so a rebuild matches (Wes: "add some random rotation to the stone so they don't look so uniform");
+  - twenty Firewood01 fuel sticks (below), standing inside the ring;
   - BP_Campfire's fire (NFire_03), light and sounds.
-  The placement preview still shows the old merged mesh.
+  No other sticks: the first build also had three fresh sticks beside the ring and burnt pieces in the bed, which read as fuel before any
+  wood went in (Wes: "fireplace sticks visible before firewood being added, some sticks are also on outside of fireplace"). The fresh and
+  burnt sticks are the fuel sticks themselves, so an empty fire is an empty ring. The placement preview still shows the old merged mesh.
 - **The stick buildings.** `make_staged_stick_builds.py` orders each stick Blueprint's sticks: the main ones first (a wall's uprights, a
   floor's boards, a roof's rafters) along the panel, then the crossing rails bottom up. This covers the wall, half wall, floor and roof.
   Rerun it after editing a stick Blueprint.

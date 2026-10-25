@@ -96,6 +96,12 @@
 - **The MCP "died"** -> almost always external (editor closed for a build) -> `ue.py status` re-starts it through the bridge; drive it with curl
   when the harness client is disconnected (Python urllib gets an EMPTY body for `tools/call`). (ue-editor-mcp)
 - **The editor stops ticking after an asset script in PIE** -> `EditorAssetLibrary` refuses every call during play (the log's "The Editor is currently in a play mode"), so `does_asset_exist` says no and `create_asset` opens a modal "Overwrite Existing Object" dialog per call, which blocks the game thread (Oct 24, `item_tint.make` on existing MIs) -> end PIE before any create / save (`item_tint.make` now refuses in PIE). To clear dialogs already open: post WM_CLOSE to the editor's "Overwrite Existing Object" windows (cancel keeps the old asset). Spawning in PIE from Python: no deferred spawn or `add_component_by_class` binding; the engine cheat `summon StaticMeshActor` works, then set its mesh.
+- **`duplicate_asset` returns None onto a path you deleted on disk** (log: "pathspec ... did not match any files") -> the editor's git source
+  control still tracks the deleted file and refuses the new one -> commit the deletion first (`git rm --cached <uasset>`, commit), then rerun
+  the build script. (Oct 24, BP_Campfire_StoneRing rebuild)
+- **A recipe places the wrong actor (a plain `MOContainerActor`) after an asset rebuild** -> the DataTable loaded while its referenced Blueprint
+  was missing and keeps a null class in memory, even once the BP is back -> re-set the row (`ue.py rows set` with the class path) and check
+  the readback. (Oct 24, BuildCampfire)
 - **PIE wedges (can't begin_play)** -> unroot-caused flake after back-to-back sequences -> restart the editor. (dev_status)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
 - **Clicks on editor UI leak keystrokes into the game** -> PIE holds CapturePermanently + LockOnCapture -> Shift+F1 first; stop PIE with Shift+F1 + Stop, never Escape. (ue_pie_computer_testing)

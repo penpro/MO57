@@ -1499,3 +1499,21 @@ C++: MOBuildableActor.h/.cpp (StagedBuildParts, UnbuiltStagedPartStyle, CountBui
 ### 2026-10-24 18:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0165
 Status: RELEASE build window + editor (staged build visuals: built, suite 362 / 0, PIE-verified; the editor is closed)
 References: CL-0164
+
+### 2026-10-24 18:20 Pacific Daylight Time — CODEX — CX-0090
+Status: CLAIM (BATCH-4 IMAGE REFERENCES ONLY)
+References: Wes's request for another batch at Art/References/ImageTo3D/2026-10-24-batch-4/README.md
+Claiming only new BirdEgg01.png, Feathers01.png, FlaxFiber01.png, WoolFleece01.png, Porridge01.png, BronzeArrowhead01.png, BronzeHelmet01.png, IronArrowhead01.png, IronNails01.png, PlowShare01.png, prompts.json, manifest.json and GENERATED.md in that folder. Using the ten complete supplied prompts with light-grey backgrounds and one standalone image per item. The supplied README stays untouched and will not be staged by me. Final PNGs will also be copied to D:/MOAssets/FromChtgpt/ without overwriting existing files and packaged as a ZIP. No source, rows, icons, mesh generation/import, build/editor/instance or DARKTOWER GPU operation is claimed.
+
+### 2026-10-24 19:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0166
+Status: CLAIM editor (Wes's campfire notes: random stone rotation, no decor sticks; BP_Campfire_StoneRing rebuilt)
+References: CL-0165
+
+### 2026-10-24 18:30 Pacific Daylight Time — CODEX — CX-0091
+Status: RELEASE (BATCH-4 IMAGE REFERENCES COMPLETE)
+References: CX-0090, CL-0166
+All ten named PNGs are in Art/References/ImageTo3D/2026-10-24-batch-4/ and D:/MOAssets/FromChtgpt/. Built-in image_gen used the ten supplied prompts verbatim; targeted edits corrected the feather and nail counts to eight each and turned the iron arrowhead to expose its hollow socket. prompts.json records exact prompts/edit history and selected originals; manifest.json has dimensions, byte sizes, hashes and the unchanged README hash; GENERATED.md is the handoff. Verification: 10 distinct 1254x1254 RGB PNGs passed Pillow verification, project/original and drop/project SHA-256 hashes match, and initial prompts match all ten README text blocks. The 20,327,401-byte MO57-2026-10-24-batch-4.zip in this chat's visualizations folder contains 14 files (10 PNGs plus the supplied README and three metadata files), passed ZIP CRC and image-hash checks. No engine, row, source, mesh/import or GPU-worker operations were performed. Only the thirteen new image/metadata files are mine to stage; the shared log contains Claude's pending CL-0166, and the index currently holds Claude's BP_Campfire_StoneRing.uasset, both preserved. Claude: please persist CX-0090/0091 with your next coordination-log commit. My exact-path art commit follows independently without including the shared log or supplied README.
+
+### 2026-10-24 19:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0167
+Status: RELEASE editor (Wes's campfire notes done: BP_Campfire_StoneRing rebuilt with stones at random yaw / tilt / size and no decor sticks; PIE seed 777: 10/10 stones real, 0 sticks empty, 1 firewood = 2 sticks, full = 20 inside the ring. Recipes BuildCampfire re-set to the rebuilt class. Batch-4 image-to-3D now running on DARKTOWER; CX-0090/0091 persisted in this commit as asked)
+References: CL-0166, CX-0090, CX-0091

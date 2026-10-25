@@ -12,7 +12,10 @@ full is one stick visible, compeltely full is 20 sticks visible) and after you b
   each in the planned (ghost) look until the build reaches it (UnbuiltStagedPartStyle Ghost).
 - FuelStick_01..20: the Firewood01 mesh, a log-cabin base then a teepee: AMOCraftingStationActor::FuelStickParts (shown by fuel, charred once
   burnt: CharredFuelMaterial = MI_Firewood_Charred).
-- Decor: three fresh Stick01 sticks piled outside the ring, five charred burnt-firewood pieces in the fire bed.
+- No other sticks (Wes, Oct 24, after seeing it: "fireplace sticks visible before firewood being added, some sticks are also on outside of
+  fireplace"): the fresh and burnt sticks he asked for ARE the fuel sticks -- fresh when laid, charred once burnt. The ring is empty until
+  wood goes in.
+- The stones lie every which way (Wes: "add some random rotation to the stone so they don't look so uniform").
 Every part hangs under the native Mesh component, so the building's collision profile (and the interaction trace) reaches it.
 Refuses if BP_Campfire_StoneRing exists (delete it on disk with the editor closed to rebuild). Prints STONERING lines.
 """
@@ -29,8 +32,6 @@ DST = "/MOFramework/BP_Campfire_StoneRing"
 MAT_DIR = "/MOFramework/Buildings/Campfire"
 COBBLE = "/MOFramework/Items/RiverCobble01/Medium/wd5mbhd_tier_2/StaticMeshes/wd5mbhd_tier_2"
 FIREWOOD = "/Game/Fab/Megascans/3D/Firewood_tiukbj3qx/Medium/tiukbj3qx_tier_2/StaticMeshes/tiukbj3qx_tier_2"
-STICK = "/MOFramework/Items/Stick01/Medium/uehjfcofa_tier_2/StaticMeshes/uehjfcofa_tier_2"
-BURNT = "/Game/Fab/Megascans/3D/Burnt_Firewood_udthdasiw/Medium/udthdasiw_tier_2/StaticMeshes/udthdasiw_tier_2"
 MESH_Z = -6.0          # BP_Campfire's Mesh component sits 6 cm down; parts are placed relative to it
 RING_RADIUS = 38.0     # cobble centres; ten 24 cm cobbles close the ring
 FUEL_SCALE = 1.35      # 27 cm firewood -> 36 cm sticks
@@ -48,9 +49,7 @@ def log(msg):
 # --- charred materials (near-black albedo, dull) ---------------------------------------------------------------------------------------
 charred_firewood = item_tint.make(MAT_DIR + "/MI_Firewood_Charred", "/Game/Fab/Megascans/3D/Firewood_tiukbj3qx/Medium/tiukbj3qx_tier_2/Materials/MI_tiukbj3qx",
                                   tint=(0.07, 0.06, 0.055), Brightness=0.35, Saturation=0.1, Min_Roughness=0.6)
-charred_stick = item_tint.make(MAT_DIR + "/MI_Stick_Charred", "/MOFramework/Items/Stick01/Medium/uehjfcofa_tier_2/Materials/MI_uehjfcofa",
-                               tint=(0.07, 0.06, 0.055), Brightness=0.35, Saturation=0.1, Min_Roughness=0.6)
-log("materials %s %s" % (charred_firewood, charred_stick))
+log("material %s" % charred_firewood)
 
 # --- the blueprint ----------------------------------------------------------------------------------------------------------------------
 if EAL.does_asset_exist(DST):
@@ -87,12 +86,12 @@ def add_part(name, mesh_path, loc, rot, scale, material=None):
 # Stones: round the ring, numbered in build order.
 stones = []
 for k in range(10):
-    a = 2 * math.pi * k / 10 + rng.uniform(-0.06, 0.06)
-    r = RING_RADIUS + rng.uniform(-2.0, 2.0)
-    yaw = math.degrees(a) + 90 + rng.uniform(-25, 25)
-    s = rng.uniform(0.92, 1.15)
+    a = 2 * math.pi * k / 10 + rng.uniform(-0.1, 0.1)
+    r = RING_RADIUS + rng.uniform(-3.5, 3.5)
+    s = rng.uniform(0.85, 1.25)
     name = "Stone_%02d" % (k + 1)
-    add_part(name, COBBLE, (r * math.cos(a), r * math.sin(a), -2.5), (yaw, rng.uniform(-8, 8), rng.uniform(-8, 8)), s)
+    # Any yaw, a real tilt either way, sunk by a random few cm: gathered cobbles dropped round a fire, not a laid kerb.
+    add_part(name, COBBLE, (r * math.cos(a), r * math.sin(a), rng.uniform(-4.5, -1.0)), (rng.uniform(0, 360), rng.uniform(-18, 18), rng.uniform(-18, 18)), s)
     stones.append(name)
 
 # Fuel: a log-cabin base of four, then a teepee of sixteen, laid alternately round so any amount stands balanced.
@@ -115,14 +114,6 @@ for n, k in enumerate(order):
     add_part(name, FIREWOOD, centre, (yaw, pitch, rng.uniform(0, 360)), FUEL_SCALE)
     fuel.append(name)
 
-# Decor: fresh sticks piled beside the ring, burnt pieces in the bed.
-for i in range(3):
-    add_part("FreshStick_%02d" % (i + 1), STICK, (72 + rng.uniform(-4, 4), 28 + i * 5, 3 + i * 4.5), (rng.uniform(-30, 30) + 15, 0, rng.uniform(0, 360)), 1.0)
-for i in range(5):
-    a = rng.uniform(0, 2 * math.pi)
-    r = rng.uniform(0, 14)
-    add_part("BurntPiece_%02d" % (i + 1), BURNT, (r * math.cos(a), r * math.sin(a), 1.5), (rng.uniform(0, 360), rng.uniform(-6, 6), rng.uniform(-10, 10)), 1.6)
-add_part("BurntStick_01", STICK, (6, -4, 2.5), (35, 0, 0), 0.55, charred_stick)
 
 # --- class defaults ---------------------------------------------------------------------------------------------------------------------
 unreal.BlueprintEditorLibrary.compile_blueprint(bp)
