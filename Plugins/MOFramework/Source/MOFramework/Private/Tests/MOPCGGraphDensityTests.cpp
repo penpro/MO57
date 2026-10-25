@@ -506,4 +506,25 @@ bool FMOPCG_LandmarkTierReachesFar::RunTest(const FString& Parameters)
 	return true;
 }
 
+// BR25-9 (Wes, Oct 24 2026: "make sure trees aren't growing through rocks"): a later tier skips a point whose footprint reaches a planted obstacle.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_TreesKeepOutOfBoulders,
+	"MOFramework.PCG.TreesKeepOutOfBoulders",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_TreesKeepOutOfBoulders::RunTest(const FString& Parameters)
+{
+	using MOPCGBiomeSpawner::FObstacle;
+	const TArray<FObstacle> Boulders = { { FVector2D(0.0, 0.0), 300.0f }, { FVector2D(5000.0, 0.0), 150.0f } };
+	const float Trunk = MOPCGBiomeSpawner::FootprintRadius(nullptr, FVector(1.0), /*bTree=*/true);
+	TestEqual(TEXT("a x1 tree's trunk is 45 cm"), Trunk, 45.0f);
+	TestTrue(TEXT("a tree 2 m from a 3 m boulder's centre is inside it"), MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(200.0, 0.0), Trunk, Boulders));
+	TestTrue(TEXT("a tree whose trunk just reaches the boulder's edge is refused"), MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(340.0, 0.0), Trunk, Boulders));
+	TestFalse(TEXT("CONTROL: a tree 4 m out stands"), MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(400.0, 0.0), Trunk, Boulders));
+	TestFalse(TEXT("CONTROL: no obstacles, nothing refused"), MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(0.0, 0.0), Trunk, TArray<FObstacle>()));
+	TestTrue(TEXT("the second boulder counts too"), MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(5100.0, 50.0), Trunk, Boulders));
+	TestEqual(TEXT("a x2 tree's trunk is 90 cm"), MOPCGBiomeSpawner::FootprintRadius(nullptr, FVector(2.0), /*bTree=*/true), 90.0f);
+	TestEqual(TEXT("a rock with no mesh: 0.4 x 50 cm x scale 3"), MOPCGBiomeSpawner::FootprintRadius(nullptr, FVector(3.0), /*bTree=*/false), 60.0f, 0.01f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

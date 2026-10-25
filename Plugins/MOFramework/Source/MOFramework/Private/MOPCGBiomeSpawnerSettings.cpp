@@ -274,6 +274,75 @@ bool MOPCGBiomeSpawner::SpeciesPassesFilter(EMOBiomeSpeciesFilter Filter, const 
 	return PassesSpeciesFilter(Filter, Species);
 }
 
+bool MOPCGBiomeSpawner::OverlapsObstacle(const FVector2D& Point, float Radius, TConstArrayView<FObstacle> Obstacles)
+{
+	for (const FObstacle& O : Obstacles)
+	{
+		const double Reach = double(Radius) + O.Radius;
+		if (FVector2D::DistSquared(Point, O.Center) < Reach * Reach)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+float MOPCGBiomeSpawner::FootprintRadius(const UStaticMesh* Mesh, const FVector& Scale, bool bTree)
+{
+	if (bTree)
+	{
+		return 45.0f * float(FMath::Max(Scale.X, Scale.Y));   // a trunk with its flare
+	}
+	const FVector Extent = Mesh ? FVector(Mesh->GetBoundingBox().GetExtent()) : FVector(50.0);
+	return 0.4f * float(FMath::Max(Extent.X * Scale.X, Extent.Y * Scale.Y));
+}
+
+namespace
+{
+	const FName NAME_MOLandmark(TEXT("MOLandmark"));
+	const FName NAME_MOTreeTrunk(TEXT("MOTreeTrunk"));
+
+	/** A solid rock species: what must not stand inside a tree, nor a tree inside it. */
+	bool IsRockSpecies(const FMOBiomeSpeciesEntry& Sp)
+	{
+		static const FName Rock(TEXT("MOResource_Rock")), CoverRock(TEXT("MOBiomeCover_Rock"));
+		return Sp.HISMTag == Rock || Sp.HISMTag == CoverRock;
+	}
+
+	/** The planted obstacles in Bounds (MOPCGBiomeSpawner::FObstacle): the landmark instances, and the tree trunks too when bWithTrees. */
+	void GatherObstacles(const UWorld* World, const FBox& Bounds, bool bWithTrees, TArray<MOPCGBiomeSpawner::FObstacle>& Out)
+	{
+		if (!World)
+		{
+			return;
+		}
+		for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+		{
+			const UInstancedStaticMeshComponent* ISM = *It;
+			if (!IsValid(ISM) || ISM->GetWorld() != World || !ISM->IsRegistered())
+			{
+				continue;
+			}
+			const bool bLandmark = ISM->ComponentHasTag(NAME_MOLandmark);
+			const bool bTree = !bLandmark && bWithTrees && ISM->ComponentHasTag(NAME_MOTreeTrunk);
+			if ((!bLandmark && !bTree) || !ISM->Bounds.GetBox().Intersect(Bounds))
+			{
+				continue;
+			}
+			const UStaticMesh* Mesh = ISM->GetStaticMesh();
+			const int32 Count = ISM->GetInstanceCount();
+			for (int32 i = 0; i < Count; ++i)
+			{
+				FTransform Xf;
+				if (ISM->GetInstanceTransform(i, Xf, /*bWorldSpace=*/true) && Bounds.IsInsideXY(Xf.GetLocation()))
+				{
+					Out.Add({ FVector2D(Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(Mesh, Xf.GetScale3D(), bTree) });
+				}
+			}
+		}
+	}
+}
+
 namespace
 {
 	std::atomic<int32> GBiomeSpawnerRuns{0};
@@ -857,6 +926,17 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	}, bSingleThread ? EParallelForFlags::ForceSingleThread : EParallelForFlags::None);
 	const double ParallelDoneTime = FPlatformTime::Seconds();
 
+	// Trees never grow through boulders (Wes, Oct 24 2026: "make sure trees aren't growing through rocks", BR25-9): the bigger tier's solid instances round
+	// these points already stand (MOPCGBiomeSpawner::FObstacle) -- the landmarks for the trees, the landmarks and the trees for the large tier's rocks.
+	const bool bTreeTier = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::TreesOnly;
+	const bool bLargeTier = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::LargeOnly;
+	TArray<MOPCGBiomeSpawner::FObstacle> Obstacles;
+	if ((bTreeTier || bLargeTier) && InputBounds.IsValid)
+	{
+		GatherObstacles(TargetActor->GetWorld(), InputBounds.ExpandBy(FVector(4000.0, 4000.0, 1.0e6)), /*bWithTrees=*/bLargeTier, Obstacles);
+	}
+	int32 TotalBlocked = 0;
+
 	// Merge in input order (the buckets' instance order, and so the components' instance indices, stay deterministic).
 	// A tree felled or a boulder quarried stays gone when its cell is generated again (UMOWorldRemovalSubsystem).
 	const UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(TargetActor);
@@ -879,6 +959,13 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		}
 		const FBiomeEntry& Chosen = Biomes[R.BiomeIndex];
 		const FMOBiomeSpeciesEntry& Sp = *R.Species;
+		if (!Obstacles.IsEmpty() && ((bTreeTier && IsTreeSpecies(Sp)) || (bLargeTier && IsRockSpecies(Sp)))
+			&& MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(R.Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(R.Mesh, R.Xf.GetScale3D(), bTreeTier), Obstacles))
+		{
+			++TotalSuppressed;
+			++TotalBlocked;
+			continue;
+		}
 		UMaterialInterface* Material = Sp.MaterialOverride.Get();   // loaded with the meshes above; a recoloured scan is a component of its own
 		const FString Key = FString::Printf(TEXT("%s|%s|%s"), *R.Mesh->GetPathName(), *Chosen.Id.ToString(), Material ? *Material->GetPathName() : TEXT(""));
 		FSpeciesBucket& Bucket = Buckets.FindOrAdd(Key);
@@ -889,11 +976,13 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		Bucket.ResourceNodeId = Sp.ResourceNodeId;
 		Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
 		Bucket.Collision = Sp.Collision;
+		Bucket.bLandmark = Sp.bLandmark;
+		Bucket.bTreeTrunk = !Sp.bLandmark && IsTreeSpecies(Sp);
 		Bucket.Transforms.Add(R.Xf);
 		++TotalAccepted;
 	}
 
-	FString StageSummary = FString::Printf(TEXT("setup %.0f parallel %.0f merge %.0f"),
+	FString StageSummary = FString::Printf(TEXT("blocked %d (of %d obstacles) setup %.0f parallel %.0f merge %.0f"), TotalBlocked, Obstacles.Num(),
 		(PlantStartTime - ExecStartTime) * 1000.0, (ParallelDoneTime - PlantStartTime) * 1000.0, (FPlatformTime::Seconds() - ParallelDoneTime) * 1000.0);
 	if (bProfile)
 	{
@@ -1065,6 +1154,10 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 				Params.Descriptor.bCanEverAffectNavigation = false;
 			}
 			Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
+			if (Bucket.bLandmark || Bucket.bTreeTrunk)
+			{
+				Params.Descriptor.ComponentTags.Add(Bucket.bLandmark ? NAME_MOLandmark : NAME_MOTreeTrunk);   // an obstacle for the later tiers (GatherObstacles)
+			}
 			if (Bucket.bAutoSweep)
 			{
 				// Opt decorative ground cover into the terrain-mod subsystem's

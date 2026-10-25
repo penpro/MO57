@@ -105,6 +105,25 @@ namespace MOPCGBiomeSpawner
 {
 	/** Whether a node with this filter plants this species of a biome's main palette (the tier split: by HISMTag, the young-tree rule and bLandmark). For tests. */
 	MOFRAMEWORK_API bool SpeciesPassesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Species);
+
+	/**
+	 * A solid instance a later tier must not plant into (Wes, Oct 24 2026: "make sure trees aren't growing through rocks"): its centre on the ground and its
+	 * footprint radius. The tiers are separate nodes on separate grids; the PCG scheduler generates the larger grids first (with the larger radii), so a node
+	 * finds the bigger tier's instances round its points already standing: the landmarks (component tag MOLandmark) for the trees, the landmarks and the
+	 * trees (MOTreeTrunk) for the large tier's rocks.
+	 */
+	struct FObstacle
+	{
+		FVector2D Center = FVector2D::ZeroVector;
+		float Radius = 0.0f;
+	};
+
+	/** Does a footprint of Radius at Point reach any obstacle (centres closer than the two radii together)? */
+	MOFRAMEWORK_API bool OverlapsObstacle(const FVector2D& Point, float Radius, TConstArrayView<FObstacle> Obstacles);
+
+	/** A planted instance's footprint radius (cm): a tree its trunk (its crown may spread over a rock), anything else 0.4 of its mesh's horizontal extent
+	 *  (a boulder's body, not its bounding box's corners). */
+	MOFRAMEWORK_API float FootprintRadius(const UStaticMesh* Mesh, const FVector& Scale, bool bTree);
 }
 
 UCLASS(BlueprintType, ClassGroup=(MO))
@@ -263,6 +282,9 @@ public:
 		EMOSpeciesCollision Collision = EMOSpeciesCollision::Auto;
 		/** Optional material for every slot (a recoloured scan: an ore on a rock mesh). Part of the component's identity. */
 		TObjectPtr<UMaterialInterface> Material = nullptr;
+		/** What a later tier must not plant into (MOPCGBiomeSpawner::FObstacle): its components are tagged MOLandmark / MOTreeTrunk. */
+		bool bLandmark = false;
+		bool bTreeTrunk = false;
 		TArray<FTransform> Transforms;
 	};
 
