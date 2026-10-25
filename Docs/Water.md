@@ -109,6 +109,12 @@
   almost still". Waves 0.03 of the lake preset's height (`mo.Lakes.WaveScale`, was 0.1; length 0.2, noise 0.1 as before) and the surface's
   animated normal maps (Oceanology Flipbook: near / mid / far strength and frame rate) a quarter (`mo.Lakes.NormalScale`), set as each lake
   spawns (`UMOUplandLakeSubsystem`). The round lakes are BR23-13.
+- **The wave scales never reached the water (found Oct 25 2026, Wes: "the lakes are still way too wavy, it seems like the previous
+  adjustments aren't taking affect").** Measured in PIE: each lake's Gerstner solver held 1.5 / 0.6 / 0.3 / 0.15 cm (0.03 of the preset)
+  while its water material drew 50 / 20 / 10 / 5 cm. `AOceanologyLake::Init` runs from OnConstruction AND BeginPlay -- both inside
+  `FinishSpawning` -- and pushes the waves into the material there; the scaling came after it, and nothing pushed again until a lake was
+  removed (`ReelectWaveTimeSource`'s re-init: why it looked "hit or miss"). `SpawnLake` now calls the solver's `UpdateWaves()` after
+  scaling. Every wave tuning since Oct 18 (0.4, 0.1, 0.03, the wavelength and speed) only ever reached the CPU wave query until then.
 - **Shore wetness:** the ocean lays a 1 km shoreline wetness decal; its preset made everything within 4 m of the water 75 % metallic at
   roughness 0.1 -- beach rocks and wet skin read as chrome ("looks metallic instead of wet"). `UMOSceneLightingSubsystem` sets it a tick after
   the ocean loads its preset: metallic 0, roughness 0.25, a 1 m band (`mo.Water.ShoreWetMetallic` / `ShoreWetRoughness` / `ShoreWetRadius`).

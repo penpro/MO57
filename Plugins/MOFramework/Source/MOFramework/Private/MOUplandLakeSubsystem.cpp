@@ -176,6 +176,11 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 		Gerstner->Wave_2.Speed_2 *= SpeedScale;
 		Gerstner->Wave_3.Speed_3 *= SpeedScale;
 		Gerstner->Wave_4.Speed_4 *= SpeedScale;
+		// Push them into the water material: AOceanologyLake::Init (run from OnConstruction and BeginPlay, i.e. inside FinishSpawning above) already sent
+		// the preset's full-size waves to it, and nothing sends them again until a lake is removed (ReelectWaveTimeSource). Without this the scales
+		// reached only the CPU wave query; the surface kept the sea swell (Wes, Oct 25 2026: "the lakes are still way too wavy, it seems like the
+		// previous adjustments aren't taking affect").
+		Gerstner->UpdateWaves();
 	}
 	// Oceanology makes the wave solver with NewObject in AOceanologyWaterParent::SetupWaveSolvers and never registers it. A lake placed in a level gets it
 	// registered on load (its solver was saved with it); a lake SPAWNED at runtime -- every upland lake -- kept an inactive, never-ticking solver, so the lake
