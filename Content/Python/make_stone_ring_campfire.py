@@ -10,7 +10,7 @@ full is one stick visible, compeltely full is 20 sticks visible) and after you b
 - A copy of BP_Campfire (its fire NFire_03, light, sounds, station settings), its merged Megascans campfire mesh cleared.
 - Stone_01..10: the RiverCobble01 mesh (the recipe deposits 10 river cobbles) in a ring, numbered round it: AMOBuildableActor::StagedBuildParts,
   each in the planned (ghost) look until the build reaches it (UnbuiltStagedPartStyle Ghost).
-- FuelStick_01..20: the Firewood01 mesh, a log-cabin base then a teepee: AMOCraftingStationActor::FuelStickParts (shown by fuel, charred once
+- FuelStick_01..20: the Firewood01 mesh, a log-cabin base then a teepee (campfire_fuel_layout.py): AMOCraftingStationActor::FuelStickParts (shown by fuel, charred once
   burnt: CharredFuelMaterial = MI_Firewood_Charred).
 - No other sticks (Wes, Oct 24, after seeing it: "fireplace sticks visible before firewood being added, some sticks are also on outside of
   fireplace"): the fresh and burnt sticks he asked for ARE the fuel sticks -- fresh when laid, charred once burnt. The ring is empty until
@@ -23,6 +23,7 @@ import math
 import random
 
 import unreal
+import campfire_fuel_layout
 import item_tint
 
 EAL = unreal.EditorAssetLibrary
@@ -34,9 +35,6 @@ COBBLE = "/MOFramework/Items/RiverCobble01/Medium/wd5mbhd_tier_2/StaticMeshes/wd
 FIREWOOD = "/Game/Fab/Megascans/3D/Firewood_tiukbj3qx/Medium/tiukbj3qx_tier_2/StaticMeshes/tiukbj3qx_tier_2"
 MESH_Z = -6.0          # BP_Campfire's Mesh component sits 6 cm down; parts are placed relative to it
 RING_RADIUS = 38.0     # cobble centres; ten 24 cm cobbles close the ring
-FUEL_SCALE = 1.35      # 27 cm firewood -> 36 cm sticks
-TEEPEE_FOOT = 21.0
-TEEPEE_PITCH = 58.0
 
 lines = []
 rng = random.Random(57)
@@ -94,24 +92,10 @@ for k in range(10):
     add_part(name, COBBLE, (r * math.cos(a), r * math.sin(a), rng.uniform(-4.5, -1.0)), (rng.uniform(0, 360), rng.uniform(-18, 18), rng.uniform(-18, 18)), s)
     stones.append(name)
 
-# Fuel: a log-cabin base of four, then a teepee of sixteen, laid alternately round so any amount stands balanced.
+# Fuel: a log-cabin base of four, then a teepee of sixteen (campfire_fuel_layout.py: lower and less perfect since Oct 24 2026, BR25-8).
 fuel = []
-half = 13.35 * FUEL_SCALE
-base = [((0, -9, 3.5), 0), ((0, 9, 3.5), 0), ((-9, 0, 9.5), 90), ((9, 0, 9.5), 90)]
-for i, (p, yaw) in enumerate(base):
-    name = "FuelStick_%02d" % (i + 1)
-    add_part(name, FIREWOOD, p, (yaw + rng.uniform(-6, 6), 0, rng.uniform(0, 360)), FUEL_SCALE)
-    fuel.append(name)
-order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
-for n, k in enumerate(order):
-    a = 2 * math.pi * k / 16 + rng.uniform(-0.05, 0.05)
-    foot = (TEEPEE_FOOT * math.cos(a), TEEPEE_FOOT * math.sin(a), 1.5)
-    yaw = math.degrees(a) + 180                       # pointing in, toward the centre
-    pitch = TEEPEE_PITCH + rng.uniform(-4, 4)
-    d = (math.cos(math.radians(yaw)) * math.cos(math.radians(pitch)), math.sin(math.radians(yaw)) * math.cos(math.radians(pitch)), math.sin(math.radians(pitch)))
-    centre = (foot[0] + d[0] * half, foot[1] + d[1] * half, foot[2] + d[2] * half)
-    name = "FuelStick_%02d" % (len(base) + n + 1)
-    add_part(name, FIREWOOD, centre, (yaw, pitch, rng.uniform(0, 360)), FUEL_SCALE)
+for name, loc, rot, scale in campfire_fuel_layout.layout():
+    add_part(name, FIREWOOD, loc, rot, scale)
     fuel.append(name)
 
 
