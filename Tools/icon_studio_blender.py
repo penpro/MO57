@@ -146,6 +146,15 @@ def build_material(item_dir, info):
         normal_map = nodes.new("ShaderNodeNormalMap")
         links.new(color, normal_map.inputs["Color"])
         links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+    if not info.get("two_sided", True):
+        # The engine draws one face of a one-sided material; Cycles shades both, so a thin shell's inside showed through its outside
+        # in patches (BronzeHelmet01, Oct 24). Back faces turn clear, as in the game. (Exports before Oct 24 carry no flag: unchanged.)
+        backfacing = nodes.new("ShaderNodeNewGeometry").outputs["Backfacing"]
+        mix = nodes.new("ShaderNodeMixShader")
+        links.new(backfacing, mix.inputs["Fac"])
+        links.new(bsdf.outputs["BSDF"], mix.inputs[1])
+        links.new(nodes.new("ShaderNodeBsdfTransparent").outputs["BSDF"], mix.inputs[2])
+        links.new(mix.outputs["Shader"], nodes["Material Output"].inputs["Surface"])
     return material
 
 

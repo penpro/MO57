@@ -96,6 +96,9 @@
 - **The MCP "died"** -> almost always external (editor closed for a build) -> `ue.py status` re-starts it through the bridge; drive it with curl
   when the harness client is disconnected (Python urllib gets an EMPTY body for `tools/call`). (ue-editor-mcp)
 - **The editor stops ticking after an asset script in PIE** -> `EditorAssetLibrary` refuses every call during play (the log's "The Editor is currently in a play mode"), so `does_asset_exist` says no and `create_asset` opens a modal "Overwrite Existing Object" dialog per call, which blocks the game thread (Oct 24, `item_tint.make` on existing MIs) -> end PIE before any create / save (`item_tint.make` now refuses in PIE). To clear dialogs already open: post WM_CLOSE to the editor's "Overwrite Existing Object" windows (cancel keeps the old asset). Spawning in PIE from Python: no deferred spawn or `add_component_by_class` binding; the engine cheat `summon StaticMeshActor` works, then set its mesh.
+- **An FBX export of a Nanite mesh is a coarse stand-in** -> `StaticMeshExporterFBX` writes render LOD0, which for a Nanite mesh is its
+  fallback (BronzeHelmet01: 2,257 of 24,999 triangles; the thin shell's inside poked through its outside in the icon) -> export a transient
+  non-Nanite copy built from `get_static_mesh_description(0)` (`icon_studio_export._full_detail`). (Oct 24)
 - **`duplicate_asset` returns None onto a path you deleted on disk** (log: "pathspec ... did not match any files") -> the editor's git source
   control still tracks the deleted file and refuses the new one -> commit the deletion first (`git rm --cached <uasset>`, commit), then rerun
   the build script. (Oct 24, BP_Campfire_StoneRing rebuild)

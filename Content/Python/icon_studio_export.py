@@ -94,6 +94,34 @@ def _master(material):
     return material
 
 
+def _two_sided(material):
+    """Whether the engine draws both faces of this material: an instance's override wins, else its master's setting."""
+    mi = material
+    while isinstance(mi, unreal.MaterialInstance):
+        overrides = mi.get_editor_property("base_property_overrides")
+        if overrides.get_editor_property("override_two_sided"):
+            return bool(overrides.get_editor_property("two_sided"))
+        mi = mi.get_editor_property("parent")
+    master = _master(material)
+    return bool(master and master.get_editor_property("two_sided"))
+
+
+def _full_detail(mesh):
+    """The mesh the icon is rendered from. A Nanite mesh's render LOD0 (what the FBX exporter writes) is its coarse fallback --
+    BronzeHelmet01: 2,257 of 24,999 triangles, and its thin shell broke up in the icon (Oct 24) -- so export a transient non-Nanite copy
+    built from the source mesh description instead. The asset itself is not touched."""
+    if not mesh.get_editor_property("nanite_settings").enabled:
+        return mesh
+    try:
+        copy = unreal.new_object(unreal.StaticMesh)
+        copy.set_editor_property("static_materials", mesh.static_materials)
+        copy.build_from_static_mesh_descriptions([mesh.get_static_mesh_description(0)], False)
+        return copy
+    except Exception as e:  # no source description (cooked content): the fallback is still better than no icon
+        unreal.log_warning("icon studio: %s exports its Nanite fallback (%s)" % (mesh.get_name(), e))
+        return mesh
+
+
 def export_item(item_id, mesh_path, out_root, scale=None, override=None):
     mesh = unreal.load_asset(mesh_path)
     if not isinstance(mesh, unreal.StaticMesh):
@@ -103,7 +131,7 @@ def export_item(item_id, mesh_path, out_root, scale=None, override=None):
     options = unreal.FbxExportOption()
     options.collision = False
     options.level_of_detail = False
-    if not _export(mesh, folder + "/mesh.fbx", unreal.StaticMeshExporterFBX(), options):
+    if not _export(_full_detail(mesh), folder + "/mesh.fbx", unreal.StaticMeshExporterFBX(), options):
         return "FAIL %s: mesh export" % item_id
     slots = []
     for index, slot in enumerate(mesh.static_materials):
@@ -112,7 +140,7 @@ def export_item(item_id, mesh_path, out_root, scale=None, override=None):
             material = unreal.load_asset(override) or material
         master = _master(material)
         info = {"slot": index, "name": str(slot.material_slot_name),
-                "kind": "foliage" if master and "Foliage" in master.get_name() else "opaque"}
+                "kind": "foliage" if master and "Foliage" in master.get_name() else "opaque", "two_sided": _two_sided(material)}
         if isinstance(material, unreal.MaterialInstance):
             for param, key in PARAMS:
                 tex = mel.get_material_instance_texture_parameter_value(material, param)
