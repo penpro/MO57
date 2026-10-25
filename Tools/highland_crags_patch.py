@@ -32,12 +32,17 @@ import sys
 CRAG_GROUP = 8
 CRAG_RADIUS_CM = 12000.0
 CRAG_BIOMES = {"RockyHighland": 1.0, "AlpineHeath": 0.6, "AlpineRock": 1.2}
-CLIFF_DENSITY = 0.3          # per hectare per formation mesh, authored (realised ~0.56x of it on average; ~2.4 / ha each inside a core)
+# Oct 25 2026 evening (BR25-15), Wes of the TRELLIS formations: "still look like garbage up close and they have holes in them where you can see
+# light through them ... scale them down and make more of them in clusters": x0.4-0.8 (was 0.8-1.6, which had doubled the texture stretch) and
+# 2.5x as many; their materials are two-sided (Content/Python/trellis_cliffs_two_sided.py: no light through the holes). The Nordic cliff -- his
+# reference for good, "properly scaled and not sticking out of the ground" -- keeps its size and its own density.
+CLIFF_DENSITY = 0.75         # per hectare per TRELLIS formation mesh, authored (realised ~0.56x of it on average)
+NORDIC_CLIFF_DENSITY = 0.3   # per hectare, the Nordic cliff in the crags
 BOULDER_RING_DENSITY = 0.3   # per hectare per boulder mesh round the crags
 # The formations' size (their meshes are 23-30 m): x0.5-1.05 until Oct 25, then x0.8-1.6, 24-48 m (Wes: "they're also not very large
 # compared to what i thought they were going to be"; the rock detail layer keeps them crisp up close at any size: rock_detail_layer.py).
-CRAG_MIN_SCALE = 0.8
-CRAG_MAX_SCALE = 1.6
+CRAG_MIN_SCALE = 0.4
+CRAG_MAX_SCALE = 0.8
 CLIFFS = ["Cliff_BroadCliffBlock01", "Cliff_SheerBlockTower01", "Cliff_LeaningSlabStack01", "Cliff_OverhangingButtress01"]
 NORDIC_CLIFF = "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/SM_venrdcgga_RM_N1.SM_venrdcgga_RM_N1"
 COAST_GROUP = 9
@@ -87,7 +92,7 @@ def main():
                           "bLandmark": True, "MaterialOverride": granite})
                 crags.append(e)
             e = copy.deepcopy(crags[0])   # the Dark Ruins cliff: a fifth formation, its own (Smart) material, 11-22 m
-            e.update({"Mesh": NORDIC_CLIFF, "MaterialOverride": "None",
+            e.update({"Mesh": NORDIC_CLIFF, "MaterialOverride": "None", "DensityPerHectare": round(NORDIC_CLIFF_DENSITY * k, 3),
                       "MinScale": 0.8, "MaxScale": 1.6, "SinkFraction": 0.2})
             crags.append(e)
             for b in [e for e in kept if e["ScaleBias"] == 2]:   # the biome's large boulders, strewn round the formations

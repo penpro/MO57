@@ -196,6 +196,13 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
     modulating the bake and its normal blended angle-correctly into the bake's; Detail Size 200 cm, albedo 0.5, normal 0.7 (group
     "Rock Detail"). On for the four formations' `MI_*_MO` (every rock-type variant inherits it). Shots from the same camera:
     `D:/MOAssets/previews/crag_close_off.png` / `_on.png` (2.5 m: the bake's smear and chart seams vs granite grain and pits).
+  - **Smaller and more of them, no light through them** (Oct 25 evening, BR25-15; Wes: "still look like garbage up close and they have holes in
+    them where you can see light through them ... scale them down and make more of them in clusters"): x0.4-0.8 (12-23 m; x0.8-1.6 had
+    doubled the texture stretch) and 2.5x the density (`highland_crags_patch.py` CLIFF_DENSITY 0.75); the Nordic cliff keeps x0.8-1.6 and its
+    own 0.3 / ha (his "these cliffs look pretty good ... properly scaled"). The image-to-3D shells are not watertight: through a gap the far
+    wall's culled back faces showed the sky. Every material instance under `/Game/ImageTo3D/Cliffs` is two-sided now (a base-property
+    override, `Content/Python/trellis_cliffs_two_sided.py`): the inner wall draws instead. Shots: `D:/MOAssets/previews/br25b/crags_after_wide.png`,
+    `crags_after_close.png`.
   - **The Huge Nordic Coastal Cliff** (Oct 24 night, from the Dark Ruins Megascans sample, `Docs/DarkRuins_Assets.md`: 14 x 8 x 9 m, open only
     underneath) is a fifth crag formation in its own scanned material (x0.8-1.6, sunk 20 %) and grows in clusters on NordicStrand's coast (clump
     group 9, period 320 m, core 0.65, 0.35 / ha). PIE seed 777 (AlpineRock): 333 of them against 299-341 of each TRELLIS formation, as authored.
