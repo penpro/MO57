@@ -28,6 +28,7 @@
 #include "MOIdentityComponent.h"
 #include "MOInteractableComponent.h"
 #include "MOBuildProgressComponent.h"
+#include "MOBuildingComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
@@ -147,14 +148,24 @@ void AMOBuildableActor::BeginPlay()
 	// when the building leaves ghost mode.
 	if (!bIsGhost)
 	{
-		ApplyStructuralCollisionProfile(FName("IgnoreOnlyPawn"));
+		ApplyUnbuiltCollision();
 	}
+
+	// The planned look shows only while a player of this machine is placing (ApplyGhostVisibility).
+	LocalPlacementModeHandle = UMOBuildingComponent::OnLocalPlacementModeChanged().AddUObject(this, &AMOBuildableActor::HandleLocalPlacementModeChanged);
 
 	// A client that joins after the building was finished gets its replicated state before BeginPlay bound OnConstructionCompleted above.
 	if (!HasAuthority() && IsComplete())
 	{
 		EnterCompletedState();
 	}
+}
+
+void AMOBuildableActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UMOBuildingComponent::OnLocalPlacementModeChanged().Remove(LocalPlacementModeHandle);
+	LocalPlacementModeHandle.Reset();
+	Super::EndPlay(EndPlayReason);
 }
 
 // ============================================================================
@@ -219,12 +230,12 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 	// NoCollision and the player can't right-click to manage construction.
 	RestoreGhostCollisionCache();
 
-	// Apply the under-construction profile to the structural subtree (Mesh
+	// Apply the under-construction collision to the structural subtree (Mesh
 	// + every static-mesh descendant). This is the single source of truth
 	// for under-construction collision — overrides any BP NoCollision on
-	// the visible cube child so right-click traces land while the player
-	// can still walk through.
-	ApplyStructuralCollisionProfile(FName("IgnoreOnlyPawn"));
+	// the visible cube child so right-click traces land, and nothing else
+	// collides with a plan (ApplyUnbuiltCollisionTo).
+	ApplyUnbuiltCollision();
 
 	// Enable interaction so player can configure and start build
 	if (InteractableComponent)
@@ -473,8 +484,8 @@ void AMOBuildableActor::EnterCompletedState()
 {
 	SetCompletedVisual();
 
-	// Promote the structural subtree from IgnoreOnlyPawn (walk-through with
-	// hit-trace during construction) to BlockAll now that the building is
+	// Promote the structural subtree from the unbuilt collision (the interaction
+	// trace only, ApplyUnbuiltCollisionTo) to BlockAll now that the building is
 	// real geometry. ApplyStructuralCollisionProfile propagates to every
 	// static-mesh descendant of MeshComponent, so the visible cube child
 	// becomes solid even if its BP-defined profile was NoCollision.
@@ -574,7 +585,7 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 	}
 
 	// Update visuals based on state. Complete goes through the shared
-	// completed-state routine: BeginPlay applied IgnoreOnlyPawn before this
+	// completed-state routine: BeginPlay applied the unbuilt collision before this
 	// ran, so restoring visuals alone left loaded walls walk-through.
 	EMOBuildState State = GetBuildState();
 	if (State == EMOBuildState::Complete)
@@ -591,11 +602,8 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 		// bIsGhost tracks placement preview mode, not build state: a loaded unfinished building wears the planned look, with interaction
 		RefreshBuildStateVisual();
 
-		// Enable collision and interaction for placed ghost
-		if (MeshComponent)
-		{
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		}
+		// The unbuilt collision (the interaction trace only) and interaction for a placed plan
+		ApplyUnbuiltCollision();
 		if (InteractableComponent)
 		{
 			InteractableComponent->SetCanInteract(true);
@@ -619,6 +627,7 @@ void AMOBuildableActor::RefreshBuildStateVisual()
 	{
 		RestoreOriginalMaterials();
 		ApplyStagedParts(GetStagedPartComponents().Num());
+		ApplyGhostVisibility();   // nothing wears the ghost now: whatever it hid comes back
 		return;
 	}
 	if (ApplyGhostMaterialToAllMeshes())
@@ -629,6 +638,74 @@ void AMOBuildableActor::RefreshBuildStateVisual()
 	{
 		ApplyStagedParts(CountBuiltStagedParts(BuildProgressComponent->GetState(), BuildProgressComponent->GetProgress(), GetStagedPartComponents().Num()));
 	}
+	ApplyGhostVisibility();
+}
+
+void AMOBuildableActor::ApplyGhostVisibility()
+{
+	// The placement preview is always drawn (it IS the placing); a plan only while a player here is placing.
+	const bool bShowPlans = bIsGhost || UMOBuildingComponent::IsLocalPlayerPlacing(GetWorld());
+	TArray<UMeshComponent*> Meshes;
+	GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (!IsValid(Mesh))
+		{
+			continue;
+		}
+		const bool bWearsGhost = GhostMaterialInstance && Mesh->GetNumMaterials() > 0 && Mesh->GetMaterial(0) == GhostMaterialInstance;
+		if (bWearsGhost && !bShowPlans)
+		{
+			if (Mesh->GetVisibleFlag())
+			{
+				Mesh->SetVisibility(false);
+				GhostHiddenMeshes.Add(Mesh);
+			}
+		}
+		else if (GhostHiddenMeshes.Remove(Mesh) > 0)
+		{
+			Mesh->SetVisibility(true);
+		}
+	}
+}
+
+void AMOBuildableActor::HandleLocalPlacementModeChanged()
+{
+	if (!bIsGhost && HasActorBegunPlay())
+	{
+		ApplyGhostVisibility();
+	}
+}
+
+void AMOBuildableActor::ApplyUnbuiltCollision()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+	ApplyUnbuiltCollisionTo(MeshComponent);
+	TArray<USceneComponent*> Descendants;
+	MeshComponent->GetChildrenComponents(/*bIncludeAllDescendants=*/true, Descendants);
+	for (USceneComponent* Child : Descendants)
+	{
+		UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Child);
+		if (IsValid(SMC) && SMC->GetStaticMesh())
+		{
+			ApplyUnbuiltCollisionTo(SMC);
+		}
+	}
+}
+
+void AMOBuildableActor::ApplyUnbuiltCollisionTo(UPrimitiveComponent* Primitive)
+{
+	if (!IsValid(Primitive))
+	{
+		return;
+	}
+	Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Primitive->SetCollisionObjectType(ECC_WorldDynamic);
+	Primitive->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Primitive->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);   // the interaction trace (UMOInteractorComponent::TraceChannel)
 }
 
 void AMOBuildableActor::HandleBuildStateChanged(EMOBuildState NewState)

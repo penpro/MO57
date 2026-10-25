@@ -194,10 +194,35 @@ bool UMOBuildingComponent::EnterPlacementMode(FName RecipeId)
 	}
 
 	OnPlacementModeEntered.Broadcast(RecipeId);
+	OnLocalPlacementModeChanged().Broadcast();   // the planned buildings show their ghosts while a player here is placing (BR25-4)
 	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("OpenedBuildMenu"));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Entered placement mode for: %s"), *RecipeId.ToString());
 	return true;
+}
+
+FSimpleMulticastDelegate& UMOBuildingComponent::OnLocalPlacementModeChanged()
+{
+	static FSimpleMulticastDelegate Delegate;
+	return Delegate;
+}
+
+bool UMOBuildingComponent::IsLocalPlayerPlacing(const UWorld* World)
+{
+	if (!World)
+	{
+		return false;
+	}
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		const UMOBuildingComponent* Building = (PC && PC->IsLocalController()) ? PC->FindComponentByClass<UMOBuildingComponent>() : nullptr;
+		if (Building && Building->IsInPlacementMode())
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void UMOBuildingComponent::ExitPlacementMode(bool bCancel)
@@ -230,6 +255,7 @@ void UMOBuildingComponent::ExitPlacementMode(bool bCancel)
 	}
 
 	OnPlacementModeExited.Broadcast(!bCancel);
+	OnLocalPlacementModeChanged().Broadcast();
 	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("ExitedBuildMode"));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Exited placement mode (cancelled: %s) for: %s"),
@@ -750,8 +776,27 @@ bool UMOBuildingComponent::SpawnGhostActor(const FMORecipeDefinitionRow& Recipe)
 	CurrentGhost->SetReplicates(false);
 	CurrentGhost->FinishSpawning(FTransform::Identity);
 
+	// A recipe's preview mesh (a graybox) stands in for a Blueprint with no geometry of its own. A Blueprint that carries its own visible meshes -- the
+	// stick walls, floors and roofs, the stone-ring campfire -- previews as itself: its graybox slab drawn over the sticks in the glowing ghost
+	// material was the "big green box" (Wes, Oct 24 2026, BR25-6).
+	bool bHasOwnGeometry = false;
+	TArray<UStaticMeshComponent*> OwnMeshes;
+	CurrentGhost->GetComponents<UStaticMeshComponent>(OwnMeshes);
+	for (const UStaticMeshComponent* Own : OwnMeshes)
+	{
+		if (Own != CurrentGhost->MeshComponent && Own->GetStaticMesh() && Own->GetVisibleFlag())
+		{
+			bHasOwnGeometry = true;
+			break;
+		}
+	}
+
 	// Apply preview mesh from recipe if specified
-	if (!Recipe.PlacementData.PreviewMesh.IsNull())
+	if (bHasOwnGeometry)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] %s previews as itself (its own meshes): no PreviewMesh"), *Recipe.RecipeId.ToString());
+	}
+	else if (!Recipe.PlacementData.PreviewMesh.IsNull())
 	{
 		UStaticMesh* Mesh = Recipe.PlacementData.PreviewMesh.LoadSynchronous();
 		if (Mesh && CurrentGhost->MeshComponent)

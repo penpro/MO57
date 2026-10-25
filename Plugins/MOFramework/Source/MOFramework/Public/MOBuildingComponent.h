@@ -264,6 +264,13 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Building")
 	bool IsInPlacementMode() const { return bInPlacementMode; }
 
+	/** Fires on this machine whenever one of ITS players enters or leaves placement mode: the planned, unbuilt buildings draw their ghosts only
+	 *  meanwhile (Wes, Oct 24 2026: "make them not visible if you're not in build mode trying to place an item"; AMOBuildableActor). */
+	static FSimpleMulticastDelegate& OnLocalPlacementModeChanged();
+
+	/** Is a player of this machine placing a building in World? */
+	static bool IsLocalPlayerPlacing(const UWorld* World);
+
 	/**
 	 * Get the current placement recipe ID.
 	 * @return The recipe ID being placed, or NAME_None if not in placement mode

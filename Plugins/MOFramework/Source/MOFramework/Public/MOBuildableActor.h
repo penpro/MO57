@@ -302,13 +302,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
 	bool bSnapAsRoof = false;
 
-	/** The tint a placed building wears until it is finished (the ghost material's inner glow / rim): a plan, not a structure -- it cannot be walked on. */
+	/** The tint a placed building wears until it is finished (the ghost material's inner glow / rim): a plan, not a structure -- it cannot be walked on.
+	 *  Dimmed Oct 24 2026 (Wes: "make the building ghosts less bright"; was alpha 0.45). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
-	FLinearColor PlannedColor = FLinearColor(0.55f, 0.75f, 1.0f, 0.45f);
+	FLinearColor PlannedColor = FLinearColor(0.55f, 0.75f, 1.0f, 0.3f);
 
-	/** The planned look's inner glow (the placement preview's is 6: bright, it is aimed; a plan left standing should not glare). */
+	/** The planned look's inner glow (the placement preview's is 2, TintGhost; a plan left standing should not glare). Was 1.5 until Oct 24 2026. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
-	float PlannedGlow = 1.5f;
+	float PlannedGlow = 0.5f;
 
 	/**
 	 * Parts that get built one after another (mesh component names, in build order): part i is built once construction progress reaches
@@ -489,6 +490,7 @@ protected:
 	// ============================================================================
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// ============================================================================
 	// EVENTS
@@ -562,8 +564,9 @@ private:
 	/** Put every mesh component of the actor in the ghost material (saving each one's own materials the first time). False without a ghost material. */
 	bool ApplyGhostMaterialToAllMeshes();
 
-	/** The ghost material's colours (M_BuildPreview: inner glow + outer rim). */
-	void TintGhost(const FLinearColor& Color, float InnerGlow = 6.0f);
+	/** The ghost material's colours (M_BuildPreview: inner glow + outer rim). The default glow is the placement preview's: 2 since Oct 24 2026 (was 6, an
+	 *  HDR glare that bloomed a stick wall into a solid green slab: "make the building ghosts less bright"). */
+	void TintGhost(const FLinearColor& Color, float InnerGlow = 2.0f);
 
 	UFUNCTION()
 	void HandleBuildStateChanged(EMOBuildState NewState);
@@ -616,4 +619,28 @@ private:
 	 * elsewhere (attached to Root or as a sibling of Mesh).
 	 */
 	void ApplyStructuralCollisionProfile(FName ProfileName);
+
+	/** Unbuilt collision on MeshComponent and its static-mesh descendants (ApplyUnbuiltCollisionTo); completion makes them BlockAll. */
+	void ApplyUnbuiltCollision();
+
+	/**
+	 * The planned look is drawn only while a player of this machine is placing a building (UMOBuildingComponent::IsLocalPlayerPlacing; Wes, Oct 24 2026:
+	 * "make them not visible if you're not in build mode trying to place an item"). Every mesh wearing the ghost material is hidden otherwise and shown
+	 * again when placement starts; a built part (its own materials) is always shown. Collision is untouched: the interaction trace still finds a plan.
+	 */
+	void ApplyGhostVisibility();
+	void HandleLocalPlacementModeChanged();
+	FDelegateHandle LocalPlacementModeHandle;
+
+	/** Meshes ApplyGhostVisibility hid (only those come back when placement starts: a part hidden for its own reason stays hidden). */
+	UPROPERTY(Transient)
+	TSet<TObjectPtr<UMeshComponent>> GhostHiddenMeshes;
+
+public:
+	/**
+	 * Unbuilt collision (Wes, Oct 24 2026: "make sure nothing has collission until it's fully build"): query only, blocking ECC_Visibility -- the interaction
+	 * trace (UMOInteractorComponent), so a plan can still be clicked -- and ignoring every other channel: pawns walk through, the camera does not bump,
+	 * physics bodies and dynamic objects pass. It was IgnoreOnlyPawn, which still blocked the camera, physics and WorldDynamic.
+	 */
+	static void ApplyUnbuiltCollisionTo(UPrimitiveComponent* Primitive);
 };

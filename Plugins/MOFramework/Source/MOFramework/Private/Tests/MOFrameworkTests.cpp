@@ -30,6 +30,8 @@
 #include "Components/EditableTextBox.h"
 #include "Misc/DataValidation.h"
 #include "MOBuildableActor.h"
+#include "MOWorldCreationTypes.h"
+#include "Components/StaticMeshComponent.h"
 #include "MOCraftingStationActor.h"
 #include "Components/MultiLineEditableTextBox.h"
 #include "Misc/Compression.h"
@@ -1667,6 +1669,56 @@ bool FMOFire_FuelSticksShowTheFuel::RunTest(const FString& Parameters)
 	TestEqual(TEXT("full: all twenty"), AMOCraftingStationActor::CountVisibleFuelSticks(100.0f, 100.0f, 20), 20);
 	// CONTROL (can fail): a fire with no fuel sticks shows none however full it is.
 	TestEqual(TEXT("CONTROL: no sticks configured"), AMOCraftingStationActor::CountVisibleFuelSticks(100.0f, 100.0f, 0), 0);
+	return true;
+}
+
+// BR25-7 (Wes, Oct 24 2026: "make sure nothing has collission until it's fully build"): an unbuilt building blocks only the interaction trace.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuilding_UnbuiltCollisionOnlyTheTrace,
+	"MOFramework.Building.UnbuiltCollisionOnlyTheTrace",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuilding_UnbuiltCollisionOnlyTheTrace::RunTest(const FString& Parameters)
+{
+	UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>();
+	// CONTROL: the old under-construction profile still blocked the camera and physics bodies.
+	Part->SetCollisionProfileName(TEXT("IgnoreOnlyPawn"));
+	TestEqual(TEXT("CONTROL: IgnoreOnlyPawn blocks the camera"), int32(Part->GetCollisionResponseToChannel(ECC_Camera)), int32(ECR_Block));
+	AMOBuildableActor::ApplyUnbuiltCollisionTo(Part);
+	TestEqual(TEXT("query only (no physics body)"), int32(Part->GetCollisionEnabled()), int32(ECollisionEnabled::QueryOnly));
+	TestEqual(TEXT("the interaction trace (ECC_Visibility) still hits a plan"), int32(Part->GetCollisionResponseToChannel(ECC_Visibility)), int32(ECR_Block));
+	for (const ECollisionChannel Channel : { ECC_Pawn, ECC_Camera, ECC_PhysicsBody, ECC_WorldDynamic, ECC_WorldStatic, ECC_Vehicle, ECC_Destructible })
+	{
+		TestEqual(*FString::Printf(TEXT("ignores channel %d"), int32(Channel)), int32(Part->GetCollisionResponseToChannel(Channel)), int32(ECR_Ignore));
+	}
+	return true;
+}
+
+// BR25-5 (Wes, Oct 24 2026: "make a 'creative mode' where crafting and building costs nothing"): a world knob, off by default, shown as a switch.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorld_CreativeModeIsASwitch,
+	"MOFramework.World.CreativeModeIsASwitch",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorld_CreativeModeIsASwitch::RunTest(const FString& Parameters)
+{
+	const FMOWorldKnob* Knob = FMOWorldCreation::FindKnob(TEXT("CreativeMode"));
+	if (!TestNotNull(TEXT("the CreativeMode knob exists"), Knob))
+	{
+		return false;
+	}
+	TestTrue(TEXT("a switch (the panel shows Off / On)"), Knob->bSwitch);
+	TestTrue(TEXT("a world rule, not a pace (the pace floor is for multipliers)"), Knob->Group == EMOWorldKnobGroup::Rules);
+	TestEqual(TEXT("off by default"), Knob->Default, 0.0f);
+	TestEqual(TEXT("range 0..1"), Knob->Max - Knob->Min, 1.0f);
+	FMOWorldCreationSettings Settings;
+	TestEqual(TEXT("a new world is not creative"), FMOWorldCreation::GetKnob(Settings, TEXT("CreativeMode")), 0.0f);
+	FMOWorldCreation::SetKnob(Settings, TEXT("CreativeMode"), 0.7f);
+	TestEqual(TEXT("a value snaps to on"), Settings.CreativeMode, 1.0f);
+	FMOWorldCreation::SetKnob(Settings, TEXT("CreativeMode"), 5.0f);
+	TestEqual(TEXT("clamped to on"), Settings.CreativeMode, 1.0f);
+	TestFalse(TEXT("no game state (an editor or test world): not creative"), FMOWorldRules::IsCreative(nullptr));
+	// CONTROL: the multiplier knobs are not switches.
+	const FMOWorldKnob* Crafting = FMOWorldCreation::FindKnob(TEXT("Crafting"));
+	TestTrue(TEXT("CONTROL: the crafting-time knob is a multiplier"), Crafting && !Crafting->bSwitch && Crafting->Default == 1.0f);
 	return true;
 }
 
