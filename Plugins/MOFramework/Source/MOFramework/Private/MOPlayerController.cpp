@@ -2357,19 +2357,38 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 		}
 		return;
 	}
-	// Stand outside the footprint, looking at the composition.
-	FVector2D Away = (FVector2D(Traveller->GetActorLocation()) - FVector2D(Site.Location)).GetSafeNormal();
+	// Stand just outside the NEAREST MEMBER's solid core, on the side the traveller came from, looking at it. A cluster's site is its centre and
+	// its footprint the whole cluster's reach: standing outside that put the player hundreds of metres off, facing empty ground (Wes, Oct 25 2026:
+	// "poi teleportation to cliffs ... very very far away"). A hillside composition (bAlignToSlope) is seen from its downhill front.
+	const FVector2D From(Traveller->GetActorLocation());
+	const FMOWorldFeatureMember* Nearest = nullptr;
+	for (const FMOWorldFeatureMember& Member : Site.Members)
+	{
+		if (!Nearest || FVector2D::DistSquared(FVector2D(Member.Location), From) < FVector2D::DistSquared(FVector2D(Nearest->Location), From))
+		{
+			Nearest = &Member;
+		}
+	}
+	const FMOWorldFeatureDefinitionRow* Row = Features->FindRow(FeatureId);
+	const FVector2D Target = Nearest ? FVector2D(Nearest->Location) : FVector2D(Site.Location);
+	const double Radius = Nearest ? (Row ? Row->GetCoreRadiusCm(Nearest->Scale) : Nearest->FootprintRadiusCm) : Site.FootprintRadiusCm;
+	FVector2D Away = (From - Target).GetSafeNormal();
+	if (Nearest && Row && Row->bAlignToSlope)
+	{
+		const double FrontYaw = FMath::DegreesToRadians(Nearest->YawDegrees + Row->AuthoredDownhillYawDeg);
+		Away = FVector2D(FMath::Cos(FrontYaw), FMath::Sin(FrontYaw));
+	}
 	if (Away.IsNearlyZero())
 	{
-		Away = FVector2D(1.0, 0.0);   // standing on the site already: approach from +X
+		Away = FVector2D(1.0, 0.0);   // standing on it already: approach from +X
 	}
-	const FVector2D StandXY = FVector2D(Site.Location) + Away * (Site.FootprintRadiusCm + 1500.0);
+	const FVector2D StandXY = Target + Away * (Radius + 1500.0);
 	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
 	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(this);
 	const float Ground = FMOWorldGen::SampleHeightCm(*Params, StandXY.X, StandXY.Y, Seeds ? Seeds->GetActiveTerrainSeed() : 0, Params->Tuning.VoxelSizeCm);
 	const FRotator Facing(-8.0f, FMath::RadiansToDegrees(FMath::Atan2(-Away.Y, -Away.X)), 0.0f);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: site at %s, %.1f km away"), *FeatureId.ToString(), *Site.Location.ToCompactString(),
-		FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Site.Location)) / 100000.0);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: site at %s, %.1f km away; standing %.0f m from its nearest member (of %d)"), *FeatureId.ToString(),
+		*Site.Location.ToCompactString(), FVector2D::Distance(From, FVector2D(Site.Location)) / 100000.0, (Radius + 1500.0) / 100.0, Site.Members.Num());
 	BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, Ground), Facing);
 }
 

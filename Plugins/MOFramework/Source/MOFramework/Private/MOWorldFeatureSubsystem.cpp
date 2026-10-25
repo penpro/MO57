@@ -180,6 +180,91 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	Out.Slot = Slot;
 	Out.Members.Reset();
 
+	if (R.IsCluster() && R.bClusterLine && R.bAlignToSlope)
+	{
+		// A line along the contour (a cliff band): the largest at the centre, then alternately right and left of it, each new member one pair of
+		// cores beyond the last on its side, the direction re-read from the local contour so the band bends with the hill. Every member is judged
+		// on its own footprint plane and faces its own downhill.
+		const int32 CountMin = FMath::Max(1, R.ClusterCountMin);
+		const int32 CountMax = FMath::Max(CountMin, R.ClusterCountMax);
+		const int32 Count = CountMin + FMath::Min(CountMax - CountMin, static_cast<int32>(WorldFeatureU01(H, 5) * (CountMax - CountMin + 1)));
+		TArray<float, TInlineAllocator<32>> Scales;
+		for (int32 I = 0; I < Count; ++I)
+		{
+			Scales.Add(FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), FMath::Pow(static_cast<float>(WorldFeatureU01(H, 16 + static_cast<uint64>(I))), R.ClusterScaleBias)));
+		}
+		Scales.Sort(TGreater<float>());
+		// One member at (Mx, My): the row's rules over its core, its plane's slope and relief; false = this spot ends that side of the line.
+		auto TryMember = [&](double Mx, double My, float Scale, uint64 K, FVector2D& OutGradient) -> bool
+		{
+			const double Core = R.GetCoreRadiusCm(Scale);
+			const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
+			float Ground = 0.0f, CentreSlope = 0.0f, Deviation = 0.0f;
+			if ((R.ClusterRadiusCm > 0.0f && FVector2D::Distance(FVector2D(Mx, My), FVector2D(X, Y)) > R.ClusterRadiusCm)
+				|| !PassesRules(Mx, My, Core, Ground, CentreSlope)
+				|| !MeasureFootprintPlane(*Params, TerrainSeed, Finder, Mx, My, Core, Ground, OutGradient, Deviation))
+			{
+				return false;
+			}
+			const float Slope = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan(OutGradient.Size())));
+			if (Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg || (R.MaxFootprintReliefCm > 0.0f && Deviation > R.MaxFootprintReliefCm) || OutGradient.IsNearlyZero())
+			{
+				return false;
+			}
+			const double Downhill = FMath::RadiansToDegrees(FMath::Atan2(-OutGradient.Y, -OutGradient.X));
+			const double Jitter = (2.0 * WorldFeatureU01(H, K + 3) - 1.0) * R.AlignYawJitterDeg;
+			FMOWorldFeatureMember& Member = Out.Members.AddDefaulted_GetRef();
+			Member.Location = FVector(Mx, My, Ground);
+			Member.YawDegrees = static_cast<float>(FMath::Fmod(Downhill - R.AuthoredDownhillYawDeg + Jitter + 720.0, 360.0));
+			Member.Scale = Scale;
+			Member.FootprintRadiusCm = static_cast<float>(Footprint);
+			Member.SlopeSinkCm = 0.0f;   // aligned, as a single hillside composition
+			Member.Seed = static_cast<int32>(WorldFeatureMix64(H ^ (0x5EEDULL + K)) & 0x7fffffff);
+			return true;
+		};
+		FVector2D CentreGradient;
+		if (!TryMember(X, Y, Scales[0], 300, CentreGradient))
+		{
+			return false;
+		}
+		// The two sides of the line: their last member, the direction they grow in (along the contour), and whether they still can.
+		FVector2D End[2] = { FVector2D(X, Y), FVector2D(X, Y) };
+		float EndScale[2] = { Scales[0], Scales[0] };
+		const FVector2D Along = FVector2D(-CentreGradient.Y, CentreGradient.X).GetSafeNormal();
+		FVector2D Dir[2] = { Along, -Along };
+		bool bOpen[2] = { true, true };
+		for (int32 I = 1; I < Count && (bOpen[0] || bOpen[1]); ++I)
+		{
+			const int32 Side = bOpen[I % 2] ? I % 2 : 1 - I % 2;
+			const float Scale = Scales[I];
+			const double Step = (R.GetCoreRadiusCm(EndScale[Side]) + R.GetCoreRadiusCm(Scale)) * (1.0 + 0.15 * WorldFeatureU01(H, 300 + static_cast<uint64>(I) * 4 + 1));
+			const FVector2D P = End[Side] + Dir[Side] * Step;
+			FVector2D Gradient;
+			if (!TryMember(P.X, P.Y, Scale, 300 + static_cast<uint64>(I) * 4, Gradient))
+			{
+				bOpen[Side] = false;
+				continue;
+			}
+			// Along the local contour, the same way round as before: the band follows the hill.
+			const FVector2D LocalAlong = FVector2D(-Gradient.Y, Gradient.X).GetSafeNormal();
+			Dir[Side] = FVector2D::DotProduct(LocalAlong, Dir[Side]) >= 0.0 ? LocalAlong : -LocalAlong;
+			End[Side] = P;
+			EndScale[Side] = Scale;
+		}
+		Out.Location = Out.Members[0].Location;
+		Out.YawDegrees = Out.Members[0].YawDegrees;
+		Out.Scale = 0.0f;
+		float Reach = 0.0f;
+		for (const FMOWorldFeatureMember& Member : Out.Members)
+		{
+			Out.Scale = FMath::Max(Out.Scale, Member.Scale);
+			Reach = FMath::Max(Reach, static_cast<float>(FVector2D::Distance(FVector2D(Member.Location), FVector2D(X, Y))) + Member.FootprintRadiusCm);
+		}
+		Out.FootprintRadiusCm = Reach;
+		Out.Seed = Out.Members[0].Seed;
+		return true;
+	}
+
 	if (R.IsCluster())
 	{
 		// The centre only has to be the right kind of land; every member is judged at its own spot.
@@ -563,6 +648,12 @@ void UMOWorldFeatureSubsystem::GetFootprints(const FBox2D& Bounds, TArray<FFootp
 			Foot.NearSq = FMath::Square(Member.FootprintRadiusCm * TreeBoostFootprints);
 		}
 	}
+}
+
+const FMOWorldFeatureDefinitionRow* UMOWorldFeatureSubsystem::FindRow(FName FeatureId) const
+{
+	const int32 F = Placer ? Placer->GetFeatureIndex(FeatureId) : INDEX_NONE;
+	return F != INDEX_NONE ? &Placer->GetFeatures()[F].Row : nullptr;
 }
 
 bool UMOWorldFeatureSubsystem::FindNearestSite(FName FeatureId, const FVector2D& From, double MaxRadiusCm, FMOWorldFeatureSite& Out)

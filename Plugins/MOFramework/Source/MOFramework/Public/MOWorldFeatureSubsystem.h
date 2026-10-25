@@ -110,6 +110,9 @@ public:
 	/** The nearest site of a feature to From within MaxRadiusCm (search ring by ring). */
 	bool FindNearestSite(FName FeatureId, const FVector2D& From, double MaxRadiusCm, FMOWorldFeatureSite& Out);
 
+	/** A feature's catalog row (nullptr before the catalog is loaded, or for an id it lacks). */
+	const FMOWorldFeatureDefinitionRow* FindRow(FName FeatureId) const;
+
 	int32 GetNumSpawned() const { return Spawned.Num(); }
 
 	// UTickableWorldSubsystem

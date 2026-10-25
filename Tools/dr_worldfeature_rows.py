@@ -22,6 +22,11 @@ import json
 import sys
 
 GRAPHS = "/Game/WorldFeatures/DarkRuins/"
+# OFF since Oct 25 2026 evening (BR25-16): smaller, in the artist's layout, dressed -- and still, Wes: "nordic cliffs are a disaster, the textures
+# look like garbage close up, like they're scaled up too far, and they're floating WAY above ground" (an arch of Mountain_01 showing its open
+# underside from the slope below; the sample's pieces at x2-5 of their own, the texture stretched). The single Nordic cliff in the crags is his
+# reference for good ("these cliffs look pretty good ... properly scaled and not sticking out of the ground"). The rows and graphs stay for a rework.
+ENABLED = False
 ROWS = {
     "DR_NordicMountain": {
         "displayName": "Nordic cliff mountain (Dark Ruins)", "graph": "PCG_DR_NordicMountain",
@@ -51,7 +56,7 @@ def main():
         graph = GRAPHS + spec["graph"]
         row.update({k: v for k, v in spec.items() if k != "graph"})
         row["actorProperties"] = {"Variants": "(\"%s.%s\")" % (graph, spec["graph"])}
-        row.update({"bEnabled": True, "policy": "Many", "slopeMinDeg": 0, "bAlignToSlope": False, "authoredDownhillYawDeg": 0,
+        row.update({"bEnabled": ENABLED, "policy": "Many", "slopeMinDeg": 0, "bAlignToSlope": False, "authoredDownhillYawDeg": 0,
                     "alignYawJitterDeg": 0, "sinkCm": 0, "minHeightAboveSeaCm": 200, "maxHeightAboveSeaCm": 100000,
                     "authoredGround": {"OriginCm": {"X": 0, "Y": 0}, "CellCm": 100, "NumX": 0, "NumY": 0, "HeightsCm": [], "Weights": []}})
         patch[name] = row

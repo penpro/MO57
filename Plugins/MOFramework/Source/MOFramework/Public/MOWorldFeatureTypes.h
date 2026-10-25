@@ -190,7 +190,8 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	 * A CLUSTER of the composition instead of one (Wes, Oct 15 2026, of the rock spires: "a range from 1 to 10 in an area, ranging from 50% original
 	 * size up to the 400% big towers so there's a whole neat looking area"): each site places ClusterCountMin..ClusterCountMax copies scattered within
 	 * ClusterRadiusCm of its centre, each at its own scale in [MinScale, MaxScale], yaw and ground height, kept apart by their footprints; every member
-	 * passes the row's terrain rules on its own. 1 / 1 with no radius (the default) = one composition at the site, as before. Clusters ignore bAlignToSlope.
+	 * passes the row's terrain rules on its own. 1 / 1 with no radius (the default) = one composition at the site, as before. Clusters ignore bAlignToSlope
+	 * unless they stand in a line (bClusterLine).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="1", ClampMax="32"))
 	int32 ClusterCountMin = 1;
@@ -201,6 +202,15 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	/** How far from the site's centre members may stand (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="0.0"))
 	float ClusterRadiusCm = 0.0f;
+
+	/**
+	 * The members stand side by side in a LINE along the hillside's contour -- a cliff band, an escarpment -- instead of packed round the largest:
+	 * the largest in the middle, the rest alternately to either side, their cores (CoreFraction) touching, the line bending with the contour, each
+	 * member turned to face its own downhill (AuthoredDownhillYawDeg) and judged on its own slope plane (Wes, Oct 25 2026, of the western cliffs:
+	 * "make a lot more of them in lined up clusters of 5-10"). A side stops at the first spot that fails the row's rules. Needs bAlignToSlope.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(EditCondition="bAlignToSlope"))
+	bool bClusterLine = false;
 
 	/** How member scales spread over [MinScale, MaxScale]: 1 = evenly, above 1 = mostly small with a few giants. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="0.1"))

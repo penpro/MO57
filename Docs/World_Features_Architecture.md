@@ -142,8 +142,26 @@ Only the `Many` policy with composition actors exists. Everything else below is 
     Shots: `D:/MOAssets/previews/dr_top_traced.png`, `dr_traced_wide.png`.
   Shots: `D:/MOAssets/previews/dr_small_close.png`, `dr_small_wide.png` (trees in the rock, before the footprints), `dr_small_wide_footprint.png`.
 - **Cooking (Oct 25 2026):** the rows name their graphs and PCG data assets in TEXT, which the cooker cannot follow: no DR or ED cliff was in
-  the packaged build. `FMOWorldFeatureCook` adds every package a row reaches to the cook (`Docs/Packaging.md` section 2); a new row needs
-  no config edit. Test `MOFramework.WorldFeatures.CompositionsAreCooked`.
+  the packaged build. `FMOWorldFeatureCook` adds every package an ENABLED row reaches to the cook (`Docs/Packaging.md` section 2); a new row
+  needs no config edit. Test `MOFramework.WorldFeatures.CompositionsAreCooked`.
+- **Dark Ruins compositions OFF** (Oct 25 evening, BR25-16): Wes, of a DR mountain smaller and in its authored layout: "nordic cliffs are a
+  disaster, the textures look like garbage close up, like they're scaled up too far, and they're floating WAY above ground" (an arch of
+  Mountain_01 showing its open underside to the slope below; the sample's pieces at x2-5 of their own). Both rows `bEnabled` false
+  (`Tools/dr_worldfeature_rows.py` ENABLED); graphs and data kept. The single Nordic cliff in the crags is his reference for good.
+- **Line clusters and the western cliff band** (Oct 25 evening, BR25-19; Wes: "i can't find any western cliffs anywhere ... add them to poi
+  list and make a lot more of them in lined up clusters of 5-10"): `FMOWorldFeatureDefinitionRow::bClusterLine` (with `bAlignToSlope`) stands
+  a cluster's members side by side along the hillside -- the largest in the middle, the rest alternately either side, cores touching, the
+  line re-aimed along the local contour at every member, each turned to face its own downhill and judged on its own footprint plane; a side
+  ends at the first spot that fails (test `MOFramework.WorldFeatures.ClusterLine`: 163 lines in 900 km2, members 5 % of the span off a
+  straight line, packed clusters 40 %). Row `WC_WesternCliffBand` (`Tools/western_cliff_rows.py`): 5-10 Desert Western Cliff Sheer XL 04
+  faces at x0.35-0.6 (76-131 m wide) whose cores (0.7 of the half-width) overlap into one 0.4-1 km cliff band, on 25-60 deg highland
+  slopes, 0.5 bands / km2, seen to 3 km, in the POI list. Graph `PCG_WesternCliffFace` (`Content/Python/make_western_cliff_composition.py`):
+  one point carrying the mesh, copied onto the member, MO Conform To Ground (its lowest point 3 m x scale under the lowest ground beneath
+  it: the open back and base go into the hill). Shots: `D:/MOAssets/previews/br25b/wc_band_front.png`, `wc_band_view.png`.
+- **`poi` stands at the nearest MEMBER** (BR25-20): a cluster's site is its centre and its footprint the whole cluster's reach, so `poi` put
+  the player hundreds of metres off, facing empty ground ("very very far away"). It now stands 15 m outside the nearest member's core, on the
+  traveller's side -- a hillside composition from its downhill front (`UMOWorldFeatureSubsystem::FindRow`). Measured: 44 m from a western
+  cliff face, 25 m from an ED spire.
 
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need
 the same behavior, build one abstraction — not N copies") and #9
