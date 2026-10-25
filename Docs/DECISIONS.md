@@ -60,6 +60,12 @@
 ## Decisions, newest first
 
 ### 2026-10-25
+- **Dark Ruins cliff compositions are off** (BR25-16; Wes's second verdict, after "a ball": "a disaster ... floating WAY above ground"). Rows
+  disabled, assets kept; the single Nordic cliff ("these cliffs look pretty good") stays in the crags.
+- **Western cliffs are a POI: bands of 5-10 faces in a line along the hillside** (BR25-19). New placer layout `bClusterLine`; row
+  `WC_WesternCliffBand`. The rare single faces of the PCG species stay.
+- **TRELLIS crags smaller (x0.4-0.8), 2.5x as many, two-sided** (BR25-15: Wes offered "close up the holes and just tile the textures" or "scale
+  them down and make more of them in clusters": both, the holes by two-sided rather than a mesh repair).
 - **The PN meadow flowers render classic, not Nanite** (BR23-10; partly reverses Oct 14's "palette foliage on Nanite", which answered Wes's
   "these little dry grass assets are LOD switching which means they're not nanite enabled"). Measured in PIE: under Nanite the flowers' own
   material writes wrong motion vectors, so motion blur and TSR smeared them ("a few of these little flowers are blurry", "look good here ... but

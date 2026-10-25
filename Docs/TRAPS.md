@@ -276,6 +276,11 @@
 - **A packaged build has NO world-feature cliffs** -> the rows name their graphs / PCG data assets in TEXT (ActorProperties), which the
   cooker cannot follow (a real `TSoftClassPtr` it does follow) -> `FMOWorldFeatureCook` adds what the rows reach on the cook's
   ModifyCook delegate (`Docs/Packaging.md` § 2). Any new system that loads content from a path in a string needs the same. (Oct 25)
+- **A PCG asset's meshes in no dependency list** -> an Electric Dreams "data asset" is a saved PCGAsset Blueprint-element instance whose points
+  name their meshes as text: the asset registry lists none, Python's `dir()` shows none of the Blueprint's variables -> the cook hook scans the
+  package file for content paths. A "spawned N rocks" census is no proof a mesh cooked: look at the cooked folder or a packaged screenshot. (Oct 25)
+- **A `MO.Cam.LookAt` shot shows the terrain upside down / from below** -> the camera is UNDER the uphill ground (a target at the pawn's
+  height on a slope) -> put the camera well above the ground at its own spot. (Oct 25)
 
 ## 8. Voxel and world generator
 

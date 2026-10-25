@@ -1605,3 +1605,11 @@ References: CL-0185
 ### 2026-10-25 15:35 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0187
 Status: RELEASE editor (closed) + build window (CL-0186 done). BR23-10 blurry flowers fixed: the 24 PN flower meshes the palettes plant are classic again (MA_Flowers writes wrong velocities under Nanite; `enable_palette_nanite.py` now skips MA_Flowers meshes -- Codex: don't re-enable Nanite on them), MA_Flowers cross-fades LODs, ground cover (MA_Flowers + MI_smdrailr / MI_vlkhcbxia / MI_uddmcgbia) fades at 15-45 cm near the camera. Test MOFramework.Rendering.FlowersNotNanite.
 References: CL-0186
+
+### 2026-10-25 16:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0188
+Status: CLAIM editor + build window -- Wes's Oct 25 evening reports BR25-15..20 (cliffs and big rocks: TRELLIS crags, Nordic cliffs, ED cliffs in Shipping, western cliffs as a POI row in lined clusters, `poi` distance). Files TBD: crag rows / species, DT_WorldFeatures, MOWorldFeature* (placer: line clusters), MOCheatSubsystem/MOPlayerController (poi).
+References: CL-0187
+
+### 2026-10-25 16:50 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0189
+Status: RELEASE editor (closed) + build window (CL-0188 done). Wes's Oct 25 evening reports BR25-15..21: western cliff bands as a POI row with the new `bClusterLine` layout (Codex: FMOWorldFeatureDefinitionRow gained `bClusterLine`; UMOWorldFeatureSubsystem gained `FindRow`), `poi` stands at the nearest member, the Dark Ruins rows are off, the cook hook scans PCG package files (the ED spires' meshes now cook), TRELLIS crags x0.4-0.8 / 2.5x / two-sided. Development package in Saved/StagedBuilds_DevTest is current.
+References: CL-0188
