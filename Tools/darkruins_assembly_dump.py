@@ -26,26 +26,26 @@ for name in LEVELS:
         unreal.log_warning("DRDUMP %s missing" % name)
         continue
     les.load_level(path)
-    meshes, lo, hi = {}, [1e12] * 3, [-1e12] * 3
+    meshes, lo, hi, pieces = {}, [1e12] * 3, [-1e12] * 3, []
     for a in eas.get_all_level_actors():
         for c in a.get_components_by_class(unreal.StaticMeshComponent):
             sm = c.get_editor_property("static_mesh")
             if not sm:
                 continue
-            n = c.get_instance_count() if isinstance(c, unreal.InstancedStaticMeshComponent) else 1
+            ism = isinstance(c, unreal.InstancedStaticMeshComponent)
+            n = c.get_instance_count() if ism else 1
             if n == 0:
                 continue
             meshes[sm.get_path_name()] = meshes.get(sm.get_path_name(), 0) + n
-            b = c.bounds if hasattr(c, "bounds") else None
-            origin, extent = c.get_local_bounds()
-            wt = c.get_world_transform()
-            for v in (origin, extent):
-                pass
-            loc = wt.translation
-            for i, k in enumerate(("x", "y", "z")):
-                lo[i] = min(lo[i], getattr(loc, k))
-                hi[i] = max(hi[i], getattr(loc, k))
-    result[name] = {"pivot_bounds": [lo, hi], "meshes": meshes}
+            for i in range(n):
+                wt = c.get_instance_transform(i, True) if ism else c.get_world_transform()
+                loc, rot, scl = wt.translation, wt.rotation.rotator(), wt.scale3d
+                pieces.append({"mesh": sm.get_path_name(), "loc": [loc.x, loc.y, loc.z], "rot": [rot.roll, rot.pitch, rot.yaw],
+                               "scale": [scl.x, scl.y, scl.z]})
+                for j, k in enumerate(("x", "y", "z")):
+                    lo[j] = min(lo[j], getattr(loc, k))
+                    hi[j] = max(hi[j], getattr(loc, k))
+    result[name] = {"pivot_bounds": [lo, hi], "meshes": meshes, "pieces": pieces}
     top = sorted(meshes.items(), key=lambda kv: -kv[1])[:8]
     unreal.log_warning("DRDUMP %s: %d meshes, %d pieces, pivots span %.0f x %.0f x %.0f m; top %s" % (
         name, len(meshes), sum(meshes.values()), (hi[0] - lo[0]) / 100, (hi[1] - lo[1]) / 100, (hi[2] - lo[2]) / 100,

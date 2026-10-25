@@ -20,7 +20,6 @@
 | F5 | Shore reeds | a Fab / Megascans download vs Electric Dreams plants (Taro, ferns; no reed asset there) | `Docs/Water.md` §5 | Oct 11 |
 | F7 | Building cancel / refund | queue path (full refund + world drops) vs ghost-menu path (skill-partial); one rule for both | `Docs/Building.md` | Jul 20 |
 | F8 | Excavation stage 6 UI | the designation tool + "where do you want to dump the contents?" popup (designated sites / fill inventory / fill nearby inventory). Wes said on Oct 15 the earlier question wasn't clear: **re-ask plainly with a mock-up**. Recommended default flatten target: the zone's MEAN height | `Docs/Terraform_Excavation_Plan.md` | Jul 13 / Oct 14 |
-| F9 | Real cliff walls | own composition along a steep contour (massive cliff meshes, vines, talus) vs generator crags dressed with the meshes | `Docs/World_Features_Architecture.md` | Oct 14 |
 | F10 | Heat ladder values + missing kilns | author the drafted station / recipe temperatures (campfire 700, forge 1,300, bloomery 1,250; copper 1,100, iron bloom 1,200 ...) and add pit kiln (900) + updraft kiln (1,100) stations; waits also on Codex's fuel-to-temperature rule | `Docs/PROGRESSION_ROADMAP.md` §4 | Oct 17 |
 | F11 | Engine patch #1 upstream | post the ready report (hair strands vs Single Layer Water depth) on the Epic forum + bug form (a public post) | `Docs/EnginePatches/0001-upstream-report.md` | Oct 16 |
 | F12 | Reeds along narrow rivers | `ShoreFactor` samples one 25 m ring: rings at 5 / 12 / 25 m add reeds along rivers at ~3x shore-tier samples (load time + look change) | `Docs/PCG.md` | Oct 16 |
@@ -59,6 +58,19 @@
 | N9 | PATCH_NOTES.md frozen since June 30 | "so long as you can extract steam update patch notes from git commits we don't need it, might just need to note when the last steam patch was every time i ask for steam patch notes so you have a date/time though" | Docs/Archive/PATCH_NOTES.md archived; Steam patch notes are generated from `git log` since the last recorded Steam patch, and each request records its date / time / commit in `Docs/STEAM_RELEASES.md`. |
 
 ## Decisions, newest first
+
+### 2026-10-25
+- **Cliffs are bespoke compositions, not voxel stamps** (closes F9). Wes: "the huge cliffs we just imported look pretty good but we need to
+  have more of them and we need stuff spawned on top of them ... there's a feature of voxel plugin to make voxelized meshes, would those big
+  ass cliffs work well as actual voxel meshes that get added as voxel stamps? ... either way we probably need to combine some assets to make a
+  more bespoke cliff setup like what we have going on with the electric dreams setup, meshes pcg spawned on meshes and all that". Built:
+  the Dark Ruins sample's own artist assemblies (Mountain_01, TallPath_01) as world-feature compositions with rock clusters at the foot and
+  ground cover on their tops (`Docs/World_Features_Architecture.md` "As built", `Docs/DarkRuins_Assets.md`). Voxel mesh stamps were NOT used
+  for the faces: at our 50 cm voxels the scan detail is lost and the face would wear the terrain material, and a volume stamp sends every
+  chunk it touches through the slower volume pass (TRAPS: the LOD-range holes); where a composition needs the ground to meet it, the
+  existing `AuthoredGround` raises the terrain (a 2D height edit in the terrain node).
+- **The TRELLIS formations get a tiling granite detail layer and grow to x0.8-1.6** (Wes: "the large rocks from trellis have shitty
+  resolution on the texture ... they're also not very large compared to what i thought"): `Content/Python/rock_detail_layer.py`, `Docs/PCG.md`.
 
 ### 2026-10-24
 - **Highland crags, far landmarks, granite summits** (Wes: "let's implement a 'sub biome' in the higher up areas where we have the cliffs made up of those huge rock formations ... also the largest rocks, and the cliff faces, let's have them render much further out ... the rocky highlands material is very red ... shift that to something more granite looking"). Built: `bLandmark` + the landmark tier (GRID256, ~2.5 km), `MaterialOverride`, the crags (PCG.md §5), AlpineRock on `VST_Cliff`. Claude, small calls (noted): "sub biome" = a shared clump field inside the three highland biomes, not a new biome row; the red was AlpineRock's quarry rock (RockyHighland's ground is brown-green); GRID256 not GRID512 (the 2 km grid is held past the reveal, so boulders by the spawn would pop in); the Granite variant on the formations; "the largest rocks" = the xlarge tier, the large tier stays near.

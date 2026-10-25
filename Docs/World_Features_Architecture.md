@@ -105,6 +105,26 @@ Only the `Many` policy with composition actors exists. Everything else below is 
     far). Seen on Wes's world (seed 3014) at his spire: a 7-member formation (3.58x down to 0.59x), forest up to the rock, 60 ground-cover
     plants in the nearest member's ring, none in its core; a small assembly 179 m from an embankment's centre (inside its reach).
 
+- **Dark Ruins cliff compositions (Oct 25 2026; Wes: "we need to have more of them and we need stuff spawned on top of them").** The Dark
+  Ruins Megascans sample's own artist assemblies, as PCG data assets (`Tools/darkruins_assembly_export.py` in the sample, the engine's
+  `PCGLevelToAsset`; migrated by `ede_migrate.py --source darkruins`, gitignored): rows `DR_NordicMountain` (Mountain_01: nine Huge /
+  Massive Nordic Coastal Cliff pieces, a ~60 m mountain) and `DR_NordicTallPath` (TallPath_01: a ~52 m stack with an arch, within 400 m of
+  a mountain) in RockyHighland / AlpineRock / AlpineHeath / NordicStrand, 2-3 / km2 in clusters of 1-5, x0.7-1.5, seen to 2.5 km
+  (`Tools/dr_worldfeature_rows.py`, from the ED_RockSpire row). Graphs (`Content/Python/make_dr_compositions.py`,
+  `/Game/WorldFeatures/DarkRuins/`): the spire graph's core (Load PCG Data Asset -> Copy Points onto the site -> MO Conform To Ground ->
+  spawner by Mesh) plus
+  - FOOT: the sample's boulder / rocky-buildup / shelf clusters copied onto a ring round the base (the base outline at the assembly's
+    root plane pushed out 2.5 m, a point every 7 m), their shallow ground skins (rocky-ground plates, sand, mud) left out at the export;
+  - TOP: the highland biomes' grass, wild grass, dead shrubs, alder seedlings, a flower and small stones on the assembly's own top surfaces
+    (`Content/Python/dr_dressing_points.py`: up-facing triangles that are the highest up-facing surface at their spot, 1 per 1.5 m2; ~1,050
+    on a mountain), walk-through. Their points (density 0.5) are MERGED into Conform To Ground's input with the rock, so they ride the same
+    median shift and stay on the rock; a density filter afterwards splits them to their own spawner (random yaw, x0.7-1.3).
+  Collision: `fix_mesh_collision.py` (world-feature manifest re-collected in PIE) gives every cliff and cluster mesh its real surface; it
+  now knows "Arch" and classifies a Megascans 'Smart' scan by its folder. Verified (PIE seed 777, AlpineRock): 144 spawns logged on the way
+  in; a summoned mountain built 3 + 6 cliff pieces, ~1,100 dressing instances, the clusters' rocks; downward traces hit it 57-73 m up, a
+  pawn dropped on top stands at 72.7 m. Shots: `D:/MOAssets/previews/dr_cluster_wide.png`, `dr_mountain_dressed.png`, `dr_top_grass_close.png`.
+  Not yet: AuthoredGround for these rows (they stand on the terrain as it is); slope-aligned cliff WALLS (these are rock all round).
+
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need
 the same behavior, build one abstraction — not N copies") and #9
 ("Production-ready means extension without modification").

@@ -100,7 +100,7 @@ WF_PLANT = ("Vine", "Ivy", "Fern", "Plant", "Sapling", "Palm", "Elderberry", "Gr
             "Circle_", "Periwinkle", "Archangel", "Pebbles", "MoneyPlant")
 WF_BUSH = ("Elderberry", "CommonHazel_Forest")   # the berry bushes of the Electric Dreams assemblies (playtest #21): a core capsule when at least BUSH_MIN_HEIGHT tall
 WF_ROCK = ("Cliff", "Rock", "Boulder", "Embankment", "Formation", "Stone", "Ground", "RiverBed", "Terrain", "Path", "Roots", "Stump", "Fallen", "Log",
-           "Shelf", "Mud", "Bank", "Ledge", "Scree", "Slab")
+           "Shelf", "Mud", "Bank", "Ledge", "Scree", "Slab", "Arch")
 WF_TREE = ("Hornbeam", "DeadTree", "Tree", "Spruce", "Birch", "Beech", "Oak", "Pine")
 
 
@@ -142,6 +142,8 @@ def worldfeature_meshes():
             continue   # engine shapes (a gizmo sphere) are never edited
         name = mesh_path.rsplit("/", 1)[-1].split(".")[0]
         kind = worldfeature_kind(name)
+        if kind == "?":
+            kind = worldfeature_kind(megascans_folder(mesh_path))   # a Megascans 'Smart' scan's name is its id alone (SM_vdssailfa_RM_N1)
         if kind == "?":
             print("FIXCOLL unclassified world-feature mesh %s (%s): left alone" % (name, ",".join(rows)))
         else:

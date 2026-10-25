@@ -44,7 +44,8 @@ the sample; `Saved/DarkRuinsDump/assemblies.json`); the ones that build cliffs:
 | TallPath_01 | massive Nordic cliffs + a rock arch | 7 x 15 x 52 m |
 | BoulderAssembly_01, Buildup_Rocky_01, ShelfAssembly_01 | boulder / rocky-buildup / shelf clusters (beach rocks, Icelandic rock assembly, limestone slab) | 3-6 m |
 
-`Tools/darkruins_assembly_export.py` (headless in the sample, enabling Python and PCG for the run) turns each into a PCG data asset
+They are world features now: `DR_NordicMountain` / `DR_NordicTallPath` with foot rocks and top dressing (`Docs/World_Features_Architecture.md`
+"As built"). `Tools/darkruins_assembly_export.py` (headless in the sample, enabling Python and PCG for the run) turns each into a PCG data asset
 (`/Game/MO57Export/PCGAssemblies/PL_<name>_PCG`, written into the SAMPLE's own new folder) with the engine's `PCGLevelToAsset`: the form the
 Electric Dreams compositions load (a PCGAsset element). `ede_migrate.py --source darkruins` group "assemblies" brings them and every mesh they
 name (soft references): 198 files, 3.25 GB, Oct 25. The ground assemblies (01-09) are mostly shallow rocky-ground plates and sand / mud

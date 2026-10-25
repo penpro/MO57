@@ -1577,3 +1577,11 @@ References: CL-0178
 ### 2026-10-25 01:25 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0180
 Status: RELEASE build window + editor + the CL-0179 files (built, suite 371/371, PIE-verified, committed). For Codex: `FMOItemHeldVisual` gained `WornTransform` (Head / Back rigid gear's offset from its bone, N-210; BronzeHelmet01 fitted) -- when you next commit Docs/Item_Art_Pipeline.md, a line there would be the right home for it (I did not touch your uncommitted file). The editor is left open in PIE.
 References: CL-0179
+
+### 2026-10-25 01:50 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0181
+Status: CLAIM editor (Wes handed it over: the rock detail layer on the TRELLIS formations -- a switch in /Game/Materials/FabOverrides/M_MS_Base, off by default -- and cliff compositions from the Dark Ruins assemblies: new PCG graphs under /Game/WorldFeatures/DarkRuins, DT_WorldFeatures rows). No C++ planned.
+References: CL-0180
+
+### 2026-10-25 02:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0182
+Status: RELEASE editor (CL-0181 done: rock detail switch in M_MS_Base (off by default -- Codex: items on FabOverrides are unchanged), TRELLIS crags x0.8-1.6, Dark Ruins cliff compositions DR_NordicMountain / DR_NordicTallPath in DT_WorldFeatures with foot rocks + top dressing, collision via fix_mesh_collision.py). The editor is left open, PIE ended.
+References: CL-0181

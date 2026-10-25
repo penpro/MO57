@@ -3,6 +3,10 @@
   "ED_CliffAssembly",
   "ED_EmbankmentAssembly"
  ],
+ "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Seedling_01_PP.SM_BlackAlder_Seedling_01_PP": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
  "/Game/Custom/IvyTest/SM_CliffVine_08.SM_CliffVine_08": [
   "ED_CliffAssembly",
   "ED_RockSpire"
@@ -168,6 +172,113 @@
  ],
  "/Game/Custom/RootsTest/SM_Roots_13.SM_Roots_13": [
   "ED_SmallAssembly"
+ ],
+ "/Game/CustomAssets/Bridge/SM_Arch_Flat_01_N1.SM_Arch_Flat_01_N1": [
+  "DR_NordicTallPath"
+ ],
+ "/Game/Fab/Megascans/Plants/Dead_Shrubs_vdknafgha/Medium/vdknafgha_tier_2/StaticMeshes/SM_vdknafgha_VarA.SM_vdknafgha_VarA": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/Fab/Megascans/Plants/Dead_Shrubs_vdknafgha/Medium/vdknafgha_tier_2/StaticMeshes/SM_vdknafgha_VarE.SM_vdknafgha_VarE": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/Fab/Megascans/Plants/Grass_smdrailr/Medium/smdrailr_tier_2/StaticMeshes/SM_smdrailr_VarB.SM_smdrailr_VarB": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/Fab/Megascans/Plants/Grass_smdrailr/Medium/smdrailr_tier_2/StaticMeshes/SM_smdrailr_VarE.SM_smdrailr_VarE": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/Fab/Megascans/Plants/Wild_Grass_vlkhcbxia/Medium/vlkhcbxia_tier_2/StaticMeshes/SM_vlkhcbxia_VarB.SM_vlkhcbxia_VarB": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Beach_Boulder_uisjbbis/SM_Beach_Boulder_uisjbbis_01_N1.SM_Beach_Boulder_uisjbbis_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Beach_Boulder_ukopeess/SM_Beach_Boulder_ukopeess_01_N1.SM_Beach_Boulder_ukopeess_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Beach_Boulder_ukopeijs/SM_Beach_Boulder_ukopeijs_01_N1.SM_Beach_Boulder_ukopeijs_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Beach_Rock_wenobjws/SM_Beach_Rock_wenobjws_01_N1.SM_Beach_Rock_wenobjws_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Cracked_Nordic_Beach_Cliff_ulypfbkqa/SM_Cracked_Nordic_Beach_Cliff_ulypfbkqa_01_N1.SM_Cracked_Nordic_Beach_Cliff_ulypfbkqa_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/SM_Huge_Nordic_Coastal_Cliff_venrdcgga_01_N1.SM_Huge_Nordic_Coastal_Cliff_venrdcgga_01_N1": [
+  "DR_NordicMountain"
+ ],
+ "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/SM_Huge_Nordic_Coastal_Cliff_venrdcgga_03_N1.SM_Huge_Nordic_Coastal_Cliff_venrdcgga_03_N1": [
+  "DR_NordicMountain"
+ ],
+ "/Game/MS/3D/Icelandic_Rock_Assembly_tdbmcflda/SM_Icelandic_Rock_Assembly_tdbmcflda_N1.SM_Icelandic_Rock_Assembly_tdbmcflda_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Limestone_Slab_ubxbadpda/SM_Limestone_Slab_N1.SM_Limestone_Slab_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Massive_Nordic_Coastal_Cliff_ullqbb1ga/SM_Massive_Nordic_Coastal_Cliff_ullqbb1ga_N1.SM_Massive_Nordic_Coastal_Cliff_ullqbb1ga_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Massive_Nordic_Coastal_Cliff_vdssailfa/SM_Massive_Nordic_Coastal_Cliff_vdssailfa_01_N1.SM_Massive_Nordic_Coastal_Cliff_vdssailfa_01_N1": [
+  "DR_NordicMountain"
+ ],
+ "/Game/MS/3D/Massive_Nordic_Coastal_Cliff_vdssailfa/SM_Massive_Nordic_Coastal_Cliff_vdssailfa_02_N1.SM_Massive_Nordic_Coastal_Cliff_vdssailfa_02_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Massive_Nordic_Coastal_Cliff_vdssailfa/Smart/SM_vdssailfa_RM_N1.SM_vdssailfa_RM_N1": [
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Massive_Nordic_Coastal_Cliff_veqnci0db/SM_Massive_Nordic_Coastal_Cliff_veqnci0db_02_N1.SM_Massive_Nordic_Coastal_Cliff_veqnci0db_02_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rock_Formation_vjunffdfa/SM_Nordic_Beach_Rock_Formation_vjunffdfa_N1.SM_Nordic_Beach_Rock_Formation_vjunffdfa_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rock_uknnfet/SM_Nordic_Beach_Rock_uknnfet_02_N1.SM_Nordic_Beach_Rock_uknnfet_02_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rock_ukxmdhuga/SM_Nordic_Beach_Rock_ukxmdhuga_01_N1.SM_Nordic_Beach_Rock_ukxmdhuga_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rock_vgjicivmw/SM_Nordic_Beach_Rock_vgjicivmw_01_N1.SM_Nordic_Beach_Rock_vgjicivmw_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rock_vgjjbfvmw/SM_Nordic_Beach_Rock_vgjjbfvmw_01_N1.SM_Nordic_Beach_Rock_vgjjbfvmw_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Rocks_ulznddxva/SM_Nordic_Beach_Rocks_ulznddxva_01_N1.SM_Nordic_Beach_Rocks_ulznddxva_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Nordic_Beach_Stone_ulmkce0va/SM_Nordic_Beach_Stone_ulmkce0va_01_N1.SM_Nordic_Beach_Stone_ulmkce0va_01_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/MS/3D/Quarry_Cliff_ub5tefsda/SM_Quarry_Cliff_ub5tefsda_00_N1.SM_Quarry_Cliff_ub5tefsda_00_N1": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
  ],
  "/Game/Megascans/3D_Assets/BrokenStump/SM_BrokenStump_01.SM_BrokenStump_01": [
   "ED_CliffAssembly",
@@ -335,6 +446,14 @@
   "ED_CliffAssembly",
   "ED_EmbankmentAssembly"
  ],
+ "/Game/Megascans/3D_Assets/SmallStonesPack/SM_SmallStonesPack_10.SM_SmallStonesPack_10": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
+ "/Game/Megascans/3D_Assets/SmallStonesPack/SM_SmallStonesPack_12.SM_SmallStonesPack_12": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
+ ],
  "/Game/Megascans/3D_Assets/TundraRockyGround/SM_TundraRockyGround_01.SM_TundraRockyGround_01": [
   "ED_SmallAssembly"
  ],
@@ -460,7 +579,8 @@
   "ED_SmallAssembly"
  ],
  "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_02.SM_DragonTree_02": [
-  "ED_CliffAssembly"
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
  ],
  "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_03.SM_DragonTree_03": [
   "ED_CliffAssembly",
@@ -812,6 +932,10 @@
  "/Game/Meshes/_GENERATED/RockFormation/SM_SandstoneCliff_03.SM_SandstoneCliff_03": [
   "ED_CliffAssembly",
   "ED_EmbankmentAssembly"
+ ],
+ "/Game/PN_MeadowFlowers/Meshes/flowerMesh/flower_09_02.flower_09_02": [
+  "DR_NordicMountain",
+  "DR_NordicTallPath"
  ],
  "/Game/SmartAssets/AssetMeshes/SM_Cliff_01.SM_Cliff_01": [
   "ED_CliffAssembly",
