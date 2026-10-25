@@ -272,7 +272,7 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 |---|---|
 | `Tools/icon_studio.py` (+ `icon_studio_blender.py`), `Tools/icon_fix_process.py` | item icons from meshes; de-checker icons |
 | `Tools/kitbash.py` (+ blender), `Content/Python/item_tint.py`, `item_mesh_prepare` | item meshes from scans (`Docs/Item_Art_Pipeline.md`) |
-| `Tools/ede_migrate.py` | migrate Electric Dreams groups (gitignored content; prints .gitignore lines; never overwrites repaired files) |
+| `Tools/ede_migrate.py` | migrate sample-project groups (`--source ede` Electric Dreams, `--source darkruins` the Dark Ruins Megascans sample): gitignored content; appends .gitignore lines; never overwrites repaired files |
 | `Content/Python/fix_mesh_collision.py`, `prep_rock_meshes.py`, `prep_tree_collision.py`, `worldfeature_meshes.py` | collision for scatter / composition meshes |
 | `Content/Python/fix_substrate_shading_model_pin.py`, `fix_hornbeam_masters.py` | repair migrated masters so the cook works (re-run after every migration) |
 | `Content/Python/fix_megascans_import.py` | reparent Megascans exports onto M_MS_Base |

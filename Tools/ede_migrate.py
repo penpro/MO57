@@ -1,11 +1,14 @@
-"""Migrate a SELECTED slice of Epic's Electric Dreams Environment sample (D:\\UEProjects\\ElectricDreamsEnv) into MO57's Content, preserving package paths (what the editor's Migrate does).
+"""Migrate a SELECTED slice of a sample project into MO57's Content, preserving package paths (what the editor's Migrate does). Two sources (SOURCES):
+  ede        Epic's Electric Dreams Environment sample (D:\\UEProjects\\ElectricDreamsEnv): GROUPS, `Docs/ElectricDreams_Migrated.md`
+  darkruins  the Dark Ruins Megascans sample (D:\\UEProjects\\DarkRuinsMegascansSample; Wes, Oct 24 2026): DARKRUINS_GROUPS, `Docs/DarkRuins_Assets.md`
 
-    python Tools/ede_migrate.py scan            headless UnrealEditor-Cmd on the sample: hard-reference closure of every group below -> Saved/ede_selection.json
-    python Tools/ede_migrate.py copy [--dry]    copy the closure's files (.uasset/.uexp/.ubulk/.uptnl) into Content/, never overwriting a different file; writes Docs/ElectricDreams_Migrated.md
-                                                and .gitignore lines for the NEW folders (third-party content stays out of git/LFS, like UltraDynamicSky)
+    python Tools/ede_migrate.py scan [--source S]          headless UnrealEditor-Cmd on the sample: reference closure of every group -> Saved/<S>_selection.json
+    python Tools/ede_migrate.py copy [--source S] [--dry]  copy the closure's files (.uasset/.uexp/.ubulk/.uptnl) into Content/, never overwriting a different file,
+                                                           and append .gitignore lines for the NEW folders (third-party content stays out of git/LFS, like UltraDynamicSky)
 
-The sample is Epic content licensed for use in Unreal Engine projects. Nothing here downloads anything. Needs the ElectricDreamsEnv project on disk; the editor on MO57 may stay closed.
-Add a group by listing /Game folders / assets in GROUPS (a group's closure is hard references inside /Game only; engine assets are always available).
+The samples are Epic / Quixel content licensed for use in Unreal Engine projects. Nothing here downloads anything. Needs the sample project on disk; the editor on
+MO57 may stay closed. Add a group by listing /Game folders / assets in the source's groups (a group's closure is hard references inside /Game only, plus soft ones
+when the group's third element is True; engine assets are always available).
 """
 import argparse
 import filecmp
@@ -15,10 +18,7 @@ import shutil
 import subprocess
 import sys
 
-SRC_PROJECT = r"D:\UEProjects\ElectricDreamsEnv\ElectricDreamsEnv.uproject"
-SRC_CONTENT = r"D:\UEProjects\ElectricDreamsEnv\Content"
 DST_CONTENT = r"D:\UEProjects\MO57\Content"
-SELECTION = r"D:\UEProjects\MO57\Saved\ede_selection.json"
 from ue import EDITOR_CMD  # noqa: E402
 EXTS = (".uasset", ".umap", ".uexp", ".ubulk", ".uptnl", ".upayload")
 
@@ -49,6 +49,31 @@ GROUPS = [
                                                                          "/Game/Asmbly/BPP_Asmbl_HangingVines_03", "/Game/Asmbly/BPP_Asmbl_HangingVines_04", "/Game/Asmbly/BPP_Asmbl_HangingVines_05",
                                                                          "/Game/Custom/IvyTest"], True),
 ]
+
+# The Dark Ruins Megascans sample (Wes, Oct 24 2026: "there's a bunch of very large rocky assets in the dark ruins megascans project ... the big western cliffs
+# are ENORMOUS and could help really get some good looking cliffs without a shit ton of cpu calls"). Its scans use the Smart master material (/Game/Smart) and
+# its detail textures (/Game/Textures/Detail, /Game/Materials/Custom). Only what the world uses is listed; the candidates are in Docs/DarkRuins_Assets.md.
+MS3D = "/Game/MS/3D/"
+DARKRUINS_GROUPS = [
+    ("cliffs: Huge Nordic Coastal Cliff (Smart; the crags and NordicStrand's coast)", [MS3D + "Huge_Nordic_Coastal_Cliff_venrdcgga/Smart"]),
+    ("cliffs: Desert Western Cliff Sheer XL 04 (Smart; Wes's own migration)", [MS3D + "Desert_Western_Cliff_Sheer_Xl_04_xgknben/Smart"]),
+]
+
+SOURCES = {
+    "ede": {"project": r"D:\UEProjects\ElectricDreamsEnv\ElectricDreamsEnv.uproject", "groups": GROUPS, "label": "Electric Dreams slice", "plugins": ""},
+    # the sample has no Python plugin: the scan enables it for that run only (nothing in the sample changes)
+    "darkruins": {"project": r"D:\UEProjects\DarkRuinsMegascansSample\DarkRuinsMegascansSample.uproject", "groups": DARKRUINS_GROUPS,
+                  "label": "Dark Ruins Megascans sample", "plugins": "PythonScriptPlugin,EditorScriptingUtilities"},
+}
+
+
+def source(name):
+    src = dict(SOURCES[name])
+    src["name"] = name
+    src["content"] = os.path.join(os.path.dirname(src["project"]), "Content")
+    src["selection"] = os.path.join(os.path.dirname(DST_CONTENT), "Saved", "%s_selection.json" % name)
+    return src
+
 
 SCAN_SCRIPT = r'''
 import json, os
@@ -108,16 +133,18 @@ unreal.log_warning("EDEMIGRATE scan done: %%d packages" %% len(have))
 '''
 
 
-def scan():
-    os.makedirs(os.path.dirname(SELECTION), exist_ok=True)
-    script = os.path.join(os.path.dirname(SELECTION), "ede_scan_script.py")
+def scan(src):
+    os.makedirs(os.path.dirname(src["selection"]), exist_ok=True)
+    script = os.path.join(os.path.dirname(src["selection"]), "%s_scan_script.py" % src["name"])
     with open(script, "w") as f:
-        f.write(SCAN_SCRIPT % (json.dumps(GROUPS), SELECTION, SRC_CONTENT))
-    cmd = [EDITOR_CMD, SRC_PROJECT, "-ExecutePythonScript=" + script, "-RenderOffScreen", "-unattended", "-nosplash", "-stdout", "-FullStdOutLogOutput"]
+        f.write(SCAN_SCRIPT % (json.dumps(src["groups"]), src["selection"], src["content"]))
+    cmd = [EDITOR_CMD, src["project"], "-ExecutePythonScript=" + script, "-RenderOffScreen", "-unattended", "-nosplash", "-stdout", "-FullStdOutLogOutput"]
+    if src["plugins"]:
+        cmd.append("-EnablePlugins=" + src["plugins"])
     r = subprocess.run(cmd, capture_output=True, text=True)
     lines = [l for l in (r.stdout or "").splitlines() if "EDEMIGRATE" in l]
     print("\n".join(lines) or "no EDEMIGRATE line: scan failed (exit %d)" % r.returncode)
-    return os.path.exists(SELECTION)
+    return os.path.exists(src["selection"])
 
 
 def files_of(pkg, root):
@@ -125,19 +152,19 @@ def files_of(pkg, root):
     return [base + e for e in EXTS if os.path.exists(base + e)]
 
 
-def copy(dry):
-    sel = json.load(open(SELECTION))
+def copy(src, dry):
+    sel = json.load(open(src["selection"]))
     copied = skipped_same = 0
     conflicts, new_dirs, per_group = [], set(), {}
     nbytes = 0
     for name, pkgs in sel.items():
         gbytes = 0
         for pkg in pkgs:
-            for src in files_of(pkg, SRC_CONTENT):
-                rel = os.path.relpath(src, SRC_CONTENT)
+            for f in files_of(pkg, src["content"]):
+                rel = os.path.relpath(f, src["content"])
                 dst = os.path.join(DST_CONTENT, rel)
                 if os.path.exists(dst):
-                    if filecmp.cmp(src, dst, shallow=False):
+                    if filecmp.cmp(f, dst, shallow=False):
                         skipped_same += 1
                     else:
                         conflicts.append(rel)
@@ -153,9 +180,9 @@ def copy(dry):
                     new_dirs.add(os.path.relpath(top_new, DST_CONTENT).replace(os.sep, "/"))
                 if not dry:
                     os.makedirs(d, exist_ok=True)
-                    shutil.copy2(src, dst)
+                    shutil.copy2(f, dst)
                 copied += 1
-                sz = os.path.getsize(src)
+                sz = os.path.getsize(f)
                 nbytes += sz
                 gbytes += sz
         per_group[name] = gbytes
@@ -176,7 +203,7 @@ def copy(dry):
         add = ["Content/" + d + "/" for d in folded if "Content/" + d + "/" not in existing]
         if add:
             with open(gitignore, "a", encoding="utf-8") as f:
-                f.write("\n# Electric Dreams slice (Tools/ede_migrate.py): third-party, re-created by `ede_migrate.py copy`\n" + "\n".join(add) + "\n")
+                f.write("\n# %s (Tools/ede_migrate.py): third-party, re-created by `ede_migrate.py copy --source %s`\n" % (src["label"], src["name"]) + "\n".join(add) + "\n")
             print("  -> appended %d line(s) to .gitignore" % len(add))
     if not dry and copied:
         # The copied meshes come with Electric Dreams' collision (many cliffs have none, or a few hulls a 4x outcrop falls through). The fix lives in
@@ -188,8 +215,9 @@ def copy(dry):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("action", choices=("scan", "copy"))
+    ap.add_argument("--source", choices=sorted(SOURCES), default="ede")
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
     if a.action == "scan":
-        sys.exit(0 if scan() else 1)
-    copy(a.dry)
+        sys.exit(0 if scan(source(a.source)) else 1)
+    copy(source(a.source), a.dry)

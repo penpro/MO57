@@ -147,3 +147,8 @@ Content/__ExternalActors__/Asmbly/
 
 # Project Nature Wild Berries (Fab, 2026-10-14): 635 MB of berry-bush scans, local only like the other plant packs; not used by items
 Content/PN_WildBerries/
+
+# Dark Ruins Megascans sample (Tools/ede_migrate.py --source darkruins, Docs/DarkRuins_Assets.md): third-party, re-created by `ede_migrate.py copy --source darkruins`
+Content/MS/
+Content/Smart/
+Content/Materials/Custom/

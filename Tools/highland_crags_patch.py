@@ -15,7 +15,10 @@ What it writes (every biome row it changes is sent whole: rows set replaces nest
      Upright (closed rocks: a 30 m formation does not lean with the slope), any yaw, sunk 22 % of their height. A biome's factor scales the crags (the heath gets fewer).
   3. GRANITE SUMMITS: AlpineRock's ground -> VST_Cliff (rock_05: a grey speckled granite, already in the mega material for the cave walls) instead of VST_MI_IcelandicQuarryRock
      (a saturated red quarry scan under grey and white boulders). The red was AlpineRock's (>= 950 m), not RockyHighland's (MossyRockyGround is brown-green moss).
-Idempotent: a rerun replaces the crag group (ClusterGroup 8) instead of adding it twice.
+  4. THE HUGE NORDIC COASTAL CLIFF (Oct 24 night, from Wes's Dark Ruins Megascans sample: /Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart, 14 x 8 x
+     9 m, open only underneath -- "we can handle the larger taller ones that have only the bottom open"): a fifth crag formation in its own Smart
+     material, and NordicStrand's rocky coast gets clusters of it (ClusterGroup 9). Landmarks, solid, upright, the open base buried.
+Idempotent: a rerun replaces the crag group (ClusterGroup 8) and the coastal group (9) instead of adding them twice.
 """
 import copy
 import json
@@ -27,6 +30,9 @@ CRAG_BIOMES = {"RockyHighland": 1.0, "AlpineHeath": 0.6, "AlpineRock": 1.2}
 CLIFF_DENSITY = 0.3          # per hectare per formation mesh, authored (realised ~0.56x of it on average; ~2.4 / ha each inside a core)
 BOULDER_RING_DENSITY = 0.3   # per hectare per boulder mesh round the crags
 CLIFFS = ["Cliff_BroadCliffBlock01", "Cliff_SheerBlockTower01", "Cliff_LeaningSlabStack01", "Cliff_OverhangingButtress01"]
+NORDIC_CLIFF = "/Game/MS/3D/Huge_Nordic_Coastal_Cliff_venrdcgga/Smart/SM_venrdcgga_RM_N1.SM_venrdcgga_RM_N1"
+COAST_GROUP = 9
+COAST_BIOMES = {"NordicStrand": 0.35}   # per hectare, authored (in clusters: ~2-3 a hectare inside one)
 GRANITE_GROUND = "/Game/VoxelExamples/NaniteMaterials/Materials/Cliff/VST_Cliff.VST_Cliff"
 
 
@@ -69,6 +75,10 @@ def main():
                           "MaxRandomTiltDeg": 6, "bAutoSweepOnTerraform": False, "Collision": "Solid", "MinScale": 0.5, "MaxScale": 1.05, "ScaleBias": 1.5, "WidthScale": 1,
                           "bLandmark": True, "MaterialOverride": granite})
                 crags.append(e)
+            e = copy.deepcopy(crags[0])   # the Dark Ruins cliff: a fifth formation, its own (Smart) material, 11-22 m
+            e.update({"Mesh": NORDIC_CLIFF, "MaterialOverride": "None",
+                      "MinScale": 0.8, "MaxScale": 1.6, "SinkFraction": 0.2})
+            crags.append(e)
             for b in [e for e in kept if e["ScaleBias"] == 2]:   # the biome's large boulders, strewn round the formations
                 e = copy.deepcopy(b)
                 e.update({"DensityPerHectare": round(BOULDER_RING_DENSITY * k, 3), "ClusterRadius": CRAG_RADIUS_CM, "ClusterGroup": CRAG_GROUP, "ClusterCore": 0.6,
@@ -76,7 +86,19 @@ def main():
                 crags.append(e)
             row["species"] = kept + crags
             changed = True
-            report.append("%s: crags %d formation + %d boulder entries (x%.1f)" % (biome, len(CLIFFS), len(crags) - len(CLIFFS), k))
+            report.append("%s: crags %d formation + %d boulder entries (x%.1f)" % (biome, len(CLIFFS) + 1, len(crags) - len(CLIFFS) - 1, k))
+        # 4. the Nordic coastal cliffs
+        if biome in COAST_BIOMES:
+            kept = [e for e in row["species"] if e["ClusterGroup"] != COAST_GROUP]
+            e = copy.deepcopy(template)
+            e.update({"Mesh": NORDIC_CLIFF, "DensityPerHectare": COAST_BIOMES[biome], "ClusterRadius": 8000.0, "ClusterGroup": COAST_GROUP, "ClusterCore": 0.65,
+                      "HISMTag": "MOBiomeCover_Rock", "ResourceNodeId": "None", "bAlignToSurfaceNormal": False, "bFaceDownhill": False, "FaceYawDeg": 0,
+                      "SinkFraction": 0.2, "SinkMinCm": 0, "BaseRadiusCm": 0, "bLieOnSlope": False, "LieShowFraction": 0.15, "MaxGroundReliefFraction": 0,
+                      "MinSlopeDeg": 0, "MaxSlopeDeg": 55, "MaxRandomTiltDeg": 6, "bAutoSweepOnTerraform": False, "Collision": "Solid", "MinScale": 0.7,
+                      "MaxScale": 1.4, "ScaleBias": 1.5, "WidthScale": 1, "bLandmark": True, "MaterialOverride": "None"})
+            row["species"] = kept + [e]
+            changed = True
+            report.append("%s: Nordic coastal cliffs (group %d, %.2f / ha)" % (biome, COAST_GROUP, COAST_BIOMES[biome]))
         if changed:
             patch.setdefault(biome, {})["species"] = row["species"]
         report.append("%s: %d landmark entries outside the crags" % (biome, marks))

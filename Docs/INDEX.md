@@ -56,6 +56,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/Item_Art_Pipeline.md` | Fab scan -> item mesh -> tint / kitbash -> icon studio; Fab panel traps | Giving an item art or an icon |
 | `Docs/Technology_History.md` | How technology really advanced (heat ladder, materials, mining) with sources | Progression / heat / mining design |
 | `Docs/ElectricDreams_Lessons.md`, `Docs/ElectricDreams_Migrated.md` | What to take from Epic's Electric Dreams sample; what was migrated | Environment / PCG references |
+| `Docs/DarkRuins_Assets.md` | The Dark Ruins Megascans sample: the cliffs migrated (gitignored, `ede_migrate.py --source darkruins`), the western cliff, candidates for rocks, items and ruins | Environment / PCG references |
 | `Docs/MedievalDynasty_Village_Reference.md` | The village-loop north star mapped to MO57 | Colony / village design |
 | `Docs/MO57_Colony_Management_Design.docx` | The colony management design (Word) | Colony UI / personality design |
 | `Docs/Engine_Patches.md` + `Docs/EnginePatches/` | Engine-side bugs: evidence, diffs, apply / verify / revert, upstream report | Before touching engine source |
