@@ -63,6 +63,17 @@ Far tiers use the engine's per-instance `InstanceMinDrawDistance`, which needs `
 no shadow and no ray tracing; native grass fades 150-200 m (`tune_native_grass.py`). Filter enum values were APPENDED (4..6) so
 saved graphs keep their meaning.
 
+**The glowing grass (BR23-11 / BR24-21; Wes, Oct 25 2026: "for the love of god, fix the weird glowing/weirdly shaded grass").** The lawn
+grass is Megascans Two Sided Foliage; the light it passes through its blades is Desaturate(BaseColor x Mask x Controls.G, 1 - Controls.R)
+^ Controls.B per `Translucency Controls*` vector (`QMF_GenerateTranslucency`; measured live: R = saturation, G = strength, B = exponent).
+The wild / thatching grass shipped at strength 5.0 with exponent 0.5 (a square root lifting every dim value), the lawn grass leaves 3.0:
+the transmitted light out-shone the lit side, so the blades read pale, self-lit, and a shadow on them (a tree's, the pawn's) drowned in it.
+`Content/Python/fix_foliage_transmission.py` caps every instance under M_MS_Foliage / M_MS_Billboard at strength 0.5, exponent >= 1
+(14 instances, 11 changed; rerun after importing plants; test `MOFramework.Rendering.FoliageTransmissionCapped`). A/B (seed 4242, noon,
+toward the sun): `D:/MOAssets/previews/grass/g0_spawn.png` before, `g4_s05_e1.png` after, `shadow_strip.png` (original / capped /
+no transmission / capped without VSM: VSM is not the fault, turning it off made the blades paler). The grass still CASTS no shadow
+(ground cover, for cost); receiving was never off.
+
 ## 4. The chokepoints (one rule each, every chain passes through)
 
 - **`MOPCGElevationBands`**: every spawner chain passes one. `bExcludeWater` (default on) + `AllowedBiomeIds` + `bExcludeCaves`.
