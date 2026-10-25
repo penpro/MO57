@@ -9,7 +9,7 @@
 > **Entry points:** graph `MOPCG_StampScatter1` (game level `/Game/VoxelExamples/PCGScattering/MOPCGScattering`, menu
 > `/Game/Penumbra/Maps/LoadingLevel`); `UMOPCGBiomeSpawnerSettings`, `UMOPCGElevationBandsSettings`, `FMOPCGWaterMask`
 > (`MOPCGWaterMask.h`), `UMOPCGCaveSpawnerSettings`, `UMOWorldRemovalSubsystem`, `FMOHISMHarvestHelper`,
-> `UMOWorldReadinessSubsystem`; palettes `Content/Python/biome_palettes.py` + `Docs/Ground_Coverage_2026-10-14.plan.json`.
+> `UMOWorldReadinessSubsystem`; palettes: the live DT_Biomes (source of truth since Oct 25, N-204), changed by targeted patch tools.
 > **Dev verbs:** `MO.PCG.Census [r]`, `.Grounding <mesh substr> [r]` (does each base touch the ground: worst point of its base outline, by slope), `.Rings`, `.MeshSurvey [top]`, `.HideTag <tag> [0|1]`, `.HideMesh <substr> [0|1]`,
 > `.WaterAudit [r]`, `.ResourceCensus <r>`, `MO.WorldGen.FindBiomeSpot <id> [km] [rough] [go]`, `.BiomeStats`,
 > `MO.Readiness.Dump|Restart|Force`, `MO.Test.RemovalPersists`, `MO.Test.WorldRemovalAudit`; cvars `mo.PCG.BiomeSoftPick`,
@@ -95,10 +95,7 @@ saved graphs keep their meaning.
 
 ## 5. Palettes: where the numbers live
 
-- `Content/Python/biome_palettes.py` builds the palettes and applies the per-tier factors of
-  `Docs/Ground_Coverage_2026-10-14.plan.json` (`<tier>`, `<tier>:<HISMTag>`, `<tier>_core_max`). Regenerate:
-  `python Tools/ue.py py --file Content/Python/biome_palettes.py`, then `python Tools/ue.py rows set .../DT_Biomes --file
-  Saved/Logs/biome_palettes.json`, then diff live vs script.
+- **The live DT_Biomes is the source of truth** (Oct 25 2026, N-204): a palette changes only through a targeted patch tool with readback (`ue.py rows get` -> patch -> `ue.py rows set`: `Tools/highland_crags_patch.py`, `rock_scale_cap.py`, `remove_open_geometry.py`, `pcg_stocking.py`'s plans, the Content/Python `*_patch` / `fix_*` scripts). `Content/Python/biome_palettes.py` is the AUTHORED palettes of Oct 10-16 and no longer applies: run plainly it writes nothing; `BIOME_PALETTES_REGENERATE=True` writes `Saved/Logs/biome_palettes_regen.json` and prints per row the live entries the plan lacks (Oct 25: 89 across all 11 rows -- the crags, the Dark Ruins cliffs, the size tiers, the coverage boulders), so it cannot revert the table by accident.
 - **The script has DRIFTED from the live table (Oct 16):** Meadow / RockyHighland / DryScrub / AlpineHeath have +1 species live;
   Rainforest hazel densities live are ~0.7x; live has 42 Black Alder tree entries vs 28 in the plan. Regenerating would revert live
   tuning: diff plan vs `ue.py rows get` first, or edit live rows directly (rows set with the FULL live species arrays; `rows list`

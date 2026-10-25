@@ -45,6 +45,7 @@ def tier(sp):
 # bunches around 0.5, so a core of 0.7 covers ~7 % of the ground, not 30 %. This samples the engine's own noise (ported below, permutation table
 # read from the engine source) so the model sees the same distribution. Until Oct 14 2026 this model drew the field uniformly -- and so did the
 # spawner's compensation, which is why forests realised a quarter of their authored trees (see UMOPCGBiomeSpawnerSettings::ClumpCoverage).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # loaded by file path from the editor too (biome_palettes.py): Tools is not on its path
 import ue  # noqa: E402
 UE_ROOT = os.environ.get("UE_ROOT") or ue.ENGINE_ROOT
 MAX_CLUMP_CONCENTRATION = 8.0   # UMOPCGBiomeSpawnerSettings::MaxClumpConcentration

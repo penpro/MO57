@@ -177,8 +177,8 @@ Wes: "create some biome test levels that we can audit things inside of independe
   compositions' spawners all BlockAll (the mesh decides). `FIXCOLL_FORCE=("Tree", "Sapling", "Bush")` rebuilds even "done" meshes: a shape list edited without
   rebuilding the cooked physics keeps the OLD collision in game (BlackAlder trees walked through with a correct capsule in the asset). Composition meshes come from
   `Content/Python/data/worldfeature_meshes.json` (`worldfeature_meshes.py` spawn/collect in PIE; the collect MERGES -- a seed never shows every mesh).
-- Policy source of truth: `Content/Python/biome_palettes.py` -> DT_Biomes (`MSYS_NO_PATHCONV=1 python Tools/ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes
-  --file Saved/Logs/biome_palettes.json`; diff the plan against the live table first). Species slope band: `MinSlopeDeg` / `MaxSlopeDeg`.
+- Policy source of truth: the live DT_Biomes (Oct 25 2026, N-204), changed by targeted patch tools with readback (`Docs/PCG.md` § 5);
+  `Content/Python/biome_palettes.py` is the authored history and no longer applies. Species slope band: `MinSlopeDeg` / `MaxSlopeDeg`.
 - Item meshes (`/Items/`, e.g. Bark01 = shore driftwood AND the bark pickup) keep convex hulls even when a palette marks them Solid: a dropped world item
   simulates physics, and a complex-as-simple body cannot.
 - Rendering side of the palette: `Content/Python/enable_palette_nanite.py` (dry run by default; `NANITE_APPLY = True` in a `-c` prelude) turns Nanite on for
@@ -554,7 +554,7 @@ Cross-build determinism: `Tools/ov_task.sh` history shows the whole packaging + 
 | `MO.Weather.Director 0\|1` (cvar), `MO.Weather.Director.Info`, `.Next` | the weather that changes by itself |
 | `QUIT_EDITOR` (`python Tools/ue.py run QUIT_EDITOR`) | leaves the editor with NO save prompt. The window close box (CloseMainWindow) raises a "Save Content" dialog for LoadingLevel every time since the menu level holds the generated terrain |
 | `python Tools/ue.py ui menu` then `python Tools/ue.py asset shot pie out.png` | PIE at the main menu and a full-resolution game-view capture (the capture has no UMG; `ui shot` has) |
-| `Content/Python/biome_palettes.py` | the biome palettes as data -> `Saved/Logs/biome_palettes.json` -> `ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes --file ...` |
+| `Content/Python/biome_palettes.py` | the AUTHORED biome palettes (Oct 10-16); retired as an applier (N-204): `BIOME_PALETTES_REGENERATE=True` writes `Saved/Logs/biome_palettes_regen.json` and lists the live entries it lacks |
 | `Content/Python/audit_mesh_collision.py` (PIE) / `audit_table_mesh_collision.py` / `fix_mesh_collision.py` | collision audit of what is spawned / of every mesh the tables can place / the fix |
 
 Traps met (each cost a build cycle): a `TAutoConsoleVariable` and a console COMMAND with the same name are a **fatal** error at the first PIE ("can't be replaced with the new one of different type"): name commands `.Info`/`.Next`;

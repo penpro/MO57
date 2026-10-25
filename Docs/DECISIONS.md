@@ -346,6 +346,9 @@ Wes's votes on the first review page (notes word for word: `Docs/BugReports_2026
 - 2026-03-18 (native-functionality audit): systems confirmed custom -- persistence / identity (GUID), medical simulation (no GAS), building (weighted
   build parts), FastArraySerializer, TSoftObjectPtr.
 - Standing policy: **No pause, ever** (`Docs/PAUSE_POLICY.md`, enforced in `AMOPlayerController::SetPause`).
+- **The live DT_Biomes is the palettes' source of truth** (Claude, 2026-10-25, N-204; a tooling call): changed only by targeted patch tools
+  with readback; `Content/Python/biome_palettes.py` no longer applies (re-syncing a 700-line script after every live edit drifted within a day;
+  its plan would have dropped 89 live entries). `Docs/PCG.md` § 5.
 - **Dev saves are disposable** (Wes, 2026-10-25: "scrap my saves/autosaves every build, if i want save games i'll play them on steam"): `ue.py build`
   and `cycle` delete `Saved/SaveGames/*.sav` and `Saved/Autosaves*` before UBT runs (`scrap_dev_saves`, `--keep-saves` skips it). The packaged /
   Steam game's saves (`%LOCALAPPDATA%\MO57\Saved\SaveGames`) are never touched. Replaces "never touch Wes's saves (Harper_Wright-01, Test158, v1gate)".

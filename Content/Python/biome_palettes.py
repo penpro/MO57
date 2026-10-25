@@ -1,9 +1,13 @@
-"""The biome palettes of DT_Biomes as DATA: what grows where, and how thick. One place to read and tune the look of the land.
+"""The biome palettes of DT_Biomes as they were AUTHORED (Oct 10-16 2026): what grows where and why. RETIRED AS AN APPLIER (Oct 25 2026, N-204).
 
-Apply with the editor open:
-    python Tools/ue.py py --file Content/Python/biome_palettes.py          (writes Saved/Logs/biome_palettes.json and prints the plan)
-    python Tools/ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes --file Saved/Logs/biome_palettes.json     (existing rows: species arrays are replaced wholesale)
-The new biome (AlpineHeath) is added by apply_biome_palettes() below through the in-editor DataTable API.
+The live DT_Biomes (the committed uasset) is the source of truth; it is changed only by targeted patch tools with readback (Tools/highland_crags_patch.py,
+rock_scale_cap.py, remove_open_geometry.py, pcg_stocking.py, the Content/Python *_patch / fix_* scripts: `ue.py rows get` -> patch -> `ue.py rows set`).
+Since Oct 16 a dozen live-only edits (the crags, landmarks, the x5 rock cap, the open-geometry removals, the Dark Ruins cliffs, the rainforest x1.25,
+the alder burial ...) are in the table and not here, so applying this plan would revert every one of them. Running this file now prints that and writes
+nothing; to look at the authored palettes against the live table on purpose:
+    python Tools/ue.py py -c "BIOME_PALETTES_REGENERATE=True; exec(open('D:/UEProjects/MO57/Content/Python/biome_palettes.py', encoding='utf-8').read())"
+writes Saved/Logs/biome_palettes_regen.json (never the old biome_palettes.json name) and prints, per row, how many LIVE entries the plan lacks.
+Its helpers and constants (BASE_RADIUS_CM, species(), far_grass() ...) stay the reference for what a palette entry means.
 
 WARNING (Oct 16 2026): this script has DRIFTED from the live DT_Biomes -- Meadow, RockyHighland, DryScrub and AlpineHeath each have one more species live, and the
 Rainforest hazel densities live are ~0.7x the values here (tuned in the table later). Applying the plan would REVERT those. Diff the plan against `ue.py rows get`
@@ -692,13 +696,35 @@ def write_plan():
     out["ElectricForest"] = ELECTRIC_FOREST
     out["NordicStrand"] = NORDIC_STRAND
     apply_coverage_plans(out)
-    with open("D:/UEProjects/MO57/Saved/Logs/biome_palettes.json", "w", encoding="utf-8") as f:
+    with open("D:/UEProjects/MO57/Saved/Logs/biome_palettes_regen.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)
+    live_only_report(out)
     for name, sp in list(PALETTES.items()) + [("AlpineHeath", ALPINE["species"]), ("AlpineRock", ALPINE_ROCK["species"]), ("Rainforest", RAINFOREST["species"]), ("ElectricForest", ELECTRIC_FOREST["species"]), ("NordicStrand", NORDIC_STRAND["species"])]:
         total = sum(s["DensityPerHectare"] for s in sp)
         trees = sum(s["DensityPerHectare"] for s in sp if s["HISMTag"] == "MOResource_Tree")
         print("PALETTE %-16s %2d species, %5.0f instances/ha (%4.0f trees)" % (name, len(sp), total, trees))
 
 
-if __name__ == "__main__" or True:
+def live_only_report(out):
+    """Per row: the live entries (mesh, tag, clump group) the authored plan lacks -- what applying it would throw away."""
+    try:
+        import unreal
+    except ImportError:
+        print("PALETTE (no editor: the live table was not compared)")
+        return
+    table = unreal.load_asset("/MOFramework/Data/DT_Biomes")
+    live = json.loads(unreal.DataTableFunctionLibrary.export_data_table_to_json_string(table))
+    for row in live:
+        plan = out.get(row["Name"], {}).get("species")
+        if plan is None:
+            continue
+        planned = {(e["Mesh"], e["HISMTag"], e["ClusterGroup"]) for e in plan}
+        lost = [e for e in row.get("Species") or [] if (e["Mesh"], e["HISMTag"], e["ClusterGroup"]) not in planned]
+        print("PALETTE %-16s the plan lacks %d live entries%s" % (row["Name"], len(lost), (": " + ", ".join(sorted({e["Mesh"].split(".")[-1][:28] for e in lost})[:6])) if lost else ""))
+
+
+if globals().get("BIOME_PALETTES_REGENERATE"):
     write_plan()
+else:
+    print("PALETTE retired as an applier (N-204): the live DT_Biomes is the source of truth -- edit it with a targeted patch tool. "
+          "Set BIOME_PALETTES_REGENERATE=True to write Saved/Logs/biome_palettes_regen.json and compare it with the live table.")
