@@ -162,6 +162,14 @@ saved graphs keep their meaning.
     compensation packs ~10 a hectare there, so they overlap into one formation). The biome's large boulders strew the ring round them
     (core 0.6). Upright (a closed formation does not lean with the slope), any yaw, sunk 22 % of their height, solid, landmarks. The heath gets
     0.6x, the alpine rock 1.2x.
+  - **Rock detail layer** (Oct 25; Wes: "the large rocks from trellis have shitty resolution on the texture"): the formations already
+    carry 8192^2 bakes, but one UV atlas over a 30 m rock is <= ~270 texels / m, and tiling an atlas 2x2 would scramble it (scattered
+    charts). `Content/Python/rock_detail_layer.py` gives `/Game/Materials/FabOverrides/M_MS_Base` a static switch "Enable Rock Detail"
+    (OFF by default: every other item on the master keeps its shader) -- a world-aligned (triplanar) tile of the terrain's own granite
+    (`rock_05`, CC0; its OpenGL normal copied as DirectX: `/Game/ImageTo3D/Shared/T_Rock05_Normal_DX`), its brightness over its mean (0.27)
+    modulating the bake and its normal blended angle-correctly into the bake's; Detail Size 200 cm, albedo 0.5, normal 0.7 (group
+    "Rock Detail"). On for the four formations' `MI_*_MO` (every rock-type variant inherits it). Shots from the same camera:
+    `D:/MOAssets/previews/crag_close_off.png` / `_on.png` (2.5 m: the bake's smear and chart seams vs granite grain and pits).
   - **The Huge Nordic Coastal Cliff** (Oct 24 night, from the Dark Ruins Megascans sample, `Docs/DarkRuins_Assets.md`: 14 x 8 x 9 m, open only
     underneath) is a fifth crag formation in its own scanned material (x0.8-1.6, sunk 20 %) and grows in clusters on NordicStrand's coast (clump
     group 9, period 320 m, core 0.65, 0.35 / ha). PIE seed 777 (AlpineRock): 333 of them against 299-341 of each TRELLIS formation, as authored.
