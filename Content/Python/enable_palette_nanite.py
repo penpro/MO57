@@ -31,16 +31,30 @@ def palette_meshes():
     return sorted(paths)
 
 
+# Meshes on this master stay CLASSIC (BR23-10, Oct 25 2026): under Nanite MA_Flowers writes wrong motion vectors (its Pivot Painter / player-bend
+# wind), so motion blur and TSR smeared the flowers into ghosts -- measured in PIE, Content/Python/flower_meshes_non_nanite.py. Their LOD steps
+# cross-fade instead (MA_Flowers' Dithered LOD Transition).
+CLASSIC_MASTERS = ("/Game/PN_MeadowFlowers/Materials/flowerMaterials/MA_Flowers.MA_Flowers",)
+
+
+def stays_classic(sm):
+    return any(m and m.get_base_material().get_path_name() in CLASSIC_MASTERS
+               for m in (sm.get_material(i) for i in range(len(sm.get_editor_property("static_materials")))))
+
+
 def is_foliage(path):
     return any(h.lower() in path.lower() for h in FOLIAGE_HINTS)
 
 
 def main():
-    changed, already, missing = [], 0, []
+    changed, already, missing, classic = [], 0, [], 0
     for path in palette_meshes():
         sm = unreal.load_asset(path)
         if not isinstance(sm, unreal.StaticMesh):
             missing.append(path)
+            continue
+        if stays_classic(sm):
+            classic += 1
             continue
         ns = sm.get_editor_property("nanite_settings")
         if ns.get_editor_property("enabled"):
@@ -60,8 +74,8 @@ def main():
         unreal.EditorAssetLibrary.save_asset(path.split(".")[0], only_if_is_dirty=False)
     for path, foliage, lods in changed:
         print("NANITE %s %s (%d classic LODs)%s" % ("ON " if NANITE_APPLY else "OFF", path, lods, "  foliage: preserve area" if foliage else ""))
-    print("NANITE summary: %d %s, %d already Nanite, %d not static meshes %s" % (
-        len(changed), "turned on" if NANITE_APPLY else "would be turned on", already, len(missing), missing[:5]))
+    print("NANITE summary: %d %s, %d already Nanite, %d kept classic (CLASSIC_MASTERS), %d not static meshes %s" % (
+        len(changed), "turned on" if NANITE_APPLY else "would be turned on", already, classic, len(missing), missing[:5]))
 
 
 main()

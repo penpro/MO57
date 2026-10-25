@@ -60,6 +60,14 @@
 ## Decisions, newest first
 
 ### 2026-10-25
+- **The PN meadow flowers render classic, not Nanite** (BR23-10; partly reverses Oct 14's "palette foliage on Nanite", which answered Wes's
+  "these little dry grass assets are LOD switching which means they're not nanite enabled"). Measured in PIE: under Nanite the flowers' own
+  material writes wrong motion vectors, so motion blur and TSR smeared them ("a few of these little flowers are blurry", "look good here ... but
+  weird and blurry in other places": the good ones were the native scatter's classic lupines). Their LOD steps cross-fade instead
+  (MA_Flowers' Dithered LOD Transition). The grasses and every other palette mesh stay Nanite. If the flowers' LOD changes still show, the
+  next step is the wind function's previous-frame position under Nanite, not Nanite off for more meshes.
+- **Ground cover fades only right at the lens** (15-45 cm, was the foliage's 40-160 cm): grass and flowers under the low third-person camera
+  were a moving screen door ("dotted" blades). Shrubs, ferns and trees keep 40-160 cm (the reason the fade exists: never look through leaves).
 - **Cliffs are bespoke compositions, not voxel stamps** (closes F9). Wes: "the huge cliffs we just imported look pretty good but we need to
   have more of them and we need stuff spawned on top of them ... there's a feature of voxel plugin to make voxelized meshes, would those big
   ass cliffs work well as actual voxel meshes that get added as voxel stamps? ... either way we probably need to combine some assets to make a

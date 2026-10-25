@@ -74,6 +74,21 @@ toward the sun): `D:/MOAssets/previews/grass/g0_spawn.png` before, `g4_s05_e1.pn
 no transmission / capped without VSM: VSM is not the fault, turning it off made the blades paler). The grass still CASTS no shadow
 (ground cover, for cost); receiving was never off.
 
+**The blurry flowers (BR23-10 / BR24-19 / BR24-20; Wes: "a few of these little flowers are blurry", "look good here ... but weird and blurry
+in other places").** Two causes, both measured on his own views (`Content/Python/flower_motion_capture.py`: a report's camera held still,
+then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/flower_sharpness.py` scores the flowers' purple pixels):
+1. The 24 PN flower meshes the biome palettes plant were Nanite (`enable_palette_nanite.py`, Oct 14) and under Nanite their material MA_Flowers
+   writes wrong motion vectors: motion blur streaked them with the camera STILL, TSR ghosted them; with no AA and no motion blur the same
+   flowers were sharp, so the velocity is the fault, not TSR (`D:/MOAssets/previews/grass/nanite_flowers_motionblur_ab.png`). Classic again
+   (`Content/Python/flower_meshes_non_nanite.py`; MA_Flowers cross-fades its LODs; `enable_palette_nanite.py` now leaves MA_Flowers meshes
+   alone): Wes's rainforest view (report 89300267) went from a smear to a sharp flower, 3.1x the edge contrast still, 2.4x mid-pan
+   (`pal_flowers_before_after.png`). The native scatter's two lupine meshes had always been classic -- "the ones that look good".
+2. The near-camera fade (MO_CameraFade, 40-160 cm, temporal dither) on ground cover: under the low third-person camera whole tufts sit in the
+   band, and while the camera moves TSR cannot average the screen door -- dotted, broken blades, flowers washing out (16 % of the purple gone
+   mid-pan). Ground cover now fades at 15-45 cm (`foliage_camera_fade.py` GROUND_COVER_BAND): solid blades mid-pan, no purple lost
+   (`grass_moving_before_after_band.png`). What remains -- ~20 % less edge contrast while moving -- is TSR's normal cost; TAA scored softer
+   still and moving. Test `MOFramework.Rendering.FlowersNotNanite` (96 flower meshes classic, the band on ground cover).
+
 ## 4. The chokepoints (one rule each, every chain passes through)
 
 - **`MOPCGElevationBands`**: every spawner chain passes one. `bExcludeWater` (default on) + `AllowedBiomeIds` + `bExcludeCaves`.

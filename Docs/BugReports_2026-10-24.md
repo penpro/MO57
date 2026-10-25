@@ -30,7 +30,7 @@
 | BR24-16 | d1ca4fa1 | lake movement/footsteps/swimming sounds | "just remove them until we find some that don't sound like shit" | the sound bank rows for water steps, wading, swimming, lake ambience | DONE-2026-10-24 |
 | BR24-17 | 54c3a597 | terrain mesh offset needs dialed down a bit | (Wes, asked:) the ground material's Nanite displacement is high: great on the Nordic Strand rocks, odd elsewhere | a per-surface displacement scale in M_QuixelBase | VERIFY |
 | BR24-18 | 94487cde | wetness affect is weird | "the wetness effect goes way too high on things and just looks metallic instead of wet, im assuming the effect is from oceanology??" -- beach rocks and the pawn's skin at the shore | find which wetness (Oceanology shore / character wetness, UDW) | VERIFY |
-| BR24-19 | 98b8c640 | these little purple flowers look good here | "but they're weird and blurry in other places" | BR23-10 | OPEN |
-| BR24-20 | 34096019 | purple flowers being weird here | blurry, some of them | BR23-10 | OPEN |
+| BR24-19 | 98b8c640 | these little purple flowers look good here | "but they're weird and blurry in other places" | BR23-10 | FIXED Oct 25 with BR23-10 (by eye) |
+| BR24-20 | 34096019 | purple flowers being weird here | blurry, some of them | BR23-10 | FIXED Oct 25 with BR23-10 (by eye) |
 | BR24-21 | 1a77a86f | this grass still has no shadows and looks like it's glowing | the pawn's shadow lands on the ground under the blades, not on them | BR23-11 | OPEN |
 | BR24-22 | 94980919 | cave entrances are still enormous with a lot of floating stuff at edges | | BR23-1 | OPEN |

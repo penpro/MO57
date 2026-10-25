@@ -290,6 +290,7 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 | `Tools/steam_scout.py`, `steam_art_build.py`, `steam_wordmark.py`, `Tools/look_sheet.py`, `Tools/biome_eye.py`, `Tools/biome_tour.py` | screenshots and Steam art (`SteamArt/README.md`) |
 | `Tools/terrain_lab/` | numpy replica of the world generator (iterate shapes in seconds) |
 | `Tools/motion_probe.py capture|track`, `Content/Python/foliage_wind_precision.py`, `Content/Python/pivot_painter_textures.py` | does on-screen motion flow or hold-and-snap: a timestamped frame burst of a game window + sub-pixel patch tracking; per patch the step share and the **jump share** (travel in frames > 4x the median of the 10 frames around them: reads a staircase, not a gust; trust it over the step share on mostly-still foliage), how many jumps fall on hitch frames (frame pacing, not the material), and a plot scaled to fit each swing (foliage wind, `Docs/PCG.md` §9); the Pivot Painter wind precision patch (guard: `MOFramework.Data.FoliageWindPrecision`); the Pivot Painter data texture settings (no mips, never streamed, nearest, linear) |
+| `Content/Python/flower_motion_capture.py` (claude_seq), `Tools/flower_sharpness.py` | a bug report's view re-shot still and mid-pan per AA / material setting, and the flowers' (or any crop's, `--all`) edge contrast as a number: does something blur, and only in motion? (BR23-10) |
 | Animation retarget (editor Python recipe) | `Docs/Water.md` §3 + `Docs/TRAPS.md` §10 (op-stack retargeters, root motion) |
 
 ## 7. Packaging, probing, profiling

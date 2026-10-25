@@ -11,9 +11,16 @@ function that sets its leaves' OpacityMask (FUNCTIONS):
   interleaved-gradient pattern on the pixel position, offset every frame, so TSR resolves it to a soft fade). Shadow passes keep the original mask: a leaf beside the
   lens still casts its shadow, the player only stops seeing the leaf itself.
 Parameters CameraFadeStartCm / CameraFadeEndCm (group "MO Camera Fade") are overridable per instance.
+GROUND COVER (grass, flowers) gets a narrower band, GROUND_COVER_BAND (BR23-10, Oct 25 2026): it stands right under the low third-person
+camera, so the 40-160 cm band covered whole tufts at once, and while the camera MOVES TSR cannot average the screen door: the blades read
+dotted and broken ("blurry, some of them"; measured in PIE on Wes's view, D:/MOAssets/previews/grass/flowers_moving_fade_vs_nofade.png).
+15-45 cm still clears a blade touching the lens. MA_Flowers (flowers only) takes it as its defaults; the grass masters are shared with
+shrubs and ferns, so the grass INSTANCES override it. FOLIAGEFADE_GROUND_ONLY=1 runs only that step (no master is touched).
 Only MASKED masters with an OpacityMask input are changed; others are reported and skipped. Idempotent: a master that already has MO_CameraFade
 only gets its shader code updated. Output lines start with FOLIAGEFADE.
 """
+import os
+
 import unreal
 
 MEL = unreal.MaterialEditingLibrary
@@ -34,6 +41,15 @@ MASTERS = [
 FUNCTIONS = [
     "/Game/MSPresets/MS_Foliage_Material/MaterialFunctions/Foliage/MF_TwoSided_Leaves",
     "/Game/MSPresets/MS_Foliage_Material/MaterialFunctions/Foliage/MF_TwoSided_Decoration",
+]
+
+GROUND_COVER_BAND = (15.0, 45.0)
+GROUND_COVER_MASTERS = ["/Game/PN_MeadowFlowers/Materials/flowerMaterials/MA_Flowers"]
+FAB = "/Game/Fab/Megascans/Plants/"
+GROUND_COVER_INSTANCES = [
+    FAB + "Grass_smdrailr/Medium/smdrailr_tier_2/Materials/MI_smdrailr",
+    FAB + "Wild_Grass_vlkhcbxia/Medium/vlkhcbxia_tier_2/Materials/MI_vlkhcbxia",
+    FAB + "Thatching_Grass_uddmcgbia/Medium/uddmcgbia_tier_2/Materials/MI_uddmcgbia",
 ]
 
 FADE_CODE = """// MO_CameraFade (Content/Python/foliage_camera_fade.py): drop the mask near the camera lens, dithered.
@@ -159,9 +175,41 @@ def upgrade_function(path):
     return True
 
 
+def ground_cover():
+    """GROUND_COVER_BAND on the flower master's defaults and as an override on the grass instances (see the module doc)."""
+    start, end = GROUND_COVER_BAND
+    for path in GROUND_COVER_MASTERS:
+        m = unreal.load_asset(path)
+        n = 0
+        for e in MEL.get_material_expressions(m):
+            if isinstance(e, unreal.MaterialExpressionScalarParameter):
+                name = str(e.get_editor_property("parameter_name"))
+                want = start if name == "CameraFadeStartCm" else end if name == "CameraFadeEndCm" else None
+                if want is not None and abs(e.get_editor_property("default_value") - want) > 1e-3:
+                    e.set_editor_property("default_value", want)
+                    n += 1
+        if n:
+            MEL.recompile_material(m)
+            EAL.save_loaded_asset(m)
+        log("%s: ground-cover band %.0f-%.0f cm (%d default(s) changed)" % (path, start, end, n))
+    for path in GROUND_COVER_INSTANCES:
+        mi = unreal.load_asset(path)
+        # both set unconditionally and read back: set_material_instance_scalar_parameter_value can return False when it DID set the value
+        MEL.set_material_instance_scalar_parameter_value(mi, "CameraFadeStartCm", start)
+        MEL.set_material_instance_scalar_parameter_value(mi, "CameraFadeEndCm", end)
+        MEL.update_material_instance(mi)
+        got = (MEL.get_material_instance_scalar_parameter_value(mi, "CameraFadeStartCm"), MEL.get_material_instance_scalar_parameter_value(mi, "CameraFadeEndCm"))
+        ok = abs(got[0] - start) < 1e-3 and abs(got[1] - end) < 1e-3
+        if ok:
+            EAL.save_loaded_asset(mi)
+        log("%s: ground-cover band %.0f-%.0f cm %s" % (path, start, end, "set" if ok else "!! NOT SET (read back %s), not saved" % (got,)))
+
+
 def main():
-    done = [p for p in MASTERS if upgrade(p)] + [p for p in FUNCTIONS if upgrade_function(p)]
-    log("DONE %d/%d graphs" % (len(done), len(MASTERS) + len(FUNCTIONS)))
+    if os.environ.pop("FOLIAGEFADE_GROUND_ONLY", "") != "1":
+        done = [p for p in MASTERS if upgrade(p)] + [p for p in FUNCTIONS if upgrade_function(p)]
+        log("DONE %d/%d graphs" % (len(done), len(MASTERS) + len(FUNCTIONS)))
+    ground_cover()
 
 
 main()

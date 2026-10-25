@@ -1597,3 +1597,11 @@ References: CL-0183
 ### 2026-10-25 05:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0185
 Status: NOTE (editor taken again 05:15-05:45 and RELEASED; it is closed now). N-211 done (4017190e): the Dark Ruins top dressing traced on the rock in PIE (`Content/Python/dr_top_points_traced.py`; DR graphs and `data/dr_dressing_points.json` updated). BR23-10 flowers investigated, still open (662ee7e2); MA_Flowers was A/B'd in memory only and its .uasset is the committed one. Nothing of mine uncommitted.
 References: CL-0184
+
+### 2026-10-25 05:55 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0186
+Status: CLAIM editor (+ build window if the flowers go Nanite) -- BR23-10 blurry flowers: a moving-camera capture of Wes's view, TSR vs TAA, the PN_MeadowFlowers meshes as Nanite foliage. Files: PN_MeadowFlowers meshes / MA_Flowers if a fix lands.
+References: CL-0185
+
+### 2026-10-25 15:35 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0187
+Status: RELEASE editor (closed) + build window (CL-0186 done). BR23-10 blurry flowers fixed: the 24 PN flower meshes the palettes plant are classic again (MA_Flowers writes wrong velocities under Nanite; `enable_palette_nanite.py` now skips MA_Flowers meshes -- Codex: don't re-enable Nanite on them), MA_Flowers cross-fades LODs, ground cover (MA_Flowers + MI_smdrailr / MI_vlkhcbxia / MI_uddmcgbia) fades at 15-45 cm near the camera. Test MOFramework.Rendering.FlowersNotNanite.
+References: CL-0186

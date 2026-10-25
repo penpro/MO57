@@ -115,6 +115,8 @@
   was missing and keeps a null class in memory, even once the BP is back -> re-set the row (`ue.py rows set` with the class path) and check
   the readback. (Oct 24, BuildCampfire)
 - **PIE wedges (can't begin_play)** -> unroot-caused flake after back-to-back sequences -> restart the editor. (dev_status)
+- **`MaterialEditingLibrary.set_material_instance_scalar_parameter_value` returned False and the value WAS set** (a parameter the instance
+  did not override yet) -> never chain sets with `and`; set each, then read back (`get_material_instance_scalar_parameter_value`). (Oct 25)
 - **A flag passed through `os.environ` to an editor script sticks** -> the editor's Python is ONE process: a dry-run flag set for one
   `ue.py py` call is still set for the next, which then silently dry-runs too -> a script consumes its flag (`os.environ.pop`). (Oct 25)
 - **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
@@ -376,6 +378,11 @@
   the old ones (N-185, `Docs/Engine_Patches.md` #2) -> `MOMaterialKeepAlive.cpp` keeps the replaced ones alive in uncooked game processes
   (`mo.Debug.MaterialKeepAlive`, default on: keep it on); a cooked build never swaps shader maps. The same race can hit PIE in the editor
   (not covered). (Oct 21)
+- **Foliage smeared even with the camera still** -> wrong motion vectors: motion blur and TSR both read them. Test it: `r.AntiAliasingMethod 0`
+  + `r.MotionBlurQuality 0` -- sharp = the velocity is wrong, not the AA. The PN flowers' MA_Flowers does it under Nanite (its wind): they stay
+  classic (`flower_meshes_non_nanite.py`). A material's WPO that is fine classic can be wrong under Nanite: compare both before turning a pack Nanite. (Oct 25)
+- **Ground cover reads dotted / broken while walking** -> the near-camera fade's temporal screen door, which TSR averages only when the camera
+  holds still -> ground cover has its own narrow band (`foliage_camera_fade.py` GROUND_COVER_BAND). (Oct 25)
 - **Grass glows, pale, self-lit, shadows don't show on the blades** -> Megascans Two Sided Foliage `Translucency Controls*` G = strength,
   B = exponent: shipped at 5 x the base colour with a square root, the transmitted light out-shines the lit side -> cap strength <= 0.5,
   exponent >= 1 (`Content/Python/fix_foliage_transmission.py`, rerun after importing plants; test FoliageTransmissionCapped). (Oct 25)
