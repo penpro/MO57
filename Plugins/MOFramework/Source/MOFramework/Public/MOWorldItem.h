@@ -50,6 +50,10 @@
  *    the old settle traced down from the item's own (sunken) position and found nothing -- the item was lost under the world. The ground
  *    found at the drop is kept (DropGroundLocation): sinking well below it ends the fall, and the settle traces from above, not from the item.
  *
+ * 2c. THE PIVOT IS NOT THE BOTTOM (Oct 24 2026, N-209): the settle used to put the actor pivot 10 cm over the ground, so a 5 cm arrowhead that
+ *    had tunnelled (1 drop in 4 of a 0.7 cm hull, despite CCD) hung 8.5 cm in the air and a big item on its side would sink. Both teleports
+ *    go through RestingOn(): the lowest point of the mesh bounds, as the mesh lies now, meets the ground (test MOFramework.Items.SettleRestsMeshOnGround).
+ *
  * 3. NO INTERACTION PROXY (Oct 16 2026): an item is targeted by its own mesh -- the crosshair's line, the interactor's sweep, then the
  *    nearest interactable around where the crosshair rests (FMOInteractionTraceConfig::AimAssistRadius). The old proxy, a 60 cm sphere
  *    floating 75 cm above every item, was mesh-local (a dropped item that tipped over carried it into the ground) and, kept upright, it
@@ -175,6 +179,9 @@ protected:
 
 	/** Called when drop physics completes - settles item on ground and disables physics. */
 	void SettleOnGround();
+
+	/** Where the actor goes so that the bottom of its mesh (as it lies now) sits on Ground: the pivot's height over the mesh bounds' lowest point is added (pitfall 2c). */
+	FVector RestingOn(const FVector& Ground) const;
 
 	/**
 	 * A mesh imported without simple collision uses its triangles for simple queries. The item mesh IS the interaction target (pitfall 3), and the

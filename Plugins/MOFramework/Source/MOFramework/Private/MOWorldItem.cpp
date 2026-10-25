@@ -458,11 +458,11 @@ void AMOWorldItem::SettleOnGround()
 			const float DistanceToGround = FVector::Dist(CurrentLocation, HitResult.Location);
 			if (DistanceToGround > 50.0f || CurrentLocation.Z < HitResult.Location.Z - 5.0f)
 			{
-				// Teleport to just above the ground
-				const FVector GroundLocation = HitResult.Location + FVector(0.0f, 0.0f, 10.0f);
+				// Teleport so the mesh rests on the ground (pitfall 2c: the pivot is not the bottom)
+				const FVector GroundLocation = RestingOn(HitResult.Location);
 				SetActorLocation(GroundLocation);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Settled on ground at %s (was %.1fcm above)"),
-					*GroundLocation.ToString(), DistanceToGround);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Settled on ground at %s (was %.1fcm above; pivot %.1fcm over the mesh bottom)"),
+					*GroundLocation.ToString(), DistanceToGround, GroundLocation.Z - HitResult.Location.Z);
 			}
 			else
 			{
@@ -471,7 +471,7 @@ void AMOWorldItem::SettleOnGround()
 		}
 		else if (bHasDropGround)
 		{
-			SetActorLocation(DropGroundLocation + FVector(0.0f, 0.0f, 10.0f));
+			SetActorLocation(RestingOn(DropGroundLocation));
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] No ground found under %s now: back on the ground its drop found (%s)"), *CurrentLocation.ToString(), *DropGroundLocation.ToString());
 		}
 		else
@@ -482,6 +482,20 @@ void AMOWorldItem::SettleOnGround()
 
 	// Keep collision enabled for interaction traces but disable physics response
 	ItemMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+}
+
+FVector AMOWorldItem::RestingOn(const FVector& Ground) const
+{
+	// The pivot sits wherever the mesh was authored (a corner, the centre, under a handle): what has to meet the ground is the lowest point of
+	// the mesh as it lies NOW (its current rotation), so the pivot goes up by the pivot's height over that point. A mesh-less item has no
+	// bounds and rests its pivot on the ground.
+	float PivotOverBottom = 0.0f;
+	if (IsValid(ItemMesh) && IsValid(ItemMesh->GetStaticMesh()))
+	{
+		const FBox Bounds = ItemMesh->CalcBounds(ItemMesh->GetComponentTransform()).GetBox();
+		PivotOverBottom = GetActorLocation().Z - Bounds.Min.Z;
+	}
+	return FVector(Ground.X, Ground.Y, Ground.Z + PivotOverBottom);
 }
 
 // ============================================================================
