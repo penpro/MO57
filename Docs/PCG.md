@@ -140,11 +140,15 @@ saved graphs keep their meaning.
   - Open plates / rocky-ground scans need flat ground (`MaxGroundReliefFraction` 0.5): the ground under the footprint is sampled at 8 points,
     and a spot whose relief against its best plane (`FMOSpeciesPlacement::GroundReliefCm`) is more than half the mesh's thickness stays empty.
   - Closed rocks in size tiers (`Content/Python` patch, live in DT_Biomes): per biome its 3 densest closed rocks get a large tier (x3-6, a
-    tenth the density) and an xlarge tier (x8-16, a fiftieth, slopes up to 30 deg), decorative and a quarter of their height buried; AlpineRock's
+    tenth the density) and an xlarge tier (x4-8 since Oct 24 evening, was x8-16; a fiftieth, slopes up to 30 deg), decorative and a quarter of
+    their height buried; AlpineRock's
     rocks are x3. Wes: "make a lot of the closed geometry rocks larger, like 2-20 time larger ... set into the ground in a dynamic depth".
     Within a tier most are small and few giant (Wes, Oct 24: "make fewer of them that large, bias the sizes away from all being that large"):
     a species' `ScaleBias` spreads its scale as MinScale + range x u^bias (`FMOSpeciesPlacement::DrawScale`, test
-    `PCG.ScaleBiasKeepsGiantsRare`). xlarge 3: 9 % in the top quarter of the range, mean x10 (was 25 %, x12); large 2: mean x4. 1 (the
+    `PCG.ScaleBiasKeepsGiantsRare`). xlarge 3: 9 % in the top quarter of the range, mean x10 then (was 25 %, x12); large 2: mean x4. Then
+    Wes, Oct 24 evening: "i was wrong about the rock features they look kind of bad at that size lets reduce them to about half at the larger
+    end": the 29 xlarge entries' Min/MaxScale halved (x8-16 -> x4-8 of the base; S_Stone x10-20 -> x5-10), the large tier and the bias
+    unchanged. PIE seed 777 strand: within 600 m no tier rock passes its new maximum (largest S_Stone x9.1; it had 19 at x10-20). 1 (the
     default) is the old even draw, so every other species and every world's layout are unchanged.
   - The spawner planted only a biome's first 64 species (a leftover of an old fixed loop): the Rainforest and ElectricForest have 72, and
     their far stand-ins and canopy proxies (rows 64-71) never grew. The cap is gone.
