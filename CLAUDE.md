@@ -60,7 +60,8 @@ Production-ready software: fix systems, not symptoms. These override convenience
 - Coordinate in `claude-codex-coop.md` (append-only; CLAIM files before editing shared ones, RELEASE after). The editor, builds and
   instances have ONE owner at a time.
 - Close the editor when a build needs it (Wes N5) with `ue.py editor stop` (graceful; refuses with unsaved packages). Never force-kill by
-  process name; stop only processes you launched (recorded PID). Never touch Wes's saves (Harper_Wright-01, Test158, v1gate).
+  process name; stop only processes you launched (recorded PID). Dev saves and editor autosaves are scrapped on every build (`ue.py build` /
+  `cycle`, Wes Oct 25: "if i want save games i'll play them on steam"); never the packaged / Steam game's saves.
 - After code changes: `python -m graphify update .` (the graph is in `graphify-out/`, gitignored; query it before grepping:
   `python -m graphify query "..."`, `explain "Symbol"`, `path "A" "B"`, `affected "X"`).
 - Local / free / offline by default; paid APIs only with Wes's yes; downloads need his yes unless already authorized (`Docs/DECISIONS.md`).

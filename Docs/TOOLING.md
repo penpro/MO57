@@ -45,6 +45,9 @@ controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input
 in `Docs/Engine_Patches.md`. Before a build: the editor must be closed (Live Coding blocks UBT) -- `ue.py editor stop`; check the module DLL
 mtime if a change seems not to apply (Live Coding may have hot-patched). Run `python Tools/check_unity_collisions.py` before committing new
 .cpp files. After code changes: `python -m graphify update .`.
+Every `build` / `cycle` first scraps the dev saves (`Saved/SaveGames/*.sav`) and the editor autosaves (`Saved/Autosaves*`): Wes, Oct 25 2026,
+"if i want save games i'll play them on steam" (`scrap_dev_saves`; `--keep-saves` skips it; the packaged / Steam saves are never touched).
+`ue.py py` exits 3 "STILL RUNNING" when the editor took a call that outlasted `--timeout`: it finishes on its own, never re-run it.
 
 PowerShell fallback (CLAUDE.md until 2026-10-17, verbatim):
 

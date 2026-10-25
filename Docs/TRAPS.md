@@ -78,6 +78,10 @@
   aside, start again. (far-trees, Handoff)
 - **"bridge not responding"** -> (a) the editor is building Nanite / textures (15-30 min after new ED assets), (b) a Python exception inside
   `ue.py py --file` (no result file) -> small steps with `unreal.log("TAG")`, or try/except, (c) first launch after a rebuild -> `ue.py editor wait` then `boot`. (overnight-polish, animation-retarget, ue-ui-toolset)
+- **A long `ue.py py` call that times out is still running** -> the editor took it and finishes it; a re-run queues behind it and runs
+  right after (Oct 25 2026: `fix_mesh_collision.py` took 33 s against the 20 s default, the re-run's second pass crashed the editor in a
+  mesh save, `ThumbnailHelpers.cpp:595`, and the unsaved level went with it) -> `bridge_run` now exits 3 "STILL RUNNING" when the call was
+  picked up; never re-run on it; give long scripts `--timeout 300`. (dark-ruins cliffs)
 - **A call hangs while the bridge still answers** -> a modal dialog (reload_packages on a dirty asset, `fill_data_table_from_json_string` with a
   missing field) -> pass every field; Windows Security (pickerhost) blocking clicks: post Enter to the dialog's HWND. (dev_status, world-features)
 - **Asset saves silently don't happen** -> the editor refuses saves during PIE (save_assets still answers True); a running `inst` locks the

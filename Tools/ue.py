@@ -187,6 +187,12 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
             break
         time.sleep(0.05)   # was 0.25: a harness makes hundreds of calls per run, each paid this slack (loop deep dive, Oct 22)
     else:
+        if f"<B {mid}>" in buf:
+            # The editor took this call and is still running it: NOT a dead bridge. Reported as one, it got re-run, and the copy queued behind
+            # the original and ran right after it (Oct 25 2026: fix_mesh_collision.py took 33 s against a 20 s timeout; its second pass
+            # crashed the editor in a save). It finishes on its own; nothing here may send it again.
+            _die(3, f"STILL RUNNING: the editor picked this call up but has not finished it after {timeout:.0f} s. It will finish on its own -- "
+                    "do NOT re-run it. Watch Saved/Logs/MO57.log (or `ue.py status`); next time pass a longer --timeout.")
         return False, [], ""
 
     time.sleep(0.05)  # let the END marker's [py-ok] ack land, then swallow it (acks that land later are filtered anyway)
@@ -837,6 +843,28 @@ def editor_start(wait_bridge_s=360):
             return True
         time.sleep(4)
     return False
+
+
+def scrap_dev_saves():
+    """Every build starts clean (Wes, Oct 25 2026: "scrap my saves/autosaves every build, if i want save games i'll play them on steam"):
+    the project's dev saves (Saved/SaveGames/*.sav) and the editor's autosaves and package-restore data (Saved/Autosaves*: after a crash
+    they park the next editor start on a restore dialog). Never the packaged / Steam game's saves (%LOCALAPPDATA%\\MO57\\Saved\\SaveGames).
+    Called with the editor closed; `--keep-saves` skips it."""
+    import glob
+    import shutil
+    saved = os.path.join(ROOT, "Saved")
+    gone = []
+    for path in glob.glob(os.path.join(saved, "SaveGames", "*.sav")):
+        try:
+            os.remove(path)
+            gone.append(os.path.basename(path))
+        except OSError as e:
+            print(f"[saves] could not remove {path}: {e}")
+    for path in glob.glob(os.path.join(saved, "Autosaves*")):
+        shutil.rmtree(path, ignore_errors=True)
+        if not os.path.exists(path):
+            gone.append(os.path.basename(path) + "/")
+    print(f"[saves] scrapped {len(gone)} dev save(s) / autosave folder(s)" + (": " + ", ".join(gone[:12]) + (" ..." if len(gone) > 12 else "") if gone else ""))
 
 
 def build(target="MO57Editor"):
@@ -1548,6 +1576,8 @@ def cmd_build(a):
                 + ", ".join(f"{name} (pid {pid})" for pid, name in instances)
                 + ". Stop yours with `ue.py inst stop <name>`; another session's are its own (ask in claude-codex-coop.md). "
                   "(--force skips this check.)")
+    if not a.keep_saves and not editor_running():
+        scrap_dev_saves()
     sys.exit(0 if build(a.target) else 1)
 
 
@@ -1576,6 +1606,8 @@ def cmd_cycle(a):
         print("[cycle] stopping editor (force; unsaved editor state is lost)...")
         if not editor_stop():
             _die(1, "[cycle] could not stop the editor")
+    if not a.keep_saves:
+        scrap_dev_saves()
     print(f"[cycle] building {a.target}...")
     if not build(a.target):
         _die(1, "[cycle] BUILD FAILED — editor left closed")
@@ -1771,6 +1803,7 @@ def main():
     s = sub.add_parser("build", help="UBT build (refuses if editor is running)")
     s.add_argument("--target", default="MO57Editor")
     s.add_argument("--force", action="store_true")
+    s.add_argument("--keep-saves", action="store_true", help="skip scrapping the dev saves + editor autosaves (scrap_dev_saves)")
     s.set_defaults(fn=cmd_build)
 
     s = sub.add_parser("editor", help="editor lifecycle")
@@ -1782,6 +1815,7 @@ def main():
     s.add_argument("--boot", action="store_true")
     s.add_argument("--seed", type=int)
     s.add_argument("--test", action="store_true")
+    s.add_argument("--keep-saves", action="store_true", help="skip scrapping the dev saves + editor autosaves (scrap_dev_saves)")
     s.set_defaults(fn=cmd_cycle)
 
     a = p.parse_args()
