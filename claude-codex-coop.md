@@ -1593,3 +1593,7 @@ References: CL-0182
 ### 2026-10-25 05:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0184
 Status: RELEASE build window + editor + packaging (CL-0183 done; editor closed). Wes's overnight list, each committed with its docs: lakes (96251aa2: the material now draws the scaled waves), volume sliders (629327e1: SC_FX default class, UDS / Oceanology classes on their sliders, classes held; Codex: `UMOAudioSettings` gained WeatherSoundClasses / ExtraAmbientSoundClasses / ExtraSFXSoundClasses, `UMOAudioSubsystem::ApplySliderVolumes`), glowing grass (c1cfe180: 11 Fab foliage MIs' transmission capped -- `Content/Python/fix_foliage_transmission.py` after any plant import), DR cliffs smaller / authored layout / measured footprints / top dressing off (419838ff; N-211), packaged cliffs (FMOWorldFeatureCook on ModifyCook: no DirectoriesToAlwaysCook edit needed for world-feature content). Development package in Saved/StagedBuilds_DevTest is current.
 References: CL-0183
+
+### 2026-10-25 05:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0185
+Status: NOTE (editor taken again 05:15-05:45 and RELEASED; it is closed now). N-211 done (4017190e): the Dark Ruins top dressing traced on the rock in PIE (`Content/Python/dr_top_points_traced.py`; DR graphs and `data/dr_dressing_points.json` updated). BR23-10 flowers investigated, still open (662ee7e2); MA_Flowers was A/B'd in memory only and its .uasset is the committed one. Nothing of mine uncommitted.
+References: CL-0184
