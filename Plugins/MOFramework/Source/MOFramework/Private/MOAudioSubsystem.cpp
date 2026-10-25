@@ -136,10 +136,7 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	// Apply initial volumes to whatever SoundClasses exist. If the soft refs
 	// haven't been set up yet (fresh project), these are silent no-ops.
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume);
+	ApplySliderVolumes(/*bLoad=*/true);
 
 	// Build a sensible default attenuation for spatialized ambient events.
 	// Used unless the user assigns a custom USoundAttenuation in settings.
@@ -297,6 +294,8 @@ void UMOAudioSubsystem::HandleWorldAudioContext(UWorld* World)
 	// so the player's master volume must be put back for each new world -- before this, everything after the first load (main menu -> game) played at
 	// full volume, whatever the Master slider said, until the slider was touched (found by the audio heartbeat, Oct 16 2026).
 	ApplyMasterVolumeToAudioDevice();
+	// And every slider's class volume: a plugin's class (Ultra Dynamic Sky's) first loads with the world that uses it.
+	ApplySliderVolumes(/*bLoad=*/true);
 
 	// Detect main menu via game mode CLASS. Clock subsystem exists in every
 	// world so it can't distinguish — game mode is the authoritative signal.
@@ -632,10 +631,7 @@ bool UMOAudioSubsystem::PlayOneShotAtLocationAttenuated(const UObject* WorldCont
 void UMOAudioSubsystem::SetMasterVolume(float Volume)
 {
 	MasterVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume);
+	ApplySliderVolumes(/*bLoad=*/false);
 	ApplyMasterVolumeToAudioDevice();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MasterVolume -> %.2f"), MasterVolume);
 }
@@ -656,7 +652,7 @@ void UMOAudioSubsystem::SetMusicVolume(float Volume)
 {
 	MusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::Music);
-	ApplyVolumeToSoundClass(SC, MusicVolume);
+	ApplySliderVolumes(/*bLoad=*/false);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MusicVolume -> %.2f (soundclass=%s)"),
 		MusicVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
@@ -666,7 +662,7 @@ void UMOAudioSubsystem::SetAmbientVolume(float Volume)
 {
 	AmbientVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::Ambient);
-	ApplyVolumeToSoundClass(SC, AmbientVolume);
+	ApplySliderVolumes(/*bLoad=*/false);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] AmbientVolume -> %.2f (soundclass=%s)"),
 		AmbientVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
@@ -676,7 +672,7 @@ void UMOAudioSubsystem::SetSFXVolume(float Volume)
 {
 	SFXVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::SFX);
-	ApplyVolumeToSoundClass(SC, SFXVolume);
+	ApplySliderVolumes(/*bLoad=*/false);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] SFXVolume -> %.2f (soundclass=%s)"),
 		SFXVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
@@ -686,7 +682,7 @@ void UMOAudioSubsystem::SetUIVolume(float Volume)
 {
 	UIVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::UI);
-	ApplyVolumeToSoundClass(SC, UIVolume);
+	ApplySliderVolumes(/*bLoad=*/false);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] UIVolume -> %.2f (soundclass=%s)"),
 		UIVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
@@ -695,8 +691,9 @@ void UMOAudioSubsystem::SetUIVolume(float Volume)
 void UMOAudioSubsystem::SetWeatherVolume(float Volume)
 {
 	WeatherVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
-	// UDW lives outside our SoundClass hierarchy. Broadcast so the bridge BP
-	// (or any other listener) can apply the value to UDW's audio.
+	// Ultra Dynamic Sky / Weather plays in its own UDS_Weather class, outside our tree: the volume goes onto that class (UMOAudioSettings
+	// WeatherSoundClasses). Nothing listened to the broadcast (BP_WeatherBridge never bound it), so until Oct 25 2026 this slider did nothing.
+	ApplySliderVolumes(/*bLoad=*/false);
 	OnWeatherVolumeChanged.Broadcast(WeatherVolume);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] WeatherVolume -> %.2f"),
 		WeatherVolume);
@@ -1782,4 +1779,38 @@ void UMOAudioSubsystem::ApplyVolumeToSoundClass(USoundClass* SoundClass, float V
 {
 	if (!SoundClass) return;
 	SoundClass->Properties.Volume = FMath::Clamp(Volume, 0.0f, 1.0f);
+}
+
+void UMOAudioSubsystem::ApplySliderVolumes(bool bLoad)
+{
+	const UMOAudioSettings* Settings = GetDefault<UMOAudioSettings>();
+	if (!Settings)
+	{
+		return;
+	}
+	auto Apply = [this, bLoad](const FSoftObjectPath& Path, float Volume)
+	{
+		USoundClass* SoundClass = Path.IsNull() ? nullptr : Cast<USoundClass>(bLoad ? Path.TryLoad() : Path.ResolveObject());
+		if (SoundClass)
+		{
+			ApplyVolumeToSoundClass(SoundClass, Volume);
+			SliderSoundClasses.AddUnique(SoundClass);
+		}
+	};
+	Apply(Settings->MusicSoundClass, MusicVolume);
+	Apply(Settings->AmbientSoundClass, AmbientVolume);
+	Apply(Settings->SFXSoundClass, SFXVolume);
+	Apply(Settings->UISoundClass, UIVolume);
+	for (const FSoftObjectPath& Path : Settings->ExtraAmbientSoundClasses)
+	{
+		Apply(Path, AmbientVolume);
+	}
+	for (const FSoftObjectPath& Path : Settings->ExtraSFXSoundClasses)
+	{
+		Apply(Path, SFXVolume);
+	}
+	for (const FSoftObjectPath& Path : Settings->WeatherSoundClasses)
+	{
+		Apply(Path, WeatherVolume);
+	}
 }

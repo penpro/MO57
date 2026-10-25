@@ -125,8 +125,8 @@ public:
 
 	/**
 	 * Weather audio volume (0-1) — controls UDW's weather sounds (rain, thunder,
-	 * wind). Applied by the bridge BP (BP_WeatherBridge) reacting to
-	 * UMOAudioSubsystem::OnWeatherVolumeChanged. Not routed through SoundClasses.
+	 * wind): UMOAudioSubsystem::SetWeatherVolume sets it on UDS's own sound
+	 * class (UMOAudioSettings::WeatherSoundClasses).
 	 */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float WeatherVolume = 0.50f;

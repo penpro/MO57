@@ -212,9 +212,8 @@ public:
 	void SetUIVolume(float Volume);
 
 	/**
-	 * Set weather audio volume. Doesn't route through a SoundClass (UDW
-	 * lives outside our hierarchy) — broadcasts OnWeatherVolumeChanged so
-	 * BP_WeatherBridge can apply via UDW's native volume.
+	 * Set weather audio volume: the volume of Ultra Dynamic Sky / Weather's own sound class (UDS_Weather, outside our tree; the list is
+	 * UMOAudioSettings::WeatherSoundClasses), then OnWeatherVolumeChanged.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Audio|Volume")
 	void SetWeatherVolume(float Volume);
@@ -237,7 +236,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Audio|Volume")
 	float GetWeatherVolume() const { return WeatherVolume; }
 
-	/** Fired when SetWeatherVolume is called. BP_WeatherBridge subscribes. */
+	/** Fired when SetWeatherVolume is called. Nothing subscribes (BP_WeatherBridge never bound it): the volume itself goes onto the weather sound classes (UMOAudioSettings::WeatherSoundClasses). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Audio|Volume")
 	FMOAudioWeatherVolumeChanged OnWeatherVolumeChanged;
 
@@ -377,6 +376,14 @@ protected:
 	void ApplyVolumeToSoundClass(USoundClass* SoundClass, float Volume);
 
 	/**
+	 * Every slider's value onto its sound classes: the category's own (Music / Ambient / SFX / UI) and the plugins' it also sets (UMOAudioSettings
+	 * WeatherSoundClasses / ExtraAmbientSoundClasses / ExtraSFXSoundClasses). bLoad (start, every world) loads them; the setters only find them.
+	 * Each class is held in SliderSoundClasses: the volume lives on the loaded class, and one the garbage collector unloaded came back from disk
+	 * at its authored volume.
+	 */
+	void ApplySliderVolumes(bool bLoad);
+
+	/**
 	 * Push MasterVolume to the audio device's transient primary volume — a
 	 * SEPARATE engine-level multiplier from the SoundClass mix (it "multiplies
 	 * with all other volume settings" per FAudioDevice's own contract). Called
@@ -438,6 +445,10 @@ private:
 
 	UPROPERTY()
 	float WeatherVolume = 1.0f;
+
+	/** The sound classes the sliders set, held so none is unloaded (ApplySliderVolumes). */
+	UPROPERTY()
+	TArray<TObjectPtr<USoundClass>> SliderSoundClasses;
 
 	/** Dedicated component for the current music loop. Recreated per session. */
 	UPROPERTY()

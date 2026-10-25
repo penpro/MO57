@@ -74,6 +74,18 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
 - **`UEngine::LoadMap` resets the device transient primary volume to 1.0 on every map load:** `UMOAudioSubsystem::HandleWorldAudioContext`
   re-applies the master volume.
 - The intro video's `UMediaSoundComponent` had no sound class (full volume, ignored the sliders): it plays at music x master.
+- **Sliders "hit or miss" (Wes, Oct 25 2026: "the volume sliders are hit or miss both in game and in the main menu").** Three holes, measured
+  by an audit of every sound's class: (1) 112 sounds have NO class (UDS puddle / snow footsteps, Oceanology's underwater loop and bubbles):
+  they played in the engine's Master, which only our Master slider reaches -> the project default class is SC_FX
+  (`[/Script/Engine.AudioSettings] DefaultSoundClassName`, `Config/DefaultEngine.ini`); (2) the plugins' own classes sit outside SC_Master:
+  Ultra Dynamic Sky's `UDS_Weather` (24 rain / wind / thunder sounds) and Oceanology's two roots (waves, splash, distant wind) -> each slider
+  also sets the plugin classes listed for it (`UMOAudioSettings` `WeatherSoundClasses` / `ExtraAmbientSoundClasses` / `ExtraSFXSoundClasses`);
+  the Weather slider had done NOTHING (it only broadcast `OnWeatherVolumeChanged`, which `BP_WeatherBridge` never bound); (3) a slider's
+  volume lives on the LOADED sound class, and the subsystem held none of them: a class the garbage collector unloaded (nothing playing in it,
+  e.g. in the menu) came back from disk at its authored volume. `UMOAudioSubsystem::ApplySliderVolumes` now sets every slider's classes at
+  start, on every world and from each setter, and holds them (`SliderSoundClasses`). Test `MOFramework.Audio.EverySoundOnASlider` (every
+  sound's class reaches a slider; the Weather slider sets UDS_Weather). Consequence: the ocean / lake waves now follow Ambient and the rain
+  follows Weather (default 0.5) -- quieter than before at the default sliders, because before they ignored them.
 - The ambience driver flapped Water <-> Outdoor every second (rings depended on the previous state): `DistanceToWaterCm` measures once on
   fixed 7 m rings + a 4 s minimum dwell. Ambience states: Cave (> 12 m under the generator surface; leaves at 8 m), Water (within 35 m of
   water; leaves beyond 56 m), else the clock's Day / Night; Indoor is left to buildings.

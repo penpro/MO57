@@ -113,6 +113,24 @@ public:
 		meta=(AllowedClasses="/Script/Engine.SoundClass"))
 	FSoftObjectPath UISoundClass;
 
+	// Sound classes OUTSIDE the Master tree -- the plugins' own -- that a slider also sets: each one's volume is the slider's value, and its child
+	// classes follow. Without them the Weather slider did nothing (Ultra Dynamic Sky plays its rain / wind / thunder in UDS_Weather) and Ambient
+	// missed Oceanology's ocean and lake waves and wind (Wes, Oct 25 2026: "the volume sliders are hit or miss both in game and in the main
+	// menu"). A sound with NO class plays in the project's default class, SC_FX (Config/DefaultEngine.ini, [/Script/Engine.AudioSettings]).
+	UPROPERTY(Config, EditAnywhere, Category="MO|Audio|Mix",
+		meta=(AllowedClasses="/Script/Engine.SoundClass"))
+	TArray<FSoftObjectPath> WeatherSoundClasses = { FSoftObjectPath(TEXT("/Game/UltraDynamicSky/Sound/UDS_Weather.UDS_Weather")) };
+
+	UPROPERTY(Config, EditAnywhere, Category="MO|Audio|Mix",
+		meta=(AllowedClasses="/Script/Engine.SoundClass"))
+	TArray<FSoftObjectPath> ExtraAmbientSoundClasses = {   // Oceanology's two roots: the wave / splash / underwater cues', its effects' wind and background
+		FSoftObjectPath(TEXT("/Oceanology_Plugin/Design/Audio/SoundClasses/MasterSoundClass.MasterSoundClass")),
+		FSoftObjectPath(TEXT("/Oceanology_Plugin/Effects/Audio/SoundClasses/MasterSoundClass.MasterSoundClass")) };
+
+	UPROPERTY(Config, EditAnywhere, Category="MO|Audio|Mix",
+		meta=(AllowedClasses="/Script/Engine.SoundClass"))
+	TArray<FSoftObjectPath> ExtraSFXSoundClasses = { FSoftObjectPath(TEXT("/Game/Audio/Sound_Classes/SCLASS_Vehicle.SCLASS_Vehicle")) };
+
 	// =========================================================================
 	// DEFAULT VOLUMES (0-1)
 	// =========================================================================
