@@ -31,6 +31,9 @@
 
 ## 2. Engine, build and C++ (UE 5.8.3)
 
+- **The package build fails on a test that the editor build compiled** -> the GAME target compiles the automation tests too
+  (`WITH_DEV_AUTOMATION_TESTS`), without `WITH_EDITOR`; `ue.py build` builds only the editor -> a test that calls editor-only code
+  (an `#if WITH_EDITOR` function: `FMOWorldFeatureCook::CollectCookPackages`) goes inside `#if WITH_EDITOR` itself. (Oct 25)
 - **Engine upgrade: a new stock network channel would silently vanish** -> `Config/DefaultEngine.ini` replaces the whole
   `[/Script/Engine.NetDriver]` ChannelDefinitions list (`!ClearArray`) to swap the Actor channel for `MONetStatsActorChannel`. On every engine
   upgrade, re-diff it against the new `BaseEngine.ini` list. Matched UE 5.8.3's four channels exactly on Oct 17. (Oct 17 review of afb9aabc)
@@ -112,6 +115,10 @@
   was missing and keeps a null class in memory, even once the BP is back -> re-set the row (`ue.py rows set` with the class path) and check
   the readback. (Oct 24, BuildCampfire)
 - **PIE wedges (can't begin_play)** -> unroot-caused flake after back-to-back sequences -> restart the editor. (dev_status)
+- **A flag passed through `os.environ` to an editor script sticks** -> the editor's Python is ONE process: a dry-run flag set for one
+  `ue.py py` call is still set for the next, which then silently dry-runs too -> a script consumes its flag (`os.environ.pop`). (Oct 25)
+- **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
+  cancels nothing -> read the first run's output (or MO57.log), never re-send. (Oct 25: a harmless double substrate-pin pass)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
 - **Clicks on editor UI leak keystrokes into the game** -> PIE holds CapturePermanently + LockOnCapture -> Shift+F1 first; stop PIE with Shift+F1 + Stop, never Escape. (ue_pie_computer_testing)
 - **Injected keys don't trigger Enhanced Input actions in PIE** -> computer-use / AHK keys miss Enhanced Input -> drive in-process (`MO.Test.PressKey` / `MO.Test.Input`). (ue_pie_computer_testing)
@@ -264,6 +271,9 @@
 - **Shipping writes no log** -> package Development for diagnosis; `MO57ShipDiag`; bug-report fields. Shipping reads Wes's REAL
   `%LOCALAPPDATA%/MO57/Saved` settings -> back up byte for byte, restore + compare. The staged `MO57.exe` is a launcher (stop the tree);
   packaged CSV profiles are wiped by the next `--package`; `-log` opens a console over the game.
+- **A packaged build has NO world-feature cliffs** -> the rows name their graphs / PCG data assets in TEXT (ActorProperties), which the
+  cooker cannot follow (a real `TSoftClassPtr` it does follow) -> `FMOWorldFeatureCook` adds what the rows reach on the cook's
+  ModifyCook delegate (`Docs/Packaging.md` § 2). Any new system that loads content from a path in a string needs the same. (Oct 25)
 
 ## 8. Voxel and world generator
 
@@ -324,6 +334,9 @@
   lake planes are world-axis-aligned quad trees (never rotate, never scale big); Oceanology actors replicate by default (SetReplicates(false)
   for per-machine lakes); runtime-spawned lakes never register their wave solver (register + activate); presets overwrite the distortion cap
   every load (re-enforce on a tick); absorption = how far light CARRIES (bigger = clearer).
+- **A lake setting changed after `FinishSpawning` never reaches the water** -> `AOceanologyLake::Init` runs from OnConstruction AND
+  BeginPlay, both inside FinishSpawning, and pushes the waves / surface to the material there -> set things before FinishSpawning, or push
+  again after (`UpdateWaves()` for the Gerstner waves). Measure the MATERIAL (its MID's Amplitude_N), not the solver. (Oct 25)
 
 ## 12. Light, rendering, materials
 
@@ -363,6 +376,9 @@
   the old ones (N-185, `Docs/Engine_Patches.md` #2) -> `MOMaterialKeepAlive.cpp` keeps the replaced ones alive in uncooked game processes
   (`mo.Debug.MaterialKeepAlive`, default on: keep it on); a cooked build never swaps shader maps. The same race can hit PIE in the editor
   (not covered). (Oct 21)
+- **Grass glows, pale, self-lit, shadows don't show on the blades** -> Megascans Two Sided Foliage `Translucency Controls*` G = strength,
+  B = exponent: shipped at 5 x the base colour with a square root, the transmitted light out-shines the lit side -> cap strength <= 0.5,
+  exponent >= 1 (`Content/Python/fix_foliage_transmission.py`, rerun after importing plants; test FoliageTransmissionCapped). (Oct 25)
 
 ## 13. UI (CommonUI / UMG)
 
@@ -400,6 +416,10 @@
   a new multichannel sound gets no reverb send. (Oct 22)
 - **Every pawn's footsteps as loud as your own** -> `PlaySoundAtLocation` with no attenuation plays an asset that has none of its own at full
   volume wherever it is -> `UMOAudioSubsystem::PlayOneShotAtLocation` gives such assets a profile (footsteps: `GetFootstepAttenuation`). (Oct 18)
+- **A volume slider misses some sounds** -> (a) a sound with no class plays in the project DEFAULT class (was the engine Master; now SC_FX);
+  (b) a plugin's own class (UDS_Weather, Oceanology's) sits outside SC_Master -> list it for its slider in `UMOAudioSettings`; (c) the
+  volume lives on the LOADED class and an unreferenced class is garbage-collected and reloads at its authored volume -> hold it
+  (`ApplySliderVolumes`). Test EverySoundOnASlider. (Oct 25)
 
 ## 15. Performance measurement
 

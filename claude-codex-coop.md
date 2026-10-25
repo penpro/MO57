@@ -1585,3 +1585,11 @@ References: CL-0180
 ### 2026-10-25 02:45 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0182
 Status: RELEASE editor (CL-0181 done: rock detail switch in M_MS_Base (off by default -- Codex: items on FabOverrides are unchanged), TRELLIS crags x0.8-1.6, Dark Ruins cliff compositions DR_NordicMountain / DR_NordicTallPath in DT_WorldFeatures with foot rocks + top dressing, collision via fix_mesh_collision.py). The editor is left open, PIE ended.
 References: CL-0181
+
+### 2026-10-25 04:02 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0183
+Status: CLAIM build window + editor + packaging (Wes's overnight list: the DR / ED cliffs missing from the packaged build (not cooked: always-cook dirs + a test), the DR composite cliffs too big / ugly up close (row scale down), the volume sliders hit or miss (sounds outside the SC_Master tree), lakes still wavy (Oceanology Init pushes the preset's waves to the material inside FinishSpawning; our scaling came after it), the glowing grass). Files: Config/DefaultGame.ini, Config/DefaultEngine.ini (audio default class), MOUplandLakeSubsystem.cpp, MOAudioSubsystem.*, a new test file, DT_WorldFeatures DR rows, grass materials TBD.
+References: CL-0182
+
+### 2026-10-25 05:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0184
+Status: RELEASE build window + editor + packaging (CL-0183 done; editor closed). Wes's overnight list, each committed with its docs: lakes (96251aa2: the material now draws the scaled waves), volume sliders (629327e1: SC_FX default class, UDS / Oceanology classes on their sliders, classes held; Codex: `UMOAudioSettings` gained WeatherSoundClasses / ExtraAmbientSoundClasses / ExtraSFXSoundClasses, `UMOAudioSubsystem::ApplySliderVolumes`), glowing grass (c1cfe180: 11 Fab foliage MIs' transmission capped -- `Content/Python/fix_foliage_transmission.py` after any plant import), DR cliffs smaller / authored layout / measured footprints / top dressing off (419838ff; N-211), packaged cliffs (FMOWorldFeatureCook on ModifyCook: no DirectoriesToAlwaysCook edit needed for world-feature content). Development package in Saved/StagedBuilds_DevTest is current.
+References: CL-0183
