@@ -152,3 +152,9 @@ Content/PN_WildBerries/
 Content/MS/
 Content/Smart/
 Content/Materials/Custom/
+
+# Dark Ruins Megascans sample (Tools/ede_migrate.py): third-party, re-created by `ede_migrate.py copy --source darkruins`
+Content/CustomAssets/
+Content/MO57Export/
+Content/PLBPs/
+Content/__ExternalActors__/PLBPs/

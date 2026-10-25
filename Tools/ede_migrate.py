@@ -57,6 +57,11 @@ MS3D = "/Game/MS/3D/"
 DARKRUINS_GROUPS = [
     ("cliffs: Huge Nordic Coastal Cliff (Smart; the crags and NordicStrand's coast)", [MS3D + "Huge_Nordic_Coastal_Cliff_venrdcgga/Smart"]),
     ("cliffs: Desert Western Cliff Sheer XL 04 (Smart; Wes's own migration)", [MS3D + "Desert_Western_Cliff_Sheer_Xl_04_xgknben/Smart"]),
+    # The sample's own artist-built assemblies, as PCG data assets (Tools/darkruins_assembly_export.py writes them into the SAMPLE's
+    # /Game/MO57Export): Mountain_01 and TallPath_01 (massive Nordic cliff stacks), and the boulder / rocky-buildup / shelf clusters that dress
+    # a cliff's foot. SOFT references: a PCG asset names its meshes by path (Oct 25 2026, Wes: "we probably need to combine some assets to make a
+    # more bespoke cliff setup like what we have going on with the electric dreams setup").
+    ("assemblies: cliff stacks + rock clusters (PCG assets and the meshes they name)", ["/Game/MO57Export/PCGAssemblies"], True),
 ]
 
 SOURCES = {
