@@ -65,4 +65,9 @@ private:
 	 * Without this, the cooker won't include soft-referenced assets from config files.
 	 */
 	void PreloadDatabaseTables();
+
+#if WITH_EDITOR
+	/** FMOWorldFeatureCook::ModifyCook on the cook's ModifyCookDelegate. */
+	FDelegateHandle ModifyCookHandle;
+#endif
 };

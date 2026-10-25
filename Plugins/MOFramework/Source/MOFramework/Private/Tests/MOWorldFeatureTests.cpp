@@ -7,6 +7,13 @@
 #include "MOPCGConformToGroundSettings.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldGen.h"
+#include "MOWorldFeatureCook.h"
+#include "MOWorldFeatureSettings.h"
+#include "Engine/DataTable.h"
+#include "GameDelegates.h"
+#include "Misc/PackageName.h"
+#include "AssetRegistry/IAssetRegistry.h"
+#include "Engine/StaticMesh.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -481,5 +488,55 @@ bool FMOWorldFeature_ConformBaseWeight::RunTest(const FString& Parameters)
 	TestTrue(TEXT("tilted 45 deg: a corner dips below the floor"), UMOPCGConformToGroundSettings::LowestZ(Box, FTransform(FRotator(45.0, 0.0, 0.0))) < -20.0);
 	return true;
 }
+
+#if WITH_EDITOR   // the cook list is editor code (the game target compiles these tests too)
+// A feature row names its graphs and PCG data assets in text (ActorProperties), which the cooker cannot follow: the packaged build had no cliffs at all
+// (Wes, Oct 25 2026). The cook asks FMOWorldFeatureCook for every package the rows reach. Every package a row names must exist (a stale path is a feature
+// that never appears), the cook list must hold them and what they reach (the meshes a PCG data asset names softly), and the module must have bound the hook.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_CompositionsAreCooked,
+	"MOFramework.WorldFeatures.CompositionsAreCooked",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_CompositionsAreCooked::RunTest(const FString& Parameters)
+{
+	const UMOWorldFeatureSettings* Settings = GetDefault<UMOWorldFeatureSettings>();
+	const UDataTable* Table = Settings ? Settings->FeatureTable.LoadSynchronous() : nullptr;
+	if (!TestNotNull(TEXT("the feature table loads"), Table))
+	{
+		return false;
+	}
+	TArray<FName> Named;
+	FMOWorldFeatureCook::CollectNamedPackages(*Table, Named);
+	int32 Graphs = 0;
+	for (const FName Package : Named)
+	{
+		TestTrue(FString::Printf(TEXT("%s, named by a feature row, exists"), *Package.ToString()), FPackageName::DoesPackageExist(Package.ToString()));
+		Graphs += Package.ToString().StartsWith(TEXT("/Game/WorldFeatures/")) ? 1 : 0;
+	}
+	TestTrue(TEXT("the rows name their composition graphs (the text is parsed, the check is not vacuous)"), Graphs >= 4);
+
+	TArray<FName> Cook;
+	FMOWorldFeatureCook::CollectCookPackages(Cook);
+	int32 Missing = 0;
+	for (const FName Package : Named)
+	{
+		Missing += Cook.Contains(Package) ? 0 : 1;
+	}
+	TestEqual(TEXT("every package a row names is in the cook list"), Missing, 0);
+	int32 Meshes = 0;
+	for (const FName Package : Cook)
+	{
+		TArray<FAssetData> Assets;
+		IAssetRegistry::GetChecked().GetAssetsByPackageName(Package, Assets);
+		Meshes += Assets.ContainsByPredicate([](const FAssetData& Asset) { return Asset.AssetClassPath == UStaticMesh::StaticClass()->GetClassPathName(); }) ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("%d package(s) named by %d row(s); the cook list holds %d, %d of them meshes"), Named.Num(), Table->GetRowMap().Num(), Cook.Num(), Meshes));
+	TestTrue(TEXT("the cook list reaches the meshes the PCG data assets name softly"), Meshes >= 20);
+	TestFalse(TEXT("no level in the cook list (an assembly's source level is editor data)"),
+		Cook.ContainsByPredicate([](const FName Package) { return Package.ToString().Contains(TEXT("/__ExternalActors__/")); }));
+	TestTrue(TEXT("the module bound the cook hook"), FGameDelegates::Get().GetModifyCookDelegate().IsBound());
+	return true;
+}
+#endif // WITH_EDITOR
 
 #endif // WITH_DEV_AUTOMATION_TESTS

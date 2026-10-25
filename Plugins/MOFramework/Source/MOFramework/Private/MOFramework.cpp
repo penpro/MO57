@@ -11,6 +11,10 @@
 #include "MOMedicalDatabaseSettings.h"
 #include "MOWorldGenSettings.h"
 #include "Engine/DataTable.h"
+#include "MOWorldFeatureCook.h"
+#if WITH_EDITOR
+#include "GameDelegates.h"
+#endif
 
 // Define the log category
 DEFINE_LOG_CATEGORY(LogMOFramework);
@@ -105,6 +109,12 @@ void FMOFrameworkModule::StartupModule()
 	// Publish the world-generator snapshot (tuning + DT_Biomes) so editor graph previews, PIE and the PCG spawner have data before any world exists.
 	// Also loads DT_Biomes here, which is what gets it cooked. Re-published before every voxel runtime (UMOWorldSeedSubsystem::RegenerateVoxelWorld).
 	UMOWorldGenSettings::RefreshPublishedParams();
+
+#if WITH_EDITOR
+	// The world features' graphs, PCG data assets and meshes are named in DT_WorldFeatures text the cooker cannot follow: the cook asks for them
+	// (FMOWorldFeatureCook; the packaged build had no cliffs without it, Oct 25 2026).
+	ModifyCookHandle = FGameDelegates::Get().GetModifyCookDelegate().AddStatic(&FMOWorldFeatureCook::ModifyCook);
+#endif
 
 	// Validate configuration settings - logs warnings if required settings aren't configured.
 	// Skip validation during commandlet runs (cooking, packaging, etc.) to avoid noise.
@@ -286,6 +296,9 @@ void FMOFrameworkModule::PreloadDatabaseTables()
 
 void FMOFrameworkModule::ShutdownModule()
 {
+#if WITH_EDITOR
+	FGameDelegates::Get().GetModifyCookDelegate().Remove(ModifyCookHandle);
+#endif
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
 }

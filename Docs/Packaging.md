@@ -41,6 +41,16 @@
   it. An editor-only render proves nothing: package after migrating a new material family.
 - **Soft-referenced plugin content is not cooked:** Oceanology loads materials / effects / sounds through soft paths in its runtime
   settings; list them in `DirectoriesToAlwaysCook` (the test reads every soft path). Retargeted animation folders referenced softly too.
+- **A path written as TEXT is invisible to the cooker:** the world features name their graphs and PCG data assets in DT_WorldFeatures
+  `ActorProperties` strings, so the packaged build had no Dark Ruins or Electric Dreams cliffs at all (Wes, Oct 25 2026). The cooker DOES
+  follow real soft references (the rows' `TSoftClassPtr` ActorClass got the ED Blueprints cooked); strings it cannot. `FMOWorldFeatureCook`
+  (bound to `FGameDelegates::GetModifyCookDelegate()` by the MOFramework module, editor builds) parses the rows and adds every package they
+  reach (asset-registry game dependencies, hard and soft; levels and external actors left out). The cook log says
+  `[MOWorldFeatures] cook: N package(s) the world-feature rows reach`. Test `MOFramework.WorldFeatures.CompositionsAreCooked`.
+  Verified Oct 25 (Development package, seed 4242, `pkg_probe` logs `Saved/Logs/pkg_probe/cliffs_pkg.log`, `ed_pkg.log`): the cook added 633
+  packages; in the packaged game each DR mountain spawned 376 rock instances and each arch stack 174 (as in PIE), the ED embankments ~950
+  rocks and ~300 plants per member, the spires their rock and vines; no load failure. Shot: `D:/MOAssets/previews/packaged_dr_mountain.png`.
+  (A packaged `MO.NewGame` keeps its start camera after a `poi` teleport: aim it with `MO.Cam.LookAt` before a `HighResShot`.)
 - **Too-wide always-cook dirs pull in assets that can't compile:** Oceanology's `NS_GerstnerWaves(_Splash)` take ddx/ddy in a GPU compute
   script; DX12/SM6 compiles it, the DX11 (SM5) fallback can't (Niagara X3662). Only `AOceanologyWaterNiagaraWavesVolume` uses them (no MO
   level places one), so the always-cook list was narrowed to `Effects/RVT`.
