@@ -7,6 +7,7 @@
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldGen.h"
 #include "MOSpawnClearance.h"
+#include "MOStartSiteSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOGameState.h"
 #include "MOBiomeFinder.h"
@@ -247,6 +248,7 @@ void AMOGameMode::HandlePendingNewGame()
 
 		// The first survivor is made while the world finishes loading (Wes, Oct 15 2026): see OnPawnLandedSafely.
 		bOpenCharacterCreatorOnLanding = !FParse::Param(FCommandLine::Get(), TEXT("NoCharacterCreator"));
+		bPlaceStartSiteOnLanding = true;
 
 		// Wait for voxel world to be ready before spawning
 		WaitForVoxelWorldAndSpawn();
@@ -2258,6 +2260,16 @@ void AMOGameMode::OnPawnLandedSafely()
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Pawn landed safely at %s"),
 		Pawn ? *Pawn->GetActorLocation().ToString() : TEXT("NULL"));
+
+	// A new world's first survivor wakes beside the clone egg they grew in (Wes, Oct 24 2026: "the egg should be near where the first player starts").
+	if (bPlaceStartSiteOnLanding && Pawn)
+	{
+		bPlaceStartSiteOnLanding = false;
+		if (UMOStartSiteSubsystem* StartSite = UMOStartSiteSubsystem::Get(this))
+		{
+			StartSite->PlaceBesideWhenReady(Pawn);
+		}
+	}
 
 	// A new game's first survivor: the character creator replaces the rest of the loading screen -- the vegetation and streaming stages of the
 	// readiness cycle run behind it, so the first load-in is all but instant (its Begin holds the overlay only if the world is still not ready).

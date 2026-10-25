@@ -670,6 +670,10 @@ private:
 	 *  loading screen holding until the world is ready (OnPawnLandedSafely). -NoCharacterCreator (test harnesses) skips it. */
 	bool bOpenCharacterCreatorOnLanding = false;
 
+	/** Set by a NEW game too: when its first survivor lands, the start site (the clone egg they grew in, its hatch) goes down beside them
+	 *  (UMOStartSiteSubsystem, OnPawnLandedSafely). A load restores the saved site instead; a respawn gets none. */
+	bool bPlaceStartSiteOnLanding = false;
+
 	/** Number of recovery attempts triggered for this spawn. */
 	int32 LandingRecoveryAttempts = 0;
 };

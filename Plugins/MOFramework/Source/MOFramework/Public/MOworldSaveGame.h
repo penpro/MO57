@@ -65,6 +65,7 @@
 #include "MOResourceDepletionSubsystem.h" // (H37) FMOResourceNodeDepletionSaveEntry
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
+#include "MOStartSiteTypes.h"             // FMOStartSiteSaveData
 #include "MOItemInstanceState.h"
 #include "MOSurvivalStatsComponent.h"
 #include "MOWorldCreationTypes.h"
@@ -484,6 +485,13 @@ public:
      */
     UPROPERTY()
     FMOWorldRemovalSaveData WorldRemovalData;
+
+    /**
+     * The start site beside the first survivor (the clone egg and its hatch), as placed.
+     * Owned + serialized by UMOStartSiteSubsystem via IMOSaveDomain. Empty for older saves (no egg).
+     */
+    UPROPERTY()
+    FMOStartSiteSaveData StartSiteData;
 
     // --- Terraform excavation designations (unit 3) ---
 

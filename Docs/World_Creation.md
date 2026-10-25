@@ -47,6 +47,20 @@ it is a property of the world chosen before its first step, not a mid-game skip.
   elevation biomes"): `FMOWorldCreation::IsStartingBand` -- the band's floor within 50 m of the sea and no minimum slope, so AlpineHeath,
   AlpineRock and RockyHighland are offered neither as cards nor by the spawn (test `WorldCreation.StartingBiomesAreLowland`). A start with
   the sea within 300 m faces it (`FMOWorldGen::FindWaterFacingYaw`; the strands), as the coastal start does.
+- **The start site** (Oct 24, Wes: "the egg should be near where the first player starts"): the first survivor of a NEW world wakes beside
+  the stone clone egg they grew in and its thrown-off hatch (`Content/ImageTo3D/CloneEggPod01`, `CloneEggPodHatch01`). `AMOGameMode`
+  flags a new game; when its first survivor has landed (`OnPawnLandedSafely`) `UMOStartSiteSubsystem::PlaceBesideWhenReady` keeps the
+  spot and facing and places the props once the world is READY (the vegetation round the spawn has collision by then).
+  - Where: 3.3 m from the survivor's feet, behind them to the right (bearing 140 degrees from their facing), the egg's opening turned to them,
+    the hatch between. 24 candidates round them (`MOStartSite::Candidates`, tests `MOFramework.StartSite.*`): the first with voxel ground
+    under every prop's footprint, at most 60 cm of rise across one, no open water and no tree / rock / building inside a prop wins.
+    None fits: the preferred spot anyway (logged).
+  - Each prop sits on the lowest ground under it, pressed in a little (the egg 10 cm). Grass is kept out with a worked-ground zone per prop.
+  - The props are `AMOStartSiteProp` actors: server-spawned, replicated, always relevant, so a joiner sees them.
+  - They are saved (domain `StartSite`, `Docs/Persistence.md` §1) and a load spawns them again where they were. A respawn or a load never
+    places a new site; a world saved before Oct 24 has none.
+  - The props and the layout are Project Settings > MOFramework > Start Site (`UMOStartSiteSettings`, DefaultGame.ini). The defaults are
+    the egg and its hatch.
 - **New knob:** a field in `FMOWorldShape` / `FMOWorldPace` + one entry in `BuildKnobs()` (`MOWorldCreationTypes.cpp`); the panel, the
   console and the clamps follow from the table.
 

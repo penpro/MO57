@@ -20,7 +20,8 @@
 - A system that needs saving implements `IMOSaveDomain` (Core) and registers with the persistence subsystem (priority registry); the
   subsystem iterates the registry and names no domain. Live domains (2026-10-17): `GameClock` (via `UMOClockSaveDomainAdapter`: a Core
   service that needs saving gets an adapter in the upper module), `Colony`, `Designation` (pri 80), `Quest`, `ResourceDepletion`,
-  `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`.
+  `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`, `StartSite` (pri 90, Oct 24: the clone egg and hatch beside the first
+  survivor, `Docs/World_Creation.md` §2).
 - Pawns: the persistence subsystem captures each pawn's components through the shared `ApplyPawnComponentState` on BOTH load paths
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters now save in a
   valid/versioned snapshot (six values plus nutrition), through the same restore path, without changing rates or offline policy.

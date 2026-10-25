@@ -1535,3 +1535,12 @@ DARKTOWER's MO57 copy (C:\UEProjects\MO57) is now a git clone: this repo's .git 
 ### 2026-10-24 19:58 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0170
 Status: RELEASE editor (batch 4 done and pushed; the clone egg body + hatch imported as meshes only, not placed or wired; PIE ended, the editor left open)
 References: CL-0168, CL-0169
+
+### 2026-10-24 20:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0171
+Status: CLAIM build window + editor (Wes: "the egg should be near where the first player starts" -- a start-site subsystem places the clone egg + hatch beside a new world's first survivor, saved as domain StartSite; and "reduce [the rock features] to about half at the larger end" -- the xlarge rock tier in DT_Biomes)
+References: CL-0170
+C++: new MOStartSiteTypes.h, MOStartSiteSubsystem.h/.cpp, Tests/MOStartSiteTests.cpp; MOGameMode.h/.cpp (flag + hook), MOWorldSaveGame.h (StartSiteData), MOSaveDomainInterface.h (comment). Data: DT_Biomes xlarge tier rows.
+
+### 2026-10-24 20:35 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0172
+Status: RELEASE build window + editor (start site built, suite 365 / 0, PIE-verified: the egg placed beside a new world's first survivor, saved and restored; the xlarge rock tier halved in DT_Biomes, readback 11/11. PIE ended; the editor left open)
+References: CL-0171
