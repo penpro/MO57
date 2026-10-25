@@ -4271,7 +4271,8 @@ def _pkg_stop(pid):
 
 def _package_build():
     """Re-package the Development build (RunUAT BuildCookRun, ~90 s). The editor must be closed."""
-    uat = r"D:\UnrealEngine\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat"
+    import ue  # the one engine root (UE_ENGINE_ROOT or the per-machine install), not a hard-coded path
+    uat = os.path.join(ue.ENGINE_ROOT, "Engine", "Build", "BatchFiles", "RunUAT.bat")
     project = os.path.abspath(os.path.join(HERE, "..", "MO57.uproject"))
     log = os.path.abspath(os.path.join(HERE, "..", "Saved", "Logs", "package.log"))
     stage = os.path.abspath(os.path.join(HERE, "..", "Saved", "StagedBuilds_DevTest"))

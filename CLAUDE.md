@@ -65,10 +65,22 @@ Production-ready software: fix systems, not symptoms. These override convenience
   `python -m graphify query "..."`, `explain "Symbol"`, `path "A" "B"`, `affected "X"`).
 - Local / free / offline by default; paid APIs only with Wes's yes; downloads need his yes unless already authorized (`Docs/DECISIONS.md`).
 
-## The second PC: DARKTOWER (GPU worker)
+## The second PC: DARKTOWER (GPU worker and second clone)
 
 - DARKTOWER (192.168.1.169, Windows 10, RTX 3090 24 GB, user Wes) takes heavy model work off this PC (DARKSIDE, 192.168.1.73):
-  image-to-3D (TRELLIS), ComfyUI, WanGP (`D:\WanGP` there). Unreal, builds and game instances stay here.
+  image-to-3D (TRELLIS), ComfyUI, WanGP (`D:\WanGP` there).
+- **Two clones, never two writers in one folder** (Wes, 2026-10-24). DARKTOWER has its own MO57 clone at `C:\UEProjects\MO57` (UE 5.8.4 at
+  `D:\UE_5.8`; `ue.py` finds either install, `UE_ENGINE_ROOT` overrides).
+  - DARKSIDE owns `master` and the editor-heavy work: DataTables, Blueprints, maps, materials, art imports, packaging / Steam, Wes's
+    playtests (and Codex).
+  - DARKTOWER takes one task per branch, `darktower/<topic>` off `origin/master`, in a lane assigned up front (C++ systems with few asset
+    edits), and never commits to `master`. Done = rebased on `origin/master`, built, `ue.py auto` green, branch pushed, a note in
+    `inbox-for-darkside\`. DARKSIDE merges it after its own batch (`ue.py auto` again, push). Merge small and often.
+  - Binary assets don't merge, so each has one owner. DataTables change only on DARKSIDE: DARKTOWER puts row changes in its branch as
+    `ue.py rows set --file` patch JSON under `Docs/RowPatches/`, and DARKSIDE applies them. Any other `.uasset` both might touch:
+    `git lfs lock <path>` before editing, `git lfs unlock` after the push.
+  - Live claims between the machines go through the inbox (instant); `claude-codex-coop.md` stays the record (it travels only by git).
+  - DARKTOWER's GPU jobs pause while its editor runs; builds and `ue.py auto` don't need the editor open.
 - Run commands with `ssh darktower "<powershell>"` (key login, `~/.ssh/config` alias; the remote shell is PowerShell 5.1). Copy files
   with `scp darktower:C:/path/file ./dest` (and back). An SSH session there cannot see the share (a key login carries no network
   credentials: `Access is denied`), so ssh commands move files with scp. DARKTOWER's own desktop Claude session sees this PC's `D:\`
@@ -77,7 +89,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
   after a reboot (stale session-manager state after 44 days up, Oct 24); ComfyUI restarts by itself when Wes logs in.
 - Hand work to its Claude session through `D:\ClaudeMeetClaude\` (`README.md` there): requests in `inbox-for-darktower\`, results in
   `inbox-for-darkside\`, each with a short `*.md` saying what it is and what to do. DARKTOWER writes only inside `ClaudeMeetClaude\` on
-  the share, never into this tree: results come back through the inbox and a DARKSIDE agent imports them.
+  the share, never into this tree: results come back through the inbox (or its pushed branch) and a DARKSIDE agent imports them.
 - Start long GPU jobs there with `Start-Process` or a scheduled task so they outlive the SSH session; `ssh darktower "nvidia-smi"` before
   assuming its VRAM is free.
 - ComfyUI runs there at http://192.168.1.169:8188.

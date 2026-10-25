@@ -19,7 +19,7 @@ SRC_PROJECT = r"D:\UEProjects\ElectricDreamsEnv\ElectricDreamsEnv.uproject"
 SRC_CONTENT = r"D:\UEProjects\ElectricDreamsEnv\Content"
 DST_CONTENT = r"D:\UEProjects\MO57\Content"
 SELECTION = r"D:\UEProjects\MO57\Saved\ede_selection.json"
-EDITOR_CMD = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+from ue import EDITOR_CMD  # noqa: E402
 EXTS = (".uasset", ".umap", ".uexp", ".ubulk", ".uptnl", ".upayload")
 
 M = "/Game/Megascans/"

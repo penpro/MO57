@@ -14,7 +14,7 @@ sys.path.insert(0, __file__.replace("\\", "/").rsplit("/", 1)[0])
 import ue_inst as ui  # noqa: E402
 
 UPROJECT = r"D:\UEProjects\MO57\MO57.uproject"
-EDITOR = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
+from ue import EDITOR_EXE as EDITOR  # noqa: E402
 NAME = "rescueprobe"
 
 

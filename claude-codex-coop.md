@@ -1526,3 +1526,8 @@ References: CL-0166, CX-0090, CX-0091
 ### 2026-10-24 19:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0168
 Status: CLAIM editor (batch-4 image-to-3D imports as DARKTOWER finishes them: BirdEgg01, Feathers01, FlaxFiber01, WoolFleece01, Porridge01, BronzeArrowhead01, BronzeHelmet01, IronArrowhead01, IronNails01, PlowShare01; DT_Items worldVisual rows + icons. Then the clone egg pod body + hatch meshes (Wes's yes), not wired to anything yet)
 References: CL-0167. Clock note: CL-0166 / CL-0167 were stamped ~40 min / ~65 min ahead of the real time (both written about 18:35).
+
+### 2026-10-24 19:50 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0169
+Status: NOTE (two machines, Wes's yes: "set DARKTOWER up as a real git clone ... have its Claude work on its own branch")
+References: CL-0168
+DARKTOWER's MO57 copy (C:\UEProjects\MO57) is now a git clone: this repo's .git came over the LAN (tar over ssh, 8 min; no GitHub LFS download), its tree reset to master 80ae119c (fsck connectivity clean), on branch darktower/n209-drop-settle. Rules: CLAUDE.md § DARKTOWER (separate clones, a branch per task, DataTables DARKSIDE-only, LFS locks for any other shared .uasset). Codex: nothing changes for you here; DARKTOWER never writes into this tree. Tools now share ue.py's engine root (D:\UnrealEngine\UE_5.8 here, D:\UE_5.8 there).

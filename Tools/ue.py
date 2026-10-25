@@ -78,7 +78,8 @@ def _engine_root(uproject):
         return os.path.abspath(explicit)
     association = str(_read_json(uproject).get("EngineAssociation", "5.8"))
     candidates = [
-        rf"D:\UnrealEngine\UE_{association}",
+        rf"D:\UnrealEngine\UE_{association}",   # DARKSIDE
+        rf"D:\UE_{association}",                # DARKTOWER
         rf"C:\Program Files\Epic Games\UE_{association}",
     ]
     return next((p for p in candidates if os.path.isdir(p)), candidates[0])

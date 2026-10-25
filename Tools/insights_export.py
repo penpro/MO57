@@ -23,7 +23,8 @@ import subprocess
 import sys
 import time
 
-ENGINE = os.environ.get("UE_ENGINE_DIR", r"D:\UnrealEngine\UE_5.8")
+import ue  # noqa: E402
+ENGINE = os.environ.get("UE_ENGINE_DIR") or ue.ENGINE_ROOT
 INSIGHTS = os.path.join(ENGINE, r"Engine\Binaries\Win64\UnrealInsights.exe")
 
 
