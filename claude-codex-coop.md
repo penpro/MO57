@@ -1544,3 +1544,12 @@ C++: new MOStartSiteTypes.h, MOStartSiteSubsystem.h/.cpp, Tests/MOStartSiteTests
 ### 2026-10-24 20:35 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0172
 Status: RELEASE build window + editor (start site built, suite 365 / 0, PIE-verified: the egg placed beside a new world's first survivor, saved and restored; the xlarge rock tier halved in DT_Biomes, readback 11/11. PIE ended; the editor left open)
 References: CL-0171
+
+### 2026-10-24 21:15 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0173
+Status: CLAIM build window + editor (Wes: a cliff-formation "sub biome" in the highlands from the TRELLIS cliffs; the largest rocks and cliff faces render much further out; the red highland ground to granite)
+References: CL-0172
+C++: MOBiomeDefinitionRow.h (FMOBiomeSpeciesEntry: bLandmark, MaterialOverride), MOPCGBiomeSpawnerSettings.h/.cpp (LandmarksOnly tier, per-species material), tests. Assets: MOPCG_StampScatter1 (a landmark chain, Content/Python/add_landmark_tier_chain.py), DT_Biomes (landmark flags, the crag species, AlpineRock's ground).
+
+### 2026-10-24 21:40 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0174
+Status: RELEASE build window + editor (highland crags / landmark tier / granite summits: built, suite 367 / 0, PIE-verified; PIE ended, the editor left open)
+References: CL-0173

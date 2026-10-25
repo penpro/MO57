@@ -11,6 +11,7 @@
 #include "MOPCGBiomeSpawnerSettings.h"
 #include "MOPCGCaveSpawnerSettings.h"
 #include "PCGVoxelSampler.h"
+#include "Elements/PCGHiGenGridSize.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -386,6 +387,122 @@ bool FMOPCG_NoDeadBranches::RunTest(const FString& Parameters)
 			TestTrue(*FString::Printf(TEXT("%s (a grid-size node) is not fully disconnected (in=%d out=%d)"), *Node->GetName(), bHasIn ? 1 : 0, bHasOut ? 1 : 0), bHasIn || bHasOut);
 		}
 	}
+	return true;
+}
+
+// The landmark tier (Oct 24 2026, Wes: "the largest rocks, and the cliff faces, let's have them render much further out"): a species with bLandmark is planted by the
+// LandmarksOnly node and by no other, so a big rock never stands twice (the large tier near, the landmark tier far) and never vanishes past the large tier's 300 m.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_LandmarksHaveOneTier,
+	"MOFramework.PCG.LandmarksHaveOneTier",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_LandmarksHaveOneTier::RunTest(const FString& Parameters)
+{
+	using F = EMOBiomeSpeciesFilter;
+	const F Tiers[] = { F::GroundCoverOnly, F::LargeOnly, F::TreesOnly, F::FarGroundCoverOnly, F::FarLargeOnly, F::FarCanopyOnly, F::LandmarksOnly };
+	auto Only = [&](const TCHAR* What, const FMOBiomeSpeciesEntry& Sp, F Expected)
+	{
+		for (const F Tier : Tiers)
+		{
+			TestEqual(*FString::Printf(TEXT("%s: %s"), What, *UEnum::GetValueAsString(Tier)), MOPCGBiomeSpawner::SpeciesPassesFilter(Tier, Sp), Tier == Expected);
+		}
+		TestTrue(*FString::Printf(TEXT("%s: the legacy All node still plants it"), What), MOPCGBiomeSpawner::SpeciesPassesFilter(F::All, Sp));
+	};
+	FMOBiomeSpeciesEntry Rock;
+	Rock.HISMTag = TEXT("MOBiomeCover_Rock");
+	Only(TEXT("CONTROL: a boulder"), Rock, F::LargeOnly);
+	Rock.bLandmark = true;
+	Only(TEXT("a landmark boulder"), Rock, F::LandmarksOnly);
+
+	FMOBiomeSpeciesEntry Tree;
+	Tree.HISMTag = TEXT("MOResource_Tree");
+	Only(TEXT("CONTROL: a tree"), Tree, F::TreesOnly);
+	Tree.bLandmark = true;
+	Only(TEXT("a landmark tree"), Tree, F::LandmarksOnly);
+
+	FMOBiomeSpeciesEntry Grass;
+	Grass.HISMTag = TEXT("MOBiomeCover_Grass");
+	Grass.bLandmark = true;
+	Only(TEXT("a landmark flag on ground cover"), Grass, F::LandmarksOnly);
+
+	FMOBiomeSpeciesEntry StandIn;
+	StandIn.HISMTag = TEXT("MOFar_Tree");
+	StandIn.bLandmark = true;
+	Only(TEXT("a far stand-in stays a stand-in"), StandIn, F::FarLargeOnly);
+	return true;
+}
+
+// The graph half: a landmark node exists, on the 1 km grid (generated out to ~2.5 km during the load, not held back like the 2 km grid), with no near draw floor.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_LandmarkTierReachesFar,
+	"MOFramework.PCG.LandmarkTierReachesFar",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_LandmarkTierReachesFar::RunTest(const FString& Parameters)
+{
+	const UPCGGraph* Graph = LoadScatterGraph();
+	if (!TestNotNull(TEXT("the scatter graph loads"), Graph))
+	{
+		return false;
+	}
+	TMap<const UPCGNode*, TArray<const UPCGNode*>> Up;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (!Node)
+		{
+			continue;
+		}
+		for (const UPCGPin* Pin : Node->GetOutputPins())
+		{
+			if (!Pin)
+			{
+				continue;
+			}
+			for (const UPCGEdge* Edge : Pin->Edges)
+			{
+				if (const UPCGNode* To = (Edge && Edge->OutputPin) ? Edge->OutputPin->Node.Get() : nullptr)
+				{
+					Up.FindOrAdd(To).Add(Node);
+				}
+			}
+		}
+	}
+	int32 LandmarkNodes = 0;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		const UMOPCGBiomeSpawnerSettings* Spawner = Node ? Cast<UMOPCGBiomeSpawnerSettings>(Node->GetSettings()) : nullptr;
+		if (!Spawner || !Spawner->bEnabled || Spawner->SpeciesFilter != EMOBiomeSpeciesFilter::LandmarksOnly)
+		{
+			continue;
+		}
+		++LandmarkNodes;
+		TestEqual(*FString::Printf(TEXT("%s: no near draw floor (the same instances near and far)"), *Node->GetName()), Spawner->MinDistanceFromViewerCm, 0.0f);
+		// Walk upstream to the grid this chain runs on.
+		const UPCGHiGenGridSizeSettings* Grid = nullptr;
+		TArray<const UPCGNode*> Stack = { Node };
+		TSet<const UPCGNode*> Seen;
+		while (Stack.Num() > 0 && !Grid)
+		{
+			const UPCGNode* N = Stack.Pop();
+			if (Seen.Contains(N))
+			{
+				continue;
+			}
+			Seen.Add(N);
+			Grid = Cast<UPCGHiGenGridSizeSettings>(N->GetSettings());
+			if (const TArray<const UPCGNode*>* Ups = Up.Find(N))
+			{
+				Stack.Append(*Ups);
+			}
+		}
+		if (TestNotNull(*FString::Printf(TEXT("%s runs on a hi-gen grid"), *Node->GetName()), Grid))
+		{
+			// HiGenGridSize is protected: read it by reflection.
+			const FEnumProperty* GridProp = CastField<FEnumProperty>(UPCGHiGenGridSizeSettings::StaticClass()->FindPropertyByName(TEXT("HiGenGridSize")));
+			const int64 GridValue = GridProp ? GridProp->GetUnderlyingProperty()->GetSignedIntPropertyValue(GridProp->ContainerPtrToValuePtr<void>(Grid)) : -1;
+			TestEqual(*FString::Printf(TEXT("%s: the 1 km grid (GRID256)"), *Node->GetName()), GridValue, (int64)EPCGHiGenGrid::Grid256);
+		}
+	}
+	TestEqual(TEXT("one landmark node in the scatter graph"), LandmarkNodes, 1);
 	return true;
 }
 

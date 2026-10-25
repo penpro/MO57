@@ -36,6 +36,7 @@
 class UTexture2D;
 
 class UStaticMesh;
+class UMaterialInterface;
 
 /**
  * How a scattered species treats the pawn. Auto follows the resource type (solid for trees, rocks, ore and generic nodes; walk-through for bushes and herbs).
@@ -218,6 +219,20 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.1", ClampMax="5.0"))
 	float WidthScale = 1.0f;
+
+	/**
+	 * A LANDMARK: big enough to be seen from kilometres away (the xlarge boulders, the cliff faces and formations). The landmark tier plants it
+	 * on its own 1 km grid out to ~2.5 km, instead of the large tier's 300 m (Wes, Oct 24 2026: "the largest rocks, and the cliff faces, let's
+	 * have them render much further out so they add some detail to the high lands at a distance"). The SAME instances near and far -- no
+	 * stand-ins -- so nothing swaps as you walk up to it; it casts shadows and keeps its collision. Wins over the large and tree tiers; a
+	 * far-tier tag (MOFar_*) still wins over it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	bool bLandmark = false;
+
+	/** A material for every slot of the mesh (a recoloured scan: a cliff formation's granite variant). Empty = the mesh's own materials. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	TSoftObjectPtr<UMaterialInterface> MaterialOverride;
 };
 
 /**

@@ -420,7 +420,9 @@ ALPINE["species"] = ALPINE["species"] + [ed_plate("TundraRockyGround", "SM_Tundr
 ALPINE_ROCK = {
     "displayName": "Alpine Rock",
     "heightMin": 95000.0, "heightMax": 100000000.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 90.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 1.0,
-    "priority": 22, "groundSurfaceType": surface("IcelandicQuarryRock"), "edgeBlendWidth": 5000.0,   # dark volcanic rock above the heath
+    # Granite (VST_Cliff: rock_05, the cave walls' grey speckled rock), Oct 24 2026 -- Wes: "very red and none of the rocks are red, let's shift that to something more granite
+    # looking"; it was surface("IcelandicQuarryRock"), a saturated red quarry scan. The live table has drifted from this script: Tools/highland_crags_patch.py set it there.
+    "priority": 22, "groundSurfaceType": "/Game/VoxelExamples/NaniteMaterials/Materials/Cliff/VST_Cliff.VST_Cliff", "edgeBlendWidth": 5000.0,
     "species": mountain_rocks(0.5, 1.4, 1.2) + scree(95.0, 1.4, 3.2)
     + [boulder("forest", 8.0, 2000.0, 0.8, 2.2), boulder("beach_a", 5.0, 2600.0, 0.8, 2.0), ed_cliff("SM_HugeSandstoneCliff_04", 0.15, face_yaw=90.0)],
 }

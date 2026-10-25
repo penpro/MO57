@@ -231,15 +231,17 @@ namespace
 		}
 		const bool bFarGround = IsFarGroundCover(Sp), bFarLarge = IsFarLarge(Sp), bFarCanopy = IsFarCanopy(Sp);
 		const bool bAnyFar = bFarGround || bFarLarge || bFarCanopy;
+		const bool bLandmark = Sp.bLandmark && !bAnyFar;   // a far tag wins: a stand-in is never a landmark
 		switch (Filter)
 		{
 		case EMOBiomeSpeciesFilter::All:                return true;
 		case EMOBiomeSpeciesFilter::FarGroundCoverOnly: return bFarGround;
 		case EMOBiomeSpeciesFilter::FarLargeOnly:       return bFarLarge;
 		case EMOBiomeSpeciesFilter::FarCanopyOnly:      return bFarCanopy;
-		case EMOBiomeSpeciesFilter::TreesOnly:          return IsTreeSpecies(Sp);
-		case EMOBiomeSpeciesFilter::LargeOnly:          return !bAnyFar && !IsTreeSpecies(Sp) && IsLargeSpecies(Sp);
-		default:                                        return !bAnyFar && !IsLargeSpecies(Sp);   // GroundCoverOnly
+		case EMOBiomeSpeciesFilter::LandmarksOnly:      return bLandmark;
+		case EMOBiomeSpeciesFilter::TreesOnly:          return !bLandmark && IsTreeSpecies(Sp);
+		case EMOBiomeSpeciesFilter::LargeOnly:          return !bAnyFar && !bLandmark && !IsTreeSpecies(Sp) && IsLargeSpecies(Sp);
+		default:                                        return !bAnyFar && !bLandmark && !IsLargeSpecies(Sp);   // GroundCoverOnly
 		}
 	}
 
@@ -265,6 +267,11 @@ void MOPCGBiomeSpawner::ApplyNearDrawFloor(FISMComponentDescriptorBase& Descript
 	}
 	Descriptor.InstanceMinDrawDistance = FMath::RoundToInt(MinDistanceCm);
 	Descriptor.InstanceEndCullDistance = FMath::Max(Descriptor.InstanceEndCullDistance, NearFloorEndCullCm);
+}
+
+bool MOPCGBiomeSpawner::SpeciesPassesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Species)
+{
+	return PassesSpeciesFilter(Filter, Species);
 }
 
 namespace
@@ -374,6 +381,11 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] species mesh FAILED to load: %s (biome %s)"),
 						*Sp.Mesh.ToString(), *Id.ToString());
 				}
+				if (!Sp.MaterialOverride.IsNull() && !Sp.MaterialOverride.LoadSynchronous())   // the merge below reads it with Get()
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] species material FAILED to load: %s (biome %s): the mesh's own"),
+						*Sp.MaterialOverride.ToString(), *Id.ToString());
+				}
 				E.LoadedMeshes.Add(Loaded);
 				E.GroundCoverScaled.Add(ScalesWithGroundCover(Sp));
 				E.FeatureRingOk.Add(GrowsInFeatureRing(Sp));
@@ -388,6 +400,10 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				if (!Loaded)
 				{
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] water-edge species mesh FAILED to load: %s (biome %s)"), *Sp.Mesh.ToString(), *Id.ToString());
+				}
+				if (!Sp.MaterialOverride.IsNull())
+				{
+					Sp.MaterialOverride.LoadSynchronous();
 				}
 				E.LoadedEdgeMeshes.Add(Loaded);
 				E.EdgeGroundCoverScaled.Add(ScalesWithGroundCover(Sp));
@@ -863,9 +879,11 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		}
 		const FBiomeEntry& Chosen = Biomes[R.BiomeIndex];
 		const FMOBiomeSpeciesEntry& Sp = *R.Species;
-		const FString Key = FString::Printf(TEXT("%s|%s"), *R.Mesh->GetPathName(), *Chosen.Id.ToString());
+		UMaterialInterface* Material = Sp.MaterialOverride.Get();   // loaded with the meshes above; a recoloured scan is a component of its own
+		const FString Key = FString::Printf(TEXT("%s|%s|%s"), *R.Mesh->GetPathName(), *Chosen.Id.ToString(), Material ? *Material->GetPathName() : TEXT(""));
 		FSpeciesBucket& Bucket = Buckets.FindOrAdd(Key);
 		Bucket.Mesh = R.Mesh;
+		Bucket.Material = Material;
 		Bucket.HISMTag = Sp.HISMTag;
 		Bucket.BiomeId = Chosen.Id;
 		Bucket.ResourceNodeId = Sp.ResourceNodeId;

@@ -53,6 +53,7 @@ invoker (`AMOCharacter::VoxelCollisionInvoker`), which is separate from PCG.
 | Far grass | FarGroundCoverOnly, tag `MOFar_Grass` | 512 m cells | 288/ha; min 100 m from viewer; 16 % density x2.1 scale | |
 | Far trees | FarLargeOnly (`MO Biome Spawner_5`), tag `MOFar_Tree` | GRID256 (1 km) | 300/ha on 404 cm (was 112.5) | stand-ins 1.5-2.5 km, scale 1.1 |
 | Far canopy | FarCanopyOnly (`MO Biome Spawner_6`), tag `MOFar_Canopy` | GRID512 | 40/ha on 1106 cm (was 18) | clump proxies (`Content/Penumbra/FarCanopy`) 2.2-7.5 km |
+| Landmarks (Oct 24) | LandmarksOnly (`add_landmark_tier_chain.py`), species with `bLandmark` | GRID256 (1 km), r 2.5 km | 32/ha on 1500 cm | the xlarge boulders, the cliff faces, the crag formations: the REAL instances near and far (no near floor, shadows, collision); every other tier leaves them out |
 | Native lawn grass | the scatter graph's native chain, gated per biome by `MO Elevation Bands_3` | | ~14k/ha | `Content/Python/native_grass_biomes.py` holds the biome list + reasons (AlpineHeath IN for #25, Rainforest OUT for #6) |
 | Item clutter | `MO Mesh Spawner_0/1` fed by `RandomChoice_3` off `VoxelSampler_0` | | ~100 items/ha | sticks / bark / stones: thin the ratio (`thin_item_clutter.py`), NEVER the sampler (the ground tier shares it) |
 | Caves | MO Cave Spawner (GRID16) | | | `Docs/Caves_And_Geology.md` §5 |
@@ -152,6 +153,18 @@ saved graphs keep their meaning.
     default) is the old even draw, so every other species and every world's layout are unchanged.
   - The spawner planted only a biome's first 64 species (a leftover of an old fixed loop): the Rainforest and ElectricForest have 72, and
     their far stand-ins and canopy proxies (rows 64-71) never grew. The cap is gone.
+- **Landmarks and the highland crags** (Oct 24 evening; Wes: "a 'sub biome' in the higher up areas where we have the cliffs made up of those huge
+  rock formations ... clustering them should give some pretty nice results, also the largest rocks, and the cliff faces, let's have them render
+  much further out"). `Tools/highland_crags_patch.py` writes it (rows get -> patch -> rows set):
+  - `FMOBiomeSpeciesEntry::bLandmark`: the species goes to the landmark tier only (table in §3; `MOPCGBiomeSpawner::SpeciesPassesFilter`, tests
+    `PCG.LandmarksHaveOneTier`, `PCG.LandmarkTierReachesFar`). Landmarks: every xlarge boulder (all biomes) and every HugeSandstoneCliff face.
+  - `FMOBiomeSpeciesEntry::MaterialOverride`: a material for every slot (a recoloured scan); the bucket (one HISM per mesh, biome and material)
+    takes it, as the cave spawner's ore tints always did.
+  - **The crags**, a sub-biome of RockyHighland, AlpineHeath and AlpineRock: the four TRELLIS cliff formations (`/Game/ImageTo3D/Cliffs`, their
+    Granite variant, 15-31 m) share clump group 8 (period 480 m) and grow only in its cores (core 0.72, ~7 % of the ground; the capped x8
+    compensation packs ~10 a hectare there, so they overlap into one formation). The biome's large boulders strew the ring round them
+    (core 0.6). Upright (a closed formation does not lean with the slope), any yaw, sunk 22 % of their height, solid, landmarks. The heath gets
+    0.6x, the alpine rock 1.2x.
 
 ## 6. Performance rules (what keeps it fast)
 

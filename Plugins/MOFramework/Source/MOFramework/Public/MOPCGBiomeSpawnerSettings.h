@@ -76,7 +76,8 @@ namespace MOPCGBiomeSpawner
 /**
  * Which species of the biome palettes a spawner node handles. One graph runs this node at SEVERAL hierarchical grid sizes (the PCG hi-gen idea: small things on a small, near grid; big things on a larger grid
  * that reaches further): ground cover (grass, flowers, debris) at GRID16 reaches 32 m, large species (trees, shrubs, bushes, boulders) at GRID128 reach 256 m. The split is by the species' HISMTag, so a new
- * species needs no flag: MOResource_Tree / MOResource_Rock / MOResource_Bush / MOBiomeCover_Shrub are LARGE, everything else is ground cover.
+ * species needs no flag: MOResource_Tree / MOResource_Rock / MOResource_Bush / MOBiomeCover_Shrub are LARGE, everything else is ground cover. The one flag is bLandmark: a species seen from
+ * kilometres (the biggest boulders, cliffs) goes to the LandmarksOnly tier and no other.
  * The biome rows' WATER-EDGE species (reeds, rushes) are NOT part of ground cover / large: they belong to their own tier, WaterEdgeOnly, which runs on a much denser sampler (a reed belt wants about one clump per square
  * metre at the waterline, far more than the ground-cover sampler emits) and skips every cell with no water in or near it. All = everything (the legacy single node).
  */
@@ -94,8 +95,17 @@ enum class EMOBiomeSpeciesFilter : uint8
 	/** TREES only (HISMTag MOResource_Tree), on their own large hierarchical grid so the forest reaches far past the shrubs, rocks and undergrowth of the LargeOnly tier. */
 	TreesOnly UMETA(DisplayName = "Trees only (MOResource_Tree)"),
 	/** The FAR CANOPY tier: species tagged MOFar_Canopy (solid low-poly crown proxies, 3-9 km): beyond the stand-in trees, where a real tree is a few pixels and its masked leaves only alias. */
-	FarCanopyOnly UMETA(DisplayName = "Far canopy only (MOFar_Canopy)")
+	FarCanopyOnly UMETA(DisplayName = "Far canopy only (MOFar_Canopy)"),
+	/** The LANDMARK tier: species with bLandmark (the xlarge boulders, cliff faces and formations) on a 1 km grid out to ~2.5 km -- the same instances near and far, with shadows and
+	 *  collision, so the highlands keep their detail at a distance (Oct 24 2026). Every other tier leaves landmarks out. */
+	LandmarksOnly UMETA(DisplayName = "Landmarks only (bLandmark: big rocks, cliffs)")
 };
+
+namespace MOPCGBiomeSpawner
+{
+	/** Whether a node with this filter plants this species of a biome's main palette (the tier split: by HISMTag, the young-tree rule and bLandmark). For tests. */
+	MOFRAMEWORK_API bool SpeciesPassesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Species);
+}
 
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGBiomeSpawnerSettings : public UPCGSettings
