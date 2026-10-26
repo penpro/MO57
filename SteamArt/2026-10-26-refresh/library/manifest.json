@@ -1,0 +1,121 @@
+{
+  "project": "Metaverse: Origins",
+  "createdUtc": "2026-10-26T08:43:21.213Z",
+  "method": "Conventional crop/colour/compositing only; no generative edits",
+  "inputs": [
+    {
+      "file": "sources/hero_panorama_3840x2160.png",
+      "bytes": 12257916,
+      "sha256": "84ddcc9d3662202b9c1595507c053e3c795b94c4a07c13c7597cd1a101051576"
+    },
+    {
+      "file": "../masters/03_cliffs_native.png",
+      "bytes": 4377299,
+      "sha256": "da8f3aae11b8f46030eb39bfb011cb6b3d15190d6849732fce668899a4fc06a8"
+    },
+    {
+      "file": "../sources/wordmark_transparent.png",
+      "bytes": 163781,
+      "sha256": "eb97abee8f347bd33c449aec45c8d8821743cd0a128f472c024e529c5e3cb796"
+    },
+    {
+      "file": "../exports/header_capsule_920x430.png",
+      "bytes": 933000,
+      "sha256": "931787fc391141fd406778b01a2eb036b20f6544d47f2f7a83dd9504b744553f"
+    }
+  ],
+  "exports": [
+    {
+      "file": "library_capsule_600x900.png",
+      "width": 600,
+      "height": 900,
+      "hasAlpha": false,
+      "channels": 3,
+      "colourSpace": "srgb",
+      "bytes": 1201989,
+      "sha256": "60768043da873e7f3fecbb4d2d937a7fa561171af50cc8db9cb916755434e7c6"
+    },
+    {
+      "file": "library_header_920x430.png",
+      "width": 920,
+      "height": 430,
+      "hasAlpha": false,
+      "channels": 3,
+      "colourSpace": "srgb",
+      "bytes": 933000,
+      "sha256": "931787fc391141fd406778b01a2eb036b20f6544d47f2f7a83dd9504b744553f"
+    },
+    {
+      "file": "library_hero_3840x1240.png",
+      "width": 3840,
+      "height": 1240,
+      "hasAlpha": false,
+      "channels": 3,
+      "colourSpace": "srgb",
+      "bytes": 7461034,
+      "sha256": "d72b8ecb28b3c8d460f4228f2cf7ca63741227ecab2b7f3463a94eca4c533797"
+    },
+    {
+      "file": "library_logo_1280x368.png",
+      "width": 1280,
+      "height": 368,
+      "hasAlpha": true,
+      "channels": 4,
+      "colourSpace": "srgb",
+      "bytes": 106264,
+      "sha256": "f4f5f61d9d9c6bf43cb0d62fbe912ed7d5000e6a7375be11192352a8b75cc5f7"
+    }
+  ],
+  "capsule": {
+    "source": "../masters/03_cliffs_native.png",
+    "sourceCrop": {
+      "left": 178,
+      "top": 0,
+      "width": 677,
+      "height": 1015
+    },
+    "logoWidth": 540,
+    "logoTop": 65
+  },
+  "header": {
+    "source": "../exports/header_capsule_920x430.png",
+    "byteIdentical": true
+  },
+  "hero": {
+    "source": "sources/hero_panorama_3840x2160.png",
+    "originalSource": "Saved/SteamArt/plates/S2_gold.png",
+    "sourceCrop": {
+      "left": 0,
+      "top": 600,
+      "width": 3840,
+      "height": 1240
+    },
+    "nativeResolution": true,
+    "containsText": false,
+    "containsLogo": false,
+    "safeArea": {
+      "left": 1490,
+      "top": 430,
+      "width": 860,
+      "height": 380
+    }
+  },
+  "logo": {
+    "source": "../sources/wordmark_transparent.png",
+    "transparentPixels": 354272,
+    "visiblePixels": 116768,
+    "transparentCorners": true,
+    "naturalAspect": true,
+    "softShadow": true
+  },
+  "recommendedPlacement": {
+    "anchor": "bottom-left",
+    "left": 144,
+    "top": 816,
+    "width": 1280,
+    "height": 368
+  },
+  "sourceSpec": "User pasted Steam library guidelines, 2026-10-26",
+  "officialSpec": "https://partner.steamgames.com/doc/store/assets/libraryassets",
+  "note": "Guide, checkerboard and hero-with-logo composites are previews only; upload only exports/. Nothing uploaded to Steam."
+}
