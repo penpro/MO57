@@ -1187,6 +1187,10 @@ void AMOCharacter::ApplyGaitFromMovement(bool bJog, bool bSprint)
 
 float AMOCharacter::GetCurrentMET() const
 {
+	if (IsClimbing())
+	{
+		return ClimbingMET;
+	}
 	if (IsSwimming())
 	{
 		return SwimmingMET;
@@ -1205,6 +1209,10 @@ float AMOCharacter::GetCurrentMET() const
 
 float AMOCharacter::GetCurrentExertionLevel() const
 {
+	if (IsClimbing())
+	{
+		return ClimbingExertion;
+	}
 	if (IsSwimming())
 	{
 		return SwimmingExertion;
@@ -1262,8 +1270,8 @@ void AMOCharacter::StopMovementPhysiologyTracking()
 
 void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 {
-	// Only apply effects if we're actually moving (a swimmer treading water is working: it never rests)
-	if (!GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming()))
+	// Only apply effects if we're actually moving (a swimmer treading water is working: it never rests; nor does a climber holding on)
+	if (!GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming() && !IsClimbing()))
 	{
 		// Not moving - set exertion to resting
 		if (VitalsComponent)
@@ -1346,6 +1354,10 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 		{
 			StaminaCost = SwimmingStaminaCostPerSecond * DeltaTime;
 		}
+		if (IsClimbing())
+		{
+			StaminaCost = ClimbingStaminaCostPerSecond * DeltaTime;
+		}
 
 		if (StaminaCost > 0.0f)
 		{
@@ -1355,6 +1367,15 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 			if (bIsSprinting && SurvivalStatsComponent->GetStatCurrent(TEXT("Stamina")) <= 0.0f)
 			{
 				StopSprint();
+			}
+			// Out of strength on a climb: the hands give out (the server decides; a joiner's prediction is corrected to the fall).
+			if (HasAuthority() && IsClimbing() && SurvivalStatsComponent->GetStatCurrent(TEXT("Stamina")) <= 0.0f)
+			{
+				if (UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTraversal] %s is out of strength and falls from the climb"), *GetName());
+					Move->StopClimbing();
+				}
 			}
 		}
 	}
@@ -1434,6 +1455,12 @@ bool AMOCharacter::IsSwimming() const
 {
 	const UCharacterMovementComponent* Move = GetCharacterMovement();
 	return Move && Move->IsSwimming();
+}
+
+bool AMOCharacter::IsClimbing() const
+{
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	return Move && Move->IsClimbing();
 }
 
 void AMOCharacter::HandleAsphyxiaDeath()

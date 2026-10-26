@@ -478,6 +478,12 @@
 
 ## 16. AI and gameplay
 
+- **A crouch press "did nothing" / a climber could not grab again** -> crouch is a TOGGLE here (`RequestCrouchToggle`): a press that is
+  used for something else (letting go of a climb) must clear `bWantsToCrouch`, or the body lands crouched and a crouched body cannot jump
+  or grab. (Oct 26)
+- **A traversal test block "not in front"** -> the MetaHuman's capsule radius is 28.9 cm, not the 34 of `MOSpawnClearance::FCapsule`: the
+  traversal rays reach radius + 60 = 89 cm from the centre. Put test blocks 60 cm ahead. (Oct 26)
+
 - **One survivor order froze the host for minutes** -> `UMOPCGInteractionSubsystem::GetItemIdForMesh` logged a Warning plus the whole
   mesh-to-item cache (~130 lines) for every unmapped mesh; a Gather Wood search over 200 m met 122 of them inside `EnqueueJob` (2 min 44 s) ->
   a miss is normal and logs one Verbose line (commented out since Oct 18 with every other Verbose line: TECHNICAL_REFERENCE "Code

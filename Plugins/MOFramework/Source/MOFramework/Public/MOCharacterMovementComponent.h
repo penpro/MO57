@@ -18,6 +18,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "MOTraversal.h"
 #include "MOCharacterMovementComponent.generated.h"
 
 UCLASS()
@@ -74,6 +75,65 @@ public:
 
 	/** Flying the glider right now: wants to, falling, and the world's host is in developer mode. */
 	bool IsGliding() const;
+
+	// ---- traversal: vault / hop up / pull up, and climbing (MOTraversal.h; Wes, Oct 26 2026) ----
+	//
+	// Two custom movement modes. Traverse follows the path worked out at the jump (FMOTraversal::FPath) for the move's duration; Climb holds the body
+	// to a climbable face and moves it along the face with the input (W up, S down, A / D across), pulling up over the edge at the top. Both are
+	// predicted like every move: they start from the jump (DoJump) on the joiner and, from the same input, on the server; the traversal's state and
+	// the face held ride in the saved moves, so a replay after a correction runs them the same way. Crouch lets go of a climb.
+
+	enum ECustomMovement : uint8
+	{
+		CMOVE_None = 0,
+		CMOVE_Traverse = 1,
+		CMOVE_Climb = 2,
+	};
+
+	UFUNCTION(BlueprintPure, Category="MO|Traversal")
+	bool IsClimbing() const { return MovementMode == MOVE_Custom && CustomMovementMode == CMOVE_Climb; }
+
+	UFUNCTION(BlueprintPure, Category="MO|Traversal")
+	bool IsTraversing() const { return MovementMode == MOVE_Custom && CustomMovementMode == CMOVE_Traverse; }
+
+	/** What the climber holds (the speed depends on it). */
+	EMOClimbSurface GetClimbSurface() const { return ClimbSurface; }
+
+	/** What a jump would do in front of the body right now (also MO.Test.Traversal). */
+	struct FTraversalPlan
+	{
+		EMOTraversal Kind = EMOTraversal::None;
+		float HeightCm = 0.0f;
+		float Duration = 0.0f;
+		FVector Facing = FVector::ForwardVector;
+		FMOTraversal::FPath Path;
+	};
+	bool FindTraversal(FTraversalPlan& OutPlan, FString* OutWhyNot = nullptr) const;
+
+	/** A climbable face in front of the body within reach (bRequireInputTowardIt: on the ground, only when the input pushes at it -- a jump beside a trunk stays a jump). */
+	bool FindClimbableWall(FHitResult& OutHit, EMOClimbSurface& OutSurface, bool bRequireInputTowardIt) const;
+
+	/** Let go of the face (crouch, exhaustion): falls, or stands when Next is walking. */
+	void StopClimbing(EMovementMode Next = MOVE_Falling);
+
+	/** How far from the face the climber's capsule is held (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="0"))
+	float ClimbWallGapCm = 6.0f;
+
+	/** How far past the capsule the hands find a face to grab (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="5"))
+	float ClimbReachCm = 30.0f;
+
+	/** Effort scale on the climbing speed (the character lowers it when tired). */
+	UPROPERTY(BlueprintReadWrite, Category="MO|Traversal")
+	float ClimbSpeedScale = 1.0f;
+
+	/** A jump off the face: away from it and up (cm/s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal")
+	float ClimbPushOffSpeed = 220.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal")
+	float ClimbPushOffUpSpeed = 180.0f;
 
 	// ---- water state (valid after the first movement update) ----
 
@@ -154,6 +214,13 @@ public:
 	virtual FVector NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const override;
 	/** No air braking while gliding: hands off, a glider keeps its airspeed (the stock fall brakes a pawn with no input). */
 	virtual void ApplyVelocityBraking(float DeltaTime, float Friction, float BrakingDeceleration) override;
+	/** Jump at an obstacle or a climbable face: a vault / hop up / pull-up, or a grab (FMOTraversal); while climbing: pull up or push off. Else the stock jump. */
+	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
+	/** A climber can always "jump" (to pull up or push off). */
+	virtual bool CanAttemptJump() const override;
+	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
+	/** A climber faces the face and a traversal its path: no turning to the input meanwhile. */
+	virtual void PhysicsRotation(float DeltaTime) override;
 
 	// Co-op smoothness counters (MONetDiagnostics.h): the server's verdict on each of a joiner's moves, and on the joiner the corrections it got
 	// and how far its pawn visibly snapped once it replayed its moves. Each calls the stock implementation first; nothing about movement changes.
@@ -190,4 +257,25 @@ private:
 	uint8 bWantsToGlide : 1;
 	float GaitJogSpeed = 550.0f;
 	float GaitSprintSpeed = 700.0f;
+
+	// Traversal / climbing (see IsTraversing / IsClimbing). Saved and restored by FSavedMove_MO.
+	void StartTraversal(const FTraversalPlan& Plan);
+	void StartClimbing(const FHitResult& Wall, EMOClimbSurface Surface);
+	void PhysTraverse(float DeltaTime, int32 Iterations);
+	void PhysClimb(float DeltaTime, int32 Iterations);
+	/** The body's facing for traversal probes: the face held while climbing, else where the body looks (flat). */
+	FVector TraversalFacing() const;
+	/** A face along Direction from the body's centre within the climbing reach: hit and classification. */
+	bool TraceClimbFace(const FVector& Direction, FHitResult& OutHit, EMOClimbSurface& OutSurface) const;
+
+	struct FTraverseState
+	{
+		FMOTraversal::FPath Path;
+		FVector Facing = FVector::ForwardVector;
+		float Duration = 0.0f;
+		float Elapsed = 0.0f;
+	};
+	FTraverseState Traverse;
+	FVector ClimbNormal = FVector::ZeroVector;
+	EMOClimbSurface ClimbSurface = EMOClimbSurface::None;
 };

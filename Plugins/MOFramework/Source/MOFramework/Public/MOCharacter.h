@@ -416,6 +416,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Water")
 	bool IsSwimming() const;
 
+	/** Climbing a cliff, a rock or a tree (UMOCharacterMovementComponent, MOTraversal.h). */
+	UFUNCTION(BlueprintPure, Category="MO|Movement")
+	bool IsClimbing() const;
+
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOCraftingQueueComponent* GetCraftingQueueComponent() const { return CraftingQueueComponent; }
 
@@ -993,6 +997,19 @@ public:
 	/** Swim speed multiplier while the hustle input is held (a harder stroke). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="1", ClampMax="2"))
 	float SwimHustleSpeedScale = 1.35f;
+
+	/** MET value for climbing (rock scrambling and tree climbing run about 7-9 METs). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	float ClimbingMET = 8.0f;
+
+	/** Exertion level while climbing (0-100): hard, sustained work for arms and legs, holding on included. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology", meta=(ClampMin="0", ClampMax="100"))
+	float ClimbingExertion = 75.0f;
+
+	/** Stamina cost per second on a climb, moving or hanging (between a jog's 2 and a sprint's 8: a full bar lasts about half a minute). Out of
+	 *  stamina, the hands give out and the climber falls (decided on the server). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	float ClimbingStaminaCostPerSecond = 3.0f;
 
 	/** Swim speed multiplier when the stamina is gone (an exhausted swimmer can barely keep afloat). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="0.1", ClampMax="1"))

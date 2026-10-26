@@ -3,6 +3,8 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "MOCharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "MOInventoryRequest.h"
 #include "Layout/WidgetPath.h"
 #include "Types/ReflectionMetadata.h"
@@ -1634,6 +1636,97 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				}
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearEmbed: removed %d block(s)"), Removed);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] / MO.Test.ClearLedges / MO.Test.Traversal ----------
+	// A test obstacle for the traversal moves (MOTraversal.h): a block HeightCm tall standing on the ground DistanceCm in front of the local
+	// player's pawn, 2 m wide, DepthCm deep; Climbable tags it MOClimbable (a rock face to climb). The pawn turns to face it. MO.Test.Traversal
+	// reports what a jump would do where the pawn stands. Run on the machine whose pawn it is.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.SpawnLedge"),
+		TEXT("Dev: a test block in front of the pawn for vault / hop up / pull-up / climbing. Usage: MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+			ACharacter* Character = Cast<ACharacter>(Pawn);
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			if (!Character || !Cube || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SpawnLedge: %s"), !Character ? TEXT("no pawn") : (!Cube ? TEXT("cube mesh missing") : TEXT("usage: MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]")));
+				return;
+			}
+			const float Height = FMath::Clamp(FCString::Atof(*Args[0]), 10.0f, 5000.0f);
+			const float Depth = Args.Num() > 1 ? FMath::Clamp(FCString::Atof(*Args[1]), 10.0f, 2000.0f) : 150.0f;
+			const bool bClimbable = Args.Num() > 2 && FCString::Atoi(*Args[2]) != 0;
+			const float Distance = Args.Num() > 3 ? FMath::Clamp(FCString::Atof(*Args[3]), 40.0f, 500.0f) : 90.0f;
+			const float FeetZ = Character->GetActorLocation().Z - Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+			FVector Facing = Character->GetActorForwardVector();
+			Facing.Z = 0.0;
+			Facing.Normalize();
+			const FVector Center = Character->GetActorLocation() + Facing * (Distance + Depth * 0.5f);
+			AStaticMeshActor* Block = World->SpawnActor<AStaticMeshActor>(FVector(Center.X, Center.Y, FeetZ + Height * 0.5f - 2.0f), Facing.Rotation());
+			Block->SetMobility(EComponentMobility::Movable);
+			Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+			Block->SetActorScale3D(FVector(Depth / 100.0f, 2.0f, (Height + 4.0f) / 100.0f));   // the engine cube is 100 uu
+			Block->Tags.Add(TEXT("MOTestLedge"));
+			if (bClimbable)
+			{
+				Block->Tags.Add(TEXT("MOClimbable"));
+			}
+			if (AController* Controller = Character->GetController())
+			{
+				Controller->SetControlRotation(Facing.Rotation());
+			}
+			Character->SetActorRotation(Facing.Rotation());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS SpawnLedge: %.0f cm tall, %.0f deep, %s, %.0f cm ahead of %s (feet z %.0f, top z %.0f)"),
+				Height, Depth, bClimbable ? TEXT("climbable") : TEXT("plain"), Distance, *Character->GetName(), FeetZ, FeetZ + Height);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ClearLedges"),
+		TEXT("Dev: remove every block MO.Test.SpawnLedge made."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Removed = 0;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				if (It->Tags.Contains(TEXT("MOTestLedge")))
+				{
+					It->Destroy();
+					++Removed;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearLedges: removed %d block(s)"), Removed);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Traversal"),
+		TEXT("Dev: what a jump would do where the local pawn stands (vault / hop up / pull-up / climb / jump), and its movement mode now."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			ACharacter* Character = Cast<ACharacter>(World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr);
+			const UMOCharacterMovementComponent* Move = Character ? Cast<UMOCharacterMovementComponent>(Character->GetCharacterMovement()) : nullptr;
+			if (!Move)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] TRAVERSAL FAILED: no MO pawn"));
+				return;
+			}
+			static const TCHAR* Kinds[] = { TEXT("none"), TEXT("vault"), TEXT("hop up"), TEXT("pull-up") };
+			UMOCharacterMovementComponent::FTraversalPlan Plan;
+			FHitResult Wall;
+			EMOClimbSurface Surface = EMOClimbSurface::None;
+			FString WhyNot;
+			const bool bPlan = Move->FindTraversal(Plan, &WhyNot);
+			const bool bClimb = Move->FindClimbableWall(Wall, Surface, /*bRequireInputTowardIt=*/false);
+			const FVector At = Character->GetActorLocation();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] TRAVERSAL pawn=(%.0f, %.0f, %.0f) mode=%d custom=%d climbing=%d traversing=%d jump=%s height=%.0f duration=%.2f climbable=%s why=%s"),
+				At.X, At.Y, At.Z, static_cast<int32>(Move->MovementMode.GetValue()), static_cast<int32>(Move->CustomMovementMode), Move->IsClimbing() ? 1 : 0,
+				Move->IsTraversing() ? 1 : 0, bPlan ? Kinds[static_cast<int32>(Plan.Kind)] : TEXT("plain jump"), Plan.HeightCm, Plan.Duration,
+				bClimb ? (Surface == EMOClimbSurface::Tree ? TEXT("tree") : TEXT("rock")) : TEXT("no"), bPlan ? TEXT("-") : *WhyNot);
 		}),
 		ECVF_Default));
 

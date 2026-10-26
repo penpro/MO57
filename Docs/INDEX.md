@@ -32,7 +32,8 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/Medical_And_Survival.md` | Medical cascade, death path, survival meters, thermal model, breath, illness, treatment | Medical / survival work |
 | `Docs/Crafting_And_Progression.md` | Recipes, queue, stations, tool gate, harvesting, item state / liquids / action registries, discovery, progression checks | Crafting / harvesting / items code |
 | `Docs/PROGRESSION_ROADMAP.md` | **The design authority** for technology progression: eras, heat ladder, materials, discovery precursors, gaps | Before adding or changing any item, recipe, station or knowledge |
-| `Docs/Building.md` | Placement, server-driven construction, build-state look | Building work |
+| `Docs/Building.md` | Placement, server-driven construction, build-state look, building mode, creative instant building | Building work |
+| `Docs/Movement_And_Traversal.md` | Vault / hop up / pull-up and climbing (cliffs, rocks, trees): the rules, the co-op prediction, the costs | Movement, traversal, climbing |
 | `Docs/Terraform_Excavation_Plan.md` | Player terraform + designation-based pawn excavation (plan and stage record) | Terraform / excavation |
 | `Docs/AI_And_Colony.md` | Creatures, survivor jobs, the village loop, recruitment, possession, colony UI plan | AI, survivors, colony |
 | `Docs/Coop_And_Networking.md` | Sessions, pawns in co-op, per-machine terrain, spawn settle, RPC rules, interaction targeting, co-op testing | Anything multiplayer |

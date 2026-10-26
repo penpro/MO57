@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOWaterSubsystem.h"
 #include "MOCharacter.h"
+#include "MOBuildableActor.h"
 #include "MONetDiagnostics.h"
 #include "MODevMode.h"
 #include "GameFramework/Character.h"
@@ -56,6 +57,10 @@ public:
 	uint8 bSavedWantsToJog : 1;
 	uint8 bSavedWantsToSprint : 1;
 	uint8 bSavedWantsToGlide : 1;
+	// The traversal under way and the face held at the start of the move: a replay after a correction runs them the same way (MOTraversal.h).
+	UMOCharacterMovementComponent::FTraverseState SavedTraverse;
+	FVector SavedClimbNormal = FVector::ZeroVector;
+	EMOClimbSurface SavedClimbSurface = EMOClimbSurface::None;
 
 	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0), bSavedWantsToGlide(0) {}
 
@@ -65,6 +70,9 @@ public:
 		bSavedWantsToJog = 0;
 		bSavedWantsToSprint = 0;
 		bSavedWantsToGlide = 0;
+		SavedTraverse = UMOCharacterMovementComponent::FTraverseState();
+		SavedClimbNormal = FVector::ZeroVector;
+		SavedClimbSurface = EMOClimbSurface::None;
 	}
 
 	virtual uint8 GetCompressedFlags() const override
@@ -103,6 +111,9 @@ public:
 			bSavedWantsToJog = Move->bWantsToJog;
 			bSavedWantsToSprint = Move->bWantsToSprint;
 			bSavedWantsToGlide = Move->bWantsToGlide;
+			SavedTraverse = Move->Traverse;
+			SavedClimbNormal = Move->ClimbNormal;
+			SavedClimbSurface = Move->ClimbSurface;
 		}
 	}
 
@@ -114,6 +125,9 @@ public:
 			Move->bWantsToJog = bSavedWantsToJog;   // a replayed move runs at the gait it was made with
 			Move->bWantsToSprint = bSavedWantsToSprint;
 			Move->bWantsToGlide = bSavedWantsToGlide;
+			Move->Traverse = SavedTraverse;          // ... and from the traversal / climb it started in
+			Move->ClimbNormal = SavedClimbNormal;
+			Move->ClimbSurface = SavedClimbSurface;
 		}
 	}
 };
@@ -493,4 +507,365 @@ float UMOCharacterMovementComponent::GetWaterDepthCm() const
 	}
 	const float FeetZ = UpdatedComponent->GetComponentLocation().Z - CharacterOwner->GetSimpleCollisionHalfHeight();
 	return FMath::Max(0.0f, WaterSurfaceZ - FeetZ);
+}
+
+// ---- traversal: vault / hop up / pull up, and climbing (MOTraversal.h) ----
+
+namespace
+{
+	/** What the hands found: a climbable surface's kind from its tags, its owner and its mesh (FMOTraversal::ClassifyClimbSurface). */
+	EMOClimbSurface ClassifyClimbHit(const FHitResult& Hit)
+	{
+		const UPrimitiveComponent* Component = Hit.GetComponent();
+		const AActor* Owner = Hit.GetActor();
+		const bool bTree = Component && Component->ComponentHasTag(TEXT("MOTreeTrunk"));
+		const bool bRock = Component && Component->ComponentHasTag(TEXT("MOLandmark"));
+		const bool bClimbable = (Component && Component->ComponentHasTag(TEXT("MOClimbable"))) || (Owner && Owner->ActorHasTag(TEXT("MOClimbable")));
+		const bool bVoxel = Component && Component->GetClass()->GetName().Contains(TEXT("Voxel"));
+		const bool bBuilt = Owner && Owner->IsA<AMOBuildableActor>();
+		FString MeshPath;
+		if (const UStaticMeshComponent* Mesh = Cast<UStaticMeshComponent>(Component))
+		{
+			MeshPath = Mesh->GetStaticMesh() ? Mesh->GetStaticMesh()->GetPathName() : FString();
+		}
+		return FMOTraversal::ClassifyClimbSurface(bTree, bRock, bClimbable, bVoxel, bBuilt, MeshPath, Hit.ImpactNormal.Z);
+	}
+}
+
+FVector UMOCharacterMovementComponent::TraversalFacing() const
+{
+	FVector Facing = IsClimbing() ? -ClimbNormal : (UpdatedComponent ? UpdatedComponent->GetForwardVector() : FVector::ForwardVector);
+	Facing.Z = 0.0;
+	return Facing.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+}
+
+bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FString* OutWhyNot) const
+{
+	OutPlan = FTraversalPlan();
+	auto WhyNot = [OutWhyNot](const FString& Reason) { if (OutWhyNot) { *OutWhyNot = Reason; } return false; };
+	if (!UpdatedComponent || !CharacterOwner || !GetWorld())
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	float Radius = 0.0f;
+	float Half = 0.0f;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, Half);
+	const FVector Center = UpdatedComponent->GetComponentLocation();
+	const float FeetZ = Center.Z - Half;
+	const FVector Facing = TraversalFacing();
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOTraversal), /*bTraceComplex=*/false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	const ECollisionChannel Channel = UpdatedComponent->GetCollisionObjectType();
+
+	// 1. Something in front, between the knees and arm's reach: the nearest face.
+	const float Reach = Radius + 60.0f;
+	float WallDist = TNumericLimits<float>::Max();
+	for (const float Height : { FMOTraversal::HopMinCm + 5.0f, 90.0f, 140.0f, 190.0f })
+	{
+		FHitResult Hit;
+		const FVector Start(Center.X, Center.Y, FeetZ + Height);
+		if (World->LineTraceSingleByChannel(Hit, Start, Start + Facing * Reach, Channel, Params, Response) && FVector::DotProduct(Hit.ImpactNormal, -Facing) > 0.5f)
+		{
+			WallDist = FMath::Min(WallDist, Hit.Distance);
+		}
+	}
+	if (WallDist == TNumericLimits<float>::Max())
+	{
+		return WhyNot(TEXT("nothing in front within reach"));
+	}
+
+	// 2. Its top: a small sphere dropped onto it just past the face, from above arm's reach.
+	constexpr float Probe = 12.0f;
+	const FVector TopXY = Center + Facing * (WallDist + Probe + 8.0f);
+	FHitResult Top;
+	const FVector TopStart(TopXY.X, TopXY.Y, FeetZ + FMOTraversal::PullUpMaxCm + Probe + 10.0f);
+	const FVector TopEnd(TopXY.X, TopXY.Y, FeetZ + FMOTraversal::HopMinCm - 5.0f);
+	if (!World->SweepSingleByChannel(Top, TopStart, TopEnd, FQuat::Identity, Channel, FCollisionShape::MakeSphere(Probe), Params, Response)
+		|| Top.bStartPenetrating || !IsWalkable(Top))
+	{
+		// taller than arm's reach (a climb, if it is climbable), or no surface to stand on
+		return WhyNot(Top.bStartPenetrating ? TEXT("taller than arm's reach") : TEXT("no top to stand on within reach"));
+	}
+	const float TopZ = Top.ImpactPoint.Z;
+	const float HeightCm = TopZ - FeetZ;
+
+	// 3. Room to rise straight up beside the face to clear the edge (no overhang, no ceiling).
+	constexpr float Clearance = 8.0f;
+	const FVector Rise(Center.X, Center.Y, FMath::Max(Center.Z, TopZ + Half + Clearance));
+	// (Swept from a few cm up with a slightly smaller capsule: the body stands touching its floor, and a start in contact is not a ceiling.)
+	FHitResult Ceiling;
+	if (Rise.Z > Center.Z + 1.0 && World->SweepSingleByChannel(Ceiling, Center + FVector(0.0, 0.0, 5.0), Rise, FQuat::Identity, Channel,
+		FCollisionShape::MakeCapsule(Radius * 0.9f, Half - 5.0f), Params, Response) && !Ceiling.bStartPenetrating)
+	{
+		return WhyNot(FString::Printf(TEXT("no room to rise (blocked by %s)"), *GetNameSafe(Ceiling.GetActor())));
+	}
+
+	// 4. Room for the body on top, and (a waist-high obstacle) on the ground just behind it.
+	const FVector OnTopXY = Center + Facing * (WallDist + Radius + 15.0f);
+	const FVector OnTop(OnTopXY.X, OnTopXY.Y, TopZ + Half + 2.0f);
+	const bool bRoomOnTop = !World->OverlapBlockingTestByChannel(OnTop, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response);
+	bool bRoomBehind = false;
+	FVector Behind = FVector::ZeroVector;
+	if (HeightCm <= FMOTraversal::HopMaxCm)
+	{
+		const FVector FarXY = Center + Facing * (WallDist + FMOTraversal::VaultMaxDepthCm + Radius);
+		FHitResult Ground;
+		const FVector GroundStart(FarXY.X, FarXY.Y, TopZ + 20.0f);
+		const FVector GroundEnd(FarXY.X, FarXY.Y, FeetZ - 60.0f);
+		if (World->LineTraceSingleByChannel(Ground, GroundStart, GroundEnd, Channel, Params, Response) && IsWalkable(Ground)
+			&& Ground.ImpactPoint.Z < TopZ - 40.0f)
+		{
+			Behind = FVector(FarXY.X, FarXY.Y, Ground.ImpactPoint.Z + Half + 2.0f);
+			bRoomBehind = !World->OverlapBlockingTestByChannel(Behind, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response);
+		}
+	}
+
+	OutPlan.Kind = FMOTraversal::Classify(HeightCm, bRoomOnTop, bRoomBehind);
+	if (OutPlan.Kind == EMOTraversal::None)
+	{
+		return WhyNot(FString::Printf(TEXT("a %.0f cm ledge with %s on top%s"), HeightCm, bRoomOnTop ? TEXT("room") : TEXT("no room"),
+			HeightCm <= FMOTraversal::HopMaxCm ? (bRoomBehind ? TEXT(", room behind") : TEXT(", no room behind")) : TEXT("")));
+	}
+	OutPlan.HeightCm = HeightCm;
+	OutPlan.Duration = FMOTraversal::DurationSeconds(OutPlan.Kind, HeightCm);
+	OutPlan.Facing = Facing;
+	const FVector End = OutPlan.Kind == EMOTraversal::Vault ? Behind : OnTop;
+	OutPlan.Path.Points[0] = Center;
+	OutPlan.Path.Points[1] = Rise;
+	OutPlan.Path.Points[2] = FVector(End.X, End.Y, Rise.Z);   // over the edge at the risen height
+	OutPlan.Path.Points[3] = End;
+	return true;
+}
+
+bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHitResult& OutHit, EMOClimbSurface& OutSurface) const
+{
+	OutSurface = EMOClimbSurface::None;
+	if (!UpdatedComponent || !CharacterOwner || !GetWorld())
+	{
+		return false;
+	}
+	float Radius = 0.0f;
+	float Half = 0.0f;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, Half);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbFace), /*bTraceComplex=*/false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	const FVector Start = UpdatedComponent->GetComponentLocation() + FVector(0.0, 0.0, Half * 0.3f);   // the chest: where the hands are
+	if (!GetWorld()->LineTraceSingleByChannel(OutHit, Start, Start + Direction.GetSafeNormal() * (Radius + ClimbReachCm + 10.0f),
+		UpdatedComponent->GetCollisionObjectType(), Params, Response))
+	{
+		return false;
+	}
+	OutSurface = ClassifyClimbHit(OutHit);
+	return OutSurface != EMOClimbSurface::None;
+}
+
+bool UMOCharacterMovementComponent::FindClimbableWall(FHitResult& OutHit, EMOClimbSurface& OutSurface, bool bRequireInputTowardIt) const
+{
+	const FVector Facing = TraversalFacing();
+	if (!TraceClimbFace(Facing, OutHit, OutSurface) || FVector::DotProduct(OutHit.ImpactNormal.GetSafeNormal2D(), -Facing) < 0.5f)
+	{
+		return false;   // nothing in reach, or only an edge glanced at
+	}
+	if (bRequireInputTowardIt && !IsFalling() && FVector::DotProduct(Acceleration.GetSafeNormal2D(), Facing) < 0.3f)
+	{
+		return false;
+	}
+	return true;
+}
+
+void UMOCharacterMovementComponent::StartTraversal(const FTraversalPlan& Plan)
+{
+	Traverse.Path = Plan.Path;
+	Traverse.Facing = Plan.Facing;
+	Traverse.Duration = FMath::Max(Plan.Duration, 0.05f);
+	Traverse.Elapsed = 0.0f;
+	ClimbSurface = EMOClimbSurface::None;
+	Velocity = FVector::ZeroVector;
+	SetMovementMode(MOVE_Custom, CMOVE_Traverse);
+	static const TCHAR* Names[] = { TEXT("none"), TEXT("vault"), TEXT("hop up"), TEXT("pull-up") };
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: %s onto %.0f cm in %.2f s"), *GetNameSafe(CharacterOwner), Names[static_cast<int32>(Plan.Kind)],
+		Plan.HeightCm, Plan.Duration);
+}
+
+void UMOCharacterMovementComponent::StartClimbing(const FHitResult& Wall, EMOClimbSurface Surface)
+{
+	ClimbNormal = Wall.ImpactNormal;
+	ClimbSurface = Surface;
+	Velocity = FVector::ZeroVector;
+	SetMovementMode(MOVE_Custom, CMOVE_Climb);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: climbing %s at %s"), *GetNameSafe(CharacterOwner),
+		Surface == EMOClimbSurface::Tree ? TEXT("a tree") : TEXT("rock"), *Wall.ImpactPoint.ToCompactString());
+}
+
+void UMOCharacterMovementComponent::StopClimbing(EMovementMode Next)
+{
+	if (!IsClimbing())
+	{
+		return;
+	}
+	ClimbSurface = EMOClimbSurface::None;
+	SetMovementMode(Next);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: let go of the climb"), *GetNameSafe(CharacterOwner));
+}
+
+bool UMOCharacterMovementComponent::CanAttemptJump() const
+{
+	return IsClimbing() || Super::CanAttemptJump();
+}
+
+bool UMOCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
+{
+	if (IsTraversing())
+	{
+		return false;   // a vault / pull-up under way: the held key does nothing more
+	}
+	FTraversalPlan Plan;
+	if (IsClimbing())
+	{
+		if (FindTraversal(Plan))
+		{
+			StartTraversal(Plan);   // the edge in reach: over it
+			return true;
+		}
+		const FVector Away = ClimbNormal.GetSafeNormal2D();   // else off the face
+		StopClimbing();
+		Velocity = Away * ClimbPushOffSpeed + FVector(0.0, 0.0, ClimbPushOffUpSpeed);
+		return true;
+	}
+	if (CharacterOwner && !CharacterOwner->bIsCrouched && (IsMovingOnGround() || IsFalling()))
+	{
+		if (FindTraversal(Plan))
+		{
+			StartTraversal(Plan);
+			return true;
+		}
+		FHitResult Wall;
+		EMOClimbSurface Surface = EMOClimbSurface::None;
+		if (FindClimbableWall(Wall, Surface, /*bRequireInputTowardIt=*/true))
+		{
+			StartClimbing(Wall, Surface);
+			return true;
+		}
+	}
+	return Super::DoJump(bReplayingMoves, DeltaTime);
+}
+
+void UMOCharacterMovementComponent::PhysicsRotation(float DeltaTime)
+{
+	if (IsClimbing() || IsTraversing())
+	{
+		return;   // the move sets the facing itself
+	}
+	Super::PhysicsRotation(DeltaTime);
+}
+
+void UMOCharacterMovementComponent::PhysCustom(float DeltaTime, int32 Iterations)
+{
+	switch (CustomMovementMode)
+	{
+	case CMOVE_Traverse:
+		PhysTraverse(DeltaTime, Iterations);
+		break;
+	case CMOVE_Climb:
+		PhysClimb(DeltaTime, Iterations);
+		break;
+	default:
+		Super::PhysCustom(DeltaTime, Iterations);
+		break;
+	}
+}
+
+void UMOCharacterMovementComponent::PhysTraverse(float DeltaTime, int32 Iterations)
+{
+	if (DeltaTime < MIN_TICK_TIME || !UpdatedComponent)
+	{
+		return;
+	}
+	Traverse.Elapsed = FMath::Min(Traverse.Elapsed + DeltaTime, Traverse.Duration);
+	const float Fraction = Traverse.Duration > 0.0f ? Traverse.Elapsed / Traverse.Duration : 1.0f;
+	const FVector Delta = FMOTraversal::Evaluate(Traverse.Path, Fraction) - UpdatedComponent->GetComponentLocation();
+	FHitResult Hit;
+	SafeMoveUpdatedComponent(Delta, Traverse.Facing.ToOrientationQuat(), /*bSweep=*/true, Hit);
+	if (Hit.IsValidBlockingHit())
+	{
+		SlideAlongSurface(Delta, 1.0f - Hit.Time, Hit.Normal, Hit, true);
+	}
+	Velocity = Delta / DeltaTime;
+	if (Fraction >= 1.0f)
+	{
+		Velocity = FVector::ZeroVector;
+		SetMovementMode(MOVE_Falling);   // standing on it (or behind it): lands next step
+	}
+}
+
+void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
+{
+	if (DeltaTime < MIN_TICK_TIME || !UpdatedComponent || !CharacterOwner)
+	{
+		return;
+	}
+	if (bWantsToCrouch)
+	{
+		// Crouch lets go -- and is used up by it: crouch is a toggle here, and a climber who let go must land standing (and be able to jump
+		// and grab again), not crouched. The cleared request rides in the next saved move, so the server agrees.
+		bWantsToCrouch = false;
+		StopClimbing();
+		StartNewPhysics(DeltaTime, Iterations);
+		return;
+	}
+	FHitResult Wall;
+	EMOClimbSurface Surface = EMOClimbSurface::None;
+	if (!TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Wall, Surface))
+	{
+		StopClimbing();   // the face ended (round a corner, past the top without room to pull up) or turned unclimbable
+		StartNewPhysics(DeltaTime, Iterations);
+		return;
+	}
+	ClimbNormal = Wall.ImpactNormal;
+	ClimbSurface = Surface;
+
+	float Radius = 0.0f;
+	float Half = 0.0f;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, Half);
+	const FVector Into = -ClimbNormal.GetSafeNormal2D();
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Into).GetSafeNormal();
+	const FVector UpAlong = (FVector::UpVector - FVector::DotProduct(FVector::UpVector, ClimbNormal) * ClimbNormal).GetSafeNormal();
+	const FVector Input = GetMaxAcceleration() > 0.0f ? Acceleration / GetMaxAcceleration() : FVector::ZeroVector;
+	const float InputUp = FVector::DotProduct(Input, Into);      // pushing at the face climbs up it, pulling away climbs down
+	const float InputSide = FVector::DotProduct(Input, Right);
+	FVector Move = (UpAlong * InputUp + Right * InputSide).GetClampedToMaxSize(1.0f) * FMOTraversal::ClimbSpeedCm(ClimbSurface) * FMath::Max(ClimbSpeedScale, 0.1f);
+	// Held at the face: the gap closes or opens back toward ClimbWallGapCm.
+	const float Gap = Wall.Distance - Radius;
+	Move += Into * FMath::Clamp((Gap - ClimbWallGapCm) * 6.0f, -40.0f, 40.0f);
+	Velocity = Move;
+
+	FHitResult Hit;
+	SafeMoveUpdatedComponent(Velocity * DeltaTime, Into.ToOrientationQuat(), /*bSweep=*/true, Hit);
+	if (Hit.IsValidBlockingHit())
+	{
+		SlideAlongSurface(Velocity * DeltaTime, 1.0f - Hit.Time, Hit.Normal, Hit, true);
+	}
+
+	if (InputUp < -0.1f)
+	{
+		FFindFloorResult Floor;
+		FindFloor(UpdatedComponent->GetComponentLocation(), Floor, false);
+		if (Floor.IsWalkableFloor() && Floor.GetDistanceToFloor() < 15.0f)
+		{
+			StopClimbing(MOVE_Walking);   // climbed down to the ground
+			return;
+		}
+	}
+	if (InputUp > 0.5f)
+	{
+		FTraversalPlan Plan;
+		if (FindTraversal(Plan))
+		{
+			StartTraversal(Plan);   // at the top: over the edge
+		}
+	}
 }

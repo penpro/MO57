@@ -38,6 +38,8 @@ Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one
 stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|click|drag|key ...` (real input / window capture for instances and packaged windows; `drag -X -Y -X2 -Y2` is a real
 UMG drag and drop). `MO.Test.InjectInput <IA_Name> [X Y] [Seconds]` feeds a REAL Enhanced Input action (from `/MOFramework/Input/`) through the
 controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input` skips (it calls the pawn directly): use it for naive-player passes.
+Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90]` (a test block in front of the pawn, which turns to
+face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, `MO.Test.Traversal` (what a jump would do, and why not).
 
 ## 2. Build
 
