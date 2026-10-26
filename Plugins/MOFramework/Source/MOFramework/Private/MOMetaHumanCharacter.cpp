@@ -32,6 +32,16 @@ void AMOMetaHumanCharacter::BeginPlay()
 	{
 		ApplyCurrentAppearance();
 	}
+
+	// Hair physics follows where the pawn is (near the world origin only, MO.Hair.Simulation 2): a groom that crosses the line is rebuilt once.
+	// Staggered so a colony's pawns do not all check on the same frame.
+	if (GetNetMode() != NM_DedicatedServer && HairSimulationCheckSeconds > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(HairSimulationTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			UMOAppearanceSubsystem::ApplyHairSimulation(this);
+		}), HairSimulationCheckSeconds, /*bLoop=*/true, FMath::FRandRange(0.0f, HairSimulationCheckSeconds));
+	}
 }
 
 void AMOMetaHumanCharacter::SetupLeaderPoseComponents()

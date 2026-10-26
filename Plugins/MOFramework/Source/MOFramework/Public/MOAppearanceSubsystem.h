@@ -151,6 +151,19 @@ public:
 	static FText MakeGroomDisplayName(const FString& AssetName);
 
 	/**
+	 * Whether a groom at Location simulates its physics (MO.Hair.Simulation): 0 never, 1 always, 2 (the default) only near the world origin, where
+	 * the engine's hair simulation is steady -- every coordinate within RadiusCm (MO.Hair.SimulationRadiusKm), back on only HairSimulationReturnCm
+	 * inside it (bCurrentlyOn: no flapping on the line). Fork F39 option D (Wes, Oct 26). Pure: unit-tested.
+	 */
+	static bool WantsHairSimulation(int32 Mode, const FVector& Location, bool bCurrentlyOn, double RadiusCm);
+
+	/** How far inside the radius a groom that stopped simulating starts again. */
+	static constexpr double HairSimulationReturnCm = 50000.0;
+
+	/** Apply MO.Hair.Simulation to every groom of Actor where it stands now (a groom whose state changes is rebuilt; the rest cost nothing). */
+	static void ApplyHairSimulation(AActor* Actor);
+
+	/**
 	 * Apply body parameters (for Mutable integration).
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")

@@ -424,43 +424,84 @@ namespace MOAppearancePrivate
 
 	void ApplyHairSimulationSetting(UGroomComponent* Component);
 
+	void ApplyAllHairSimulation()
+	{
+		for (TObjectIterator<UGroomComponent> It; It; ++It)
+		{
+			if (!It->IsTemplate() && It->IsRegistered() && It->GetWorld() && It->GetWorld()->IsGameWorld())
+			{
+				ApplyHairSimulationSetting(*It);
+			}
+		}
+	}
+
 	/**
-	 * Groom physics is OFF by default (Wes, Oct 25 2026: the simulated strands -- the shipped updo's bangs, a whole bob -- "shifting back and
-	 * forth" / "fluttery" whenever the head moved; "they just stopped" with physics off). The cause is the ENGINE's hair simulation far from
-	 * the world origin: UNiagaraDataInterfaceHairStrands' ComputeWorldTransform casts the groom's and the head bone's world transforms to float
-	 * BEFORE taking their relative transform "in double precision", so ~17 km out (single precision ~1 mm) the simulation's frame jumps by
-	 * rounding error every frame. Measured: 0.8-0.9 px of back-and-forth per frame at the start site, 0.19-0.21 px (= physics off) 5 m from the
-	 * origin with the same groom and damping. Unfixable in a launcher install: Docs/Engine_Patches.md has the patch. With physics off the
-	 * strands follow the head skinned (no sway). 1 = each groom as its asset says. Flips every groom in the world at once.
+	 * Groom physics only NEAR THE WORLD ORIGIN by default (fork F39 option D, Wes Oct 26). The ENGINE's hair simulation jitters far from the
+	 * origin (Wes, Oct 25: the simulated strands -- the shipped updo's bangs, a whole bob -- "shifting back and forth" / "fluttery"):
+	 * UNiagaraDataInterfaceHairStrands' ComputeWorldTransform casts the groom's and the head bone's world transforms to float BEFORE taking
+	 * their relative transform "in double precision", so the simulation's frame jumps by rounding error every frame (Docs/Engine_Patches.md #3).
+	 * Since Oct 26 a new world's start IS the origin. Measured, the bangs against the face, hovering along a line out from it (lag-1
+	 * autocorrelation: + = smooth sway, - = back-and-forth): 0.05 / 2.5 / 5 km +0.8 / +0.8 / +0.7; 7.5 km +0.3 / +0.06; 10 km +0.04;
+	 * 15 / 20 km -0.2 / -0.3 with the step doubling. The break is where a float's step doubles, 2^19 cm = 5.24 km on a coordinate (the 5 km
+	 * diagonal is 3.5 km on each), so the default radius is 5 km per coordinate. Out there the strands follow the head skinned (no sway).
 	 */
 	TAutoConsoleVariable<int32> CVarHairSimulation(
-		TEXT("MO.Hair.Simulation"), 0,
-		TEXT("Groom hair physics: 0 = no groom simulates (default: the engine's hair simulation jitters far from the world origin), 1 = each groom as its asset says. Applies at once."),
-		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*)
-		{
-			for (TObjectIterator<UGroomComponent> It; It; ++It)
-			{
-				if (!It->IsTemplate() && It->IsRegistered() && It->GetWorld() && It->GetWorld()->IsGameWorld())
-				{
-					ApplyHairSimulationSetting(*It);
-				}
-			}
-		}));
+		TEXT("MO.Hair.Simulation"), 2,
+		TEXT("Groom hair physics: 0 = never, 1 = always (each groom as its asset says), 2 = within MO.Hair.SimulationRadiusKm of the world origin (default: the engine's hair simulation jitters far from it). Applies at once."),
+		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*) { ApplyAllHairSimulation(); }));
+
+	TAutoConsoleVariable<float> CVarHairSimulationRadiusKm(
+		TEXT("MO.Hair.SimulationRadiusKm"), 5.0f,
+		TEXT("MO.Hair.Simulation 2: grooms simulate while every coordinate of them is within this many km of the world origin (back on 0.5 km inside it)."),
+		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*) { ApplyAllHairSimulation(); }));
 
 	void ApplyHairSimulationSetting(UGroomComponent* Component)
 	{
-		const bool bOff = CVarHairSimulation.GetValueOnGameThread() == 0;
 		FHairSimulationSettings& Simulation = Component->SimulationSettings;
-		if (bOff == (Simulation.bOverrideSettings && !Simulation.SolverSettings.bEnableSimulation))
+		const bool bOn = !(Simulation.bOverrideSettings && !Simulation.SolverSettings.bEnableSimulation);
+		const bool bWantOn = UMOAppearanceSubsystem::WantsHairSimulation(CVarHairSimulation.GetValueOnGameThread(), Component->GetComponentLocation(), bOn,
+			(double)CVarHairSimulationRadiusKm.GetValueOnGameThread() * 100000.0);
+		if (bWantOn == bOn)
 		{
 			return;   // already so
 		}
-		Simulation.bOverrideSettings = bOff;   // off: the component's own settings, simulation disabled; on: the groom asset's own physics again
+		Simulation.bOverrideSettings = !bWantOn;   // off: the component's own settings, simulation disabled; on: the groom asset's own physics again
 		Simulation.SolverSettings.bEnableSimulation = false;
 		if (Component->GroomAsset)
 		{
 			Component->SetGroomAsset(Component->GroomAsset, Component->BindingAsset);   // rebuilds the groom's resources with that physics
+			const FVector At = Component->GetComponentLocation();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s %s: hair physics %s at (%.1f, %.1f, %.1f) km (MO.Hair.Simulation %d)"),
+				*GetNameSafe(Component->GetOwner()), *Component->GetName(), bWantOn ? TEXT("on") : TEXT("off"), At.X / 100000.0, At.Y / 100000.0,
+				At.Z / 100000.0, CVarHairSimulation.GetValueOnGameThread());
 		}
+	}
+}
+
+bool UMOAppearanceSubsystem::WantsHairSimulation(int32 Mode, const FVector& Location, bool bCurrentlyOn, double RadiusCm)
+{
+	if (Mode <= 0)
+	{
+		return false;
+	}
+	if (Mode == 1)
+	{
+		return true;
+	}
+	const double Farthest = Location.GetAbsMax();   // a float's step is set per coordinate
+	return Farthest <= (bCurrentlyOn ? RadiusCm : RadiusCm - HairSimulationReturnCm);
+}
+
+void UMOAppearanceSubsystem::ApplyHairSimulation(AActor* Actor)
+{
+	if (!Actor || Actor->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	TInlineComponentArray<UGroomComponent*> Grooms(Actor);
+	for (UGroomComponent* Groom : Grooms)
+	{
+		MOAppearancePrivate::ApplyHairSimulationSetting(Groom);
 	}
 }
 
@@ -549,11 +590,7 @@ bool UMOAppearanceSubsystem::ApplyGroomsToCharacter(AMOMetaHumanCharacter* Chara
 	}
 	USkeletalMeshComponent* Face = Character->GetFaceMesh();
 	// The Blueprint's own grooms follow MO.Hair.Simulation too (rebuilt once when it changes them; cheap afterwards).
-	TInlineComponentArray<UGroomComponent*> Grooms(Character);
-	for (UGroomComponent* Groom : Grooms)
-	{
-		MOAppearancePrivate::ApplyHairSimulationSetting(Groom);
-	}
+	ApplyHairSimulation(Character);
 	FMOCharacterAppearance Paths = Appearance;
 	bool bAllLoaded = true;
 	for (const MOAppearancePrivate::FGroomSlot& Slot : MOAppearancePrivate::GroomSlots)

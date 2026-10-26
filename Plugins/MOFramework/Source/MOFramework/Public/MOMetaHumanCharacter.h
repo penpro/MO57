@@ -129,6 +129,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
 	float GroomRetrySeconds = 0.2f;
 
+	/** How often the pawn re-checks whether its grooms may simulate where it now stands (MO.Hair.Simulation 2: near the world origin only). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
+	float HairSimulationCheckSeconds = 1.0f;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -178,6 +182,7 @@ protected:
 
 private:
 	FTimerHandle GroomRetryTimer;
+	FTimerHandle HairSimulationTimer;
 	/** When the oldest groom still waiting to swap in was asked for (world seconds); negative = none waiting. */
 	double GroomWaitStartSeconds = -1.0;
 };

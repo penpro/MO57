@@ -97,13 +97,44 @@ bool FMOAppearance_GroomLibrary::RunTest(const FString& Parameters)
 	}
 	TestEqual(FString::Printf(TEXT("every style has a binding to MH_F_1's face (missing: %s)"), *FString::Join(Unbound, TEXT(", "))), Unbound.Num(), 0);
 
-	// Groom physics is off by default: the engine's hair simulation jitters far from the world origin (the start sites are ~17 km out;
-	// Docs/Engine_Patches.md). A default of 1 would bring back Wes's "shifting back and forth" bangs.
+	// Groom physics only near the world origin by default (F39 option D): the engine's hair simulation jitters far from it (Docs/Engine_Patches.md
+	// #3). A default of 1 would bring back Wes's "shifting back and forth" bangs on every expedition.
 	const IConsoleVariable* HairSimulation = IConsoleManager::Get().FindConsoleVariable(TEXT("MO.Hair.Simulation"));
 	if (TestNotNull(TEXT("MO.Hair.Simulation exists"), HairSimulation))
 	{
-		TestEqual(TEXT("groom physics off by default"), HairSimulation->GetInt(), 0);
+		TestEqual(TEXT("groom physics near the world origin only, by default"), HairSimulation->GetInt(), 2);
 	}
+	const IConsoleVariable* Radius = IConsoleManager::Get().FindConsoleVariable(TEXT("MO.Hair.SimulationRadiusKm"));
+	if (TestNotNull(TEXT("MO.Hair.SimulationRadiusKm exists"), Radius))
+	{
+		TestTrue(TEXT("the radius stays inside 5.24 km, where a float's step doubles (measured: the jitter starts past it)"), Radius->GetFloat() > 0.0f && Radius->GetFloat() <= 5.24f);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOAppearance_HairSimulationNearOrigin,
+	"MOFramework.Appearance.HairSimulationNearOrigin",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOAppearance_HairSimulationNearOrigin::RunTest(const FString& Parameters)
+{
+	const double R = 500000.0;   // 5 km
+	const double Back = UMOAppearanceSubsystem::HairSimulationReturnCm;
+	auto Wants = [R](int32 Mode, const FVector& At, bool bOn) { return UMOAppearanceSubsystem::WantsHairSimulation(Mode, At, bOn, R); };
+
+	TestFalse(TEXT("mode 0: never, even at the origin"), Wants(0, FVector::ZeroVector, true));
+	TestTrue(TEXT("mode 1: always, even 20 km out"), Wants(1, FVector(2000000.0, 0.0, 0.0), false));
+
+	TestTrue(TEXT("mode 2: at the start (the origin)"), Wants(2, FVector(-3.0, 40.0, 523.0), false));
+	TestTrue(TEXT("mode 2: 4.9 km out on one axis, already on"), Wants(2, FVector(490000.0, 0.0, 600.0), true));
+	TestFalse(TEXT("mode 2: past the radius on X"), Wants(2, FVector(R + 1.0, 0.0, 0.0), true));
+	TestFalse(TEXT("mode 2: past it on Y alone (each coordinate counts)"), Wants(2, FVector(0.0, -(R + 1.0), 0.0), true));
+	TestTrue(TEXT("mode 2: a 6.4 km diagonal is 4.5 km on each axis: still on"), Wants(2, FVector(450000.0, -450000.0, 0.0), true));
+	TestFalse(TEXT("mode 2: 20 km out (the old start sites)"), Wants(2, FVector(1754697.0, 989040.0, 523.0), true));
+
+	// No flapping on the line: once off, back on only Back inside it.
+	TestFalse(TEXT("hysteresis: off at 4.8 km stays off"), Wants(2, FVector(480000.0, 0.0, 0.0), false));
+	TestTrue(TEXT("hysteresis: off comes back on inside the return line"), Wants(2, FVector(R - Back - 1.0, 0.0, 0.0), false));
 	return true;
 }
 

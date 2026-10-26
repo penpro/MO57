@@ -124,10 +124,19 @@ with a blur halo whenever the head moved; the skinned strands steady).
   ON -- the simulation is fine there. A world-space simulation (`bLocalSimulation` off) doubled it far out (1.6 px).
 - Since Oct 26 a new world's start IS the world origin (`Docs/World_Creation.md` §2). The same seed (20261025), the same start, now at
   (0,0): physics ON 0.200 px, autocorrelation +0.4 / +0.5; OFF 0.193 px. The simulation is steady where the colony lives without this
-  patch; it still jitters on an expedition far out (fork F39 option D: physics on near the origin only).
-- The hair's LOOK does not depend on the position: hovering 3 km up (sky all round) at (0,0) and 20 km out, the same camera and sun, the
-  hair is the same (mean 27-34 vs 29-30 over repeats). A different look at a new start is its light (the plants there are re-rolled by the
-  origin shift: PCG placement follows world coordinates).
+  patch; it still jitters on an expedition far out. Built: physics on near the origin only (fork F39 option D, `MO.Hair.Simulation 2`).
+- Jitter against the distance (the bangs against the ear, hovering along a line out from the origin, camera 70 cm from the face; lag-1
+  autocorrelation + = smooth sway, - = back-and-forth): 0.05 km 2.09 px +0.86 / +0.80; 2.5 km 2.19 px +0.83 / +0.70; 5 km 2.17 px +0.73 /
+  +0.46; 7.5 km 2.76 px +0.32 / +0.06; 10 km 3.17 px +0.36 / +0.04; 15 km 6.05 px -0.22 / -0.26; 20 km 4.92 px -0.31 / -0.28. The break is
+  where a float's step doubles, 2^19 cm = 5.24 km on a coordinate (the 5 km diagonal is 3.5 km on each): the gate is 5 km per coordinate.
+- **The strands' SHADING also breaks far out** (found Oct 26 after Wes: "the hair is super shiny and gold now?"). At a fixed exposure, the
+  same camera 1 m from the face, the bangs' mean colour: 0.05 km (86, 40, 16), 1 km (77, 40, 18), 2.5 km (91, 44, 19), 4 km (88, 45, 20),
+  5.5 km (69, 35, 16), 7.5 km (107, 58, 26), 10 km (56, 24, 11), 15 km (13, 8, 5), 20 km (13, 7, 4); the face barely changes. So the copper
+  / gold of melanin 0.8 in the sun near the origin is the hair as authored, and every start before Oct 26 (17+ km out) showed it broken:
+  near black and dull, with Wes's blur halo. Not the LOD (LOD 0 is forced by the Blueprint's LODSync, ForcedLOD 1; LOD colouring shows LOD 0
+  at 3 / 8 / 15 m), not the voxel density or the deep opacity maps (the same at both places; switching voxelization or deep shadows off
+  changes little). Not yet traced to its line in the source; an expedition far out still sees it. (An earlier check hovering with the BACK
+  of the head in view, braids and buns, saw no difference: measure the front strands.)
 - Not the cause, each measured live: `r.HairStrands.SwapType 3`, `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face LOD, the
   face's own animation, the head velocity fed to the solver, bend damping (0.05 halved it far out, nothing at the origin), AA, motion blur.
 
@@ -147,8 +156,8 @@ i.e. a `ComputeBoneTransform` that returns `FMatrix44d` for this use; check ever
 ### Applying it here (no source engine needed)
 HairStrands is a PLUGIN: a copy in `MO57/Plugins/HairStrands` overrides the engine's and UBT builds it with the project. Costs: the copy
 (source, shaders, content) to carry and to re-copy on every engine update (5.8.4 is due), and engine plugins that link HairStrandsCore
-(MetaHuman) loading the project's build -- ABI-safe while only .cpp bodies change. Until then groom physics stays off (`MO.Hair.Simulation`
-default 0: the strands follow the head skinned, no sway).
+(MetaHuman) loading the project's build -- ABI-safe while only .cpp bodies change. Until then groom physics runs only near the world origin
+(`MO.Hair.Simulation` default 2, `MO.Hair.SimulationRadiusKm` 5; farther out the strands follow the head skinned, no sway).
 
 ### How to verify once applied
 `MO.Hair.Simulation 1`, the creator at the start site, the bangs-vs-face metric (Docs/UI.md §3): at or near the physics-off figure.

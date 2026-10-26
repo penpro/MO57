@@ -219,7 +219,8 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   trunk behind them (`PlacePreviewCamera`). A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
   "if you click into the world ... it closes the character builder"; "click drag the world to pivot the camera around the character").
 - Randomize picks colours and a hair style (never bald) and takes any beard / mustache off.
-- **Hair physics is OFF by default (`MO.Hair.Simulation 0`): the engine's hair simulation jitters far from the world origin** (Wes, Oct 25:
+- **Hair physics runs only near the world origin (`MO.Hair.Simulation 2`, the default since Oct 26; it was 0 = off): the engine's hair
+  simulation jitters far from the origin** (Wes, Oct 25:
   the simulated strands -- the shipped updo's bangs, a whole bob -- "shifting back and forth", "fluttery", a blur halo; the buns, which don't
   simulate, steady; "they just stopped" with physics off). `UNiagaraDataInterfaceHairStrands::ComputeWorldTransform` casts the groom's and the
   head bone's world transforms to float before taking their relative transform "in double precision": at the start sites, ~17 km out (single
@@ -230,12 +231,18 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   (0.05 halved it far out but did nothing at the origin -- reverted to the authored values), `r.HairStrands.SwapType 3` (the 5.4 forum fix for a
   lagging groom), `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face at LOD 0, the face's own animation, no head velocity fed to
   the solver, anti-aliasing, motion blur; a world-space simulation doubled it (all its positions absolute). Since Oct 26 the start is the world
-  origin: the same start measures 0.200 px with physics ON (0.193 OFF), so physics near the colony needs no engine patch (fork F39 option D).
-- **The hair looks copper / gold in sunlight at some starts** (Wes, Oct 26: "the hair is super shiny and gold now?" after the origin shift):
-  the colour values are unchanged (melanin 0.8, redness 0.25) and the render is the same at any position (hovering at (0,0) and 20 km out:
-  the same hair). The start's light changed: the origin shift re-rolls where plants grow (PCG placement follows world coordinates), so seed
-  20261025's start stands in an open, sunlit sandy clearing instead of among bushes. Whether the default brown should be darker is a look
-  call (BACKLOG, Wes: check by eye).
+  origin: the same start measures 0.200 px with physics ON (0.193 OFF), so physics near the colony needs no engine patch. Fork F39 option D
+  (Wes, Oct 26: "build F39 option D"): a groom simulates while every coordinate of it is within `MO.Hair.SimulationRadiusKm` (5) of the
+  origin -- the jitter measured against the distance breaks where a float's step doubles, 5.24 km on a coordinate (`Docs/Engine_Patches.md`
+  #3) -- and stops past it, back on 0.5 km inside (no flapping). `UMOAppearanceSubsystem::WantsHairSimulation` (unit-tested,
+  `Appearance.HairSimulationNearOrigin`) decides; each MetaHuman pawn re-checks every `HairSimulationCheckSeconds` (1 s); a groom that
+  crosses the line is rebuilt once (a one-off settle of the strands). 0 = never, 1 = always (for A/B).
+- **The hair looks copper / gold in sunlight now** (Wes, Oct 26: "the hair is super shiny and gold now?", then "looks good up close, but at
+  a distance it looks really odd ... an LOD change issue?"): the colour values are unchanged (melanin 0.8, redness 0.25) and the LOD is
+  still forced to 0. Near the world origin the strands shade as authored: bright copper with gold highlights in full sun; 15+ km out --
+  where every start was before Oct 26 -- the engine's strand shading collapses to near black (measured at a fixed exposure,
+  `Docs/Engine_Patches.md` #3). So the old brown was the broken render. At a distance the true colour reads as an orange blob in full sun;
+  whether the default should be darker is a look call (BACKLOG, Wes: check by eye).
 - **For a hair-length option later** (Wes: "keep note of the stuff that makes the hair longer"): raising the strands' stretch damping (0.2+)
   let gravity pull the bangs visibly longer (simulated strands only) -- a sag, not a clean length change. The proper control is `UGroomComponent::SetHairLengthScale` /
   `SetHairLengthScaleEnable` (the groom's own length scale, needs the groom's deformation flags), not the physics.

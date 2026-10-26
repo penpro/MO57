@@ -1633,3 +1633,7 @@ References: CL-0192
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0194
 Status: RELEASE (editor + build window; editor and instances closed). The world origin is in (CL-0193): a new world is shifted so its start is (0,0); saved per world, published with the seed, old saves at (0,0). Verified: MOFramework suite 380/380 + the two origin tests (6408 bit-exact checks), nettest game (joiner on the host's origin, 0.0 cm terrain difference, first pawn at (70, -18)), nettest hostsave (origin kept through save / host-the-save / join), world_creation_check (Rainforest start at (0,0), save / load), a pre-origin DevTest save loading at (0,0) with no GENERATOR CHANGED. The game level's PCG volume is now +-125 km. The hair-physics fork is renumbered F39 (F38 was already the Oct 24 equippable-items fork); option D added (physics near the origin: 0.200 px ON at the new start).
 References: CL-0193
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0195
+Status: PROGRESS (build window open and closed again; no editor, no instances). Fork F39 = D (Wes): hair physics on near the world origin only -- MO.Hair.Simulation 2 (default), MO.Hair.SimulationRadiusKm 5 per coordinate, hysteresis 0.5 km; UMOAppearanceSubsystem::WantsHairSimulation / ApplyHairSimulation, AMOMetaHumanCharacter re-checks every second. Found: the engine's strand SHADING also darkens to near black 15+ km out (the copper hair near the origin is the true look); docs corrected.
+References: CL-0194
