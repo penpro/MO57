@@ -97,6 +97,10 @@
   right after (Oct 25 2026: `fix_mesh_collision.py` took 33 s against the 20 s default, the re-run's second pass crashed the editor in a
   mesh save, `ThumbnailHelpers.cpp:595`, and the unsaved level went with it) -> `bridge_run` now exits 3 "STILL RUNNING" when the call was
   picked up; never re-run on it; give long scripts `--timeout 300`. (dark-ruins cliffs)
+- **A queued call ran INSIDE the one still running** -> a call that opens a slow-task dialog (a MetaHuman character's set-up, a save)
+  pumps Slate, the bridge's tick fired again and ran the next call on the half-built state (Oct 26 2026: a re-sent measuring script
+  crashed the MO_Tools editor, `Array.h:1339` in MetaHumanCharacterEditor) -> the bridge's tick is never nested now
+  (`Tools/tests/test_claude_bridge.py`); a crashed editor ends a waiting `ue.py py` with exit 4 "GONE". (MO_Tools body shapes)
 - **A call hangs while the bridge still answers** -> a modal dialog (reload_packages on a dirty asset, `fill_data_table_from_json_string` with a
   missing field) -> pass every field; Windows Security (pickerhost) blocking clicks: post Enter to the dialog's HWND. (dev_status, world-features)
 - **Asset saves silently don't happen** -> the editor refuses saves during PIE (save_assets still answers True); a running `inst` locks the

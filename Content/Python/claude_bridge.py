@@ -103,10 +103,15 @@ def _execute(line):
 
 
 # Throttled slate tick
-_state = {"pos": 0, "accum": 0.0}
+_state = {"pos": 0, "accum": 0.0, "busy": False}
 
 
 def _tick(dt):
+    # Never nested. A command that opens a slow-task dialog (a MetaHuman character's set-up, a save) pumps Slate, which ticks this again,
+    # and the next queued command ran INSIDE the one still running (Oct 26 2026: a second measuring script ran inside the first's character
+    # set-up, on the half-built character, and crashed the editor). What arrives meanwhile waits in the file for the first free tick.
+    if _state["busy"]:
+        return
     _state["accum"] += dt
     if _state["accum"] < POLL_INTERVAL:
         return
@@ -123,12 +128,15 @@ def _tick(dt):
             f.seek(_state["pos"])
             chunk = f.read()
             _state["pos"] = f.tell()
+        _state["busy"] = True
         for raw in chunk.splitlines():
             line = raw.strip().lstrip("﻿").strip()  # PS5.1 writes BOMs on file-create
             if line and not line.startswith("#"):
                 _execute(line)
     except Exception:
         _append(f"[bridge-error]\n{traceback.format_exc()}")
+    finally:
+        _state["busy"] = False
 
 
 # Idempotent registration: stash the handle on the unreal module so re-running

@@ -258,5 +258,31 @@ class GameInstancePythonGuardTests(unittest.TestCase):
         self.assertEqual((code, sent), (0, True))
 
 
+class BridgeRunLivenessTests(unittest.TestCase):
+    """Oct 26: a call crashed the editor, and the caller kept waiting on a process that was gone."""
+
+    def _run(self, took_the_call):
+        with tempfile.TemporaryDirectory() as td:
+            ue = load_ue({"MO57_BRIDGE_DIR": td})
+
+            def send(lines):
+                if took_the_call:   # the editor read the call, wrote its begin marker, then died
+                    with open(ue.OUT_FILE, "a", encoding="utf-8") as f:
+                        f.write("[00:00:00] " + lines[0][len('py:out("'):-len('")')] + "\n")
+
+            with mock.patch.object(ue, "bridge_send", side_effect=send), \
+                    mock.patch.object(ue, "_unreal_processes", return_value=[]), \
+                    mock.patch.object(ue, "ALIVE_CHECK_S", 0.0), mock.patch("builtins.print"):
+                return ue.bridge_run(["py:pass"], timeout=30, want_log=False)
+
+    def test_an_editor_that_died_mid_call_is_reported_at_once(self):
+        with self.assertRaises(SystemExit) as done:
+            self._run(took_the_call=True)
+        self.assertEqual(done.exception.code, 4)
+
+    def test_no_editor_at_all_is_not_responding_without_the_timeout(self):
+        self.assertEqual(self._run(took_the_call=False), (False, [], ""))
+
+
 if __name__ == "__main__":
     unittest.main()

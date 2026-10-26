@@ -175,6 +175,9 @@ def bridge_send(lines):
 _MARKER_ACK = re.compile(r'\[py-(ok|err)\] out\("<[BE] [0-9a-f]{8}>"\)')
 
 
+ALIVE_CHECK_S = 2.0   # how often a bridge call that is still waiting checks the editor is alive (a process listing takes ~1 s)
+
+
 def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
     """Execute command lines via the bridge, correlated.
 
@@ -189,19 +192,30 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
     bridge_send([f'py:out("<B {mid}>")'] + list(cmds) + [f'py:out("<E {mid}>")'])
 
     deadline = time.time() + timeout
+    next_alive_check = time.time() + ALIVE_CHECK_S
     buf = ""
     while time.time() < deadline:
         buf = _read_from(OUT_FILE, out_off)
         if f"<E {mid}>" in buf:
             break
+        if time.time() >= next_alive_check:
+            # A crash mid-call is not a slow call: say so now instead of waiting out the timeout on a dead process (Oct 26 2026).
+            next_alive_check = time.time() + ALIVE_CHECK_S
+            if not any(not cmd or _is_this_project(cmd) for _, cmd in _unreal_processes()):   # an unreadable command line: alive
+                if f"<B {mid}>" in buf:
+                    _die(4, f"GONE: the {PROJECT_NAME} editor took this call and then exited (a crash? "
+                            f"{os.path.join(ROOT, 'Saved', 'Crashes')} and the end of {gamelog}).")
+                return False, [], ""   # no process at all: the bridge is not responding, as at the timeout, only sooner
         time.sleep(0.05)   # was 0.25: a harness makes hundreds of calls per run, each paid this slack (loop deep dive, Oct 22)
     else:
         if f"<B {mid}>" in buf:
             # The editor took this call and is still running it: NOT a dead bridge. Reported as one, it got re-run, and the copy queued behind
             # the original and ran right after it (Oct 25 2026: fix_mesh_collision.py took 33 s against a 20 s timeout; its second pass
-            # crashed the editor in a save). It finishes on its own; nothing here may send it again.
+            # crashed the editor in a save). It finishes on its own; nothing here may send it again. (The bridge no longer nests one call
+            # inside another -- Oct 26 -- but a re-run still runs twice.)
             _die(3, f"STILL RUNNING: the editor picked this call up but has not finished it after {timeout:.0f} s. It will finish on its own -- "
-                    "do NOT re-run it. Watch Saved/Logs/MO57.log (or `ue.py status`); next time pass a longer --timeout.")
+                    f"do NOT re-run it. Watch {gamelog} (or `ue.py status`), and check the process is still alive while you wait; "
+                    "next time pass a longer --timeout.")
         return False, [], ""
 
     time.sleep(0.05)  # let the END marker's [py-ok] ack land, then swallow it (acks that land later are filtered anyway)

@@ -62,6 +62,9 @@ mtime if a change seems not to apply (Live Coding may have hot-patched). Run `py
 Every `build` / `cycle` first scraps the dev saves (`Saved/SaveGames/*.sav`) and the editor autosaves (`Saved/Autosaves*`): Wes, Oct 25 2026,
 "if i want save games i'll play them on steam" (`scrap_dev_saves`; `--keep-saves` skips it; the packaged / Steam saves are never touched).
 `ue.py py` exits 3 "STILL RUNNING" when the editor took a call that outlasted `--timeout`: it finishes on its own, never re-run it.
+`ue.py py` exits 4 "GONE" when the editor took the call and then exited (a crash: `Saved/Crashes`); with no editor at all a call
+reports "bridge not responding" within ~2 s instead of at the timeout. Waiting on a long call yourself: check the process is alive too.
+The bridge never runs one call inside another (a slow-task dialog pumps Slate; Oct 26): a call sent meanwhile waits its turn.
 
 PowerShell fallback (CLAUDE.md until 2026-10-17, verbatim):
 
