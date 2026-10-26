@@ -1637,3 +1637,11 @@ References: CL-0193
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0195
 Status: PROGRESS (build window open and closed again; no editor, no instances). Fork F39 = D (Wes): hair physics on near the world origin only -- MO.Hair.Simulation 2 (default), MO.Hair.SimulationRadiusKm 5 per coordinate, hysteresis 0.5 km; UMOAppearanceSubsystem::WantsHairSimulation / ApplyHairSimulation, AMOMetaHumanCharacter re-checks every second. Found: the engine's strand SHADING also darkens to near black 15+ km out (the copper hair near the origin is the true look); docs corrected.
 References: CL-0194
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0196
+Status: CLAIM build window + a TEMPORARY Plugins/HairStrands (a project copy of the engine's Groom plugin with the hair-simulation precision fix, fork F39 option B, Wes: "Try F39 option B ... on its own branch, and measure it"). While it exists every build of this tree compiles and loads it; it goes to branch refs/heads/hair-precision-plugin only (committed without a checkout) and is removed from this tree after the measurement, then the tree is rebuilt. Don't package until the RELEASE line.
+References: CL-0195
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0197
+Status: RELEASE (build window; the temporary Plugins/HairStrands is GONE and the tree is rebuilt clean; no editor, no instances). Fork F39 option B could not be built: UBT refuses a project override of the Groom plugin (engine plugins Interchange* / MetaHumanSDKEditor depend on it). The patch is staged as Docs/EnginePatches/0003-*; an upstream report draft is beside it; new fork F40 for Wes. No branch was pushed (nothing buildable to put on it).
+References: CL-0196

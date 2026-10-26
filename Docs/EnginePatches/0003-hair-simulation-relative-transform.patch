@@ -1,0 +1,58 @@
+MO57 engine patch 0003 -- hair simulation: relative groom-to-bone transform from DOUBLE world transforms.
+Made against UE 5.8.3 (launcher) Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp, sha1 d4f8095f66eace9760f5f77c3638a99dc291e2fa.
+See Docs/Engine_Patches.md #3. Built and measured: NOT YET (a project override cannot build on a launcher engine; see #3).
+
+diff --git a/Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp b/Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp
+index 10ff59e..b21d562 100644
+--- a/Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp
++++ b/Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp
+@@ -1001,34 +1001,38 @@ IMPLEMENT_SHADER_TYPE(, FInterpolateGroomGuidesCS, TEXT("/Plugin/Runtime/HairStr
+ 
+ //------------------------------------------------------------------------------------------------------------
+ 
+-FMatrix44f ComputeBoneTransform(const FNDIHairStrandsData* InstanceData, const TRefCountPtr<FHairGroupInstance>& GroupInstance)
++// MO57 (Docs/Engine_Patches.md #3): the simulation bone's world transform in DOUBLE. The engine cast it to float before the relative transform
++// below was taken, so far from the world origin (~1 mm per float step at 17 km) the solver's frame jumped by rounding error every frame.
++static FMatrix44d ComputeBoneTransformDouble(const FNDIHairStrandsData* InstanceData, const TRefCountPtr<FHairGroupInstance>& GroupInstance)
+ {
+ 	if(InstanceData)
+ 	{
+ 		const FTransform RigidTransform = GroupInstance.IsValid() ? GroupInstance->Debug.RigidCurrentLocalToWorld : InstanceData->WorldTransform;
+ 		if(RigidTransform.IsValid() && InstanceData->BoneTransform.IsValid())
+ 		{
+-			return  FMatrix44f((InstanceData->BoneTransform * RigidTransform).ToMatrixWithScale());
++			return (InstanceData->BoneTransform * RigidTransform).ToMatrixWithScale();
+ 		}
+ 	}
+-	return FMatrix44f::Identity;
++	return FMatrix44d::Identity;
++}
++
++FMatrix44f ComputeBoneTransform(const FNDIHairStrandsData* InstanceData, const TRefCountPtr<FHairGroupInstance>& GroupInstance)
++{
++	return FMatrix44f(ComputeBoneTransformDouble(InstanceData, GroupInstance));
+ }
+ 
+ FMatrix44f ComputeWorldTransform(const FNDIHairStrandsData* InstanceData, const TRefCountPtr<FHairGroupInstance>& GroupInstance)
+ {
+ 	if(InstanceData)
+ 	{
+-		const FMatrix44f BoneTransformFloat = ComputeBoneTransform(InstanceData, GroupInstance);
+-
+ 		const FTransform WorldTransform = GroupInstance.IsValid() ? GroupInstance->GetCurrentLocalToWorld() : InstanceData->WorldTransform;
+-		FMatrix44f WorldTransformFloat = WorldTransform.IsValid() ? FMatrix44f(WorldTransform.ToMatrixWithScale()) : FMatrix44f::Identity;
+-	
++		const FMatrix44d WorldTransformDouble = WorldTransform.IsValid() ? WorldTransform.ToMatrixWithScale() : FMatrix44d::Identity;
++		FMatrix44f WorldTransformFloat = FMatrix44f(WorldTransformDouble);
++
+ 		if (InstanceData->LocalSimulation)
+ 		{
+-			const FMatrix44d WorldTransformDouble(WorldTransformFloat);
+-			const FMatrix44d BoneTransformDouble(BoneTransformFloat);
+-
+-			// Due to large world coordinate we compute the relative world transform in double precision 
++			// MO57: the relative transform from the DOUBLE transforms, converted to float only once it is small (the groom is cm from its bone).
++			const FMatrix44d BoneTransformDouble = ComputeBoneTransformDouble(InstanceData, GroupInstance);
+ 			WorldTransformFloat = FMatrix44f(WorldTransformDouble * BoneTransformDouble.Inverse());
+ 		}
+ 		

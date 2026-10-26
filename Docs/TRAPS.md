@@ -39,6 +39,10 @@
   upgrade, re-diff it against the new `BaseEngine.ini` list. Matched UE 5.8.3's four channels exactly on Oct 17. (Oct 17 review of afb9aabc)
 - **An engine `.cpp` edit changes nothing** -> `D:\UnrealEngine\UE_5.8` is the LAUNCHER install (`Engine/Build/InstalledBuild.txt`) -> engine fixes
   are staged in `Docs/Engine_Patches.md` + `Docs/EnginePatches/`; check InstalledBuild.txt before proposing one. (engine-installed-build-patches)
+- **A project copy of an engine plugin does not build when other ENGINE plugins depend on it** (Oct 26, HairStrands) -> UBT: "Module
+  'InterchangeImport' (Engine Plugins) should not reference module 'HairStrandsCore' (Project)", a hard-coded rule (`UEBuildTarget.cs`,
+  `IsEngineToPluginReferenceAllowed`) -> such a plugin is patched only by rebuilding the engine's copy or a source engine
+  (`Docs/Engine_Patches.md` #3). A plugin nothing in the engine depends on can still be overridden from `Plugins/`.
 - **Build fails in ~5 s: `CS0117 ... V7` / RulesError** -> the UE_5.7 UBT -> use the UE_5.8 UBT (`Docs/TOOLING.md` § Build) or `ue.py build` / `cycle`. (build_engine_path)
 - **"Unable to build while Live Coding is active" / LNK1104** -> the editor (or a crashed editor's CrashReportClientEditor window) holds the
   DLL -> `ue.py editor stop` (graceful: QUIT_EDITOR, refuses with unsaved packages); close a crash reporter by PID. Check the DLL mtime: Live
@@ -69,7 +73,9 @@
   left empty -> redirect only to a package holding the same object name, and fix the rest after the resave (`resave_metahuman_grooms.py`).
 - **Python `set_editor_property` on a COMPONENT in a running game re-runs the Blueprint construction script** (Oct 25): the notify path
   (PostEditChange) rebuilt the pawn's Blueprint components -- the probe then toggled a `TRASH_GroomComponent_0` -> pass
-  `unreal.PropertyAccessChangeNotifyMode.NEVER` as the third argument for live probes.
+  `unreal.PropertyAccessChangeNotifyMode.NEVER` as the third argument for live probes. Not always enough: on Oct 26 a NEVER write of a groom's
+  `simulation_settings` still rebuilt the MetaHuman's components (the change landed on `TRASH_GroomComponent_1`) -> change groom settings from
+  C++ (a dev cvar) and check the component's name after the write.
 - **`unreal.Rotator(0, 0, yaw)` does not set the yaw in 5.8 editor Python** -> spawned items came out rolled over and physics
   dropped them upside down -> always pass keywords: `unreal.Rotator(pitch=0, yaw=y, roll=0)`. (Oct 17)
 - **`HitResult` has no attributes in 5.8 Python** (`.blocking_hit`, `.impact_point` raise) -> `hit.to_tuple()`: [0] blocking,

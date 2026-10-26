@@ -25,7 +25,7 @@ So every patch below is **staged, not applied**. Applying one needs a real sourc
 |---|-------|--------|----------|
 | 1 | Hair strands keep their scene depth when Single Layer Water is in view | Staged (no source engine) | Draft ready: `EnginePatches/0001-upstream-report.md`; not yet posted |
 | 2 | Nanite shading pipelines outlive a material's shader map swap (uncooked game / editor; N-185) | Design only (no source engine); project workaround `MOMaterialKeepAlive.cpp` in place | Not reported |
-| 3 | Groom hair simulation jitters far from the world origin (relative transform taken from float-cast world matrices) | Design; workaround in place: groom physics off (`MO.Hair.Simulation 0`). Appliable WITHOUT a source engine (a plugin: project override) -- Wes's call | Not reported |
+| 3 | Groom hair simulation jitters far from the world origin (relative transform taken from float-cast world matrices) | Staged: `EnginePatches/0003-hair-simulation-relative-transform.patch` (not built: a project override of the plugin cannot build on the launcher engine, Oct 26). Workaround in place: physics only near the origin (`MO.Hair.Simulation 2`) | Draft ready: `EnginePatches/0003-upstream-report.md`; not yet posted |
 
 ---
 
@@ -152,17 +152,32 @@ Compute the relative transform from the double transforms and convert only the (
 i.e. a `ComputeBoneTransform` that returns `FMatrix44d` for this use; check every other `FMatrix44f` world matrix the DI hands its shaders
 (`WorldTransform`, `BoneTransform`, `WorldToLocal` in `InterpolateGroomGuides`) for the same absolute-float pattern.
 
-### Applying it here (no source engine needed)
-HairStrands is a PLUGIN: a copy in `MO57/Plugins/HairStrands` overrides the engine's and UBT builds it with the project. Costs: the copy
-(source, shaders, content) to carry and to re-copy on every engine update (5.8.4 is due), and engine plugins that link HairStrandsCore
-(MetaHuman) loading the project's build -- ABI-safe while only .cpp bodies change. Until then groom physics runs only near the world origin
-(`MO.Hair.Simulation` default 2, `MO.Hair.SimulationRadiusKm` 5; farther out the strands follow the head skinned, no sway).
+### Applying it here: a project copy of the plugin does NOT work (tried Oct 26, Wes: "Try F39 option B")
+The plan was a copy of the plugin in `MO57/Plugins/HairStrands` overriding the engine's. UnrealBuildTool refuses it before compiling:
+`Module 'InterchangeImport' (Engine Plugins) should not reference module 'HairStrandsCore' (Project). Hierarchy is Project -> Engine Programs
+-> Engine Plugins -> Engine.` (also InterchangeAnalytics, InterchangeFactoryNodes, InterchangePipelines, MetaHumanSDKEditor). The check is
+`UEBuildTarget.ValidateModule` with a hard-coded allow list (`IsEngineToPluginReferenceAllowed`, two Android / Voice pairs), and its comment
+names this exact case: "game-specific plugins override engine plugins". So an engine plugin that other engine plugins depend on cannot be
+overridden from a launcher project. What is left: (a) rebuild the ENGINE's plugin in place (`RunUAT BuildPlugin` against the launcher engine,
+then its binaries over `Engine/Plugins/Runtime/HairStrands`: changes the shared install outside git, redone after every engine update and on
+DARKTOWER), (b) a source engine (the steps above; it would take patches #1 and #2 too), (c) Epic (`EnginePatches/0003-upstream-report.md`).
+- An experiment from the project side failed too: simulating in the bone the groom is ATTACHED to (`FACIAL_C_FacialRoot`, so the groom's and
+  the bone's world transforms are nearly the same double and round alike) instead of `head`: 20 km 5.77 px (head 5.48 / 6.38), 30 km 7.26
+  px, autocorrelation ~0 either way. So the relative transform is not the only absolute-float path: the absolute `BoneTransform` the solver
+  gets for local / world conversions (forces, collisions; `NiagaraDataInterfaceHairStrandsTemplate.ush` lines 841 / 847) and the physics
+  asset collision shapes (Niagara's own data interface) are likely in it as well, so the staged patch alone may not be enough.
+- Until then groom physics runs only near the world origin (`MO.Hair.Simulation` default 2, `MO.Hair.SimulationRadiusKm` 5; farther out the
+  strands follow the head skinned, no sway).
+- The clean baseline (3 km up, open sky, `MO.Hair.Simulation 1`, bangs against the ear): 0.05 km 2.08 px +0.80 / +0.85; 2.5 km 2.05 px +0.57
+  / +0.74; 5 km 2.30 px +0.48 / +0.45; 7.5 km 2.92 px +0.11 / +0.03; 10 km 3.19 px +0.26 / -0.01; 15 km 5.08 px -0.12 / -0.25; 20 km 5.28 px
+  -0.08 / -0.07; 30 km 6.62 px -0.13 / -0.11 (scripts: the measurement in `Docs/UI.md` §3).
 
 ### How to verify once applied
-`MO.Hair.Simulation 1`, the creator at the start site, the bangs-vs-face metric (Docs/UI.md §3): at or near the physics-off figure.
+`MO.Hair.Simulation 1`, hover the survivor 3 km up at 20 km and 30 km, the bangs-vs-ear metric: at or near the origin's figure (~2.1 px,
+autocorrelation +0.8).
 
 ### Upstream
-Not reported. Repro: any simulated MetaHuman groom on a character ~15+ km from the origin, idle animation; compare with the same at the origin.
+Draft: `EnginePatches/0003-upstream-report.md` (the repro, the table above, the suspected cause, the patch). Not posted.
 
 ## #2 — Nanite shading pipelines outlive a material's shader map swap (uncooked game and editor)
 
