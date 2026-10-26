@@ -1705,3 +1705,7 @@ References: CL-0205
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0207
 Status: RELEASE Content/Python/claude_bridge.py, Tools/ue.py. The bridge's tick is never nested (a call sent while one runs waits its turn; tested live on the MO_Tools editor with a slow-task script: unguarded A start / B / A end, guarded A start / A end / B; unit test Tools/tests/test_claude_bridge.py). `ue.py py` exits 4 "GONE" when the editor took a call and died; with no editor it reports "not responding" in ~2 s. Docs: TOOLING.md, TRAPS.md.
 References: CL-0206
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0208
+Status: PROGRESS (no MO57 editor, build or instance held). Body weight (Wes Oct 26) built and verified in the MO_Tools lab (penpro/MO_Tools e1fb0b2, plugin MOBodyShape); Docs/BACKLOG.md: N-226 (waiting on the survivor remade in the Creator and auto-rigged, then the MO57 integration) and a by-eye row for the shapes.
+References: CL-0207
