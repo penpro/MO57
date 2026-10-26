@@ -61,6 +61,7 @@ class AMOCreatureController;
 class AMOCarcassActor;
 class UBehaviorTree;
 class UAnimSequenceBase;
+class UAnimSequence;
 struct FMOCreatureDefinitionRow;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCreatureDeath, AMOCreature*, Creature, AActor*, Killer);
@@ -195,6 +196,33 @@ public:
 	static float NearestFlameDistanceCm(const UWorld* World, const FVector& Location);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// ============================================================================
+	// LOCOMOTION WITHOUT AN ANIMBLUEPRINT (MOCreatureAnimInstance.h)
+	// ============================================================================
+
+	/** A species added as data: its Blueprint sets the mesh, the capsule, AnimClass = MOCreatureAnimInstance and these cycles, which that
+	 *  native anim instance blends by speed (the cues play over them). Deer and wolf have AnimBlueprints and leave these empty. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	TObjectPtr<UAnimSequence> IdleAnimation;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	TObjectPtr<UAnimSequence> WalkAnimation;
+
+	/** The ground the walk cycle covers at play rate 1 (cm/s): measured from the pack's root-motion twin (ANIM_*_Walk_RM). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	float WalkAnimationSpeedCm = 100.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	TObjectPtr<UAnimSequence> RunAnimation;
+
+	/** The ground the run cycle covers at play rate 1 (cm/s; ANIM_*_Run_RM). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	float RunAnimationSpeedCm = 500.0f;
+
+	/** Faster than its own speed the run cycle plays faster, up to this rate (past it the feet slide rather than blur). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Creature|Animation")
+	float MaxRunPlayRate = 2.0f;
 
 	// ============================================================================
 	// EVENTS

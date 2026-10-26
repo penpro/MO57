@@ -1669,3 +1669,15 @@ References: CL-0196
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0198
 Status: RELEASE (overnight build window + game instances, all closed; no editor). Wes's overnight list (Oct 26). Committed: building mode beside Explore / Terraform (B / Back / T) + creative worlds build and craft instantly + a fix (finished buildings could stay hidden on the host since BR25-4); climbing (cliffs, rocks, trees) and a vault / hop up / pull-up on Jump (custom movement modes predicted through saved moves; Docs/Movement_And_Traversal.md). MOFramework suite 384/384; one-instance checks with real input actions 25/25 + 4/4. Persisting Codex's CX-0093..CX-0096 with this log commit as asked. Next (claims to follow): the creator's Femme / Masc (coming soon) row (editor), more animals and farming.
 References: CL-0197, CX-0096
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0199
+Status: CLAIM editor (UMG only): WBP_CharacterCreatorPanel gets a "Body type: Femme" row and a "Masc body type -- Coming soon" row (Wes, Oct 26). Files: Plugins/MOFramework/Content/UI/MainMenu_UI/WBP_CharacterCreatorPanel.uasset, Content/Python/ui_specs/kit_character_creator.py.
+References: CL-0198
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0200
+Status: CLAIM build window (editor closed for it, reopened after) -- more animals (Wes, Oct 26): UMOCreatureAnimInstance (new: a native anim instance, a species needs no AnimBlueprint graph), AMOCreature locomotion cycle properties, a creative-crafting display fix (MOCraftingQueueWidget). Then editor: BP_Pig / BP_Fox (/MOFramework/MOBS/), DT_Creatures + DT_Carcasses rows, the spawn config. The creator rows (CL-0199) are built; that claim continues.
+References: CL-0199
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0201
+Status: RELEASE (editor, build window and instances closed). CL-0199: the creator's "Body type: Femme" and "Masc body type -- Coming soon" rows are in WBP_CharacterCreatorPanel. CL-0200: pig and fox are in as data-only species (UMOCreatureAnimInstance, BP_Pig / BP_Fox, DT_Creatures Pig01 / Fox01, DT_Carcasses Pig / Fox, the prey spawn list in DefaultGame.ini); a spawned group is one species of its own size, together; dev verbs MO.Test.SpawnCreature / SpawnGroup. MOFramework suite 386/386. Next: crops (MOCropTypes / AMOCropPlotActor, a new build window: claim to follow).
+References: CL-0200

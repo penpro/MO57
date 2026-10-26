@@ -139,7 +139,17 @@ public:
 
 	/** Attempt to spawn an entity for the given category. Returns spawned pawn or nullptr. */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
-	APawn* TrySpawnForCategory(EMOSpawnCategory Category);
+	APawn* TrySpawnForCategory(EMOSpawnCategory Category) { return TrySpawnOfClass(Category, nullptr); }
+
+	/** TrySpawnForCategory with the class chosen (nullptr = a random one of the category's): a group's first member. */
+	APawn* TrySpawnOfClass(EMOSpawnCategory Category, TSubclassOf<APawn> OnlyClass);
+
+	/** A group's size for one of its classes: the species' own (FMOCreatureDefinitionRow::Min / MaxGroupSize) or the category's. */
+	static FIntPoint GroupSizeFor(TSubclassOf<APawn> PawnClass, const FMOSpawnCategoryConfig& Config);
+
+	/** A group member close to its leader (3-12 m), on the ground, clear of buildings; the category's entity separation (hundreds of m) is
+	 *  for groups, not within one. */
+	APawn* SpawnGroupMemberNear(EMOSpawnCategory Category, TSubclassOf<APawn> PawnClass, const FVector& Leader, bool bIgnoreStructures = false);
 
 	/** Force spawn at a specific location (bypasses cooldowns and spawn points) */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
@@ -262,7 +272,15 @@ protected:
 	 * rig) plus a deer herd = a 40 ms frame (Insights, Oct 13 2026). Each tick now spawns at least one entity, then stops once the budget is spent:
 	 * the rest of a group carries over here and finishes on the next ticks; categories not reached stay due for the next check.
 	 */
-	TArray<TPair<EMOSpawnCategory, int32>> PendingGroupSpawns;
+	struct FPendingGroup
+	{
+		EMOSpawnCategory Category;
+		int32 Remaining = 0;
+		TSubclassOf<APawn> PawnClass;   // one species per group (Oct 26: a group used to be a random mix, each member hundreds of m apart)
+		FVector Leader = FVector::ZeroVector;
+		bool bHasLeader = false;   // the group's first member stands: the rest go beside it
+	};
+	TArray<FPendingGroup> PendingGroupSpawns;
 	double SpawnBudgetStartSeconds = 0.0;
 	int32 SpawnsThisTick = 0;
 	void BeginSpawnBudget();
@@ -314,7 +332,8 @@ protected:
 	 * capsule, the category's Z band, its structure distance and entity separation; then spawn, track, freeze, broadcast, notice.
 	 * The spawn-point path used to skip the ground / water / clearance checks and read the meter-valued distances as cm.
 	 */
-	APawn* SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source);
+	APawn* SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source, float MinEntitySeparationOverrideCm = -1.0f,
+		bool bIgnoreStructures = false);
 
 	void NotifyPlayerOfSpawn(APawn* SpawnedPawn);
 

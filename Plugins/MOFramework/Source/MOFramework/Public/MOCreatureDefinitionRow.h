@@ -160,6 +160,14 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
 	float ChaseGiveUpCooldownSeconds = 120.f;
 
+	/** How many of this species the spawner puts down together, near each other (a herd of does, a sounder of pigs, a lone fox). 0 = the
+	 *  spawn category's group size (Project Settings > MO Spawn). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	int32 MinGroupSize = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Behavior", meta=(ClampMin="0"))
+	int32 MaxGroupSize = 0;
+
 	// ============================================================================
 	// AI
 	// ============================================================================

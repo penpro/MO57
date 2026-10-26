@@ -33,6 +33,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/Crafting_And_Progression.md` | Recipes, queue, stations, tool gate, harvesting, item state / liquids / action registries, discovery, progression checks | Crafting / harvesting / items code |
 | `Docs/PROGRESSION_ROADMAP.md` | **The design authority** for technology progression: eras, heat ladder, materials, discovery precursors, gaps | Before adding or changing any item, recipe, station or knowledge |
 | `Docs/Building.md` | Placement, server-driven construction, build-state look, building mode, creative instant building | Building work |
+| `Docs/Farming_And_Husbandry.md` | Crops (seed, field, growth, harvest) and domestic animals (capture, pens, taming, breeding, products): design and build order | Farming, livestock |
 | `Docs/Movement_And_Traversal.md` | Vault / hop up / pull-up and climbing (cliffs, rocks, trees): the rules, the co-op prediction, the costs | Movement, traversal, climbing |
 | `Docs/Terraform_Excavation_Plan.md` | Player terraform + designation-based pawn excavation (plan and stage record) | Terraform / excavation |
 | `Docs/AI_And_Colony.md` | Creatures, survivor jobs, the village loop, recruitment, possession, colony UI plan | AI, survivors, colony |

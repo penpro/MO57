@@ -1,4 +1,6 @@
 #include "MOSpawnManagerSubsystem.h"
+#include "MOCreature.h"
+#include "MOCreatureDefinitionRow.h"
 #include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOGameSettings.h"
@@ -394,9 +396,9 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 // CORE API
 // ============================================================================
 
-APawn* UMOSpawnManagerSubsystem::TrySpawnForCategory(EMOSpawnCategory Category)
+APawn* UMOSpawnManagerSubsystem::TrySpawnOfClass(EMOSpawnCategory Category, TSubclassOf<APawn> OnlyClass)
 {
-	const FMOSpawnCategoryConfig Config = GetCategoryConfig(Category);
+	FMOSpawnCategoryConfig Config = GetCategoryConfig(Category);
 	if (!Config.bEnabled)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Category %d is disabled"), (int32)Category);
@@ -407,6 +409,10 @@ APawn* UMOSpawnManagerSubsystem::TrySpawnForCategory(EMOSpawnCategory Category)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] No spawnable classes for category %d"), (int32)Category);
 		return nullptr;
+	}
+	if (OnlyClass)
+	{
+		Config.SpawnableClasses = { OnlyClass };   // the group's species
 	}
 
 	// Hard cap: don't spawn past MaxSpawnedCount. The previous behavior — DespawnOldest
@@ -973,18 +979,64 @@ void UMOSpawnManagerSubsystem::ProcessPendingGroupSpawns()
 {
 	while (PendingGroupSpawns.Num() > 0 && !IsSpawnBudgetSpent())
 	{
-		TPair<EMOSpawnCategory, int32>& Next = PendingGroupSpawns[0];
-		if (Next.Value <= 0 || !TrySpawnForCategory(Next.Key))
+		FPendingGroup& Next = PendingGroupSpawns[0];
+		APawn* Spawned = Next.Remaining <= 0 ? nullptr
+			: Next.bHasLeader ? SpawnGroupMemberNear(Next.Category, Next.PawnClass, Next.Leader) : TrySpawnOfClass(Next.Category, Next.PawnClass);
+		if (!Spawned)
 		{
 			PendingGroupSpawns.RemoveAt(0);   // done, or nowhere left to put them: drop the rest of this group
 			continue;
 		}
+		if (!Next.bHasLeader)
+		{
+			Next.Leader = Spawned->GetActorLocation();
+			Next.bHasLeader = true;
+		}
 		++SpawnsThisTick;
-		if (--Next.Value <= 0)
+		if (--Next.Remaining <= 0)
 		{
 			PendingGroupSpawns.RemoveAt(0);
 		}
 	}
+}
+
+FIntPoint UMOSpawnManagerSubsystem::GroupSizeFor(TSubclassOf<APawn> PawnClass, const FMOSpawnCategoryConfig& Config)
+{
+	FIntPoint Range(Config.MinGroupSize, Config.MaxGroupSize);
+	if (const AMOCreature* Creature = PawnClass ? Cast<AMOCreature>(PawnClass->GetDefaultObject()) : nullptr)
+	{
+		if (const FMOCreatureDefinitionRow* Definition = Creature->GetCreatureDefinitionRow())
+		{
+			if (Definition->MaxGroupSize > 0)
+			{
+				Range = FIntPoint(FMath::Max(1, Definition->MinGroupSize), Definition->MaxGroupSize);
+			}
+		}
+	}
+	Range.X = FMath::Max(1, Range.X);
+	Range.Y = FMath::Max(Range.X, Range.Y);
+	return Range;
+}
+
+APawn* UMOSpawnManagerSubsystem::SpawnGroupMemberNear(EMOSpawnCategory Category, TSubclassOf<APawn> PawnClass, const FVector& Leader, bool bIgnoreStructures)
+{
+	FMOSpawnCategoryConfig Config = GetCategoryConfig(Category);
+	if (!Config.bEnabled || !PawnClass || GetSpawnedCount(Category) >= Config.MaxSpawnedCount)
+	{
+		return nullptr;
+	}
+	Config.SpawnableClasses = { PawnClass };
+	for (int32 Attempt = 0; Attempt < 6; ++Attempt)
+	{
+		const float Distance = FMath::FRandRange(300.0f, 1200.0f);
+		const float Angle = FMath::DegreesToRadians(FMath::FRandRange(0.0f, 360.0f));
+		const FVector Near = Leader + FVector(FMath::Cos(Angle) * Distance, FMath::Sin(Angle) * Distance, 0.0f);
+		if (APawn* Member = SpawnOnGround(Near, Config, TEXT("group"), 150.0f, bIgnoreStructures))
+		{
+			return Member;
+		}
+	}
+	return nullptr;
 }
 
 void UMOSpawnManagerSubsystem::ProcessAllCategories()
@@ -1081,23 +1133,34 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 	// Log that we're attempting to spawn
 	UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Cooldown elapsed for category %d, attempting spawn..."), (int32)Category);
 
-	// Try to spawn
-	const int32 GroupSize = FMath::RandRange(Config.MinGroupSize, Config.MaxGroupSize);
+	// Try to spawn: one species per group (a herd, a sounder, a lone fox), the size its own, the members together around the first.
+	const TSubclassOf<APawn> GroupClass = Config.SpawnableClasses.Num() > 0 ? Config.SpawnableClasses[FMath::RandRange(0, Config.SpawnableClasses.Num() - 1)] : nullptr;
+	const FIntPoint GroupRange = GroupSizeFor(GroupClass, Config);
+	const int32 GroupSize = FMath::RandRange(GroupRange.X, GroupRange.Y);
 	int32 SpawnedCount = 0;
+	FVector Leader = FVector::ZeroVector;
 
 	for (int32 i = 0; i < GroupSize; ++i)
 	{
 		if (IsSpawnBudgetSpent())
 		{
-			PendingGroupSpawns.Add(TPair<EMOSpawnCategory, int32>(Category, GroupSize - i));
+			PendingGroupSpawns.Add({ Category, GroupSize - i, GroupClass, Leader, SpawnedCount > 0 });
 			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] frame budget spent: %d more of category %d next tick"), GroupSize - i, (int32)Category);
 			break;
 		}
-		APawn* Spawned = TrySpawnForCategory(Category);
+		APawn* Spawned = SpawnedCount == 0 ? TrySpawnOfClass(Category, GroupClass) : SpawnGroupMemberNear(Category, GroupClass, Leader);
 		if (Spawned)
 		{
+			if (SpawnedCount == 0)
+			{
+				Leader = Spawned->GetActorLocation();
+			}
 			SpawnedCount++;
 			++SpawnsThisTick;
+		}
+		else if (SpawnedCount > 0)
+		{
+			continue;   // no room beside this one: the next may find some
 		}
 		else
 		{
@@ -1196,7 +1259,8 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 	return SpawnedPawn;
 }
 
-APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source)
+APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source, float MinEntitySeparationOverrideCm,
+	bool bIgnoreStructures)
 {
 	UWorld* World = GetWorld();
 	if (!World || Config.SpawnableClasses.Num() == 0)
@@ -1247,11 +1311,11 @@ APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpa
 
 	// Structure avoidance and separation from other spawned entities (both authored in METERS): half of MinSpawnDistance, floor of 2 m.
 	const float MinStructureDistanceCm = Config.MinDistanceFromStructure * 100.0f;
-	if (MinStructureDistanceCm > 0.0f && !IsLocationValidForSpawn(SpawnLocation, MinStructureDistanceCm))
+	if (!bIgnoreStructures && MinStructureDistanceCm > 0.0f && !IsLocationValidForSpawn(SpawnLocation, MinStructureDistanceCm))
 	{
 		return nullptr;
 	}
-	const float MinEntitySeparationCm = FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
+	const float MinEntitySeparationCm = MinEntitySeparationOverrideCm >= 0.0f ? MinEntitySeparationOverrideCm : FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
 	if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparationCm))
 	{
 		return nullptr;

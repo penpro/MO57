@@ -72,6 +72,7 @@
 #include "MOCharacter.h"
 #include "MOAnatomyComponent.h"
 #include "MOCreature.h"
+#include "MOCreatureDefinitionRow.h"
 #include "MODeathRecapWidget.h"
 #include "MOCommonButton.h"
 #include "MOWorldReadinessSubsystem.h"
@@ -1638,6 +1639,105 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearEmbed: removed %d block(s)"), Removed);
 		}),
 		ECVF_Default));
+
+	// ---------- MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] [SideCm=0] / MO.Test.SpawnGroup <Species|ClassPath> [DistanceCm=1500] ----------
+	// A creature on the ground in front of player 0's pawn, facing it (Species = Pig -> /MOFramework/MOBS/Pig/BP_Pig; a class path for any other).
+	// SpawnGroup puts down a whole group of that species the way the spawner does (UMOSpawnManagerSubsystem::GroupSizeFor / SpawnGroupMemberNear),
+	// buildings ignored, and reports how many and how far apart. Python cannot spawn actors in a -game instance. Server.
+	{
+		struct FCreatureSpot
+		{
+			static UClass* Resolve(const FString& Name)
+			{
+				if (Name.Contains(TEXT("/")))
+				{
+					return LoadClass<APawn>(nullptr, *Name);
+				}
+				return LoadClass<APawn>(nullptr, *FString::Printf(TEXT("/MOFramework/MOBS/%s/BP_%s.BP_%s_C"), *Name, *Name, *Name));
+			}
+			static bool Ground(UWorld* W, const APawn* Player, float DistanceCm, float SideCm, UClass* Class, FVector& OutLocation)
+			{
+				const FVector Forward = FRotator(0.0f, Player->GetActorRotation().Yaw, 0.0f).Vector();
+				const FVector Right(-Forward.Y, Forward.X, 0.0f);
+				const FVector At = Player->GetActorLocation() + Forward * DistanceCm + Right * SideCm;
+				FHitResult Hit;
+				if (!MOSpawnClearance::TraceVoxelGround(W, At.X, At.Y, At.Z + 5000.0f, At.Z - 10000.0f, Player, Hit))
+				{
+					return false;
+				}
+				OutLocation = Hit.ImpactPoint + FVector(0.0f, 0.0f, MOSpawnClearance::CapsuleOf(TSubclassOf<APawn>(Class)).HalfHeight + 5.0f);
+				return true;
+			}
+		};
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.SpawnCreature"),
+			TEXT("Dev (server): a creature on the ground in front of player 0, facing them. Usage: MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] [SideCm=0]"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+			{
+				APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+				UClass* Class = Args.Num() > 0 ? FCreatureSpot::Resolve(Args[0]) : nullptr;
+				FVector Location;
+				if (!Player || !Class || World->GetNetMode() == NM_Client
+					|| !FCreatureSpot::Ground(World, Player, Args.Num() > 1 ? FCString::Atof(*Args[1]) : 600.0f, Args.Num() > 2 ? FCString::Atof(*Args[2]) : 0.0f, Class, Location))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SpawnCreature: FAILED (%s)"), !Player ? TEXT("no player pawn") : !Class ? TEXT("no such class") : TEXT("a client, or no ground there"));
+					return;
+				}
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				const FRotator Facing(0.0f, (Player->GetActorLocation() - Location).Rotation().Yaw, 0.0f);
+				APawn* Spawned = World->SpawnActor<APawn>(Class, Location, Facing, Params);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SpawnCreature: %s (%s) at %s, %.0f cm from the player"), *GetNameSafe(Spawned), *Class->GetName(),
+					*Location.ToString(), FVector::Dist(Location, Player->GetActorLocation()));
+			}),
+			ECVF_Default));
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.SpawnGroup"),
+			TEXT("Dev (server): a group of one species, as the spawner makes them (its size, together). Usage: MO.Test.SpawnGroup <Species|ClassPath> [DistanceCm=1500]"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+			{
+				APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+				UClass* Class = Args.Num() > 0 ? FCreatureSpot::Resolve(Args[0]) : nullptr;
+				UMOSpawnManagerSubsystem* Spawner = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+				FVector Location;
+				if (!Player || !Class || !Spawner || World->GetNetMode() == NM_Client
+					|| !FCreatureSpot::Ground(World, Player, Args.Num() > 1 ? FCString::Atof(*Args[1]) : 1500.0f, 0.0f, Class, Location))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SpawnGroup: FAILED (%s)"), !Player ? TEXT("no player pawn") : !Class ? TEXT("no such class") : TEXT("a client, or no ground there"));
+					return;
+				}
+				const AMOCreature* Creature = Cast<AMOCreature>(Class->GetDefaultObject());
+				const FMOCreatureDefinitionRow* Definition = Creature ? Creature->GetCreatureDefinitionRow() : nullptr;
+				const EMOSpawnCategory Category = Definition && Definition->bIsPredator ? EMOSpawnCategory::Predator : EMOSpawnCategory::Prey;
+				const FIntPoint Range = UMOSpawnManagerSubsystem::GroupSizeFor(TSubclassOf<APawn>(Class), Spawner->GetCategoryConfig(Category));
+				const int32 Size = FMath::RandRange(Range.X, Range.Y);
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				TArray<FVector> Members;
+				if (APawn* Leader = World->SpawnActor<APawn>(Class, Location, FRotator(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f), Params))
+				{
+					Members.Add(Leader->GetActorLocation());
+					for (int32 i = 1; i < Size; ++i)
+					{
+						if (APawn* Member = Spawner->SpawnGroupMemberNear(Category, TSubclassOf<APawn>(Class), Members[0], true))
+						{
+							Members.Add(Member->GetActorLocation());
+						}
+					}
+				}
+				float Spread = 0.0f;
+				for (const FVector& A : Members)
+				{
+					for (const FVector& B : Members)
+					{
+						Spread = FMath::Max(Spread, static_cast<float>(FVector::Dist2D(A, B)));
+					}
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SpawnGroup: %s x%d (size range %d-%d, rolled %d), widest apart %.0f cm"), *Class->GetName(), Members.Num(),
+					Range.X, Range.Y, Size, Spread);
+			}),
+			ECVF_Default));
+	}
 
 	// ---------- MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] / MO.Test.ClearLedges / MO.Test.Traversal ----------
 	// A test obstacle for the traversal moves (MOTraversal.h): a block HeightCm tall standing on the ground DistanceCm in front of the local

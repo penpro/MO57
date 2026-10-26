@@ -2,7 +2,8 @@
 
 > **Covers:** creature AI (prey and predators), survivor pawns (recruitment, jobs, the village loop), the colony manager's upkeep
 > passes, possession of any pawn, and the planned colony management UI.
-> **Current state (2026-10-17):** creatures are deer (prey) and wolf (predator) on behavior trees; survivors run a C++ simple-job
+> **Current state (2026-10-26):** creatures are deer, pig and fox (prey) and wolf (predator) on behavior trees; pig and fox are the first
+> species added as data (`UMOCreatureAnimInstance`, no AnimBlueprint); a spawned group is one species of its own size, together; survivors run a C++ simple-job
 > state machine in `AMOSurvivorController` (NO behavior-tree assets for survivors); the July village slice is live (craft jobs,
 > quotas, skill decay / schools, relationships, seasons, courtship, real children, winter shelter, fire heat and refuel hauling);
 > the colony UI is partly built (history, personality, colony manager, overview, portrait exist; colony bar, task assignment UI and
@@ -11,7 +12,8 @@
 > `UMOSurvivorJobQueueComponent`, `UMORecruitmentComponent`, `UMOColonyManagerSubsystem` (`RunQuotaPass`, `RunHearthPass`,
 > `RunExcavationPass`, `CanRecruitByStanding`), `UMOPersonalityComponent`, `UMOCharacterHistoryComponent`, `UMOPossessionSubsystem`,
 > `UMOSpawnManagerSubsystem`. **Dev verbs:** `MO.Colony.Found|SpawnSurvivor|Recruit|PlaceBuilding|Stock|SetSkill|AssignJob|UI|SendTo|Status`,
-> `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Possess.List|Take`.
+> `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Possess.List|Take`,
+> `MO.Test.SpawnCreature <Species> [DistanceCm] [SideCm]`, `MO.Test.SpawnGroup <Species> [DistanceCm]`.
 > **Tests:** `MOFramework.Colony.*` (incl. `Colony.Recruit.GateMath`, `Colony.Excavation.*`), `MOFramework.Creature.*` (hearing,
 > pursuit, footfalls) and `MOFramework.Combat.Damage.*` (fist vs vital parts, instigator, armor penetration), live gates `Content/Python/test_village_*.py`,
 > `test_fire_heat.py`. **Open items:** `Docs/BACKLOG.md` § AI, colony, combat. **North star:** `Docs/MedievalDynasty_Village_Reference.md`;
@@ -142,8 +144,21 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   the flame goes out the still-angry creature closes in instead of giving up at once (Oct 22).
 - Creature ABP state machines (locomotion / rest / sleep / death) and EQS query assets (`EQ_FindHarvestableItems`,
   `EQ_FindHarvestTargets`, `EQ_FindEscapeRoute`) still need Blueprint setup (C++ complete).
-- Only deer and wolf exist; the animal pack has fox / pig / crow assets but new fauna needs ABP work. Creature footsteps need foot
-  bones (`ball_l` / `ball_r`) the skeletons lack.
+- **A new species is data (Oct 26; Wes: "let's get ... some other animals going").** `UMOCreatureAnimInstance` (native, no graph)
+  blends the creature's `IdleAnimation` / `WalkAnimation` / `RunAnimation` by its speed (`FMOCreatureLocomotionBlend`: standing ->
+  the walk at its own speed -> the run at its own, then the run faster up to `MaxRunPlayRate`; walk and run share one stride clock)
+  and evaluates "DefaultSlot", so the cues (`PlayAnimationEverywhere`: hit reactions, a bite) play over it as in an AnimBlueprint.
+  A species = a data-only Blueprint under `/MOFramework/MOBS/<Species>/BP_<Species>` (parent `BP_Prey` / `BP_Predator`; mesh,
+  capsule, `AnimClass = MOCreatureAnimInstance`, the three cycles and their ground speeds measured from the pack's `_RM` twins) + a
+  `DT_Creatures` row + a `DT_Carcasses` row + its class in the spawn category (`Config/DefaultGame.ini` `MOSpawnSettings`).
+  Pig (`BP_Pig`, `Pig01`: walk 1.02 m/s / run 6.56 m/s cycles, a sounder of 3-6, ~90 kg: 27 meat, hide, bladder) and fox (`BP_Fox`,
+  `Fox01`: 0.45 / 2.63 m/s cycles played up to 2.5x, alone, keen hearing 30 m, wary of fire, a pelt and 2 meat) are in the prey list.
+  The crow is not: a bird needs flight (its own movement and AI). Deer and wolf keep their AnimBlueprints.
+- **A spawned group is one species, together (Oct 26).** The spawner picks the group's class once; its size is the species' own
+  (`FMOCreatureDefinitionRow::Min / MaxGroupSize`: deer 2-5, pig 3-6, fox 1; 0 = the category's) and the members stand 3-12 m from
+  the first (`UMOSpawnManagerSubsystem::SpawnGroupMemberNear`; the category's entity separation, hundreds of metres, is for groups).
+  Before, every member was a random class and its own spawn point: a "group" was strangers far apart. `MOFramework.Spawn.GroupSizeIsTheSpecies`.
+- Creature footsteps need foot bones (`ball_l` / `ball_r`) the skeletons lack (they step by ground covered).
 
 ## 2. Survivors and the village loop
 
