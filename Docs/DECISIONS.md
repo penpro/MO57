@@ -60,6 +60,14 @@
 ## Decisions, newest first
 
 ### 2026-10-25
+- **The creator offers the whole MetaHuman groom library** ("grab all the other hair styles from the metahumans pipeline and prepare them for
+  use in the character customization screen"): 38 hair, 16 beards / goatees, 16 mustaches, from the 5.7 install's Core Data (no download).
+  Claude, small calls (noted): beards and mustaches are offered whatever the survivor (gender is unset, F15); "Bald" / "None" first in each
+  picker; Randomize picks a hair style but takes facial hair off; eyebrows / eyelashes / peach fuzz not offered yet (the library has 18 / 6 / 1).
+- **A click on the world must not close the creator; click-drag orbits the camera round the survivor** ("i'd like to be able to click drag
+  the world to pivot the camera around the character to be able to look at the back/sides/etc"). Claude added mouse-wheel zoom (110-420 cm).
+- **No bald gap while a style loads** ("it takes like 5-10 seconds for hair changes to take effect, until it updates they look bald"): the old
+  groom stays on until the new one can draw.
 - **Dark Ruins cliff compositions are off** (BR25-16; Wes's second verdict, after "a ball": "a disaster ... floating WAY above ground"). Rows
   disabled, assets kept; the single Nordic cliff ("these cliffs look pretty good") stays in the crags.
 - **Western cliffs are a POI: bands of 5-10 faces in a line along the hillside** (BR25-19). New placer layout `bClusterLine`; row

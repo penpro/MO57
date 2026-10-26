@@ -1,5 +1,7 @@
 #include "MOCharacterAppearance.h"
 
+const FString FMOCharacterAppearance::NoGroom = TEXT("None");
+
 FMOCharacterAppearance FMOCharacterAppearance::GetDefaultMale()
 {
 	FMOCharacterAppearance Appearance;
@@ -13,9 +15,7 @@ FMOCharacterAppearance FMOCharacterAppearance::GetDefaultMale()
 	// For MetaHuman: modular Face/Body/Torso/Legs/Feet
 	Appearance.FaceAssetPath = TEXT("/Game/Characters/Faces/Default_Male_Face");
 	Appearance.BodyAssetPath = TEXT("/Game/Characters/Bodies/Default_Male_Body");
-	Appearance.HairAssetPath = TEXT("/Game/Characters/Hair/Default_Male_Hair");
-	Appearance.EyebrowsAssetPath = TEXT("/Game/Characters/Hair/Default_Eyebrows");
-	Appearance.EyelashesAssetPath = TEXT("/Game/Characters/Hair/Default_Eyelashes");
+	// Grooms: empty = the pawn Blueprint's own (no groom paths that exist nowhere).
 
 	// Body params - average male
 	Appearance.BodyFat = 0.25f;
@@ -46,9 +46,7 @@ FMOCharacterAppearance FMOCharacterAppearance::GetDefaultFemale()
 
 	Appearance.FaceAssetPath = TEXT("/Game/Characters/Faces/Default_Female_Face");
 	Appearance.BodyAssetPath = TEXT("/Game/Characters/Bodies/Default_Female_Body");
-	Appearance.HairAssetPath = TEXT("/Game/Characters/Hair/Default_Female_Hair");
-	Appearance.EyebrowsAssetPath = TEXT("/Game/Characters/Hair/Default_Eyebrows");
-	Appearance.EyelashesAssetPath = TEXT("/Game/Characters/Hair/Default_Eyelashes");
+	// Grooms: empty = the pawn Blueprint's own.
 
 	// Body params - average female
 	Appearance.BodyFat = 0.3f;

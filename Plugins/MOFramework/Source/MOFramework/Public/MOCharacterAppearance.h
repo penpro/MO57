@@ -136,25 +136,32 @@ struct MOFRAMEWORK_API FMOCharacterAppearance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Face")
 	FString FaceAssetPath;
 
-	/** Asset path to hair groom asset. */
+	// The grooms: a GroomAsset object path each (the MetaHuman library under /Game/MetaHumans/Common/Optional/Grooms/GroomAssets, Oct 25 2026),
+	// put on the pawn by UMOAppearanceSubsystem::ApplyGroomsToCharacter. EMPTY keeps the pawn Blueprint's own groom (the shipped survivor: updo
+	// braids, no beard, no mustache); NoGroom empties the slot (bald, clean-shaven).
+
+	/** Scalp hair groom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Hair")
 	FString HairAssetPath;
 
-	/** Asset path to eyebrows groom asset. */
+	/** Eyebrows groom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Hair")
 	FString EyebrowsAssetPath;
 
-	/** Asset path to eyelashes groom asset. */
+	/** Eyelashes groom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Hair")
 	FString EyelashesAssetPath;
 
-	/** Asset path to beard groom asset (empty = no beard). */
+	/** Beard (and goatee) groom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Hair")
 	FString BeardAssetPath;
 
-	/** Asset path to mustache groom asset (empty = no mustache). */
+	/** Mustache groom. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Hair")
 	FString MustacheAssetPath;
+
+	/** A groom path that empties its slot; an empty path keeps the Blueprint's own groom. */
+	static const FString NoGroom;
 
 	// ============================================================================
 	// BODY (Mutable Parameters)
@@ -215,6 +222,17 @@ struct MOFRAMEWORK_API FMOCharacterAppearance
 		HairMelanin = Other.HairMelanin;
 		HairRedness = Other.HairRedness;
 		EyeColor = Other.EyeColor;
+	}
+
+	/** The look the character creator edits over a pawn's own meshes: the colours and the grooms (an empty groom path keeps the pawn's own). */
+	void CopyLookFrom(const FMOCharacterAppearance& Other)
+	{
+		CopyColorsFrom(Other);
+		HairAssetPath = Other.HairAssetPath;
+		EyebrowsAssetPath = Other.EyebrowsAssetPath;
+		EyelashesAssetPath = Other.EyelashesAssetPath;
+		BeardAssetPath = Other.BeardAssetPath;
+		MustacheAssetPath = Other.MustacheAssetPath;
 	}
 
 	// ============================================================================

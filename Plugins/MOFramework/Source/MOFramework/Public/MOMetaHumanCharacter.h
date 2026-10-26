@@ -28,8 +28,11 @@
  * [2024-02] APPEARANCE APPLY ORDER: Appearance must be applied AFTER meshes
  *   are set up. bAutoApplyAppearance handles this in BeginPlay.
  *
- * [2024-02] GROOMS IN BLUEPRINT: Groom components for hair must be added in
- *   Blueprint, not C++. They need specific binding groups per MetaHuman.
+ * [2024-02] GROOMS IN BLUEPRINT: the Blueprint's groom components are the
+ *   default look. [2026-10-25] The appearance's groom paths swap them at run
+ *   time (UMOAppearanceSubsystem::ApplyGroomsToCharacter, with a binding per
+ *   groom and face mesh; it adds the beard / mustache components the survivor
+ *   Blueprint lacks).
  *
  * =============================================================================
  * RELATED FILES: MOCharacter.h, MOCharacterAppearance.h, MOMorphDefinitionRow.h
@@ -104,14 +107,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void SetAppearance(const FMOCharacterAppearance& NewAppearance);
 
-	/** Take only the colours of Colors (skin tone, hair, eyes) and push them to the materials -- no mesh reload: the character creator's live
-	 *  sliders and every place that restores a look over the pawn's own meshes. */
+	/** Take only the look of Look -- the colours (skin tone, hair, eyes) and the grooms (hair, beard, mustache styles; an empty path keeps the
+	 *  Blueprint's own) -- and put it on the pawn, no body / face mesh reload: the character creator's live controls and every place that restores
+	 *  a look over the pawn's own meshes. Before BeginPlay only the record changes (ApplySkinLook puts the grooms on then). */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
-	void SetAppearanceColors(const FMOCharacterAppearance& Colors);
+	void SetAppearanceLook(const FMOCharacterAppearance& Look);
 
 	/** Apply the current stored appearance (call after spawning or loading). */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void ApplyCurrentAppearance();
+
+	/** Put Look's grooms on (UMOAppearanceSubsystem::ApplyGroomsToCharacter): a slot whose new groom is still loading keeps its old one, and this
+	 *  tries again every GroomRetrySeconds with the pawn's CURRENT look (the latest choice wins) until it can, or GroomReadyTimeoutSeconds have
+	 *  passed (then it swaps anyway). A swap re-applies the colours (a new groom brings untinted materials). False if a groom could not load. */
+	bool ApplyGrooms(const FMOCharacterAppearance& Look);
+
+	/** A groom that will not get ready (a broken asset) is swapped in after this long anyway. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
+	float GroomReadyTimeoutSeconds = 30.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
+	float GroomRetrySeconds = 0.2f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -156,7 +172,12 @@ protected:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** The skin look pass (AMOCharacter) + this character's colours (skin tone, hair, eyes): it runs at BeginPlay and again once the MetaHuman
-	 *  component has rebuilt its face materials, so the colours survive that rebuild. */
+	/** The skin look pass (AMOCharacter) + this character's grooms and colours (skin tone, hair, eyes): it runs at BeginPlay and again once the
+	 *  MetaHuman component has rebuilt its face materials, so the look survives that rebuild. */
 	virtual void ApplySkinLook() override;
+
+private:
+	FTimerHandle GroomRetryTimer;
+	/** When the oldest groom still waiting to swap in was asked for (world seconds); negative = none waiting. */
+	double GroomWaitStartSeconds = -1.0;
 };

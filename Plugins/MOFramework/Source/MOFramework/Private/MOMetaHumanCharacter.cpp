@@ -2,7 +2,9 @@
 #include "MOFramework.h"
 #include "MOAppearanceSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 
 AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -74,10 +76,46 @@ void AMOMetaHumanCharacter::SetAppearance(const FMOCharacterAppearance& NewAppea
 	ApplyCurrentAppearance();
 }
 
-void AMOMetaHumanCharacter::SetAppearanceColors(const FMOCharacterAppearance& Colors)
+void AMOMetaHumanCharacter::SetAppearanceLook(const FMOCharacterAppearance& Look)
 {
-	CurrentAppearance.CopyColorsFrom(Colors);
+	CurrentAppearance.CopyLookFrom(Look);
+	ApplyGrooms(CurrentAppearance);
 	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
+}
+
+bool AMOMetaHumanCharacter::ApplyGrooms(const FMOCharacterAppearance& Look)
+{
+	UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const bool bGiveUp = GroomWaitStartSeconds >= 0.0 && Now - GroomWaitStartSeconds > GroomReadyTimeoutSeconds;
+	bool bPending = false, bChanged = false;
+	const bool bLoaded = UMOAppearanceSubsystem::ApplyGroomsToCharacter(this, Look, !bGiveUp, &bPending, &bChanged);
+	if (bChanged)
+	{
+		UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
+		if (GroomWaitStartSeconds >= 0.0)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: groom swapped in after %.1f s of loading (the old one stayed on meanwhile)"), *GetName(), Now - GroomWaitStartSeconds);
+		}
+	}
+	if (bGiveUp)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s: a groom was not ready after %.0f s -- swapped in anyway"), *GetName(), GroomReadyTimeoutSeconds);
+	}
+	if (!bPending || !World)
+	{
+		GroomWaitStartSeconds = -1.0;
+		return bLoaded;
+	}
+	if (GroomWaitStartSeconds < 0.0)
+	{
+		GroomWaitStartSeconds = Now;
+	}
+	if (!World->GetTimerManager().IsTimerActive(GroomRetryTimer))
+	{
+		World->GetTimerManager().SetTimer(GroomRetryTimer, FTimerDelegate::CreateWeakLambda(this, [this]() { ApplyGrooms(CurrentAppearance); }), GroomRetrySeconds, false);
+	}
+	return bLoaded;
 }
 
 void AMOMetaHumanCharacter::OnRep_CurrentAppearance()
@@ -94,6 +132,7 @@ void AMOMetaHumanCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 void AMOMetaHumanCharacter::ApplySkinLook()
 {
 	Super::ApplySkinLook();
+	ApplyGrooms(CurrentAppearance);
 	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
 }
 

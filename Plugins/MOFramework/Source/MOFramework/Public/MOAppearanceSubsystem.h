@@ -35,9 +35,14 @@
  * [2024-02] TAG INFERENCE: InferTagsFromAssetName() uses naming conventions.
  *   Assets should follow "Gender_Type_Name" pattern for proper tagging.
  *
+ * [2026-10-25] GROOMS: the hair / beard / mustache styles are the MetaHuman groom library (70 grooms, Tools/import_metahuman_grooms.py) under
+ *   HairContentPath. A groom goes on a pawn with the GroomBindingAsset that binds it to the pawn's FACE mesh (Content/Python/make_groom_bindings.py
+ *   makes one per groom and face; FindGroomBinding looks it up by the binding's Groom registry tag). No binding: the engine projects the groom
+ *   at run time (a GPU cost once), logged.
+ *
  * =============================================================================
  * RELATED FILES: MOCharacterAppearance.h, MOMetaHumanCharacter.h, MOCustomizableCharacter.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-10-25
  * =============================================================================
  */
 
@@ -51,6 +56,8 @@
 class AMOMetaHumanCharacter;
 class USkeletalMesh;
 class UGroomAsset;
+class UGroomBindingAsset;
+class UGroomComponent;
 UCLASS()
 class MOFRAMEWORK_API UMOAppearanceSubsystem : public UGameInstanceSubsystem
 {
@@ -70,6 +77,9 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void DiscoverAppearanceAssets();
+
+	/** DiscoverAppearanceAssets once (the character creator asks for the catalog when it opens). */
+	void EnsureDiscovered() { if (!bDiscoveryComplete) { DiscoverAppearanceAssets(); } }
 
 	/**
 	 * Get all discovered assets for a category.
@@ -107,10 +117,38 @@ public:
 	bool ApplyFace(AMOMetaHumanCharacter* Character, const FString& FaceAssetPath);
 
 	/**
-	 * Apply only hair groom.
+	 * Apply only the scalp hair (a groom path; FMOCharacterAppearance::NoGroom = bald): ApplyGroomsToCharacter with the other slots left alone.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	bool ApplyHair(AMOMetaHumanCharacter* Character, const FString& HairAssetPath);
+
+	/**
+	 * Put an appearance's grooms on a MetaHuman pawn: each slot (hair, eyebrows, eyelashes, beard, mustache) is the pawn's groom component named
+	 * after it (Hair, Eyebrows1, ...; a missing one is created on the face at the MetaHuman's socket), given the groom and its binding to the
+	 * pawn's face (FindGroomBinding). An empty path leaves the slot as the Blueprint made it, NoGroom empties it, an unknown path is logged and left.
+	 * Cheap when nothing changes (a slot already wearing its groom is skipped). Only once the pawn has begun play (its Blueprint components exist);
+	 * no-op on a dedicated server. Returns false if a groom could not be loaded. Static like ApplyColorsToActor: the creator's pawn and gameplay pawns.
+	 * bWaitUntilReady: a slot whose new groom or binding cannot draw yet keeps its old groom and sets *bOutPending (AMOMetaHumanCharacter::ApplyGrooms
+	 * retries); *bOutChanged: some slot swapped (its colours need applying again).
+	 */
+	static bool ApplyGroomsToCharacter(AMOMetaHumanCharacter* Character, const FMOCharacterAppearance& Appearance, bool bWaitUntilReady = true,
+		bool* bOutPending = nullptr, bool* bOutChanged = nullptr);
+
+	/** Every binding of a groom (any face), from the registry alone: the creator preloads a style's bindings with it. */
+	static TArray<FSoftObjectPath> FindGroomBindingPaths(const FSoftObjectPath& Groom);
+
+	/** The appearance's groom path for a groom slot (Hair, Eyebrows, Eyelashes, Beard, Mustache); null for Face / Body. */
+	static FString* GetGroomPath(FMOCharacterAppearance& Appearance, EMOAppearanceCategory Slot);
+
+	/** The actor's groom component for a slot (named after it: Hair, Eyebrows1, Beard ...), or null. */
+	static UGroomComponent* FindGroomComponent(const AActor* Actor, EMOAppearanceCategory Slot);
+
+	/** The binding that puts Groom on Face: a GroomBindingAsset whose Groom registry tag is this groom and whose target mesh is Face; null if none. */
+	static UGroomBindingAsset* FindGroomBinding(const UGroomAsset* Groom, const USkeletalMesh* Face);
+
+	/** A MetaHuman groom's name for the creator: "Hair_M_SideSweptFringe" -> "Side swept fringe (medium)", "Goatee_S_ChinStrap" -> "Chin strap goatee
+	 *  (short)", "Mustache_L_Handlebar" -> "Handlebar mustache (long)". Any other name: its words. Pure: unit-tested. */
+	static FText MakeGroomDisplayName(const FString& AssetName);
 
 	/**
 	 * Apply body parameters (for Mutable integration).
@@ -163,9 +201,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Appearance|Paths")
 	FString FacesContentPath = TEXT("/Game/Characters/Faces");
 
-	/** Base content path for hair grooms. */
+	/** Base content path for grooms: its Hair, Eyebrows, Eyelashes, Beards and Mustaches folders (the MetaHuman library's own layout). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Appearance|Paths")
-	FString HairContentPath = TEXT("/Game/Characters/Hair");
+	FString HairContentPath = TEXT("/Game/MetaHumans/Common/Optional/Grooms/GroomAssets");
 
 	/** Base content path for body meshes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Appearance|Paths")

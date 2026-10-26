@@ -3,10 +3,17 @@
 #include "MOMetaHumanCharacter.h"
 #include "Engine/SkeletalMesh.h"
 #include "GroomAsset.h"
+#include "GroomBindingAsset.h"
 #include "GroomComponent.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Algo/Find.h"
+#include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
+#include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 
 void UMOAppearanceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -126,11 +133,18 @@ void UMOAppearanceSubsystem::ScanDirectoryForGrooms(const FString& Path, EMOAppe
 			continue;
 		}
 
+		const FString Name = AssetData.AssetName.ToString();
 		FMOAppearanceAssetEntry Entry;
 		Entry.AssetPath = AssetData.GetObjectPathString();
-		Entry.DisplayName = GetDisplayNameFromPath(AssetData.AssetName.ToString());
-		Entry.Tags = InferTagsFromAssetName(AssetData.AssetName.ToString());
+		Entry.DisplayName = MakeGroomDisplayName(Name);
+		Entry.Tags = InferTagsFromAssetName(Name);
 		Entry.bIsModded = bIsModded;
+		// The MetaHuman library's previews sit beside GroomAssets: Thumbnails/<Category>/<Groom>_Thumb (editor content, not cooked).
+		const FString Thumbnail = FString::Printf(TEXT("%s/Thumbnails/%s/%s_Thumb"), *FPaths::GetPath(HairContentPath), *FPaths::GetCleanFilename(Path), *Name);
+		if (AssetRegistry.GetAssetPackageDataCopy(FName(*Thumbnail)).IsSet())
+		{
+			Entry.ThumbnailPath = Thumbnail + TEXT(".") + Name + TEXT("_Thumb");
+		}
 
 		CategoryAssets.Add(Entry);
 		KnownAssetPaths.Add(Entry.AssetPath);
@@ -138,6 +152,48 @@ void UMOAppearanceSubsystem::ScanDirectoryForGrooms(const FString& Path, EMOAppe
 		// DEBUG (MOAppearanceSubsystem, disabled Oct 18): re-enable to trace verbose detail
 		// UE_LOG(LogMOFramework, Verbose, TEXT("  Found groom asset: %s"), *Entry.AssetPath);
 	}
+	// Short styles first, then medium, then long; by name within a length (the creator steps through them in this order).
+	auto LengthRank = [](const FMOAppearanceAssetEntry& E) { return E.Tags.Contains(TEXT("Short")) ? 0 : E.Tags.Contains(TEXT("Medium")) ? 1 : E.Tags.Contains(TEXT("Long")) ? 2 : 3; };
+	CategoryAssets.StableSort([&LengthRank](const FMOAppearanceAssetEntry& A, const FMOAppearanceAssetEntry& B)
+	{
+		const int32 RankA = LengthRank(A), RankB = LengthRank(B);
+		return RankA != RankB ? RankA < RankB : A.DisplayName.ToString() < B.DisplayName.ToString();
+	});
+}
+
+FText UMOAppearanceSubsystem::MakeGroomDisplayName(const FString& AssetName)
+{
+	// CamelCase -> lower-case words, numbers apart ("SideSweptFringe" -> side swept fringe, "360Waves" -> 360 waves).
+	auto Words = [](const FString& Camel)
+	{
+		FString Out;
+		for (int32 I = 0; I < Camel.Len(); ++I)
+		{
+			const TCHAR C = Camel[I];
+			if (I > 0 && (FChar::IsUpper(C) || FChar::IsDigit(C) != FChar::IsDigit(Camel[I - 1])))
+			{
+				Out.AppendChar(TEXT(' '));
+			}
+			Out.AppendChar(FChar::ToLower(C));
+		}
+		return Out;
+	};
+	// MetaHuman grooms: <Kind>_<S|M|L>_<Style>.
+	TArray<FString> Parts;
+	AssetName.ParseIntoArray(Parts, TEXT("_"));
+	static const TMap<FString, FString> Lengths = { {TEXT("S"), TEXT("short")}, {TEXT("M"), TEXT("medium")}, {TEXT("L"), TEXT("long")} };
+	const FString* Length = Parts.Num() == 3 ? Lengths.Find(Parts[1]) : nullptr;
+	if (!Length)
+	{
+		FString Plain = Words(AssetName.Replace(TEXT("_"), TEXT("")));
+		return FText::FromString(Plain.Left(1).ToUpper() + Plain.Mid(1));
+	}
+	FString Style = Words(Parts[2]);
+	if (Parts[0] != TEXT("Hair"))
+	{
+		Style += TEXT(" ") + Parts[0].ToLower();   // "full beard", "chin strap goatee", "handlebar mustache"
+	}
+	return FText::FromString(FString::Printf(TEXT("%s%s (%s)"), *Style.Left(1).ToUpper(), *Style.Mid(1), **Length));
 }
 
 TArray<FMOAppearanceAssetEntry> UMOAppearanceSubsystem::GetAssetsForCategory(EMOAppearanceCategory Category) const
@@ -225,12 +281,16 @@ TArray<FName> UMOAppearanceSubsystem::InferTagsFromAssetName(const FString& Asse
 		Tags.Add(FName(TEXT("Old")));
 	}
 
-	// Style tags
-	if (NameLower.Contains(TEXT("short")))
+	// Style tags (MetaHuman grooms say their length in the name: Hair_S_ / _M_ / _L_)
+	if (NameLower.Contains(TEXT("short")) || NameLower.Contains(TEXT("_s_")))
 	{
 		Tags.Add(FName(TEXT("Short")));
 	}
-	if (NameLower.Contains(TEXT("long")))
+	if (NameLower.Contains(TEXT("_m_")))
+	{
+		Tags.Add(FName(TEXT("Medium")));
+	}
+	if (NameLower.Contains(TEXT("long")) || NameLower.Contains(TEXT("_l_")))
 	{
 		Tags.Add(FName(TEXT("Long")));
 	}
@@ -311,8 +371,9 @@ bool UMOAppearanceSubsystem::ApplyAppearance(AMOMetaHumanCharacter* Character, c
 		}
 	}
 
-	// Note: Groom components should be added and configured in Blueprint subclasses
-	// The appearance system stores paths but doesn't apply grooms directly
+	// The grooms before the colours: a new groom brings its own materials, which the colours then tint (a groom still loading swaps in later,
+	// AMOMetaHumanCharacter::ApplyGrooms tints it then).
+	bSuccess &= Character->ApplyGrooms(Appearance);
 
 	// Apply body parameters (Mutable integration point)
 	ApplyBodyParameters(Character, Appearance.BodyFat, Appearance.MuscleMass, Appearance.Height);
@@ -344,12 +405,220 @@ bool UMOAppearanceSubsystem::ApplyFace(AMOMetaHumanCharacter* Character, const F
 	return false;
 }
 
+namespace MOAppearancePrivate
+{
+	/** A groom slot: the MetaHuman Blueprint's component name for it (Hair, Eyebrows1, Eyelashes, Beard, Mustache) and the face bone it rides on. */
+	struct FGroomSlot
+	{
+		EMOAppearanceCategory Category;
+		const TCHAR* Name;
+		const TCHAR* Bone;
+	};
+	const FGroomSlot GroomSlots[] = {
+		{ EMOAppearanceCategory::Hair, TEXT("Hair"), TEXT("FACIAL_C_FacialRoot") },
+		{ EMOAppearanceCategory::Eyebrows, TEXT("Eyebrows"), TEXT("FACIAL_C_FacialRoot") },
+		{ EMOAppearanceCategory::Eyelashes, TEXT("Eyelashes"), TEXT("FACIAL_C_FacialRoot") },
+		{ EMOAppearanceCategory::Beard, TEXT("Beard"), TEXT("Facial_C_JAW") },
+		{ EMOAppearanceCategory::Mustache, TEXT("Mustache"), TEXT("FACIAL_C_LipUpper") },
+	};
+
+	void ApplyHairSimulationSetting(UGroomComponent* Component);
+
+	/** Dev A/B for Wes's "the hair is jittery" (Oct 25 2026): is it the strands' physics (the MetaHuman library simulates most styles whole; the
+	 *  shipped updo only its braid) or the strands' rendering? Flips every groom in the world at once. */
+	TAutoConsoleVariable<int32> CVarHairSimulation(
+		TEXT("MO.Hair.Simulation"), 1,
+		TEXT("Groom hair physics: 1 = each groom as its asset says (default), 0 = no groom simulates (still hair). Applies at once."),
+		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*)
+		{
+			for (TObjectIterator<UGroomComponent> It; It; ++It)
+			{
+				if (!It->IsTemplate() && It->IsRegistered() && It->GetWorld() && It->GetWorld()->IsGameWorld())
+				{
+					ApplyHairSimulationSetting(*It);
+				}
+			}
+		}));
+
+	void ApplyHairSimulationSetting(UGroomComponent* Component)
+	{
+		const bool bOff = CVarHairSimulation.GetValueOnGameThread() == 0;
+		FHairSimulationSettings& Simulation = Component->SimulationSettings;
+		if (bOff == (Simulation.bOverrideSettings && !Simulation.SolverSettings.bEnableSimulation))
+		{
+			return;   // already so
+		}
+		Simulation.bOverrideSettings = bOff;   // off: the component's own settings, simulation disabled; on: the groom asset's own physics again
+		Simulation.SolverSettings.bEnableSimulation = false;
+		if (Component->GroomAsset)
+		{
+			Component->SetGroomAsset(Component->GroomAsset, Component->BindingAsset);   // rebuilds the groom's resources with that physics
+		}
+	}
+}
+
+FString* UMOAppearanceSubsystem::GetGroomPath(FMOCharacterAppearance& Appearance, EMOAppearanceCategory Slot)
+{
+	switch (Slot)
+	{
+	case EMOAppearanceCategory::Hair: return &Appearance.HairAssetPath;
+	case EMOAppearanceCategory::Eyebrows: return &Appearance.EyebrowsAssetPath;
+	case EMOAppearanceCategory::Eyelashes: return &Appearance.EyelashesAssetPath;
+	case EMOAppearanceCategory::Beard: return &Appearance.BeardAssetPath;
+	case EMOAppearanceCategory::Mustache: return &Appearance.MustacheAssetPath;
+	default: return nullptr;
+	}
+}
+
+UGroomComponent* UMOAppearanceSubsystem::FindGroomComponent(const AActor* Actor, EMOAppearanceCategory Slot)
+{
+	const MOAppearancePrivate::FGroomSlot* Def = Algo::FindByPredicate(MOAppearancePrivate::GroomSlots, [Slot](const MOAppearancePrivate::FGroomSlot& S) { return S.Category == Slot; });
+	if (!Actor || !Def)
+	{
+		return nullptr;
+	}
+	TInlineComponentArray<UGroomComponent*> Components(Actor);
+	UGroomComponent* const* Found = Components.FindByPredicate([Def](const UGroomComponent* C) { return C->GetName().StartsWith(Def->Name); });
+	return Found ? *Found : nullptr;
+}
+
 bool UMOAppearanceSubsystem::ApplyHair(AMOMetaHumanCharacter* Character, const FString& HairAssetPath)
 {
-	// Groom components should be added and configured in Blueprint subclasses
-	// This function is deprecated - manage grooms directly in your character Blueprint
-	UE_LOG(LogMOFramework, Warning, TEXT("UMOAppearanceSubsystem::ApplyHair is deprecated. Add groom components in Blueprint."));
-	return false;
+	FMOCharacterAppearance HairOnly;   // every other groom path empty: those slots stay as they are
+	HairOnly.HairAssetPath = HairAssetPath;
+	return ApplyGroomsToCharacter(Character, HairOnly, /*bWaitUntilReady=*/false);
+}
+
+TArray<FSoftObjectPath> UMOAppearanceSubsystem::FindGroomBindingPaths(const FSoftObjectPath& Groom)
+{
+	// The binding's Groom property is AssetRegistrySearchable: the registry names each binding's groom without loading it.
+	TArray<FSoftObjectPath> Paths;
+	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+	TArray<FAssetData> Bindings;
+	Registry.GetAssetsByClass(UGroomBindingAsset::StaticClass()->GetClassPathName(), Bindings);
+	for (const FAssetData& Binding : Bindings)
+	{
+		FString Tag;
+		if (Binding.GetTagValue(TEXT("Groom"), Tag) && FSoftObjectPath(FPackageName::ExportTextPathToObjectPath(Tag)) == Groom)
+		{
+			Paths.Add(Binding.GetSoftObjectPath());
+		}
+	}
+	return Paths;
+}
+
+UGroomBindingAsset* UMOAppearanceSubsystem::FindGroomBinding(const UGroomAsset* Groom, const USkeletalMesh* Face)
+{
+	if (!Groom || !Face)
+	{
+		return nullptr;
+	}
+	for (const FSoftObjectPath& Path : FindGroomBindingPaths(FSoftObjectPath(Groom)))
+	{
+		UGroomBindingAsset* Asset = Cast<UGroomBindingAsset>(Path.TryLoad());
+		if (Asset && Asset->GetTargetSkeletalMesh() == Face)
+		{
+			return Asset;
+		}
+	}
+	return nullptr;
+}
+
+bool UMOAppearanceSubsystem::ApplyGroomsToCharacter(AMOMetaHumanCharacter* Character, const FMOCharacterAppearance& Appearance, bool bWaitUntilReady,
+	bool* bOutPending, bool* bOutChanged)
+{
+	if (bOutPending)
+	{
+		*bOutPending = false;
+	}
+	if (bOutChanged)
+	{
+		*bOutChanged = false;
+	}
+	// Before BeginPlay the Blueprint's groom components do not exist yet (a deferred spawn): AMOMetaHumanCharacter::ApplySkinLook applies them then.
+	if (!Character || Character->GetNetMode() == NM_DedicatedServer || !(Character->HasActorBegunPlay() || Character->IsActorBeginningPlay()))
+	{
+		return true;
+	}
+	USkeletalMeshComponent* Face = Character->GetFaceMesh();
+	FMOCharacterAppearance Paths = Appearance;
+	bool bAllLoaded = true;
+	for (const MOAppearancePrivate::FGroomSlot& Slot : MOAppearancePrivate::GroomSlots)
+	{
+		const FString& Path = *GetGroomPath(Paths, Slot.Category);
+		if (Path.IsEmpty())
+		{
+			continue;   // the Blueprint's own groom
+		}
+		UGroomAsset* Groom = nullptr;
+		if (Path != FMOCharacterAppearance::NoGroom)
+		{
+			Groom = Cast<UGroomAsset>(FSoftObjectPath(Path).TryLoad());
+			if (!Groom)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s: no groom at '%s' for %s; the slot keeps what it has"), *Character->GetName(), *Path, Slot.Name);
+				bAllLoaded = false;
+				continue;
+			}
+		}
+		UGroomComponent* Component = FindGroomComponent(Character, Slot.Category);
+		if (Component ? Component->GroomAsset == Groom : Groom == nullptr)
+		{
+			continue;   // already wearing it (or nothing to take off)
+		}
+		if (!Face || !Face->GetSkeletalMeshAsset())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s has no face mesh: %s groom not applied"), *Character->GetName(), Slot.Name);
+			continue;
+		}
+		UGroomBindingAsset* Binding = Groom ? FindGroomBinding(Groom, Face->GetSkeletalMeshAsset()) : nullptr;
+		// The slot keeps what it wears until the new groom (and its binding) can draw: swapped in earlier, the component drops the old groom's
+		// resources and draws nothing -- bald -- while an editor build caches the new one's data (seconds) or a packaged one streams it (Wes,
+		// Oct 25 2026: "it takes like 5-10 seconds for hair changes to take effect, until it updates they look bald").
+		if (Groom && bWaitUntilReady && !(Groom->IsValid() && (!Binding || Binding->IsValid())))
+		{
+			if (bOutPending)
+			{
+				*bOutPending = true;
+			}
+			continue;
+		}
+		if (bOutChanged)
+		{
+			*bOutChanged = true;
+		}
+		if (!Component)
+		{
+			// The survivor Blueprint has no beard / mustache component: one like the MetaHuman Blueprint's, on the face at its bone.
+			Component = NewObject<UGroomComponent>(Character, MakeUniqueObjectName(Character, UGroomComponent::StaticClass(), Slot.Name));
+			Component->AttachmentName = Slot.Bone;
+			// Its physics in the head's space like the Blueprint's hair (the engine default, the skeleton's root, shakes a beard with every sway).
+			if (const UGroomComponent* Hair = FindGroomComponent(Character, EMOAppearanceCategory::Hair))
+			{
+				Component->SimulationSettings.SimulationSetup = Hair->SimulationSettings.SimulationSetup;
+				Component->PhysicsAsset = Hair->PhysicsAsset;
+			}
+			else
+			{
+				Component->SimulationSettings.SimulationSetup.LocalBone = TEXT("head");
+				Component->SimulationSettings.SimulationSetup.LinearVelocityScale = 0.5f;
+				Component->SimulationSettings.SimulationSetup.AngularVelocityScale = 0.5f;
+			}
+			Component->SetupAttachment(Face);
+			Component->RegisterComponent();
+			Character->AddInstanceComponent(Component);
+		}
+		Component->EmptyOverrideMaterials();   // the old groom's material overrides (the MetaHuman assembly's per-wardrobe instances) don't fit the new groom
+		Component->SetGroomAsset(Groom, Binding);
+		MOAppearancePrivate::ApplyHairSimulationSetting(Component);
+		if (Groom && !Binding)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s: no binding of %s to %s -- the groom is projected at run time (Content/Python/make_groom_bindings.py makes one)"),
+				*Character->GetName(), *Groom->GetName(), *Face->GetSkeletalMeshAsset()->GetName());
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: %s -> %s"), *Character->GetName(), Slot.Name, Groom ? *Groom->GetName() : TEXT("none"));
+	}
+	return bAllLoaded;
 }
 
 bool UMOAppearanceSubsystem::ApplyBodyParameters(AMOMetaHumanCharacter* Character, float BodyFat, float MuscleMass, float Height)

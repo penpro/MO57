@@ -64,6 +64,12 @@
 
 ## 3. Editor, Python bridge and MCP
 
+- **A package redirect cannot rename the OBJECT** (Oct 25, MetaHuman groom import): `+PackageRedirects=(OldName=".../MI_PeachFuzz", NewName=
+  ".../MI_Facial_Hair")` loads the new package but still looks for an object named `MI_PeachFuzz` in it -> the import fails and the slot is
+  left empty -> redirect only to a package holding the same object name, and fix the rest after the resave (`resave_metahuman_grooms.py`).
+- **Python `set_editor_property` on a COMPONENT in a running game re-runs the Blueprint construction script** (Oct 25): the notify path
+  (PostEditChange) rebuilt the pawn's Blueprint components -- the probe then toggled a `TRASH_GroomComponent_0` -> pass
+  `unreal.PropertyAccessChangeNotifyMode.NEVER` as the third argument for live probes.
 - **`unreal.Rotator(0, 0, yaw)` does not set the yaw in 5.8 editor Python** -> spawned items came out rolled over and physics
   dropped them upside down -> always pass keywords: `unreal.Rotator(pitch=0, yaw=y, roll=0)`. (Oct 17)
 - **`HitResult` has no attributes in 5.8 Python** (`.blocking_hit`, `.impact_point` raise) -> `hit.to_tuple()`: [0] blocking,
@@ -142,6 +148,11 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **`MO.Test.HitTest` does not click** (Oct 25): it only asks Slate where a real click at a widget's centre WOULD land (REACHES /
+  BLOCKED). Style swaps logged after a hit test were Wes clicking in the instance window. `MO.Test.ClickWidget` clicks (simulated).
+- **Screenshots seconds apart cannot measure jitter** (Oct 25, groom hair): the idle animation and the wind move more between two `shot`s
+  than any per-frame fault -> consecutive frames (`Tools/motion_probe.py capture`, ~23 fps of a game window), a frozen body
+  (`set_component_tick_enabled(False)` on its skeletal meshes) or Wes's eye. `r.DumpingMovie 1` writes MovieFrame*.png asynchronously.
 - **One driver per instance** (Oct 22): the bridge is a command FILE each call appends to (`ue_cmd.txt`). Two processes sending to one
   instance at once (a probe from a shell while `review_shots.py` drives it) can interleave their lines: a `HighResShot` never ran and the
   shot was lost. While a tool drives an instance, start your own (`ue.py inst start <other name>`) instead of sending to its.
@@ -319,6 +330,10 @@
 
 ## 10. World features and content import
 
+- **The MetaHuman groom library is not in the 5.8 install** (Oct 25): the launcher's optional "MetaHuman Creator Core Data" (the
+  MetaHumanCharacter plugin's `Content/Optional`, 5.6 GB) is only in `D:/UnrealEngine/UE_5.7` here (DARKTOWER has none). `Content/MetaHumans`
+  is gitignored, so the 70 imported grooms and their bindings live only on this PC: a fresh clone re-runs `Tools/import_metahuman_grooms.py`
+  (its docstring has the redirect recipe) -> `resave_metahuman_grooms.py` -> `make_groom_bindings.py`.
 - **A Blueprint composition ignores its seed / sweep** -> its PCG component exists only after FinishSpawning -> bind and set after it;
   `CleanupLocal` before regenerating (GenerateLocal(force) ADDS instances). Editor-world PCG doesn't generate compositions: measure in PIE. (oct16, world-features)
 - **A white orb in a POI** -> ED PCGAsset elements bake editor markers (/Engine/BasicShapes) -> the feature subsystem hides them. (oct16)

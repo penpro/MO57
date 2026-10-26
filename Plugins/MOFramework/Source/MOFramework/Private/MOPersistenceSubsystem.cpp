@@ -1661,11 +1661,11 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         {
             IdentityComponent->SetGender(PawnRecord.Gender);
         }
-        // Only the colours over the pawn's own appearance: a record saved before appearances were captured holds the defaults (the look as
-        // shipped), and its empty mesh paths must not stand in for the pawn's.
+        // Only the look (colours, grooms) over the pawn's own appearance: a record saved before appearances were captured holds the defaults
+        // (the look as shipped), and its empty mesh paths must not stand in for the pawn's (an empty groom path keeps the pawn's own groom too).
         if (AMOMetaHumanCharacter* MetaHuman = Cast<AMOMetaHumanCharacter>(DeferredPawn))
         {
-            MetaHuman->SetAppearanceColors(PawnRecord.Appearance);
+            MetaHuman->SetAppearanceLook(PawnRecord.Appearance);
         }
 
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);

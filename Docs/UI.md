@@ -200,6 +200,25 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
 ### Main menu: New Game creates a world (Oct 22)
 - `WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards, the World and Pace knobs, Defaults / Back / Start. The rows
   and cards are made at run time from the knob table and DT_Biomes (`Docs/World_Creation.md`); spec `Content/Python/ui_specs/world_creation.py`.
+### Character creator: hair, beard and mustache styles; orbit; no outside close (Oct 25)
+- `WBP_CharacterCreatorPanel` (`UMOCharacterCreatorPanel`, spec `kit_character_creator.py`) frames the new game's first survivor in the world.
+  Rows: name, skin tone, hair colour, red in the hair, eyes, then **Hair style / Beard / Mustache** pickers ("<  Side swept fringe (medium)  >";
+  None -- "Bald" for hair -- first, then the library short to long). Face and body stay "coming soon".
+- The styles are the MetaHuman Creator groom library: 38 hair, 16 beards / goatees, 16 mustaches under
+  `/Game/MetaHumans/Common/Optional/Grooms/GroomAssets` (`UMOAppearanceSubsystem` catalogs `HairContentPath`; names by `MakeGroomDisplayName`).
+  A choice is a groom path in `FMOCharacterAppearance` (`HairAssetPath`, `BeardAssetPath`, `MustacheAssetPath`; empty = the Blueprint's own
+  groom, `FMOCharacterAppearance::NoGroom` = none), set on the pawn with `AMOMetaHumanCharacter::SetAppearanceLook` (replicated, saved; a save
+  restores it, a joiner sees it). `UMOAppearanceSubsystem::ApplyGroomsToCharacter` swaps each slot's groom component (Hair, Eyebrows1, Beard,
+  Mustache; it creates the beard / mustache components the survivor Blueprint lacks) with the groom's binding to the face (`FindGroomBinding`).
+- **No bald gap:** a slot keeps its old groom until the new groom and binding can draw (`UGroomAsset::IsValid`, `UGroomBindingAsset::IsValid`);
+  `AMOMetaHumanCharacter::ApplyGrooms` retries every 0.2 s with the latest look (30 s timeout, then it swaps anyway) and re-tints the new groom.
+  The panel preloads the styles either side of each current one (`PreloadGroomNeighbours`), so a step usually swaps at once (Wes: "it takes
+  like 5-10 seconds for hair changes to take effect, until it updates they look bald").
+- **The world behind the panel is `OrbitArea`** (a transparent, hit-testable Border first in the canvas): a left or right drag orbits the camera
+  round the survivor (yaw free, pitch -15..40 deg, 0.35 deg per pixel), the wheel zooms 110-420 cm, and the camera is swept out of any slope or
+  trunk behind them (`PlacePreviewCamera`). A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
+  "if you click into the world ... it closes the character builder"; "click drag the world to pivot the camera around the character").
+- Randomize picks colours and a hair style (never bald) and takes any beard / mustache off.
 ### Inventory menu: the transfer buttons follow the visible panel (Oct 18)
 - `UMOUnifiedInventoryMenu::GetTransferTarget()` is the one rule for "<" / ">" / "<<" / ">>": the open container on its tab (all four), the
   ground on Nearby ("<<" picks up all, ">>" drops all), nothing on Gear / Details (all four disabled). Never act on a container the panel

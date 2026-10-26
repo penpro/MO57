@@ -1613,3 +1613,11 @@ References: CL-0187
 ### 2026-10-25 16:50 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0189
 Status: RELEASE editor (closed) + build window (CL-0188 done). Wes's Oct 25 evening reports BR25-15..21: western cliff bands as a POI row with the new `bClusterLine` layout (Codex: FMOWorldFeatureDefinitionRow gained `bClusterLine`; UMOWorldFeatureSubsystem gained `FindRow`), `poi` stands at the nearest member, the Dark Ruins rows are off, the cook hook scans PCG package files (the ED spires' meshes now cook), TRELLIS crags x0.4-0.8 / 2.5x / two-sided. Development package in Saved/StagedBuilds_DevTest is current.
 References: CL-0188
+
+### 2026-10-25 17:20 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0190
+Status: CLAIM editor + build window -- hair styles for the character creator (Wes: "grab all the other hair styles from the metahumans pipeline and prepare them for use in the character customization screen"). Source: the MetaHuman Creator Core Data in the UE 5.7 install (Optional/Grooms: 38 hair, 16 beards, 16 mustaches). Files TBD: Content/MetaHumans/Common/Optional/Grooms (imports), MOAppearanceSubsystem, MOCharacterCreatorPanel, BP_MOMetaHuman_Female grooms.
+References: CL-0189
+
+### 2026-10-25 23:05 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0191
+Status: PROGRESS (CL-0190 still holds the build window; editor closed, game instance `hair` open for Wes). Hair styles in the character creator: the MetaHuman groom library (70 grooms, Content/MetaHumans -- gitignored, rebuilt by Tools/import_metahuman_grooms.py -> resave_metahuman_grooms.py -> make_groom_bindings.py), FMOCharacterAppearance groom paths + NoGroom, UMOAppearanceSubsystem::ApplyGroomsToCharacter / FindGroomBinding / MO.Hair.Simulation, AMOMetaHumanCharacter::SetAppearanceLook (was SetAppearanceColors) + ApplyGrooms, creator pickers + OrbitArea orbit + no outside close. Open: Wes sees the hair shift / halo during head motion (investigating; not physics, not AA).
+References: CL-0190
