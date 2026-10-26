@@ -41,7 +41,6 @@
 | F35 | How much a novice's treatment does | A treatment's quality is `clamp(skill / 100, 0.1, 1) + (skill - minimum) x QualitySkillScaling / 100` (`UMOAnatomyComponent::ApplyResolvedTreatment`), on skills that run to 100: an unskilled person's bandage (Medicine 0) cuts the bleeding by 0.7 x 0.1 = **7 %**, and even Medicine 10 only ~9 %; a tourniquet anyone ties stops 10 %. Real first aid is the other way round: direct pressure and a dressing, or a tourniquet, work in untrained hands (that is why they are taught to everyone); skill shows in the hard procedures (suture, reducing a dislocation). Every player and the new colony medic start near 0. **A** a floor by the treatment's own minimum skill: a row whose `MinimumSkillLevel` is 0 or 1 (bandage, tourniquet, clean, painkiller) starts at quality ~0.6 and reaches 1.0 by Medicine 30; harder rows keep today's curve; **B** one curve for all, quality 0.4 at skill 0 to 1.0 at 50; **C** keep. **Recommended: A** | `Docs/Medical_And_Survival.md` §7 | Oct 20 |
 | F36 | A first-aid dressing before cloth (N-062) | MakeBandage needs WovenCloth01, which needs flax or wool (no producer yet), so for the whole stone age nobody can dress a wound -- and the colony medic (Oct 20) has nothing to carry. Before cloth people used pads of soft plant fibre or inner bark bound with cordage, sphagnum moss, and hide strips. **A** a new item, a fibre dressing (bark fibre pad + cordage, both made today), with its own treatment row a little weaker than the cloth bandage (bleed 0.5 against 0.7, infection 0.1 against 0.3: absorbent, not clean); **B** the same recipe making the existing Bandage01 (no new item; a cloth bandage in name only); **C** a moss dressing (needs a moss resource on forest floors and bogs first). **Recommended: A** (then C when moss exists) | `Docs/PROGRESSION_ROADMAP.md` section 3 (realism checks) | Oct 20 |
 | F37 | How a HOSTED new world gets its creation settings (N-198) | The New Game panel now sets a world's shape, pace and start; the Host Game panel (camp name, max players) starts a new world with the defaults. **A** a "Host for co-op" toggle (+ camp name / max players) on the New Game panel: one place creates a world, hosting is how it opens; the Host panel keeps hosting a SAVED world. B: the same knobs and cards repeated on the Host panel. C: leave hosted new worlds at the defaults | `Docs/World_Creation.md` | Oct 22 |
-| F40 | Hair physics on far expeditions (F39 option B could not be built) | **A** keep option D (physics within 5 km of the origin; steady, no sway, farther out) and post the drafted report to Epic (`Docs/EnginePatches/0003-upstream-report.md`); B rebuild the engine's own HairStrands plugin in place with `RunUAT BuildPlugin` + the staged patch (changes the shared launcher install outside git; redone after every engine update and on DARKTOWER; the patch alone may not be enough: an attach-bone experiment showed other absolute-float paths); C a source-built engine, which would also carry staged patches #1 (hair depth under water) and #2 (Nanite shader swap): hours of build, ~100+ GB. **Recommended: A** now; C once more engine patches pile up | `Docs/Engine_Patches.md` #3 | Oct 26 |
 | F23 | Rejected Steam art | `SteamArt/` (~15 MB LFS, pushed): delete only if Wes says so | `SteamArt/README.md` | Oct 13 |
 
 ## Answered 2026-10-17 (knowledge consolidation; Wes's words)
@@ -61,6 +60,21 @@
 ## Decisions, newest first
 
 ### 2026-10-26
+- **F40: leave it as is** (Wes: "Leave it as is for now then", after asking whether a source engine means compiling the engine every build):
+  hair physics stays within 5 km of the origin (F39 D); the drafted Epic report waits for Wes. Removed from the open forks.
+- **Creative worlds build and craft instantly** (Wes: "in creative mode make it so building happens instantly, no build time etc"; "also
+  add crafting items to creative mode", read as the same for crafting): `FMOWorldRules::IsInstant`; the Principle 11 exception (CLAUDE.md).
+- **A building mode beside Explore and Terraform** (Wes: "make a 'building' mode [next to] the terraforming and exploration mode where we can
+  see the build ghosts better"): `Docs/Building.md`. Claude's small calls, noted: B is the mode's key (enter + menu; B with the menu open
+  leaves; B with it closed reopens it; B while placing cancels back to the menu); Back closes the menu and keeps the mode, Back with nothing
+  open leaves it; T and B exclude each other; the plans keep the Oct 24 dimmer tint (by eye).
+- **Climbing and vaulting** (Wes: "we need to implement climbing of cliffs / trees and we need a vault mechanic to hop / pull up on things"):
+  `Docs/Movement_And_Traversal.md`. Claude's small calls, noted: Jump is the one verb (vault / hop up / pull-up / grab), crouch lets go and
+  is used up by it, a grab from the ground needs the input pushing at the face, built things are not climbable, climbing costs 3 stamina / s.
+- **The survivor is "femme"; "masc" is a coming-soon customization** (Wes: "make the existing character 'femme' and mark 'masc' as a
+  customization coming soon"). Settles the creator side of F15 for now.
+- **Farming, animal husbandry and more animals** (Wes: "let's get farming, animal husbandry, and some other animals going. We will need
+  horses, pigs, cows, etc plus bears, rabbits, birds, chickens, I'm sure there's more"): in progress (BACKLOG).
 - **F39 option B tried and blocked** (Wes: "Try F39 option B ... on its own branch, and measure it"): UnrealBuildTool refuses a project copy
   of the Groom plugin because engine plugins (Interchange, MetaHumanSDKEditor) depend on it -- a hard-coded rule. No branch was pushed (the
   copy cannot build); the patch is staged as `Docs/EnginePatches/0003-hair-simulation-relative-transform.patch`. Next step: fork F40.

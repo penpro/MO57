@@ -1,4 +1,5 @@
 #include "MOCharacter.h"
+#include "MOBuildingComponent.h"
 #include "MOAIController.h"
 #include "MOCreature.h"
 #include "MOCreatureDefinitionRow.h"
@@ -2242,6 +2243,18 @@ UMOMetabolismComponent* AMOCharacter::GetMetabolism_Implementation() const
 void AMOCharacter::ToggleTerraformMode()
 {
 	bTerraformingMode = !bTerraformingMode;
+
+	// Terraform and building mode exclude each other (B leaves Terraform the same way).
+	if (bTerraformingMode)
+	{
+		if (const AController* OwnerController = GetController())
+		{
+			if (UMOBuildingComponent* Building = OwnerController->FindComponentByClass<UMOBuildingComponent>())
+			{
+				Building->SetBuildingMode(false);
+			}
+		}
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Terraform mode %s"),
 		*GetName(),

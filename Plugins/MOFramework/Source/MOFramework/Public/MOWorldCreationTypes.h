@@ -235,9 +235,17 @@ struct MOFRAMEWORK_API FMOWorldRules
 	/** The multiplier for this activity in WorldContext's world (1 with no MO game state, e.g. the editor or a test world). */
 	static float GetPace(const UObject* WorldContext, EMOWorldPace Activity);
 
-	/** Seconds of a timed activity in this world: Seconds x the activity's pace (never below a tenth). */
+	/** Seconds of a timed activity in this world: Seconds x the activity's pace (never below a tenth); 0 for an instant one (IsInstant). */
 	static float ScaleSeconds(const UObject* WorldContext, EMOWorldPace Activity, float Seconds);
 
-	/** Creative mode (FMOWorldCreationSettings::CreativeMode): crafting and building cost no materials. False with no MO game state. */
+	/** Creative mode (FMOWorldCreationSettings::CreativeMode): crafting and building cost no materials and take no time. False with no MO game state. */
 	static bool IsCreative(const UObject* WorldContext);
+
+	/**
+	 * Whether this activity takes no time in this world: building and crafting in a creative world (Wes, Oct 26 2026: "in creative mode make it so
+	 * building happens instantly, no build time"; crafting the same). The one exception to Principle 11 -- a world rule chosen when the world is
+	 * created, never a skip inside a survival world. Pure on (bCreative, Activity) through IsInstantActivity: unit-tested.
+	 */
+	static bool IsInstant(const UObject* WorldContext, EMOWorldPace Activity);
+	static bool IsInstantActivity(bool bCreative, EMOWorldPace Activity);
 };

@@ -63,6 +63,39 @@ pieces) the engine drew its default grey material instead ("Invalid material ...
 `RestoreOriginalMaterials` gives Nanite back (the component's own setting is saved with its materials). Verified: placing a campfire and
 a stick wall logs no Nanite warning (the build before logged one for each).
 
+### Building mode: where the plans show (Oct 26)
+
+Wes, Oct 26: "make a 'building' mode [next to] the terraforming and exploration mode where we can see the build ghosts better". Since BR25-4
+(Oct 25: "make them not visible if you're not in build mode trying to place an item") a planned, unbuilt building's ghost is hidden in
+Explore. **Building mode** (`UMOBuildingComponent::SetBuildingMode`, a local view mode: nothing replicates) shows every plan on this machine
+(`IsLocalPlayerBuilding`; placing counts as building mode) and the HUD says Build. Keys (Claude's small calls, noted in DECISIONS):
+
+- **B** outside the mode enters it and opens the build menu; B with the menu open closes it and leaves the mode (the menu's own toggle-key
+  path, `TryCloseMenuForToggleKey`, does the same when it holds focus); B with the menu closed reopens it; B while placing cancels the
+  placement and shows the menu again.
+- **Back** (Esc / Tab) closes the menu and keeps the mode; Back with nothing open leaves the mode (before it would open the system menu).
+- **T** (terraform) leaves building mode, and B leaves terraform: the two modes exclude each other.
+- The plans wear the Oct 24 dimmer tint (`PlannedColor` alpha 0.3, `PlannedGlow` 0.5); whether they read well enough in the mode is on
+  Wes's by-eye list.
+
+Verified in a game (one instance, real input actions): a placed campfire plan -- Explore 0 of 30 meshes shown; B: the 10 stones shown;
+B again: hidden; B, Back (mode kept), T: left; B, Back, Back: left.
+
+### A finished building always shows (Oct 26 fix)
+
+`AMOBuildableActor::EnterCompletedState` re-shows every part (`ApplyStagedParts` all, `ApplyGhostVisibility`). Before, only the live
+construction path did (`HandleBuildStateChanged` -> `RefreshBuildStateVisual`), so a building that came straight to Complete stayed hidden
+on the host where its plan had been hidden: a survivor's beacon fire (`FinishAsBuilt`, BR25-4's hidden plan) and a loaded finished building.
+Found by the building-mode check (the beacon fire turned visible when the mode refreshed it); verified: the beacon fire visible in Explore, a
+creative-built campfire visible, and still visible after a save and a reload.
+
+### Creative worlds build instantly (Oct 26)
+
+Wes: "in creative mode make it so building happens instantly, no build time etc". A building placed in a creative world is finished where it
+is placed (`ServerPlaceBuilding` -> `UMOBuildProgressComponent::CompleteInstantly`, credited to the placer), and every build time in it reads
+"Instant" (`FMOWorldRules::ScaleSeconds` returns 0 for building and crafting in a creative world; `Docs/World_Creation.md`). Survival worlds
+are unchanged. Verified: `MO.Test.PlaceBuildingRPC` in a creative world logs "built instantly (creative world)".
+
 ### Staged parts: it goes up piece by piece (Oct 24)
 
 Wes: "while it's building it will switch each stone to it's proper texture as the building timer fills up" (the campfire) and "they become

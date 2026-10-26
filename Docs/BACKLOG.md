@@ -22,6 +22,8 @@ word in `Docs/BugReports_2026-10-23.md` § Wes's votes): thumbs up = row removed
 
 | What to look at | Where / how | Fixed looks like | From |
 |---|---|---|---|
+| Building mode's plans (Oct 26) | Place a plan, walk away, press B | the plans read clearly enough to find and work on (they keep the Oct 24 dimmer tint; say if they should be brighter in this mode) | Wes Oct 26 |
+| Climbing and vaulting feel (Oct 26) | Jump at a waist-high rock (hop up), a fence (vault), a 2 m ledge (pull up), a cliff or tree while pushing at it (grab, W / S / A / D, crouch to let go) | the moves happen where you expect; speeds and stamina cost feel right (no animations yet: N-218) | Wes Oct 26 |
 | The 70 MetaHuman hair / beard / mustache styles on the survivor (Oct 25) | New game -> the creator's Hair style / Beard / Mustache pickers; drag the world to see the back and sides. `Tools/groom_contact_sheet.py` makes a sheet per picker | each style sits on the head (no scalp through short hair, no floating), beards on the jaw; Hair_S_Coil, Hair_M_TwistedBraids and Hair_S_BrushCut were projected without their template head -- look at those three closely | hair styles (Oct 25) |
 | The survivor's hair in sunlight at the new starts (Oct 26) | New game (seed 20261025 is the case Wes saw); the creator, morning sun | brown hair reads brown, near and at a distance: in full sun the default (melanin 0.8) is bright copper / gold, an orange blob at 8-15 m (Wes: "at a distance it looks really odd"). Not the LOD (forced 0) and not the position (measured in open sky: `Docs/Engine_Patches.md` #3): the new start is an open sunlit clearing. If too light: a darker default melanin (the creator's Hair colour slider shows the range) | Wes Oct 26 |
 | The creator's orbit camera (Oct 25) | New game; left / right drag on the world, mouse wheel | the camera goes round the survivor smoothly, never into the ground or a trunk; the panel stays open | Wes Oct 25 |
@@ -93,7 +95,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth · F40 hair physics on far expeditions (option B could not build).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth.
 
 ## Collaboration dependencies and recent handoffs
 
@@ -206,6 +208,11 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
+| N-215 | DONE-2026-10-26 | Claude | Building mode beside Explore and Terraform (Wes: "where we can see the build ghosts better"): B / Back / T, plans shown only in it; a finished building now always shows (a survivor's beacon fire and loaded finished buildings were invisible on the host since BR25-4) | `Docs/Building.md` | Wes Oct 26 |
+| N-216 | DONE-2026-10-26 | Claude | Creative worlds build and craft instantly (Wes: "in creative mode make it so building happens instantly") | `Docs/Building.md`, `Docs/World_Creation.md` | Wes Oct 26 |
+| N-217 | DONE-2026-10-26 (mechanics; animations open: N-218) | Claude | Climbing (cliffs, rocks, trees) and a vault / hop up / pull-up (Wes: "we need to implement climbing of cliffs / trees and we need a vault mechanic") | `Docs/Movement_And_Traversal.md` | Wes Oct 26 |
+| N-218 | OPEN | Claude / Wes (assets) | Climb / vault / mantle ANIMATIONS: the body follows the right path in a stand-in pose. Needs animation assets (e.g. Epic's free Game Animation Sample traversal set, a Fab download through Wes's account) and the anim BP reading `IsClimbing` / `IsTraversing` | `Docs/Movement_And_Traversal.md` | Oct 26 |
+| N-219 | OPEN | Claude | A joiner climbing / vaulting on a listen server (the prediction path) and on real cliffs / trees in the world: built for it (saved moves), not yet run with two processes | `Docs/Movement_And_Traversal.md` | Oct 26 |
 | N-080 | WAITING | Wes | Excavation stage 6 UI (F8); building cancel / refund (F7) | DECISIONS | G22, G23 |
 | N-081 | DONE-2026-10-18 | Claude | `ServerPlaceBuilding` re-checked: the server holds the transform to the pawn's reach and build requests to `MaxBuildRequestReachCm`; the rest -> N-171 | Building §2 | H19 residual |
 | N-082 | DONE-2026-10-18 | Claude | `ServerApplyTerraform` re-checked: server reach (25 m) and a rate limit (80 % of the action time); the tool requirement is client-side only -> N-171 | OVERNIGHT_LOG | H17 |

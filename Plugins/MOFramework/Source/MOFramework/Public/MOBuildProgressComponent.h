@@ -405,6 +405,9 @@ public:
 	/** Start construction (all materials deposited) or resume a paused one, drawing from SourceFlags. Authority only. */
 	bool StartOrResume(UMOInventoryComponent* InBuilderInventory, uint8 SourceFlags);
 
+	/** Finish the building where it stands, credited to Builder (may be null): a creative world's placement (FMOWorldRules::IsInstant). Authority only. */
+	void CompleteInstantly(AActor* Builder);
+
 	/**
 	 * The ghost menu's Cancel: refund the deposited materials to the builder's inventory -- all of them before construction started, after it
 	 * 50 % + up to 45 % with the Construction skill, the rarest kept first; what the inventory cannot take drops at the builder's feet --

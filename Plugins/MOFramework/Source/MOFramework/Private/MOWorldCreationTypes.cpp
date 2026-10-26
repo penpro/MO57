@@ -188,7 +188,17 @@ float FMOWorldRules::GetPace(const UObject* WorldContext, EMOWorldPace Activity)
 
 float FMOWorldRules::ScaleSeconds(const UObject* WorldContext, EMOWorldPace Activity, float Seconds)
 {
-	return Seconds * GetPace(WorldContext, Activity);
+	return IsInstant(WorldContext, Activity) ? 0.0f : Seconds * GetPace(WorldContext, Activity);
+}
+
+bool FMOWorldRules::IsInstant(const UObject* WorldContext, EMOWorldPace Activity)
+{
+	return IsInstantActivity(IsCreative(WorldContext), Activity);
+}
+
+bool FMOWorldRules::IsInstantActivity(bool bCreative, EMOWorldPace Activity)
+{
+	return bCreative && (Activity == EMOWorldPace::Building || Activity == EMOWorldPace::Crafting);
 }
 
 bool FMOWorldRules::IsCreative(const UObject* WorldContext)

@@ -483,6 +483,11 @@ bool AMOBuildableActor::CanInteract(AController* Controller) const
 void AMOBuildableActor::EnterCompletedState()
 {
 	SetCompletedVisual();
+	// Every part shows now: the plan's ghost may have been hidden (no player here in building mode, BR25-4) while the building was a plan, and
+	// only the live construction path re-showed it (HandleBuildStateChanged). A survivor's beacon fire (FinishAsBuilt) and a loaded finished
+	// building come straight here: they stayed invisible on the host (found Oct 26 by the building-mode check).
+	ApplyStagedParts(GetStagedPartComponents().Num());
+	ApplyGhostVisibility();
 
 	// Promote the structural subtree from the unbuilt collision (the interaction
 	// trace only, ApplyUnbuiltCollisionTo) to BlockAll now that the building is
@@ -675,8 +680,8 @@ void AMOBuildableActor::RefreshBuildStateVisual()
 
 void AMOBuildableActor::ApplyGhostVisibility()
 {
-	// The placement preview is always drawn (it IS the placing); a plan only while a player here is placing.
-	const bool bShowPlans = bIsGhost || UMOBuildingComponent::IsLocalPlayerPlacing(GetWorld());
+	// The placement preview is always drawn (it IS the placing); a plan only while a player here is in building mode (placing included).
+	const bool bShowPlans = bIsGhost || UMOBuildingComponent::IsLocalPlayerBuilding(GetWorld());
 	TArray<UMeshComponent*> Meshes;
 	GetComponents<UMeshComponent>(Meshes);
 	for (UMeshComponent* Mesh : Meshes)

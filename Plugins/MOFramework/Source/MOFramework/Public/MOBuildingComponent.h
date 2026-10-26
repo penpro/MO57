@@ -264,12 +264,27 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Building")
 	bool IsInPlacementMode() const { return bInPlacementMode; }
 
-	/** Fires on this machine whenever one of ITS players enters or leaves placement mode: the planned, unbuilt buildings draw their ghosts only
-	 *  meanwhile (Wes, Oct 24 2026: "make them not visible if you're not in build mode trying to place an item"; AMOBuildableActor). */
+	/** Fires on this machine whenever one of ITS players enters or leaves placement or building mode: the planned, unbuilt buildings draw their
+	 *  ghosts only meanwhile (Wes, Oct 24 2026: "make them not visible if you're not in build mode trying to place an item"; AMOBuildableActor). */
 	static FSimpleMulticastDelegate& OnLocalPlacementModeChanged();
 
 	/** Is a player of this machine placing a building in World? */
 	static bool IsLocalPlayerPlacing(const UWorld* World);
+
+	/** Is a player of this machine in building mode (or placing) in World? The planned buildings show then. */
+	static bool IsLocalPlayerBuilding(const UWorld* World);
+
+	/**
+	 * Building mode, beside Explore and Terraform (Wes, Oct 26 2026: "make a 'building' mode [next to] the terraforming and exploration mode where
+	 * we can see the build ghosts better"): while it is on, every planned (unbuilt) building on this machine shows its ghost -- in Explore they
+	 * stay hidden (BR25-4) -- and the HUD says Build. A local view mode: nothing replicates. Leaving it cancels a placement.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void SetBuildingMode(bool bOn);
+
+	/** Building mode, or placing a building (placing is always part of it). */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	bool IsInBuildingMode() const { return bBuildingMode || bInPlacementMode; }
 
 	/**
 	 * Get the current placement recipe ID.
@@ -405,6 +420,9 @@ private:
 
 	/** Whether currently in placement mode. */
 	bool bInPlacementMode = false;
+
+	/** Building mode switched on (SetBuildingMode); placing counts as building mode too (IsInBuildingMode). */
+	bool bBuildingMode = false;
 
 	/** Current recipe being placed. */
 	FName CurrentRecipeId = NAME_None;

@@ -642,9 +642,9 @@ private:
 	void GetBuildingMeshes(TArray<UStaticMeshComponent*>& OutMeshes) const;
 
 	/**
-	 * The planned look is drawn only while a player of this machine is placing a building (UMOBuildingComponent::IsLocalPlayerPlacing; Wes, Oct 24 2026:
-	 * "make them not visible if you're not in build mode trying to place an item"). Every mesh wearing the ghost material is hidden otherwise and shown
-	 * again when placement starts; a built part (its own materials) is always shown. Collision is untouched: the interaction trace still finds a plan.
+	 * The planned look is drawn only while a player of this machine is in building mode or placing a building (UMOBuildingComponent::IsLocalPlayerBuilding;
+	 * Wes, Oct 24 2026: "make them not visible if you're not in build mode trying to place an item"; Oct 26: building mode "where we can see the build
+	 * ghosts better"). Every mesh wearing the ghost material is hidden otherwise and shown again when the mode starts; a built part is always shown. Collision is untouched: the interaction trace still finds a plan.
 	 */
 	void ApplyGhostVisibility();
 	void HandleLocalPlacementModeChanged();

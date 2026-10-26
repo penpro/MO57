@@ -164,7 +164,11 @@ means. The other principles ask "is this code right?". This one asks
 
 **Examples to reject, no matter how convenient they sound:**
 - "Instant build / instant dig / instant craft" modes for shipped
-  builds (cheat console commands for debug are a separate question)
+  builds (cheat console commands for debug are a separate question).
+  The one exception is a CREATIVE world (Wes, Oct 26 2026: "in creative
+  mode make it so building happens instantly"): a world rule chosen when
+  the world is created, through `FMOWorldRules::IsInstant` only -- never
+  a skip inside a survival world
 - "HP regen over time" — use the actual healing simulation
 - "Fast travel" that teleports between distant points — build roads,
   ride horses, take the journey

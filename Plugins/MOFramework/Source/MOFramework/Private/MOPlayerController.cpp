@@ -1622,14 +1622,36 @@ void AMOPlayerController::HandleJournal(const FInputActionValue& Value)
 void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 {
 	MOUI_LOG(this, "PC", "HandleBuild FIRED via Enhanced Input");
-	// If in placement mode, cancel it
+	// B is building mode (UMOBuildingComponent::SetBuildingMode, Wes Oct 26 2026), beside T for Terraform: placing -> cancel the placement and show
+	// the menu again; the menu open -> close it and leave the mode (TryCloseMenuForToggleKey does the same when the menu holds focus); in the mode
+	// with the menu closed -> the menu; outside it -> enter it (leaving Terraform) and open the menu.
 	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
 	{
 		BuildingComponent->ExitPlacementMode(true);
+		if (UIManagerComponent && !UIManagerComponent->IsBuildingMenuOpen())
+		{
+			UIManagerComponent->ToggleBuildingMenu();
+		}
 		return;
 	}
+	if (UIManagerComponent && UIManagerComponent->IsBuildingMenuOpen())
+	{
+		UIManagerComponent->ToggleBuildingMenu();
+		if (BuildingComponent)
+		{
+			BuildingComponent->SetBuildingMode(false);
+		}
+		return;
+	}
+	if (BuildingComponent && !BuildingComponent->IsInBuildingMode())
+	{
+		if (AMOCharacter* Builder = Cast<AMOCharacter>(GetPawn()); Builder && Builder->IsTerraformingMode())
+		{
+			Builder->ToggleTerraformMode();
+		}
+		BuildingComponent->SetBuildingMode(true);
+	}
 
-	// Otherwise toggle the building menu
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleBuildingMenu();
@@ -1656,7 +1678,7 @@ bool AMOPlayerController::TryCloseMenuForToggleKey(const FKey& Key)
 		{ CraftAction,        UI->IsCraftingMenuOpen(),  [UI]() { UI->ToggleCraftingMenu(); } },
 		{ SkillsAction,       UI->IsSkillsPanelOpen(),   [UI]() { UI->ToggleSkillsPanel(); } },
 		{ JournalAction,      UI->IsQuestLogOpen(),      [UI]() { UI->ToggleQuestLog(); } },
-		{ BuildAction,        UI->IsBuildingMenuOpen(),  [UI]() { UI->ToggleBuildingMenu(); } },
+		{ BuildAction,        UI->IsBuildingMenuOpen(),  [this, UI]() { UI->ToggleBuildingMenu(); if (BuildingComponent) { BuildingComponent->SetBuildingMode(false); } } },
 		{ PossessAction,      UI->IsPossessionMenuOpen(),[UI]() { UI->TogglePossessionMenu(); } },
 		{ PlayerStatusAction, UI->IsPlayerStatusVisible(), [UI]() { UI->TogglePlayerStatus(); } },
 	};
@@ -1696,6 +1718,10 @@ void AMOPlayerController::HandleBackMenu(const FInputActionValue& Value)
 		if (UIManagerComponent->IsAnyMenuOpen())
 		{
 			UIManagerComponent->CloseActiveMenu();
+		}
+		else if (BuildingComponent && BuildingComponent->IsInBuildingMode() && !BuildingComponent->IsInPlacementMode())
+		{
+			BuildingComponent->SetBuildingMode(false);   // Back leaves building mode before it opens the system menu
 		}
 		else
 		{

@@ -37,7 +37,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
 9. Production-ready = extension without modification: the next instance of a pattern touches one new file.
 10. Diagnose before designing the fix: one sentence naming the responsible layer.
 11. **The simulation IS the design** (first pillar: realism). Every system models its real phenomenon; no instant build / dig / craft in
-    shipped builds, no HP regen, no fast travel, no free skill use, no hidden timers, no game-y decay rates. **Tedium is not simulation:**
+    shipped builds (a creative world excepted: Wes, Oct 26 -- a world rule chosen at creation, `FMOWorldRules::IsInstant`), no HP regen, no fast travel, no free skill use, no hidden timers, no game-y decay rates. **Tedium is not simulation:**
     batching repeated gestures into one action with a combined real duration is fine, and tedium that can't be batched is delegated to
     pawns (`UMOSurvivorJobQueueComponent`). Before any instant / auto / fast-X mode ask: tune the simulation? player skipping it (refuse)?
     batching gestures (allow, combined timer, or a pawn job)? Never collapse a simulated action to zero.

@@ -644,6 +644,20 @@ bool UMOBuildProgressComponent::StartOrResume(UMOInventoryComponent* InBuilderIn
 	return Progress.State == EMOBuildState::Constructing;
 }
 
+void UMOBuildProgressComponent::CompleteInstantly(AActor* Builder)
+{
+	if (!CheckAuthority(TEXT("CompleteInstantly")) || Progress.State == EMOBuildState::Complete)
+	{
+		return;
+	}
+	if (Builder)
+	{
+		BuilderInventory = Builder->FindComponentByClass<UMOInventoryComponent>();   // FinalizeConstruction credits its owner (quests)
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] %s built instantly (creative world)"), *GetNameSafe(GetOwner()));
+	FinalizeConstruction();
+}
+
 int32 UMOBuildProgressComponent::CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted, int32 ConstructionSkillLevel)
 {
 	if (TotalDeposited <= 0)

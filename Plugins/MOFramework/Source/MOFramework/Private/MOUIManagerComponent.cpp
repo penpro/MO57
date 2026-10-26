@@ -2096,7 +2096,7 @@ void UMOUIManagerComponent::RefreshGameplayMode()
 	const AMOCharacter* Character = Controller ? Cast<AMOCharacter>(Controller->GetPawn()) : nullptr;
 	const UMOBuildingComponent* Building = GetOwner() ? GetOwner()->FindComponentByClass<UMOBuildingComponent>() : nullptr;
 	const EMOGameplayMode Mode = (Character && Character->IsTerraformingMode()) ? EMOGameplayMode::Terraform
-		: (Building && Building->IsInPlacementMode()) ? EMOGameplayMode::Build
+		: (Building && Building->IsInBuildingMode()) ? EMOGameplayMode::Build
 		: EMOGameplayMode::Explore;
 	if (Mode != CurrentGameplayMode)
 	{

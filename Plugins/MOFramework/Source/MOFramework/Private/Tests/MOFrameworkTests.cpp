@@ -1788,6 +1788,15 @@ bool FMOWorld_CreativeModeIsASwitch::RunTest(const FString& Parameters)
 	// CONTROL: the multiplier knobs are not switches.
 	const FMOWorldKnob* Crafting = FMOWorldCreation::FindKnob(TEXT("Crafting"));
 	TestTrue(TEXT("CONTROL: the crafting-time knob is a multiplier"), Crafting && !Crafting->bSwitch && Crafting->Default == 1.0f);
+
+	// A creative world builds and crafts instantly (Wes, Oct 26); everything else keeps its time, and a survival world keeps every time.
+	TestTrue(TEXT("creative: building is instant"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Building));
+	TestTrue(TEXT("creative: crafting is instant"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Crafting));
+	TestFalse(TEXT("creative: digging still takes its time"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Terraforming));
+	TestFalse(TEXT("creative: gathering still takes its time"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Gathering));
+	TestFalse(TEXT("survival: building takes its time"), FMOWorldRules::IsInstantActivity(false, EMOWorldPace::Building));
+	TestFalse(TEXT("survival: crafting takes its time"), FMOWorldRules::IsInstantActivity(false, EMOWorldPace::Crafting));
+	TestEqual(TEXT("no game state: a craft keeps its seconds"), FMOWorldRules::ScaleSeconds(nullptr, EMOWorldPace::Crafting, 12.0f), 12.0f);
 	return true;
 }
 

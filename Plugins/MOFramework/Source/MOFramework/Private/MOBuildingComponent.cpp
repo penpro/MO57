@@ -60,6 +60,7 @@
 #include "MOUIManagerComponent.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
+#include "MOWorldCreationTypes.h"
 #include "MOInventoryComponent.h"
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
@@ -205,6 +206,46 @@ FSimpleMulticastDelegate& UMOBuildingComponent::OnLocalPlacementModeChanged()
 {
 	static FSimpleMulticastDelegate Delegate;
 	return Delegate;
+}
+
+bool UMOBuildingComponent::IsLocalPlayerBuilding(const UWorld* World)
+{
+	if (!World)
+	{
+		return false;
+	}
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		const UMOBuildingComponent* Building = (PC && PC->IsLocalController()) ? PC->FindComponentByClass<UMOBuildingComponent>() : nullptr;
+		if (Building && Building->IsInBuildingMode())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UMOBuildingComponent::SetBuildingMode(bool bOn)
+{
+	if (bBuildingMode == bOn)
+	{
+		return;
+	}
+	bBuildingMode = bOn;
+	if (!bOn && bInPlacementMode)
+	{
+		ExitPlacementMode(/*bCancel=*/true);
+	}
+	if (AMOPlayerController* PC = GetOwningPlayerController())
+	{
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			UIManager->RefreshGameplayMode();
+		}
+	}
+	OnLocalPlacementModeChanged().Broadcast();   // the planned buildings show their ghosts in building mode
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Building mode %s"), bOn ? TEXT("on") : TEXT("off"));
 }
 
 bool UMOBuildingComponent::IsLocalPlayerPlacing(const UWorld* World)
@@ -618,6 +659,12 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 
 	Placed->InitializeBuilding(InRecipeId);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawned %s for recipe %s"), *Placed->GetName(), *InRecipeId.ToString());
+
+	// A creative world builds instantly (FMOWorldRules::IsInstant, Wes Oct 26): the plan is finished where it is placed -- no materials, no work.
+	if (FMOWorldRules::IsInstant(this, EMOWorldPace::Building) && Placed->BuildProgressComponent)
+	{
+		Placed->BuildProgressComponent->CompleteInstantly(const_cast<APawn*>(RequestingPawn));
+	}
 
 	// The site is cleared: the decorative ground cover (the AutoSweepTags scatter: grass, never harvestable plants) under and around the
 	// footprint goes, on every machine and in the save, through the same worked-ground zones a dig uses. A campfire used to sit in tall
