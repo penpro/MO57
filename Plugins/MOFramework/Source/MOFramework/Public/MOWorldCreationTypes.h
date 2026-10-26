@@ -137,6 +137,14 @@ struct MOFRAMEWORK_API FMOWorldCreationSettings
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
 	float CreativeMode = 0.0f;
+
+	/**
+	 * Where this world's (0,0) lies in the generator's field (cm, whole metres): the start the new game chose (AMOGameMode::ChooseNewWorldOrigin),
+	 * so the first survivor and the colony stand at the origin, where floats are finest (Wes, Oct 26 2026). Not a knob: set once by the game, saved
+	 * with the world (a world saved before has none: (0,0), its land unmoved) and published with the seed (FMOWorldSeedInfo::Origin).
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, SaveGame, Category="MO|World")
+	FVector2D WorldOrigin = FVector2D::ZeroVector;
 };
 
 /** Which part of the settings a knob belongs to (the panel shows Shape in one box, Pace and Rules in the other). */

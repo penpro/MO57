@@ -32,6 +32,9 @@
  * 3. CHANGING THE MATH CHANGES EVERY SAVED WORLD's base terrain. Bump
  *    FMOWorldGenParams::GeneratorVersion and update the golden checksum test
  *    (MOFramework.WorldGen.GoldenChecksum) deliberately, in the same commit.
+ * 5. TWO SPACES (2026-10-26). FMOWorldGenDomain works in the generator's FIELD; FMOWorldGen (the only face outside this module) works in
+ *    the WORLD, which is the field shifted by FMOWorldGenParams::Origin so a new world's start is (0,0). A position function added to the
+ *    domain gets a wrapper in MOWorldGenWorld.cpp and a line in MOFramework.WorldGen.OriginEquivalence; grid cells stay in the field.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -823,6 +826,25 @@ struct MOFRAMEWORKCORE_API FMOWorldGenParams
 	FName ForcedBiomeId;
 	int32 ForcedBiomeIndex = INDEX_NONE;
 
+	/**
+	 * Where the world's (0,0) lies in the generator's field (cm, whole metres): the start a new game chose, so the first survivor and the colony
+	 * stand at the world origin, where floats are finest (Wes, Oct 26 2026, after the hair simulation -- like the foliage wind before it -- broke
+	 * ~17 km out). Zero for every world made before (old saves) and for the main menu. FMOWorldGen (world space) adds it to every position it takes
+	 * and subtracts it from every position it returns; FMOWorldGenDomain works in the field itself. The island's centre is at -Origin in the world.
+	 * Part of the hash only when non-zero (an ordinary old world's identity and the golden checksum do not change).
+	 */
+	FVector2D Origin = FVector2D::ZeroVector;
+
+	/** The island's centre in world space. */
+	FVector2D GetWorldCentre() const { return -Origin; }
+
+	/** Whether a WORLD-space point is inside the world's square (WorldHalfSizeCm each way from its centre), MarginCm in from the border. */
+	bool IsInsideWorld(double X, double Y, double MarginCm = 0.0) const
+	{
+		const double Limit = (double)Tuning.WorldHalfSizeCm - MarginCm;
+		return FMath::Abs(X + Origin.X) <= Limit && FMath::Abs(Y + Origin.Y) <= Limit;
+	}
+
 	/** ComputeHash() as of Finalize(). The hot path (one call per voxel batch) uses this instead of re-hashing. */
 	uint32 CachedHash = 0;
 	uint32 GetHash() const { return CachedHash; }
@@ -958,7 +980,12 @@ struct FMOCoastalSearch
 	float MinClimateGroundWeight = 0.75f; // the spawn's ground must be at least this much CLIMATE biome (SampleSurfaceBiomeWeights): not shore sand / bare rock. 0 = off; no biomes = off
 };
 
-struct MOFRAMEWORKCORE_API FMOWorldGen
+/**
+ * The generator in its own FIELD: X / Y are positions in the noise field, whose (0,0) is the island's centre; the world's (0,0) lies at
+ * FMOWorldGenParams::Origin in it. Only the generator itself (MOWorldGen*.cpp) works in this space. Everything else uses FMOWorldGen below,
+ * which takes and returns WORLD positions.
+ */
+struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 {
 	/** The terrain seed for an int world seed when no graph is involved (graphs get FVoxelExposedSeed::GetSeed(), see UMOWorldSeedSubsystem::GetTerrainSeed). */
 	static int32 HashSeed(int32 Seed, uint32 Salt);
@@ -1207,4 +1234,78 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * (cliffs) that ResolveBiome picks wins outright -- slope edges stay crisp. Same inputs -> same answer on every machine. INDEX_NONE when no biome applies.
 	 */
 	static int32 PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature);
+};
+
+/**
+ * The generator in WORLD space -- what everything outside the generator calls (the Voxel node, PCG, water, caves, features, tools, tests).
+ * Each function is FMOWorldGenDomain's, with Params.Origin added to every position it takes and taken off every position it returns, so a world
+ * whose start was moved to (0,0) is the same land, shifted (MOFramework.WorldGen.OriginEquivalence holds every one to that, bit for bit).
+ * Private inheritance + using-declarations: only what takes no position is passed through as is; a position function added to FMOWorldGenDomain
+ * and not wrapped here is simply not callable through FMOWorldGen -- the compiler, not a reviewer, catches the omission.
+ * Cell indices (GetLakeInCell, GetSinkholeInCell, FLake::CellX/Y) stay in the generator's grid: get them with WorldToCell.
+ */
+struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
+{
+	// No position in, no position out.
+	using FMOWorldGenDomain::HashSeed;
+	using FMOWorldGenDomain::RunProbe;
+	using FMOWorldGenDomain::PinnedProbeHeight;
+	using FMOWorldGenDomain::PinnedProbeHeightNoWater;
+	using FMOWorldGenDomain::PinnedProbeCave;
+	using FMOWorldGenDomain::CaveFarCm;
+	using FMOWorldGenDomain::CavernMaxStepCm;
+	using FMOWorldGenDomain::CaveMaxLOD;
+	using FMOWorldGenDomain::NoSinkholeDistanceCm;
+	using FMOWorldGenDomain::IsWaterTierResolved;
+	using FMOWorldGenDomain::BiomeReliefAt;
+	using FMOWorldGenDomain::TemperatureAtHeight;
+	using FMOWorldGenDomain::ResolveBiome;
+	using FMOWorldGenDomain::SoftThreshold;
+	using FMOWorldGenDomain::HeightBlendBandCm;
+	using FLake = FMOWorldGenDomain::FLake;                 // Center in WORLD space when it comes from here; CellX / CellY in the generator's grid
+	using FBiomeWeight = FMOWorldGenDomain::FBiomeWeight;
+
+	/** The generator-grid cell holding a WORLD position (for GetLakeInCell / GetSinkholeInCell). */
+	static void WorldToCell(const FMOWorldGenParams& Params, double X, double Y, double CellCm, int64& OutCellX, int64& OutCellY);
+
+	// Caves.
+	static float SampleCaveDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float StepCm = 50.0f);
+	static float SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm = 50.0f);
+	static void FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out);
+	static bool FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Seed, const FVector2D& From, double MaxRadiusCm, FVector& OutMouth, float& OutSlopeDeg);
+	static void FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out);
+	static bool GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOSinkhole& Out);
+	static bool FindSinkholeAt(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, FMOSinkhole& Out);
+	static float DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	// Rock.
+	static EMOBedrock SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static FMOOreSample SampleOreIn(const FMOWorldGenParams& Params, EMOBedrock Bedrock, double X, double Y, double Z, int32 Seed);
+	static FMOOreSample SampleOre(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
+	static float SoilDepthCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static FMODigSample SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade = 0.2f);
+
+	// Ground and climate.
+	static FMOClimateSample SampleClimate(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static float SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm = 100.0f, FMOClimateSample* OutClimate = nullptr);
+	static float SampleBaseHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm = 100.0f, FMOClimateSample* OutClimate = nullptr);
+	static FMOTerrainSample SampleColumn(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm = 100.0f);
+	static int32 SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut);
+	static int32 PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature);
+
+	// Water.
+	static float ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm, float StepCm);
+	static bool GetLakeInCell(const FMOWorldGenParams& Params, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FLake& Out);
+	static void GetUplandLakesNear(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FLake>& Out);
+	static bool IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii = 1.0f);
+	static float UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static bool GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm);
+	static EMOWaterBodyKind ClassifyWaterBody(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static float UplandLakeBedWeight(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	// Spawn. FindCoastalSpawn searches round the island's centre (its DistanceFromOriginCm is from there); its Location comes back in world space.
+	static bool FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, FMOCoastalSpawn& Out, const FMOCoastalSearch& Search = FMOCoastalSearch());
+	static bool FindWaterFacingYaw(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float MaxDistanceCm, float& OutYawDegrees);
+	static int32 MeasureLandmassCells(const FMOWorldGenParams& Params, int32 Seed, double X, double Y, float CellCm, int32 MaxCells);
 };

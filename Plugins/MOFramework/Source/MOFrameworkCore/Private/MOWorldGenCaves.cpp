@@ -30,7 +30,7 @@ namespace
 	constexpr float CavernGradient = 1.4f;
 	constexpr float CavernSquash = 1.9f;
 
-	// LOD culls: a feature is evaluated while the sample spacing is at most this fraction of its radius (caverns: up to FMOWorldGen::CavernMaxStepCm). CaveMaxLOD reads the same.
+	// LOD culls: a feature is evaluated while the sample spacing is at most this fraction of its radius (caverns: up to FMOWorldGenDomain::CavernMaxStepCm). CaveMaxLOD reads the same.
 	constexpr float SinkholeStepFraction = 0.9f;
 	constexpr float TunnelStepFraction = 0.65f;   // v9: 0.65 x 160 cm keeps LOD1 (100 cm samples) carving the galleries
 
@@ -44,7 +44,7 @@ namespace
 	/** The cell's sinkhole without touching the ground (cheap, pure hashing). The 18% jitter margin keeps a sinkhole inside its own cell. */
 	bool SinkholeBasics(const FMOWorldGenTuning& T, int64 CellX, int64 CellY, int32 Seed, FSinkholeBasics& Out)
 	{
-		const uint32 S = (uint32)FMOWorldGen::HashSeed(Seed, SaltSinkhole);
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltSinkhole);
 		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.SinkholeChance)
 		{
 			return false;
@@ -63,7 +63,7 @@ namespace
 	 * is 1.8x radius flare with +25% wobble = 2.25x, the chamber is 2.4x. This must stay inside the cell's 18% jitter margin (the tests assert it for the defaults);
 	 * a sinkhole whose reach crosses its cell border would be cut off there.
 	 */
-	FORCEINLINE float SinkholeReach(const FSinkholeBasics& B) { return B.Radius * 2.4f + FMOWorldGen::CaveFarCm + 300.0f; }
+	FORCEINLINE float SinkholeReach(const FSinkholeBasics& B) { return B.Radius * 2.4f + FMOWorldGenDomain::CaveFarCm + 300.0f; }
 
 	/**
 	 * Ground height at a sinkhole centre. A pure function of (params, seed, cell); memoised per thread because a chunk of voxels asks for the same cell
@@ -90,7 +90,7 @@ namespace
 		E.CellY = CellY;
 		E.Seed = (uint32)Seed;
 		E.ParamsHash = P.GetHash();
-		E.Ground = FMOWorldGen::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
+		E.Ground = FMOWorldGenDomain::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
 		E.bValid = true;
 		return E.Ground;
 	}
@@ -114,19 +114,19 @@ namespace
 		FSinkholeBasics B;
 		if (!SinkholeBasics(T, CellX, CellY, Seed, B))
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
 		const float H2 = Dx * Dx + Dy * Dy;
 		const float Reach = SinkholeReach(B);
 		if (H2 > Reach * Reach)
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 		const float Ground = SinkholeGroundCm(P, CellX, CellY, Seed, B);
 		if (!SinkholeAllowed(P, B, Ground, Seed))
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 
 		const float Z0 = (float)Z;
@@ -136,7 +136,7 @@ namespace
 		// Shaft: flares to 1.8x over the top 9 m, walls wobble +-25% (a clean cylinder reads as a pipe, not a collapse).
 		const float Funnel = FMath::Clamp(1.0f - TDepth / 900.0f, 0.0f, 1.0f);
 		const double WobScale = 1.0 / (double)(B.Radius * 3.0f);
-		const float Wob = GradientNoise3(X * WobScale, Y * WobScale, Z * WobScale, (uint32)FMOWorldGen::HashSeed(Seed, SaltSinkholeWall));
+		const float Wob = GradientNoise3(X * WobScale, Y * WobScale, Z * WobScale, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltSinkholeWall));
 		const float RWall = B.Radius * (1.0f + 0.8f * Funnel * Funnel) * (1.0f + 0.25f * FMath::Clamp(1.5f * Wob, -1.0f, 1.0f));
 		const float DShaft = FMath::Max(FMath::Sqrt(H2) - RWall, ZBottom - Z0);
 
@@ -168,10 +168,10 @@ namespace
 		{
 			return Last.Gradient;
 		}
-		const float Hx = FMOWorldGen::SampleHeightCm(P, X + GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm)
-			- FMOWorldGen::SampleHeightCm(P, X - GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm);
-		const float Hy = FMOWorldGen::SampleHeightCm(P, X, Y + GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm)
-			- FMOWorldGen::SampleHeightCm(P, X, Y - GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm);
+		const float Hx = FMOWorldGenDomain::SampleHeightCm(P, X + GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm)
+			- FMOWorldGenDomain::SampleHeightCm(P, X - GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm);
+		const float Hy = FMOWorldGenDomain::SampleHeightCm(P, X, Y + GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm)
+			- FMOWorldGenDomain::SampleHeightCm(P, X, Y - GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm);
 		Last.BitsX = BitsX;
 		Last.BitsY = BitsY;
 		Last.Seed = (uint32)Seed;
@@ -217,7 +217,7 @@ namespace
 		}
 		const FMOWorldGenTuning& T = P.Tuning;
 		const double X = (double)Ix * ShoreLatticeCm, Y = (double)Iy * ShoreLatticeCm;
-		if (T.bCavesOnlyInLimestone && FMOWorldGen::SampleBedrock(P, X, Y, Seed) != EMOBedrock::Limestone)
+		if (T.bCavesOnlyInLimestone && FMOWorldGenDomain::SampleBedrock(P, X, Y, Seed) != EMOBedrock::Limestone)
 		{
 			Slot.Ix = Ix;
 			Slot.Iy = Iy;
@@ -230,7 +230,7 @@ namespace
 		const float LowCeiling = T.SeaLevelCm + FMath::Max(T.RiverMaxGroundAboveSeaCm + 600.0f, T.BasinRimMaxAboveSeaCm);
 		auto WetAt = [&P, &T, Seed, LowCeiling](double Sx, double Sy)
 		{
-			return 1.0f - Smooth01(LowCeiling, LowCeiling + 1500.0f, FMOWorldGen::SampleBaseHeightCm(P, Sx, Sy, Seed, T.VoxelSizeCm));
+			return 1.0f - Smooth01(LowCeiling, LowCeiling + 1500.0f, FMOWorldGenDomain::SampleBaseHeightCm(P, Sx, Sy, Seed, T.VoxelSizeCm));
 		};
 		float Wet = WetAt(X, Y);
 		const double R = (double)T.CaveShoreKeepOutCm;
@@ -248,7 +248,7 @@ namespace
 		}
 		if (Wet < 1.0f)
 		{
-			Wet = FMath::Max(Wet, 1.0f - Smooth01(12000.0f, 18000.0f, FMOWorldGen::UplandLakeShoreDistanceCm(P, X, Y, Seed)));
+			Wet = FMath::Max(Wet, 1.0f - Smooth01(12000.0f, 18000.0f, FMOWorldGenDomain::UplandLakeShoreDistanceCm(P, X, Y, Seed)));
 		}
 		Slot.Ix = Ix;
 		Slot.Iy = Iy;
@@ -294,22 +294,22 @@ namespace
 		const double InvLevel = 1.0 / (double)T.GalleryLevelWavelengthCm;
 		const double InvMask = 0.5 / (double)T.TunnelWavelengthCm;
 		const float DeepFade = Smooth01(T.CaveMaxDepthCm, T.CaveMaxDepthCm + T.CaveFadeCm, Depth);
-		const uint32 Base = (uint32)FMOWorldGen::HashSeed(Seed, SaltGallery);
-		float Best = FMOWorldGen::CaveFarCm;
+		const uint32 Base = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltGallery);
+		float Best = FMOWorldGenDomain::CaveFarCm;
 		for (int64 K = K0 - 1; K <= K0 + 1; ++K)
 		{
 			const uint32 Salt = Base ^ (uint32)((uint64)K * 0x9E3779B97F4A7C15ull >> 32);
 			const FNoise2 Level = GradientNoise2(X * InvLevel, Y * InvLevel, Salt ^ SaltGalleryLevel);
 			const double Zc = ((double)K + 0.5) * Spacing + (double)(T.GalleryLevelAmplitudeCm * Level.Value);
 			const float Dz = (float)(Z - Zc) * T.TunnelVerticalSquash;
-			if (FMath::Abs(Dz) > RMax + FMOWorldGen::CaveFarCm)
+			if (FMath::Abs(Dz) > RMax + FMOWorldGenDomain::CaveFarCm)
 			{
 				continue;
 			}
 			const FNoise2 Path = GradientNoise2(X * InvPath, Y * InvPath, Salt ^ SaltGalleryPath);
 			const float PathGrad = FMath::Sqrt(Path.Dx * Path.Dx + Path.Dy * Path.Dy);
 			const float Dxy = FMath::Abs(Path.Value) * T.TunnelWavelengthCm / FMath::Max(PathGrad, GalleryPathGradientFloor);
-			if (Dxy > RMax + FMOWorldGen::CaveFarCm)
+			if (Dxy > RMax + FMOWorldGenDomain::CaveFarCm)
 			{
 				continue;
 			}
@@ -339,7 +339,7 @@ namespace
 			const float Gate = FMath::Max(FMath::Max3(Shallow, DeepFade, LowGround), HighGround);
 			const float Dg = FMath::Sqrt(Dxy * Dxy + Dz * Dz) - Radius;
 			// The penalty cancels the deepest possible interior and adds CaveFarCm: with a gate closed the term is saturated; in between it tapers.
-			Best = FMath::Min(Best, Dg + (Radius + FMOWorldGen::CaveFarCm) * Gate + (1.0f - Open) * FMOWorldGen::CaveFarCm);
+			Best = FMath::Min(Best, Dg + (Radius + FMOWorldGenDomain::CaveFarCm) * Gate + (1.0f - Open) * FMOWorldGenDomain::CaveFarCm);
 		}
 		return Best;
 	}
@@ -375,7 +375,7 @@ namespace
 		{
 			return false;
 		}
-		const uint32 S = (uint32)FMOWorldGen::HashSeed(Seed, SaltEntrance);
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance);
 		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.CaveEntranceChance)
 		{
 			return false;
@@ -392,7 +392,7 @@ namespace
 		Out.DirY = (float)ShoreRing[Dir][1];
 		Out.ChamberRadius = 450.0f + 200.0f * Unit16(H3 >> 20);
 		const float Margin = 0.18f * T.CaveEntranceCellCm;
-		const float Fixed = Out.HollowRadius * 0.35f + Out.ChamberRadius + FMOWorldGen::CaveFarCm + 300.0f;
+		const float Fixed = Out.HollowRadius * 0.35f + Out.ChamberRadius + FMOWorldGenDomain::CaveFarCm + 300.0f;
 		Out.Run = FMath::Min(2200.0f + 1000.0f * Unit16(H3 >> 4), Margin - Fixed);
 		return Out.Run >= 800.0f;
 	}
@@ -400,7 +400,7 @@ namespace
 	/** Horizontal distance from the hollow's centre beyond which the entrance's field is >= CaveFarCm (skipping it there is exact). <= the jitter margin. */
 	FORCEINLINE float EntranceReach(const FEntranceBasics& B)
 	{
-		return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGen::CaveFarCm + 300.0f;
+		return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGenDomain::CaveFarCm + 300.0f;
 	}
 
 	/**
@@ -437,7 +437,7 @@ namespace
 		const float Lead = B.HollowRadius * 0.35f;
 		const float EndZ = GroundCm - B.HollowDepth - B.Run * EntranceGrade;
 		const double EndX = B.CenterX + B.DirX * (Lead + B.Run), EndY = B.CenterY + B.DirY * (Lead + B.Run);
-		const float EndGround = FMOWorldGen::SampleHeightCm(P, EndX, EndY, Seed, T.VoxelSizeCm);
+		const float EndGround = FMOWorldGenDomain::SampleHeightCm(P, EndX, EndY, Seed, T.VoxelSizeCm);
 		const float ChamberTop = EndZ + EntrancePassageRadiusCm * 0.8f + 1.3f * B.ChamberRadius / 1.5f;
 		return EndGround - ChamberTop >= 300.0f
 			&& WaterGate(P, B.CenterX, B.CenterY, EndZ, Seed) <= 0.0f
@@ -466,7 +466,7 @@ namespace
 			E.CellY = CellY;
 			E.Seed = (uint32)Seed;
 			E.ParamsHash = P.GetHash();
-			E.Ground = FMOWorldGen::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
+			E.Ground = FMOWorldGenDomain::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
 			E.bAllowed = SettleEntrance(P, B, E.Ground, Seed);
 			E.DirX = B.DirX;
 			E.DirY = B.DirY;
@@ -487,19 +487,19 @@ namespace
 		FEntranceBasics B;
 		if (!EntranceBasics(T, CellX, CellY, Seed, B))
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
 		const float H2 = Dx * Dx + Dy * Dy;
 		const float Reach = EntranceReach(B);
 		if (H2 > Reach * Reach)
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 		float Ground = 0.0f;
 		if (!EntranceGround(P, CellX, CellY, Seed, B, Ground))
 		{
-			return FMOWorldGen::CaveFarCm;
+			return FMOWorldGenDomain::CaveFarCm;
 		}
 		const float Z0 = (float)Z;
 
@@ -531,7 +531,7 @@ namespace
 	}
 }
 
-float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm)
+float FMOWorldGenDomain::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableCaves)
@@ -599,7 +599,7 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 	return FMath::Clamp(D, -CaveFarCm, CaveFarCm);
 }
 
-int32 FMOWorldGen::CaveMaxLOD(const FMOWorldGenParams& Params)
+int32 FMOWorldGenDomain::CaveMaxLOD(const FMOWorldGenParams& Params)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	const float MaxStepCm = FMath::Max3(CavernMaxStepCm, T.SinkholeRadiusCm * SinkholeStepFraction, T.TunnelRadiusCm * TunnelStepFraction);
@@ -612,7 +612,7 @@ int32 FMOWorldGen::CaveMaxLOD(const FMOWorldGenParams& Params)
 	return LOD;
 }
 
-float FMOWorldGen::SampleCaveDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float StepCm)
+float FMOWorldGenDomain::SampleCaveDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float StepCm)
 {
 	if (!Params.Tuning.bEnableCaves)
 	{
@@ -621,7 +621,7 @@ float FMOWorldGen::SampleCaveDistanceCm(const FMOWorldGenParams& Params, double 
 	return SampleCaveDistanceAtGround(Params, X, Y, Z, SampleHeightCm(Params, X, Y, Seed, StepCm), Seed, StepCm);
 }
 
-bool FMOWorldGen::GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOSinkhole& Out)
+bool FMOWorldGenDomain::GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOSinkhole& Out)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	FSinkholeBasics B;
@@ -641,13 +641,13 @@ bool FMOWorldGen::GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX
 	return true;
 }
 
-bool FMOWorldGen::FindSinkholeAt(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, FMOSinkhole& Out)
+bool FMOWorldGenDomain::FindSinkholeAt(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, FMOSinkhole& Out)
 {
 	const double Cell = (double)Params.Tuning.SinkholeCellCm;
 	return GetSinkholeInCell(Params, (int64)FMath::FloorToDouble(X / Cell), (int64)FMath::FloorToDouble(Y / Cell), Seed, Out);
 }
 
-float FMOWorldGen::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+float FMOWorldGenDomain::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	// Every opening's keep-out: a sinkhole's rim zone and a built entrance's hollow (vegetation, world features and spawns read this one query).
 	const float Entrance = DistanceToCaveEntranceHollow(Params, X, Y, Seed);
@@ -661,7 +661,7 @@ float FMOWorldGen::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, do
 	return FMath::Min(Dist - S.RadiusCm * 2.3f, Entrance);
 }
 
-float FMOWorldGen::DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+float FMOWorldGenDomain::DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f)

@@ -66,9 +66,10 @@ float FMOPCGWaterMask::ShoreFactor(double X, double Y, double GroundZ, double Ma
 	// An upland lake close by: its own surface is the water level, its ellipse measures the distance.
 	if (T.bEnableUplandLakes)
 	{
-		const double Cell = (double)T.UplandLakeCellCm;
+		int64 CellX = 0, CellY = 0;
+		FMOWorldGen::WorldToCell(P, X, Y, (double)T.UplandLakeCellCm, CellX, CellY);   // the generator's grid (the world's origin may be moved)
 		FMOWorldGen::FLake L;
-		if (FMOWorldGen::GetLakeInCell(P, 2, (int64)FMath::FloorToDouble(X / Cell), (int64)FMath::FloorToDouble(Y / Cell), TerrainSeed, L))
+		if (FMOWorldGen::GetLakeInCell(P, 2, CellX, CellY, TerrainSeed, L))
 		{
 			const double Dx = X - L.Center.X, Dy = Y - L.Center.Y;
 			const double Lx = ((double)L.CosAngle * Dx + (double)L.SinAngle * Dy) / (double)L.RadiusCm;

@@ -12,6 +12,7 @@ namespace
 		TEXT("Dev: a biome test world -- every column is this biome (DT_Biomes row id); empty = off. Takes effect at the next world start (MO.BiomeTest does both)."), ECVF_Default);
 
 	FMOWorldShape GActiveWorldShape;
+	FVector2D GActiveWorldOrigin = FVector2D::ZeroVector;
 }
 
 void UMOWorldGenSettings::SetActiveWorldShape(const FMOWorldShape& Shape)
@@ -29,6 +30,21 @@ void UMOWorldGenSettings::SetActiveWorldShape(const FMOWorldShape& Shape)
 const FMOWorldShape& UMOWorldGenSettings::GetActiveWorldShape()
 {
 	return GActiveWorldShape;
+}
+
+void UMOWorldGenSettings::SetActiveWorldOrigin(const FVector2D& Origin)
+{
+	check(IsInGameThread());
+	if (Origin != GActiveWorldOrigin)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldGen] world origin: (%.0f, %.0f) cm in the generator's field"), Origin.X, Origin.Y);
+	}
+	GActiveWorldOrigin = Origin;
+}
+
+const FVector2D& UMOWorldGenSettings::GetActiveWorldOrigin()
+{
+	return GActiveWorldOrigin;
 }
 
 FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
@@ -72,6 +88,7 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 
 	const FString Forced = CVarWorldGenForceBiome.GetValueOnGameThread().TrimStartAndEnd();
 	Params->ForcedBiomeId = Forced.IsEmpty() ? NAME_None : FName(*Forced);
+	Params->Origin = GActiveWorldOrigin;   // before Finalize: it is part of the hash (when moved)
 	Params->Finalize();
 	if (!Params->ForcedBiomeId.IsNone())
 	{

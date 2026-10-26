@@ -735,7 +735,11 @@ def _world_sync(rep, host, client, host_set_before_join, join_off=0, expect_disa
     rep.step("a host weather change (-> Clear_Skies) reaches the client", ok and "clear" in hl.lower(), f"host '{hl}', client '{cl}'")
 
 
-def _terrain_agreement(rep, host, client, client_join_off, withheld=False, host_since=0, expected_seed=None, skewed=False):
+HOST_ORIGIN_RE = re.compile(r"\[MOWorldSeed\] host published world seed -?\d+ \(parameter '[^']*', origin \((-?\d+), (-?\d+)\)\)")
+CLIENT_ORIGIN_RE = re.compile(r"\[MOWorldSeed\] client received the host's world seed -?\d+ \(parameter '[^']*', origin \((-?\d+), (-?\d+)\)\)")
+
+
+def _terrain_agreement(rep, host, client, client_join_off, withheld=False, host_since=0, expected_seed=None, skewed=False, expected_origin=None):
     """Every machine generates its OWN voxel terrain, so a client only stands on the host's ground if it generated it from
     the HOST's seed. Checks the seed handoff in the logs, then measures the ground itself: the surface height at the same
     XY on both machines. (Judging the client by its own pawn's z cannot see this bug: a pawn resting on the client's
@@ -766,6 +770,14 @@ def _terrain_agreement(rep, host, client, client_join_off, withheld=False, host_
                  bool(applied) and int(applied.group(1)) == host_seed,
                  f"host seed {host_seed}, client applied {applied.group(1) if applied else 'NOTHING'}"
                  f" (client: {deferred.group(1) if deferred else '?'} AVoxelWorld(s), deferred its own runtime on {deferred.group(2) if deferred else '?'})")
+        # The world's origin (a new world is shifted so its start is (0,0)) is part of the generator's input: the joiner must use the host's.
+        ho = HOST_ORIGIN_RE.search(read_log_from(host, host_since))
+        co = CLIENT_ORIGIN_RE.search(read_log_from(client, client_join_off))
+        rep.step("client: generates the world at the host's origin", bool(ho) and bool(co) and ho.groups() == co.groups(),
+                 f"host origin {ho.groups() if ho else 'not logged'}, client {co.groups() if co else 'not logged'}")
+        if expected_origin is not None:
+            rep.step("host: the world is at the origin stored in the save", bool(ho) and ho.groups() == expected_origin,
+                     f"saved {expected_origin}, published {ho.groups() if ho else 'not logged'}")
 
     if withheld:
         return  # a client with no seed never creates a runtime (by design): there is no ground to compare
@@ -967,8 +979,13 @@ def _embedded_pawn(rep, host, client):
     freed = stuck if stuck and " -- moving it from" in stuck.group(0) else None
     time.sleep(2)
     end = _pawn1_xyz(host)
-    rep.step("the server frees a pawn stuck in solid geometry", bool(freed) and end is not None and dist_from(end, start) > 800.0,
-             f"moved {dist_from(end, start):.0f} cm; host logged: {stuck.group(0)[:160] if stuck else 'no stuck line at all'}" if end else "no pawn")
+    # Freed = the capsule (radius 34, half-height 88: MOSpawnClearance::FCapsule) is clear of the 800 cm half-extent block, sideways (the
+    # rescue's ring puts it at 840) OR below / above it: a pawn the drop left on a tree crown 12 m up is freed onto the ground under the
+    # block (Oct 26, a forest start), not 8 m to the side. 4 cm of tolerance on each.
+    out_of_block = end is not None and (abs(end[0] - start[0]) > 830.0 or abs(end[1] - start[1]) > 830.0 or abs(end[2] - start[2]) > 884.0)
+    rep.step("the server frees a pawn stuck in solid geometry (its capsule ends outside the block)", bool(freed) and out_of_block,
+             (f"moved {dist_from(end, start):.0f} cm sideways, {end[2] - start[2]:+.0f} cm up; host logged: "
+              f"{stuck.group(0)[:160] if stuck else 'no stuck line at all'}") if end else "no pawn")
     console(host, "MO.Test.ClearEmbed")
 
 
@@ -1196,6 +1213,12 @@ def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=
             return False
         time.sleep(5)
         _terrain_agreement(rep, host, client, join_off, withheld=withhold_seed, skewed=skew_seed)
+        moved = re.search(r"World origin: the start \((-?\d+), (-?\d+)\) of the generator's field is the world's \(0,0\)", read_log_from(host, 0))
+        hxy = _probe(host, PROBE_XY)
+        hx, hy = (re.search(rf"{k}=(-?[\d.]+)", hxy) for k in "XY")
+        near = bool(hx and hy) and abs(float(hx.group(1))) < 3000.0 and abs(float(hy.group(1))) < 3000.0
+        rep.step("host: the new world was moved so the first pawn starts at the world's (0,0) (within 30 m)", bool(moved) and near,
+                 f"{moved.group(0) if moved else 'no World origin line'}; host pawn x={hx.group(1) if hx else '?'} y={hy.group(1) if hy else '?'}")
         if not (withhold_seed or skew_seed):
             _world_sync(rep, host, client, host_set_before_join, join_off=join_off, expect_disagreement=withhold_sync)
 
@@ -1318,6 +1341,10 @@ def hostsave_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not rep.step("host: fresh world published a seed", bool(first), first.group(0) if first else "none"):
             return False
         saved_seed = int(first.group(1))
+        first_origin = HOST_ORIGIN_RE.search(read_log_from(host, off))
+        saved_origin = first_origin.groups() if first_origin else None
+        rep.step("host: the fresh world was moved so its start is the world's (0,0)", bool(saved_origin) and saved_origin != ("0", "0"),
+                 f"origin {saved_origin}")
 
         off = log_size(host)
         console(host, "MO.Colony.SpawnSurvivor 500")
@@ -1399,7 +1426,7 @@ def hostsave_test(uproject, editor_exe, keep=False, boot_timeout=300):
             return False
         time.sleep(5)
 
-        _terrain_agreement(rep, host, client, join_off, host_since=load_off, expected_seed=saved_seed)
+        _terrain_agreement(rep, host, client, join_off, host_since=load_off, expected_seed=saved_seed, expected_origin=saved_origin or ("?", "?"))
 
         joined = read_log_from(host, host_join_off)
         rep.step("host: the joiner took a saved colonist; no new pawn was spawned for them",

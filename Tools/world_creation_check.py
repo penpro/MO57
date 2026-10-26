@@ -53,16 +53,21 @@ def main():
         start = re.search(r"\[MOGameMode\] Starting biome Rainforest: \((-?\d+), (-?\d+)\)[^\r\n]*", hlog)
         rep.step("host: the first survivor starts deep inside the Rainforest", bool(start), start.group(0)[:200] if start else "no starting-biome line")
         if start:
+            # The start search runs in the generator's field; the world is then shifted so that spot is the world's (0,0) (Oct 26):
+            # the pawn stands at the spot less the world's origin.
+            moved = re.search(r"World origin: the start \((-?\d+), (-?\d+)\) of the generator's field", hlog)
+            ox, oy = (int(moved.group(1)), int(moved.group(2))) if moved else (0, 0)
             at = ui._probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); l = p.get_actor_location(); out('HAT %.0f %.0f' % (l.x, l.y))")
             m = re.search(r"HAT (-?\d+) (-?\d+)", at)
-            d = ((int(m.group(1)) - int(start.group(1))) ** 2 + (int(m.group(2)) - int(start.group(2))) ** 2) ** 0.5 if m else -1
-            rep.step("... and the host's pawn stands there (within 30 m)", m is not None and 0 <= d < 3000, f"{d:.0f} cm from the spot")
+            d = ((int(m.group(1)) - (int(start.group(1)) - ox)) ** 2 + (int(m.group(2)) - (int(start.group(2)) - oy)) ** 2) ** 0.5 if m else -1
+            rep.step("... and the host's pawn stands there (within 30 m)", m is not None and 0 <= d < 3000,
+                     f"{d:.0f} cm from the spot (world origin {ox}, {oy}; pawn {m.group(1) if m else '?'}, {m.group(2) if m else '?'})")
 
         hc, cc = checksum(host), checksum(client)
         rep.step("the joiner generates the host's shaped land (same params hash and height checksum)", bool(hc) and bool(cc)
                  and hc.group(5) == cc.group(5) and hc.group(1) == cc.group(1),
                  f"host params {hc.group(5) if hc else '?'} height {hc.group(1) if hc else '?'} | joiner params {cc.group(5) if cc else '?'} height {cc.group(1) if cc else '?'}")
-        rep.step("... and it is not the default world (params hash differs from the authored one)", bool(hc) and hc.group(5).lower() != "0xecac384c",
+        rep.step("... and it is not the default world (params hash differs from the authored one; the shape AND a moved origin both feed it)", bool(hc) and hc.group(5).lower() != "0xecac384c",
                  hc.group(5) if hc else "?")
 
         coff = ui.log_size(client)

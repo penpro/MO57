@@ -46,9 +46,13 @@ struct MOFRAMEWORK_API FMOWorldSeedInfo
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Voxel")
 	FMOWorldShape Shape;
 
+	/** Where the world's (0,0) lies in the generator's field (FMOWorldCreationSettings::WorldOrigin): part of the generator's input, so it arrives with the seed. */
+	UPROPERTY(BlueprintReadOnly, Category = "MO|Voxel")
+	FVector2D Origin = FVector2D::ZeroVector;
+
 	bool operator==(const FMOWorldSeedInfo& Other) const
 	{
-		return bPublished == Other.bPublished && Seed == Other.Seed && ParameterName == Other.ParameterName && Shape == Other.Shape;
+		return bPublished == Other.bPublished && Seed == Other.Seed && ParameterName == Other.ParameterName && Shape == Other.Shape && Origin == Other.Origin;
 	}
 	bool operator!=(const FMOWorldSeedInfo& Other) const { return !(*this == Other); }
 };

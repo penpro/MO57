@@ -687,6 +687,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     LastLoadResult.WorldCreation = LoadedTyped->WorldCreation;
     FMOWorldCreation::Sanitize(LastLoadResult.WorldCreation);
     UMOWorldGenSettings::SetActiveWorldShape(LastLoadResult.WorldCreation.Shape);
+    UMOWorldGenSettings::SetActiveWorldOrigin(LastLoadResult.WorldCreation.WorldOrigin);   // (0,0) for a world saved before origins existed: its land unmoved
     UMOWorldGenSettings::RefreshPublishedParams();
     // ... and on the game state (replicated: the pace every machine reads), here where every load passes -- the game mode's load and an
     // in-place load (MO.Save.LoadFrom) alike (Oct 22: the in-place load kept the previous world's settings).

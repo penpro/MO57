@@ -45,7 +45,7 @@ namespace
 	/** Strata dip: a regional field of up to +-25 m over ~4 km (about a degree). Seams and chert beds follow it. */
 	float StrataDipCm(double X, double Y, int32 Seed)
 	{
-		return 2500.0f * GradientNoise2(X * (1.0 / 400000.0), Y * (1.0 / 400000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltCoalDip)).Value;
+		return 2500.0f * GradientNoise2(X * (1.0 / 400000.0), Y * (1.0 / 400000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCoalDip)).Value;
 	}
 
 	/** The grade inside a bed of thickness Thick at depth Local into it: 1 in the middle, falling to 0 over 20% of the thickness at each face. */
@@ -65,28 +65,28 @@ namespace
 		constexpr double Cycle = 1600.0;
 		const double Zs = Z + (double)StrataDipCm(X, Y, Seed);
 		const int64 K = (int64)FMath::FloorToDouble(Zs / Cycle);
-		const uint32 SeamSalt = (uint32)FMOWorldGen::HashSeed(Seed, SaltCoalSeam);
+		const uint32 SeamSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCoalSeam);
 		const float Base = (float)((double)K * Cycle) + 300.0f + 900.0f * Unit16(HashLattice2(K, 0, SeamSalt));
 		const uint32 KSalt = HashLattice2(K, 1, SeamSalt);
-		const float Thick = 40.0f + 180.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 9000.0), Y * (1.0 / 9000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltCoalThick) ^ KSalt).Value, 0.0f, 1.0f);
+		const float Thick = 40.0f + 180.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 9000.0), Y * (1.0 / 9000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCoalThick) ^ KSalt).Value, 0.0f, 1.0f);
 		const float Grade = BedGrade((float)Zs - Base, Thick);
 		if (Grade <= 0.0f)
 		{
 			return FMOOreSample();
 		}
-		const float Present = Smooth01(-0.2f, 0.05f, GradientNoise2(X * (1.0 / 40000.0), Y * (1.0 / 40000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltCoalPresent) ^ KSalt).Value);
+		const float Present = Smooth01(-0.2f, 0.05f, GradientNoise2(X * (1.0 / 40000.0), Y * (1.0 / 40000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCoalPresent) ^ KSalt).Value);
 		return Present > 0.0f ? FMOOreSample{ EMOOreKind::Coal, Grade * Present } : FMOOreSample();
 	}
 
 	FMOOreSample Limestone(double X, double Y, double Z, int32 Seed)
 	{
 		// Hematite along one joint set: the zero set of a 2D field (~60 m between joints), 30-120 cm wide, mineralised where a 3D field (250 m across, 100 m tall) opens.
-		const FNoise2 Joint = GradientNoise2(X * (1.0 / 6000.0), Y * (1.0 / 6000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltHematiteJoint));
+		const FNoise2 Joint = GradientNoise2(X * (1.0 / 6000.0), Y * (1.0 / 6000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltHematiteJoint));
 		const float JointDist = FMath::Abs(Joint.Value) * 6000.0f / FMath::Max(FMath::Sqrt(Joint.Dx * Joint.Dx + Joint.Dy * Joint.Dy), 0.35f);
-		const float Width = 30.0f + 90.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 2000.0), Y * (1.0 / 2000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltHematiteWidth)).Value, 0.0f, 1.0f);
+		const float Width = 30.0f + 90.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 2000.0), Y * (1.0 / 2000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltHematiteWidth)).Value, 0.0f, 1.0f);
 		if (JointDist < 0.5f * Width)
 		{
-			const float Mask = GradientNoise3(X * (1.0 / 25000.0), Y * (1.0 / 25000.0), Z * (1.0 / 10000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltHematiteMask));
+			const float Mask = GradientNoise3(X * (1.0 / 25000.0), Y * (1.0 / 25000.0), Z * (1.0 / 10000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltHematiteMask));
 			const float Grade = Smooth01(0.22f, 0.32f, Mask) * (1.0f - Smooth01(0.3f * Width, 0.5f * Width, JointDist));
 			if (Grade > 0.0f)
 			{
@@ -94,12 +94,12 @@ namespace
 			}
 		}
 		// Galena along a second joint set (~90 m apart, 20-70 cm wide), mineralised in rarer patches (a 3D field 200 m across, 80 m tall).
-		const FNoise2 GJoint = GradientNoise2(X * (1.0 / 9000.0) + 3.7, Y * (1.0 / 9000.0) - 8.1, (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaJoint));
+		const FNoise2 GJoint = GradientNoise2(X * (1.0 / 9000.0) + 3.7, Y * (1.0 / 9000.0) - 8.1, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltGalenaJoint));
 		const float GJointDist = FMath::Abs(GJoint.Value) * 9000.0f / FMath::Max(FMath::Sqrt(GJoint.Dx * GJoint.Dx + GJoint.Dy * GJoint.Dy), 0.35f);
-		const float GWidth = 20.0f + 50.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 1500.0), Y * (1.0 / 1500.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaWidth)).Value, 0.0f, 1.0f);
+		const float GWidth = 20.0f + 50.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 1500.0), Y * (1.0 / 1500.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltGalenaWidth)).Value, 0.0f, 1.0f);
 		if (GJointDist < 0.5f * GWidth)
 		{
-			const float Mask = GradientNoise3(X * (1.0 / 20000.0), Y * (1.0 / 20000.0), Z * (1.0 / 8000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaMask));
+			const float Mask = GradientNoise3(X * (1.0 / 20000.0), Y * (1.0 / 20000.0), Z * (1.0 / 8000.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltGalenaMask));
 			const float Grade = Smooth01(0.26f, 0.36f, Mask) * (1.0f - Smooth01(0.3f * GWidth, 0.5f * GWidth, GJointDist));
 			if (Grade > 0.0f)
 			{
@@ -110,11 +110,11 @@ namespace
 		constexpr double Cycle = 600.0;
 		const double Zs = Z + (double)StrataDipCm(X, Y, Seed);
 		const int64 K = (int64)FMath::FloorToDouble(Zs / Cycle);
-		const float Base = (float)((double)K * Cycle) + 150.0f + 300.0f * Unit16(HashLattice2(K, 7, (uint32)FMOWorldGen::HashSeed(Seed, SaltChertBed)));
+		const float Base = (float)((double)K * Cycle) + 150.0f + 300.0f * Unit16(HashLattice2(K, 7, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltChertBed)));
 		const float Bed = BedGrade((float)Zs - Base, 25.0f);
 		if (Bed > 0.0f)
 		{
-			const float Nodule = Smooth01(0.12f, 0.22f, GradientNoise3(X * (1.0 / 120.0), Y * (1.0 / 120.0), Z * (1.0 / 120.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltChertNodule)));
+			const float Nodule = Smooth01(0.12f, 0.22f, GradientNoise3(X * (1.0 / 120.0), Y * (1.0 / 120.0), Z * (1.0 / 120.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltChertNodule)));
 			if (Nodule > 0.0f)
 			{
 				return FMOOreSample{ EMOOreKind::Flint, Bed * Nodule };
@@ -127,19 +127,19 @@ namespace
 	float Vein(double X, double Y, double Z, int32 Seed, uint32 VeinSalt, uint32 MaskSalt, double Wavelength, float HalfWidth, float Threshold)
 	{
 		const double Inv = 1.0 / Wavelength;
-		const float V = GradientNoise3(X * Inv, Y * Inv, Z * Inv, (uint32)FMOWorldGen::HashSeed(Seed, VeinSalt));
+		const float V = GradientNoise3(X * Inv, Y * Inv, Z * Inv, (uint32)FMOWorldGenDomain::HashSeed(Seed, VeinSalt));
 		const float Dist = FMath::Abs(V) * (float)Wavelength / 1.2f;   // ~1.2 gradient per lattice cell
 		if (Dist >= HalfWidth)
 		{
 			return 0.0f;
 		}
 		const double InvMask = Inv / 4.0;
-		const float Mask = GradientNoise3(X * InvMask + 5.1, Y * InvMask - 3.3, Z * InvMask + 1.7, (uint32)FMOWorldGen::HashSeed(Seed, MaskSalt));
+		const float Mask = GradientNoise3(X * InvMask + 5.1, Y * InvMask - 3.3, Z * InvMask + 1.7, (uint32)FMOWorldGenDomain::HashSeed(Seed, MaskSalt));
 		return Smooth01(Threshold, Threshold + 0.1f, Mask) * (1.0f - Smooth01(0.5f * HalfWidth, HalfWidth, Dist));
 	}
 }
 
-EMOBedrock FMOWorldGen::SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+EMOBedrock FMOWorldGenDomain::SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const double Inv = 1.0 / ProvinceWavelengthCm;
 	const float Volcanic = GradientNoise2(X * Inv * 0.6 + 11.3, Y * Inv * 0.6 - 4.7, (uint32)HashSeed(Seed, SaltGeoVolcanic)).Value;
@@ -155,7 +155,7 @@ EMOBedrock FMOWorldGen::SampleBedrock(const FMOWorldGenParams& Params, double X,
 	return Province > LimestoneProvince ? EMOBedrock::Limestone : EMOBedrock::CoalMeasures;
 }
 
-FMOOreSample FMOWorldGen::SampleOreIn(const FMOWorldGenParams& Params, EMOBedrock Bedrock, double X, double Y, double Z, int32 Seed)
+FMOOreSample FMOWorldGenDomain::SampleOreIn(const FMOWorldGenParams& Params, EMOBedrock Bedrock, double X, double Y, double Z, int32 Seed)
 {
 	switch (Bedrock)
 	{
@@ -182,7 +182,7 @@ FMOOreSample FMOWorldGen::SampleOreIn(const FMOWorldGenParams& Params, EMOBedroc
 	return FMOOreSample();
 }
 
-float FMOWorldGen::SoilDepthCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+float FMOWorldGenDomain::SoilDepthCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	// Soil and regolith pile up on flats and wash off steep ground: 250 cm on the level, 40 cm from 35 degrees on (a 12 m baseline, like the caves' slope).
 	const float Voxel = Params.Tuning.VoxelSizeCm;
@@ -196,7 +196,7 @@ float FMOWorldGen::SoilDepthCm(const FMOWorldGenParams& Params, double X, double
 	return Base * Vary;
 }
 
-FMODigSample FMOWorldGen::SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade)
+FMODigSample FMOWorldGenDomain::SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade)
 {
 	FMODigSample Out;
 	const float Ground = SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm);
@@ -220,7 +220,7 @@ FMODigSample FMOWorldGen::SampleDig(const FMOWorldGenParams& Params, double X, d
 	return Out;
 }
 
-void FMOWorldGen::FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out)
+void FMOWorldGenDomain::FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out)
 {
 	if (!Area.bIsValid || SpacingCm <= 1.0f)
 	{
@@ -278,7 +278,7 @@ void FMOWorldGen::FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, cons
 	}
 }
 
-bool FMOWorldGen::FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Seed, const FVector2D& From, double MaxRadiusCm, FVector& OutMouth, float& OutSlopeDeg)
+bool FMOWorldGenDomain::FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Seed, const FVector2D& From, double MaxRadiusCm, FVector& OutMouth, float& OutSlopeDeg)
 {
 	if (!Params.Tuning.bEnableCaves || MaxRadiusCm <= 0.0)
 	{
@@ -364,7 +364,7 @@ bool FMOWorldGen::FindNearestCaveMouth(const FMOWorldGenParams& Params, int32 Se
 	return bFound;
 }
 
-void FMOWorldGen::FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out)
+void FMOWorldGenDomain::FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableCaves || !Area.bIsValid || SpacingCm <= 1.0f)

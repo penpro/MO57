@@ -132,8 +132,7 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	}
 	const double X = (Slot.X + 0.25 + 0.5 * WorldFeatureU01(H, 1)) * Spacing;
 	const double Y = (Slot.Y + 0.25 + 0.5 * WorldFeatureU01(H, 2)) * Spacing;
-	const double Limit = Params->Tuning.WorldHalfSizeCm - R.GetMaxSiteRadiusCm() - 50000.0;
-	if (FMath::Abs(X) > Limit || FMath::Abs(Y) > Limit)
+	if (!Params->IsInsideWorld(X, Y, R.GetMaxSiteRadiusCm() + 50000.0))   // the island's centre may be off the origin
 	{
 		return false;
 	}

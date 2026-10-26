@@ -65,7 +65,7 @@ namespace
 	}
 }
 
-FMOWorldGenProbe FMOWorldGen::RunProbe(bool bWater)
+FMOWorldGenProbe FMOWorldGenDomain::RunProbe(bool bWater)
 {
 	const FMOWorldGenParamsRef Params = MakeProbeParams(bWater);
 	const FMOWorldGenParams& P = *Params;

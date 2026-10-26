@@ -441,7 +441,7 @@ namespace
 			{
 				const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
 				const double Corner = P->Tuning.WorldHalfSizeCm * 0.8;
-				Origin = FVector(Corner, Corner, 300000.0);   // 3 km over the ocean corner: nothing of the world in the way
+				Origin = FVector(P->GetWorldCentre().X + Corner, P->GetWorldCentre().Y + Corner, 300000.0);   // 3 km over the island's ocean corner: nothing of the world in the way
 				const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
 				if (Args.Num() == 0 && Seeds && Seeds->HasActiveSeed())
 				{

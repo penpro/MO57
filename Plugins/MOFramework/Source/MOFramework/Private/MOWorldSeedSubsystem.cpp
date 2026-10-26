@@ -13,6 +13,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "MOWorldGenSettings.h"
+#include "PCGComponent.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "VoxelWorld.h"
 #include "VoxelStampComponent.h"
@@ -39,6 +40,39 @@ namespace
 {
 	/** A client that has not heard the host's seed by now is told so loudly instead of silently generating nothing. */
 	constexpr float SeedArrivalWarningSeconds = 15.0f;
+
+	/**
+	 * The level's runtime PCG generation is bounded by its volume (Docs/PCG.md §1), placed in the level around (0,0). A world whose start was moved to
+	 * the origin has its island off-centre, so a volume that does not reach every shore leaves the far side bare: say so instead of planting nothing.
+	 */
+	void CheckPCGCoversIsland(UWorld* World)
+	{
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		const double Half = (double)Params->Tuning.WorldHalfSizeCm;
+		const FVector2D C = Params->GetWorldCentre();
+		const FBox2D Island(C - FVector2D(Half), C + FVector2D(Half));
+		for (TObjectIterator<UPCGComponent> It; It; ++It)
+		{
+			UPCGComponent* PCG = *It;
+			if (!PCG || PCG->GetWorld() != World || !PCG->IsManagedByRuntimeGenSystem() || PCG->IsLocalComponent())
+			{
+				continue;
+			}
+			const FBox Bounds = PCG->GetGridBounds();
+			const bool bCovers = Bounds.IsValid && Bounds.Min.X <= Island.Min.X && Bounds.Min.Y <= Island.Min.Y && Bounds.Max.X >= Island.Max.X && Bounds.Max.Y >= Island.Max.Y;
+			if (bCovers)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldSeed] PCG %s covers the island (%.0f..%.0f, %.0f..%.0f km)"), *GetNameSafe(PCG->GetOwner()),
+					Island.Min.X / 100000.0, Island.Max.X / 100000.0, Island.Min.Y / 100000.0, Island.Max.Y / 100000.0);
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Error, TEXT("[MOWorldSeed] PCG %s spans x %.0f..%.0f, y %.0f..%.0f km but the island spans x %.0f..%.0f, y %.0f..%.0f km (origin %.0f, %.0f): no vegetation beyond the volume -- enlarge it (Docs/PCG.md §1)"),
+					*GetNameSafe(PCG->GetOwner()), Bounds.Min.X / 100000.0, Bounds.Max.X / 100000.0, Bounds.Min.Y / 100000.0, Bounds.Max.Y / 100000.0,
+					Island.Min.X / 100000.0, Island.Max.X / 100000.0, Island.Min.Y / 100000.0, Island.Max.Y / 100000.0, Params->Origin.X, Params->Origin.Y);
+			}
+		}
+	}
 
 	/**
 	 * TEST ONLY: makes the host skip the replication step, reproducing the original co-op bug (client terrain from its own
@@ -422,7 +456,8 @@ bool UMOWorldSeedSubsystem::ApplySeedToHeightGraphs(int32 WorldSeed, FName Voxel
 	return GraphsUpdated > 0;
 }
 
-bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext, const FMOWorldShape* Shape)
+bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext, const FMOWorldShape* Shape,
+	const FVector2D* Origin)
 {
 	if (!World)
 	{
@@ -436,7 +471,12 @@ bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed,
 	{
 		UMOWorldGenSettings::SetActiveWorldShape(*Shape);
 	}
+	if (Origin)
+	{
+		UMOWorldGenSettings::SetActiveWorldOrigin(*Origin);
+	}
 	UMOWorldGenSettings::RefreshPublishedParams();
+	CheckPCGCoversIsland(World);
 
 	// Apply seed to all stamp components (for runtime stamps)
 	const int32 StampsUpdated = ApplySeedToStamps(World, WorldSeed, VoxelSeedParameterName, LogContext);
@@ -488,11 +528,12 @@ bool UMOWorldSeedSubsystem::ApplyBackdropSeed(int32 WorldSeed, FName VoxelSeedPa
 	bHasActiveSeed = true;
 	ActiveSeed = WorldSeed;
 	ActiveParameterName = VoxelSeedParameterName;
-	const FMOWorldShape Default;   // a menu backdrop is the authored world
-	return RegenerateVoxelWorld(GetWorld(), WorldSeed, VoxelSeedParameterName, this, &Default);
+	const FMOWorldShape Default;   // a menu backdrop is the authored world, unmoved
+	const FVector2D NoOrigin = FVector2D::ZeroVector;
+	return RegenerateVoxelWorld(GetWorld(), WorldSeed, VoxelSeedParameterName, this, &Default, &NoOrigin);
 }
 
-void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName, const FMOWorldShape& Shape)
+void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName, const FMOWorldShape& Shape, const FVector2D& Origin)
 {
 	UWorld* World = GetWorld();
 	AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr;
@@ -528,11 +569,12 @@ void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedPar
 	Info.Seed = WorldSeed + Skew;
 	Info.ParameterName = VoxelSeedParameterName;
 	Info.Shape = Shape;
+	Info.Origin = Origin;
 	State->SetWorldSeedInfo(Info);
 
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOWorldSeed] host published world seed %d (parameter '%s'); clients generate terrain from it"),
-		Info.Seed, *VoxelSeedParameterName.ToString());
+		TEXT("[MOWorldSeed] host published world seed %d (parameter '%s', origin (%.0f, %.0f)); clients generate terrain from it"),
+		Info.Seed, *VoxelSeedParameterName.ToString(), Info.Origin.X, Info.Origin.Y);
 }
 
 // ============================================================================
@@ -582,7 +624,8 @@ void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& In
 	{
 		return;
 	}
-	if (bHasActiveSeed && ActiveSeed == Info.Seed && ActiveParameterName == Info.ParameterName && UMOWorldGenSettings::GetActiveWorldShape() == Info.Shape)
+	if (bHasActiveSeed && ActiveSeed == Info.Seed && ActiveParameterName == Info.ParameterName && UMOWorldGenSettings::GetActiveWorldShape() == Info.Shape
+		&& UMOWorldGenSettings::GetActiveWorldOrigin() == Info.Origin)
 	{
 		return; // already generating from exactly this
 	}
@@ -595,10 +638,10 @@ void UMOWorldSeedSubsystem::HandleReplicatedWorldSeed(const FMOWorldSeedInfo& In
 	World->GetTimerManager().ClearTimer(SeedTimeoutHandle);
 
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOWorldSeed] client received the host's world seed %d (parameter '%s'); generating terrain from it"),
-		Info.Seed, *Info.ParameterName.ToString());
+		TEXT("[MOWorldSeed] client received the host's world seed %d (parameter '%s', origin (%.0f, %.0f)); generating terrain from it"),
+		Info.Seed, *Info.ParameterName.ToString(), Info.Origin.X, Info.Origin.Y);
 
-	const bool bStarted = RegenerateVoxelWorld(World, Info.Seed, Info.ParameterName, this, &Info.Shape);
+	const bool bStarted = RegenerateVoxelWorld(World, Info.Seed, Info.ParameterName, this, &Info.Shape, &Info.Origin);
 
 	bHasActiveSeed = true;
 	ActiveSeed = Info.Seed;

@@ -313,6 +313,10 @@
 - **The camera sees "water in a cave"** -> it is inside the rock, seeing the ocean plane under all terrain -> probe air with `MO.WorldGen.CaveSample`. After a terrain change place cameras from the pawn's REAL z. (geology, playtest-oct14)
 - **A pawn swims inside terrain below sea level** -> the ocean plane fills everything under z = 0 -> `BuriedMarginCm` + `GetGroundZ`. (death-recap)
 - **Lakes 80,000x too big / "invalid Role" on clients** -> SpawnActor with a level actor as Template composes its transform and copies its Role -> spawn a plain actor of the class. (worldgen v4)
+- **Something lines up with the island in old worlds but not new ones** -> a new world is SHIFTED (its start is (0,0), the island's centre
+  is `Params.GetWorldCentre()` = -Origin) -> centre whole-island things on `GetWorldCentre()`, test with `IsInsideWorld()`, take grid
+  cells from `FMOWorldGen::WorldToCell`, never `(0,0) +- WorldHalfSizeCm` or `floor(X / Cell)` of a world position. A world-space function
+  missing from the `FMOWorldGen` facade fails the build on purpose. (`Docs/Terrain_Generation_Exploration.md` § World space, Oct 26)
 
 ## 9. PCG
 
@@ -327,6 +331,9 @@
 - **A far-field artefact** -> find what it is made of with `MO.PCG.MeshSurvey` / `HideMesh` / `HideTag` BEFORE theorising (an hour was lost
   blaming the biome tiers for 90k native Field_05 trees). Census by radius (`MO.PCG.Census`), never component bounds. (far-trees, biome-aware)
 - **"Zero PCG in game"** -> the coastal spawn on bare sand -> LOOK at the player's view first. (shipping-diag)
+- **No vegetation on the far side of the island** -> the level's runtime PCG volume does not reach it (a shifted world's island is off
+  (0,0)) -> the log's `[MOWorldSeed] PCG ... spans ... but the island spans ...` Error; the game level's volume is +-125 km
+  (`Content/Python/pcg_volume_covers_shifted_world.py`). (world origin, Oct 26)
 
 ## 10. World features and content import
 

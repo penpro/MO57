@@ -76,4 +76,8 @@ public:
 	 */
 	static void SetActiveWorldShape(const FMOWorldShape& Shape);
 	static const FMOWorldShape& GetActiveWorldShape();
+
+	/** The current world's origin in the generator's field (FMOWorldCreationSettings::WorldOrigin), set beside the shape and written into every BuildParams. */
+	static void SetActiveWorldOrigin(const FVector2D& Origin);
+	static const FVector2D& GetActiveWorldOrigin();
 };

@@ -80,6 +80,9 @@
 
 ## 3. The world in a save
 
+- The world's creation settings are saved whole (`UMOWorldSaveGame::WorldCreation`), its ORIGIN with them (`WorldOrigin`, Oct 26: a new
+  world is shifted so its start is (0,0), `Docs/World_Creation.md` §2). A load applies the shape and origin before the hash check; a save
+  from before Oct 26 has no origin and loads at (0,0), its land unmoved.
 - Saves store the generator identity (`GeneratorVersion` + params hash); load logs GENERATOR CHANGED / UNKNOWN. **Policy (Wes, Oct 13):
   "we don't care about any old saves or preserving them"** -- no migration; the warning is informational.
 - Removed PCG instances: the `WorldRemovals` domain (`Docs/PCG.md` §7). Terrain edits: `TerrainModification` + `VoxelSculpt`.

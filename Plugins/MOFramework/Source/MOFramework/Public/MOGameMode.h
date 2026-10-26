@@ -52,6 +52,7 @@
 
 class APawn;
 class AVoxelWorld;
+struct FMOWorldCreationSettings;
 
 /**
  * Entry for mapping PCG component tags to item IDs.
@@ -99,8 +100,17 @@ public:
 	 * (FMOWorldGen::FindCoastalSpawn) -- on vegetated ground behind the beach, not on the shore strand's bare sand -- facing the water so the first view crosses it
 	 * to the relief on the far side; OutFacing is set to that view. Otherwise -- no generated
 	 * terrain, no ocean in range, bCoastalNewGameSpawn off -- it is FindSafeSpawnLocation() and a zero facing. Rescues keep using FindSafeSpawnLocation().
+	 * A start chosen with the world's origin (ChooseNewWorldOrigin) is returned as chosen: (0,0), give or take half a metre.
 	 */
 	FVector FindNewGameSpawn(FRotator& OutFacing) const;
+
+	/**
+	 * A NEW world's origin (FMOWorldCreationSettings::WorldOrigin): its generated start -- the starting biome's spot, else the sea shore, found by the generator
+	 * alone before any terrain exists -- in whole metres of the generator's field. The world is then generated shifted so that start is the world's (0,0),
+	 * where floats are finest (Wes, Oct 26: the hair simulation jittered 17 km out). Caches the start for FindNewGameSpawn. Zero when bStartAtWorldOrigin is
+	 * off or the generator finds no start: the island's centre stays at (0,0), as every world before origins.
+	 */
+	FVector2D ChooseNewWorldOrigin(int32 WorldSeed, const FMOWorldCreationSettings& Creation);
 
 	// ============================================================================
 	// CONFIGURATION
@@ -133,6 +143,10 @@ public:
 	/** New games start on the shore of the sea, looking across the water (see FindNewGameSpawn). Off = the old search for open ground around SpawnSearchCenter. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	bool bCoastalNewGameSpawn = true;
+
+	/** A new world is shifted so its start is the world's (0,0) (ChooseNewWorldOrigin). Off = the island's centre at (0,0) and the start wherever it falls. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+	bool bStartAtWorldOrigin = true;
 
 	/** Maximum attempts to find a valid spawn point. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
@@ -654,6 +668,12 @@ private:
 	float ActiveSettleMaxSeconds = 12.0f;
 	/** Set by FindNewGameSpawn when the spawn it returned is a coastal one (longer settle wait). */
 	mutable bool bSettlingCoastalSpawn = false;
+
+	/** The new game's start chosen with its origin (ChooseNewWorldOrigin): its ground in WORLD space, facing, and whether it is the coastal start. */
+	bool bHasChosenNewGameStart = false;
+	FVector ChosenNewGameGround = FVector::ZeroVector;
+	FRotator ChosenNewGameFacing = FRotator::ZeroRotator;
+	bool bChosenNewGameStartCoastal = false;
 	TWeakObjectPtr<class AMOCharacter> SettlingPawn;
 	float SettleElapsed = 0.f;
 	float SettleLastGroundZ = 0.f;

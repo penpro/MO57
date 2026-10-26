@@ -172,6 +172,10 @@ FString FMOWorldCreation::Describe(const FMOWorldCreationSettings& S)
 		Out += FString::Printf(TEXT(" %s=%g"), *K.Id.ToString(), GetKnob(S, K.Id));
 	}
 	Out += FString::Printf(TEXT(" start=%s"), S.StartingBiome.IsNone() ? TEXT("coast") : *S.StartingBiome.ToString());
+	if (!S.WorldOrigin.IsZero())
+	{
+		Out += FString::Printf(TEXT(" origin=(%.1f, %.1f) km"), S.WorldOrigin.X / 100000.0, S.WorldOrigin.Y / 100000.0);
+	}
 	return Out;
 }
 

@@ -55,6 +55,9 @@
 - Every machine generates its own voxel terrain from the seed (the level's AVoxelWorld has `bCreateRuntimeOnBeginPlay` OFF).
   `AMOGameState::WorldSeed` (replicated `FMOWorldSeedInfo`) + `UMOWorldSeedSubsystem` (host publishes in `InitializeVoxelWorldWithSeed`,
   client regenerates in `OnRep_WorldSeed`). Determinism matters: `Docs/Caves_And_Geology.md` §2 (checksum) and `Docs/TRAPS.md` (/fp:precise).
+  The world's shape and ORIGIN ride in the same struct (`FMOWorldSeedInfo::Shape` / `::Origin`): a new world is shifted so its start is
+  (0,0) (`Docs/World_Creation.md` §2), and a joiner generating at another origin would stand on other land. The client logs the origin it
+  received; `nettest game` / `hostsave` check it equals the host's.
 - **Voxel collision exists only around each machine's own human-driven pawns:** `AMOCharacter::VoxelCollisionInvoker`
   (`bWaitForVoxelWorld`) is enabled in `NotifyControllerChanged` while a human drives the pawn (5/6 joins 0 cm, 1/6 17-50 cm for ~10 s).
 - **Every machine builds fine terrain around every OTHER player too** (`AMOCharacter::RemotePlayerTerrainDetail`, a `UVoxelLODVolumeComponent`,

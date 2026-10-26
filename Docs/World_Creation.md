@@ -45,11 +45,32 @@ it is a property of the world chosen before its first step, not a mid-game skip.
   GENERATOR CHANGED), then the game mode hands the settings to the game state.
 - **Pace** is read where the time is decided, on the server, through one call: `FMOWorldRules::ScaleSeconds(Context, EMOWorldPace::X,
   Seconds)`. The UI's times use the same call, so a shown time is the real one. A new activity = one `EMOWorldPace` entry + its call.
-- **Starting biome:** `AMOGameMode::FindNewGameSpawn` asks `FMOBiomeFinder::FindNearest` for the spot deep inside that biome nearest the
-  origin (flat, else rough ground); none in the world = the coast, as before. Only lowland biomes are starts (Wes, Oct 23: "gate the higher
+- **Starting biome:** the new game's start search (`MOGameModeStart::FindGeneratedStart`, `MOGameMode.cpp`) asks `FMOBiomeFinder::FindNearest`
+  for the spot deep inside that biome nearest the island's centre (flat, else rough ground); none in the world = the coast, as before. Only lowland biomes are starts (Wes, Oct 23: "gate the higher
   elevation biomes"): `FMOWorldCreation::IsStartingBand` -- the band's floor within 50 m of the sea and no minimum slope, so AlpineHeath,
   AlpineRock and RockyHighland are offered neither as cards nor by the spawn (test `WorldCreation.StartingBiomesAreLowland`). A start with
   the sea within 300 m faces it (`FMOWorldGen::FindWaterFacingYaw`; the strands), as the coastal start does.
+- **The world's origin** (Wes, Oct 26: "have the landfall script the picks the starting location shift the entire world to 0,0 so we're
+  always starting at an origin point"): floats are finest at (0,0), and the engine's hair simulation jittered at a start 17 km out
+  (`Docs/Engine_Patches.md` #3). So a NEW world is generated shifted: `AMOGameMode::ChooseNewWorldOrigin` runs the start search above on the
+  generator alone (seed + params, before any terrain), in the generator's own field, and that start in whole metres becomes
+  `FMOWorldCreationSettings::WorldOrigin`. Every machine then generates with `FMOWorldGenParams::Origin` = it, so the start is the world's
+  (0,0) (within half a metre) and the island's centre is at `-Origin` (`FMOWorldGenParams::GetWorldCentre`). The colony grows round the
+  origin; the far side of the island is still up to ~120 km out (expeditions, not the base).
+  - It travels like the shape: saved in `WorldCreation`, published with the seed (`FMOWorldSeedInfo::Origin`), applied by
+    `RegenerateVoxelWorld` -> `UMOWorldGenSettings::SetActiveWorldOrigin`, and part of the params hash when non-zero (so a joiner with
+    another origin reads as a generator mismatch). A load sets it from the save before the hash check. A world saved before Oct 26 has
+    none: (0,0), its land where it always was. The menu backdrop is always (0,0).
+  - The land is the same bit for bit; the PLANTS are not: PCG placement follows world coordinates, so a seed's vegetation is re-rolled by
+    its origin (same biomes and densities, other spots). Both machines share the origin, so co-op agrees; a save keeps its origin, so its
+    removals stay where they were. Seen Oct 26: seed 20261025's start went from bushes to an open sunlit clearing (the hair looked gold).
+  - Switches: `AMOGameMode::bStartAtWorldOrigin` (default on); `MO.World.StartAtOrigin 0` (cheat cvar, set before the new game) makes the
+    next world unshifted -- the A/B for "is it the origin?". Logs: `[MOGameMode] World origin: the start (x, y) of the generator's field
+    is the world's (0,0) ...`, `[MOWorldSeed] host published world seed N (parameter 'Seed', origin (x, y))`.
+  - Anything placed against the WHOLE island must centre on `GetWorldCentre()` and test with `IsInsideWorld()`, never (0,0) +-
+    `WorldHalfSizeCm`; the generator itself is world-space (`FMOWorldGen`, `Docs/Terrain_Generation_Exploration.md` § World space).
+    The game level's PCG volume is +-125 km for this (`Docs/PCG.md` §1); `RegenerateVoxelWorld` logs an Error when a runtime PCG
+    volume does not cover the island.
 - **The start site** (Oct 24, Wes: "the egg should be near where the first player starts"): the first survivor of a NEW world wakes beside
   the stone clone egg they grew in and its thrown-off hatch (`Content/ImageTo3D/CloneEggPod01`, `CloneEggPodHatch01`). `AMOGameMode`
   flags a new game; when its first survivor has landed (`OnPawnLandedSafely`) `UMOStartSiteSubsystem::PlaceBesideWhenReady` keeps the
@@ -78,6 +99,11 @@ instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePrevi
 
 - Automation: `MOFramework.WorldCreation.DefaultShapeKeepsTheGenerator` (default = authored hash, shaped = its own; biome size doubles the
   climate wavelengths; height raises the top), `MOFramework.WorldCreation.KnobsClampAndPaceNeverZero`.
+- The origin: `MOFramework.WorldGen.OriginEquivalence` (every world-space generator function with origin O at P equals, bit for bit, origin
+  0 at P + O, and every position it returns is less O: ~6400 checks over three origins, a fractional one included),
+  `MOFramework.WorldGen.OriginAtCoastalStart` (the coastal start moved to the origin is within half a metre of (0,0), same ground, same
+  view). `nettest game` checks the first pawn starts within 30 m of (0,0) and the joiner uses the host's origin; `nettest hostsave` checks
+  a reload keeps the saved origin.
 - Console: `MO.World.Creation BiomeSize=2 Crafting=0.5 StartingBiome=Rainforest` sets the next new game; no arguments prints the pending and
   this world's settings (`[MOQUERY] WORLDCREATION`).
 - Open: the Host Game panel starts a new world with the defaults (it has no creation settings of its own yet): how it should get them is

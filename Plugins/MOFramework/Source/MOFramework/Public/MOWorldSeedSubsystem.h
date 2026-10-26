@@ -68,9 +68,10 @@ public:
 	 * Apply the seed everywhere, destroy any already-created voxel runtime, and CreateRuntime() so
 	 * terrain generates from this seed. Returns false if the level has no AVoxelWorld.
 	 * Shape: the world's shape (FMOWorldShape), folded into the generator before the params are published; null keeps the shape already active
-	 * (a rebuild of the same world).
+	 * (a rebuild of the same world). Origin: where the world's (0,0) lies in the generator's field (FMOWorldCreationSettings::WorldOrigin), likewise.
 	 */
-	static bool RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext, const FMOWorldShape* Shape = nullptr);
+	static bool RegenerateVoxelWorld(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext, const FMOWorldShape* Shape = nullptr,
+		const FVector2D* Origin = nullptr);
 
 	// =========================================================================
 	// HOST: publish
@@ -80,7 +81,7 @@ public:
 	 * Authority only. Records the seed as this world's active seed and replicates it through
 	 * AMOGameState so every client (present and future) generates the same terrain.
 	 */
-	void PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName, const FMOWorldShape& Shape = FMOWorldShape());
+	void PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName, const FMOWorldShape& Shape = FMOWorldShape(), const FVector2D& Origin = FVector2D::ZeroVector);
 
 	/**
 	 * Menu / offline backdrop worlds (AMOMenuFlyby): record the seed as this world's active seed WITHOUT publishing it (no GameState, nothing to replicate) and regenerate the

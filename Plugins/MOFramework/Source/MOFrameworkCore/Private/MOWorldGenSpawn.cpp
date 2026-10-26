@@ -43,10 +43,10 @@ namespace
 			return 1.0f;
 		}
 		FMOClimateSample Climate;
-		const float Height = FMOWorldGen::SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm, &Climate);
-		const float Temperature = FMOWorldGen::TemperatureAtHeight(Params, Climate.TemperatureSeaLevel, Height);
-		FMOWorldGen::FBiomeWeight Weights[3];
-		const int32 Num = FMOWorldGen::SampleSurfaceBiomeWeights(Params, X, Y, Seed, Height, Climate.Moisture, Temperature, Weights, 3);
+		const float Height = FMOWorldGenDomain::SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm, &Climate);
+		const float Temperature = FMOWorldGenDomain::TemperatureAtHeight(Params, Climate.TemperatureSeaLevel, Height);
+		FMOWorldGenDomain::FBiomeWeight Weights[3];
+		const int32 Num = FMOWorldGenDomain::SampleSurfaceBiomeWeights(Params, X, Y, Seed, Height, Climate.Moisture, Temperature, Weights, 3);
 		float Climatic = 0.0f;
 		for (int32 I = 0; I < Num; ++I)
 		{
@@ -59,7 +59,7 @@ namespace
 	}
 }
 
-bool FMOWorldGen::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, FMOCoastalSpawn& Out, const FMOCoastalSearch& Search)
+bool FMOWorldGenDomain::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, FMOCoastalSpawn& Out, const FMOCoastalSearch& Search)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	const float Sea = T.SeaLevelCm;
@@ -386,7 +386,7 @@ bool FMOWorldGen::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, 
 	return false;
 }
 
-int32 FMOWorldGen::MeasureLandmassCells(const FMOWorldGenParams& Params, int32 Seed, double X, double Y, float CellCm, int32 MaxCells)
+int32 FMOWorldGenDomain::MeasureLandmassCells(const FMOWorldGenParams& Params, int32 Seed, double X, double Y, float CellCm, int32 MaxCells)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	const double Limit = (double)T.WorldHalfSizeCm;
@@ -425,7 +425,7 @@ int32 FMOWorldGen::MeasureLandmassCells(const FMOWorldGenParams& Params, int32 S
 	return Count;
 }
 
-bool FMOWorldGen::FindWaterFacingYaw(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float MaxDistanceCm, float& OutYawDegrees)
+bool FMOWorldGenDomain::FindWaterFacingYaw(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float MaxDistanceCm, float& OutYawDegrees)
 {
 	// Of 16 directions, the one where the sea comes nearest (ties: the one with more water along the ray, the wider view). Cosmetic like the coastal
 	// spawn's yaw: it decides where the first view looks, never where anyone stands.

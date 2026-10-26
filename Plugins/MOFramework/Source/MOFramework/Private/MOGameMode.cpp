@@ -6,6 +6,7 @@
 #include "MOWorldReadinessSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldGen.h"
+#include "MOWorldGenSettings.h"
 #include "MOSpawnClearance.h"
 #include "MOStartSiteSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
@@ -223,10 +224,12 @@ void AMOGameMode::HandlePendingNewGame()
 		}
 
 		// The world's creation settings (MOWorldCreationTypes.h): the New Game panel's choice (or MO.World.Creation), consumed here once and kept
-		// on the game state (replicated, saved). Its shape reaches the generator with the seed below.
+		// on the game state (replicated, saved). Its shape and origin reach the generator with the seed below. The origin is the generated start
+		// (ChooseNewWorldOrigin), so the player begins at the world's (0,0).
 		{
-			const FMOWorldCreationSettings Creation = Settings->PendingWorldCreation;
+			FMOWorldCreationSettings Creation = Settings->PendingWorldCreation;
 			Settings->PendingWorldCreation = FMOWorldCreationSettings();
+			Creation.WorldOrigin = ChooseNewWorldOrigin(EffectiveSeed, Creation);
 			if (AMOGameState* State = GetGameState<AMOGameState>())
 			{
 				State->SetWorldCreation(Creation);
@@ -1566,7 +1569,7 @@ FVector AMOGameMode::FindRespawnLocation(const FVector& From, FRotator& OutFacin
 	const int32 Seed = Seeds->GetActiveTerrainSeed();
 	const float Step = Params->Tuning.VoxelSizeCm;
 	const float Sea = Params->Tuning.SeaLevelCm;
-	const double BorderLimit = static_cast<double>(Params->Tuning.WorldHalfSizeCm) - 600000.0;   // stay 6 km inside the world border (the view must not end at the edge of the world)
+	constexpr double BorderMarginCm = 600000.0;   // stay 6 km inside the world border (the view must not end at the edge of the world)
 
 	// Two passes: first only spots with dry land (almost) all the way from where the pawn died (a player has no boat; another island would be a prison), then any dry spot.
 	for (int32 Pass = 0; Pass < 2; ++Pass)
@@ -1579,7 +1582,7 @@ FVector AMOGameMode::FindRespawnLocation(const FVector& From, FRotator& OutFacin
 			const double Dist = RespawnDistanceCm * FMath::FRandRange(1.0f - RespawnDistanceJitter, 1.0f + RespawnDistanceJitter);
 			const double X = From.X + FMath::Cos(Angle) * Dist;
 			const double Y = From.Y + FMath::Sin(Angle) * Dist;
-			if (FMath::Abs(X) > BorderLimit || FMath::Abs(Y) > BorderLimit)
+			if (!Params->IsInsideWorld(X, Y, BorderMarginCm))
 			{
 				continue;
 			}
@@ -1803,73 +1806,147 @@ void AMOGameMode::RescueFallenPawns()
 	}
 }
 
+namespace MOGameModeStart
+{
+	/** The A/B switch for "is it the origin?": 0 = the next new world keeps the island's centre at (0,0), as before Oct 26 (AMOGameMode::bStartAtWorldOrigin is the default). */
+	TAutoConsoleVariable<bool> CVarStartAtWorldOrigin(
+		TEXT("MO.World.StartAtOrigin"), true,
+		TEXT("Dev: 1 = a new world is shifted so its start is the world's (0,0) (the default); 0 = the island's centre at (0,0), the start wherever it falls."),
+		ECVF_Cheat);
+
+	/**
+	 * A new world's start from the generator alone (no terrain needed): a chosen starting biome (the New Game panel, MOWorldCreationTypes.h) -- the nearest spot
+	 * deep inside it to the island's centre, dry and flat if the biome has any (FMOBiomeFinder: the `biome` dev teleport's search), else on rough ground; none,
+	 * or a biome this world lacks: the sea shore (FMOWorldGen::FindCoastalSpawn) when bTryCoast. OutGround is the ground in WORLD space for Params (its Origin).
+	 */
+	bool FindGeneratedStart(const FMOWorldGenParamsRef& Params, int32 TerrainSeed, FName StartBiome, bool bTryCoast, FVector& OutGround, FRotator& OutFacing,
+		bool& bOutCoastal)
+	{
+		OutFacing = FRotator::ZeroRotator;
+		bOutCoastal = false;
+		const FVector2D Centre = Params->GetWorldCentre();
+		if (!StartBiome.IsNone())
+		{
+			const int32 Index = Params->FindBiomeIndex(StartBiome);
+			if (Index == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome '%s' is not a biome of DT_Biomes -- the coast instead"), *StartBiome.ToString());
+			}
+			else if (!FMOWorldCreation::IsStartingBand(Params->Biomes[Index].HeightMin, Params->Biomes[Index].SlopeMinDeg))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s is high or rough ground, not a start (FMOWorldCreation::IsStartingBand) -- the coast instead"),
+					*StartBiome.ToString());
+			}
+			else
+			{
+				const FMOBiomeFinder Finder(Params, TerrainSeed);
+				const double T0 = FPlatformTime::Seconds();
+				FVector Spot;
+				int32 Samples = 0;
+				const bool bFlat = Finder.FindNearest(Centre, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/false, Spot, &Samples);
+				const bool bFound = bFlat || Finder.FindNearest(Centre, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/true, Spot, &Samples);
+				if (bFound)
+				{
+					// Beside the sea (a strand start), look at it, as the coastal start does (Wes, Oct 23: "shore strand and nordic strand should face the water").
+					constexpr float StartFacesWaterWithinCm = 30000.0f;   // the sea within 300 m
+					float WaterYaw = 0.0f;
+					const bool bFacesWater = FMOWorldGen::FindWaterFacingYaw(*Params, Spot.X, Spot.Y, TerrainSeed, StartFacesWaterWithinCm, WaterYaw);
+					if (bFacesWater)
+					{
+						OutFacing = FRotator(-6.0f, WaterYaw, 0.0f);
+					}
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: (%.0f, %.0f) ground z=%.0f%s, %.1f km from the island's centre (%d samples, %.0f ms)%s"),
+						*StartBiome.ToString(), Spot.X, Spot.Y, Spot.Z, bFlat ? TEXT("") : TEXT(" (rough ground)"), FVector2D::Distance(FVector2D(Spot), Centre) / 100000.0,
+						Samples, (FPlatformTime::Seconds() - T0) * 1000.0, bFacesWater ? *FString::Printf(TEXT(", facing the sea (yaw %.0f)"), WaterYaw) : TEXT(""));
+					OutGround = Spot;
+					return true;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: no dry spot of it in this world (%d samples) -- the coast instead"),
+					*StartBiome.ToString(), Samples);
+			}
+		}
+
+		if (bTryCoast)
+		{
+			FMOCoastalSpawn Coast;
+			const double T0 = FPlatformTime::Seconds();
+			if (FMOWorldGen::FindCoastalSpawn(*Params, TerrainSeed, Coast))
+			{
+				bOutCoastal = true;
+				OutFacing = FRotator(-6.0f, Coast.YawDegrees, 0.0f);   // a little downward: the water, not the sky
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Coastal spawn (%.0f ms): (%.0f, %.0f) ground z=%.0f, %.1f km from the island's centre, %.1f km of open water ahead, %.0f m of relief %.1f km away across it, on a landmass of at least %.0f km^2, yaw %.0f"),
+					(FPlatformTime::Seconds() - T0) * 1000.0, Coast.Location.X, Coast.Location.Y, Coast.GroundCm, Coast.DistanceFromOriginCm / 100000.0f, Coast.OpenWaterCm / 100000.0f,
+					Coast.FarReliefCm / 100.0f, Coast.FarDistanceCm / 100000.0f, Coast.LandmassKm2, Coast.YawDegrees);
+				OutGround = FVector(Coast.Location.X, Coast.Location.Y, Coast.GroundCm);
+				return true;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No coastal spawn within range of this world -- using the open-ground search"));
+		}
+		return false;
+	}
+}
+
+FVector2D AMOGameMode::ChooseNewWorldOrigin(int32 WorldSeed, const FMOWorldCreationSettings& Creation)
+{
+	bHasChosenNewGameStart = false;
+	const bool bSwitchOn = MOGameModeStart::CVarStartAtWorldOrigin.GetValueOnGameThread();
+	if (!bStartAtWorldOrigin || !bSwitchOn || !bAutoInitializeVoxelWithSeed)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] World origin: %s off -- the island's centre is the world's (0,0)"),
+			!bStartAtWorldOrigin ? TEXT("bStartAtWorldOrigin") : !bSwitchOn ? TEXT("MO.World.StartAtOrigin") : TEXT("bAutoInitializeVoxelWithSeed"));
+		return FVector2D::ZeroVector;
+	}
+
+	// The generator in its own field (origin zero) with this world's shape: the snapshot RegenerateVoxelWorld publishes next, less the origin.
+	UMOWorldGenSettings::SetActiveWorldShape(Creation.Shape);
+	UMOWorldGenSettings::SetActiveWorldOrigin(FVector2D::ZeroVector);
+	const FMOWorldGenParamsRef FieldParams = UMOWorldGenSettings::BuildParams();
+	FVector Ground;
+	FRotator Facing;
+	bool bCoastal = false;
+	if (!MOGameModeStart::FindGeneratedStart(FieldParams, UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(WorldSeed), Creation.StartingBiome, bCoastalNewGameSpawn,
+		Ground, Facing, bCoastal))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] World origin: the generator found no start -- the island's centre is the world's (0,0), the open-ground search picks the spawn"));
+		return FVector2D::ZeroVector;
+	}
+
+	// Whole metres: a clean number in the save and the logs, exact in a float to 167 km. The start is then within half a metre of (0,0).
+	const FVector2D Origin(FMath::RoundToDouble(Ground.X / 100.0) * 100.0, FMath::RoundToDouble(Ground.Y / 100.0) * 100.0);
+	bHasChosenNewGameStart = true;
+	ChosenNewGameGround = FVector(Ground.X - Origin.X, Ground.Y - Origin.Y, Ground.Z);
+	ChosenNewGameFacing = Facing;
+	bChosenNewGameStartCoastal = bCoastal;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] World origin: the start (%.0f, %.0f) of the generator's field is the world's (0,0) -- %.1f km off the island's centre; the first pawn starts at (%.0f, %.0f) ground z=%.0f"),
+		Origin.X, Origin.Y, Origin.Size() / 100000.0, ChosenNewGameGround.X, ChosenNewGameGround.Y, ChosenNewGameGround.Z);
+	return Origin;
+}
+
 FVector AMOGameMode::FindNewGameSpawn(FRotator& OutFacing) const
 {
 	OutFacing = FRotator::ZeroRotator;
 	bSettlingCoastalSpawn = false;
 
-	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
-
-	// A chosen starting biome (the New Game panel, MOWorldCreationTypes.h): the nearest spot deep inside it to the origin, dry and flat if the biome
-	// has any (FMOBiomeFinder: the `biome` dev teleport's search), else on rough ground. None, or a biome this world lacks: the coast, as always.
-	const AMOGameState* State = GetGameState<AMOGameState>();
-	const FName StartBiome = State ? State->GetWorldCreation().StartingBiome : NAME_None;
-	if (!StartBiome.IsNone() && Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
+	// The start the world's origin was chosen at: (0,0).
+	if (bHasChosenNewGameStart)
 	{
-		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
-		const int32 Index = Params->FindBiomeIndex(StartBiome);
-		if (Index == INDEX_NONE)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome '%s' is not a biome of DT_Biomes -- the coast instead"), *StartBiome.ToString());
-		}
-		else if (!FMOWorldCreation::IsStartingBand(Params->Biomes[Index].HeightMin, Params->Biomes[Index].SlopeMinDeg))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s is high or rough ground, not a start (FMOWorldCreation::IsStartingBand) -- the coast instead"),
-				*StartBiome.ToString());
-		}
-		else
-		{
-			const FMOBiomeFinder Finder(Params, Seeds->GetActiveTerrainSeed());
-			const double T0 = FPlatformTime::Seconds();
-			FVector Spot;
-			int32 Samples = 0;
-			const bool bFlat = Finder.FindNearest(FVector2D::ZeroVector, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/false, Spot, &Samples);
-			const bool bFound = bFlat || Finder.FindNearest(FVector2D::ZeroVector, Index, Params->Tuning.WorldHalfSizeCm, /*bRough=*/true, Spot, &Samples);
-			if (bFound)
-			{
-				// Beside the sea (a strand start), look at it, as the coastal start does (Wes, Oct 23: "shore strand and nordic strand should face the water").
-				constexpr float StartFacesWaterWithinCm = 30000.0f;   // the sea within 300 m
-				float WaterYaw = 0.0f;
-				const bool bFacesWater = FMOWorldGen::FindWaterFacingYaw(*Params, Spot.X, Spot.Y, Seeds->GetActiveTerrainSeed(), StartFacesWaterWithinCm, WaterYaw);
-				if (bFacesWater)
-				{
-					OutFacing = FRotator(-6.0f, WaterYaw, 0.0f);
-				}
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: (%.0f, %.0f) ground z=%.0f%s, %.1f km from the origin (%d samples, %.0f ms)%s"),
-					*StartBiome.ToString(), Spot.X, Spot.Y, Spot.Z, bFlat ? TEXT("") : TEXT(" (rough ground)"), FVector2D(Spot).Size() / 100000.0, Samples,
-					(FPlatformTime::Seconds() - T0) * 1000.0, bFacesWater ? *FString::Printf(TEXT(", facing the sea (yaw %.0f)"), WaterYaw) : TEXT(""));
-				return FVector(Spot.X, Spot.Y, Spot.Z + SpawnHeightOffset);
-			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Starting biome %s: no dry spot of it in this world (%d samples) -- the coast instead"),
-				*StartBiome.ToString(), Samples);
-		}
+		OutFacing = ChosenNewGameFacing;
+		bSettlingCoastalSpawn = bChosenNewGameStartCoastal;
+		return ChosenNewGameGround + FVector(0.0f, 0.0f, SpawnHeightOffset);
 	}
 
-	if (bCoastalNewGameSpawn && Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
 	{
-		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
-		FMOCoastalSpawn Coast;
-		const double T0 = FPlatformTime::Seconds();
-		if (FMOWorldGen::FindCoastalSpawn(*Params, Seeds->GetActiveTerrainSeed(), Coast))
+		const AMOGameState* State = GetGameState<AMOGameState>();
+		const FName StartBiome = State ? State->GetWorldCreation().StartingBiome : NAME_None;
+		FVector Ground;
+		bool bCoastal = false;
+		if (MOGameModeStart::FindGeneratedStart(FMOWorldGenParamsProvider::Get(), Seeds->GetActiveTerrainSeed(), StartBiome, bCoastalNewGameSpawn, Ground, OutFacing, bCoastal))
 		{
-			bSettlingCoastalSpawn = true;
-			OutFacing = FRotator(-6.0f, Coast.YawDegrees, 0.0f);   // a little downward: the water, not the sky
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Coastal spawn (%.0f ms): (%.0f, %.0f) ground z=%.0f, %.1f km from the origin, %.1f km of open water ahead, %.0f m of relief %.1f km away across it, on a landmass of at least %.0f km^2, yaw %.0f"),
-				(FPlatformTime::Seconds() - T0) * 1000.0, Coast.Location.X, Coast.Location.Y, Coast.GroundCm, Coast.DistanceFromOriginCm / 100000.0f, Coast.OpenWaterCm / 100000.0f,
-				Coast.FarReliefCm / 100.0f, Coast.FarDistanceCm / 100000.0f, Coast.LandmassKm2, Coast.YawDegrees);
-			return FVector(Coast.Location.X, Coast.Location.Y, Coast.GroundCm + SpawnHeightOffset);
+			bSettlingCoastalSpawn = bCoastal;
+			return Ground + FVector(0.0f, 0.0f, SpawnHeightOffset);
 		}
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No coastal spawn within range of this world -- using the open-ground search"));
 	}
 	return FindSafeSpawnLocation();
 }
@@ -2398,12 +2475,14 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 	// Every machine generates its own terrain from the seed, so tell the clients (current and future) which one this is
 	// BEFORE anything else: AMOGameState replicates it, and each client regenerates from it (UMOWorldSeedSubsystem).
 	// The world's shape travels with the seed: every machine folds it into its own generator before its first chunk (MOWorldCreationTypes.h).
+	// So does its origin (FMOWorldCreationSettings::WorldOrigin: a new world's start, a loaded world's saved one, zero for a world from before origins).
 	const AMOGameState* CreationState = GetGameState<AMOGameState>();
 	const FMOWorldShape Shape = CreationState ? CreationState->GetWorldCreation().Shape : FMOWorldShape();
+	const FVector2D Origin = CreationState ? CreationState->GetWorldCreation().WorldOrigin : FVector2D::ZeroVector;
 	UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
 	if (Seeds)
 	{
-		Seeds->PublishWorldSeed(WorldSeed, VoxelSeedParameterName, Shape);
+		Seeds->PublishWorldSeed(WorldSeed, VoxelSeedParameterName, Shape, Origin);
 	}
 	else
 	{
@@ -2411,7 +2490,7 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 	}
 
 	// The host's own terrain: same shared code the clients run.
-	UMOWorldSeedSubsystem::RegenerateVoxelWorld(World, WorldSeed, VoxelSeedParameterName, this, &Shape);
+	UMOWorldSeedSubsystem::RegenerateVoxelWorld(World, WorldSeed, VoxelSeedParameterName, this, &Shape, &Origin);
 }
 
 bool AMOGameMode::ApplySeedToHeightGraphParameter(int32 WorldSeed)

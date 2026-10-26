@@ -39,7 +39,7 @@ namespace
 	/**
 	 * The upland lake site of this cell (tier 2): see the header comment. false = this cell has none. Deterministic in (params, seed, cell) only.
 	 */
-	bool ComputeUplandLake(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FMOWorldGen::FLake& Out)
+	bool ComputeUplandLake(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FMOWorldGenDomain::FLake& Out)
 	{
 		const FMOWorldGenTuning& T = P.Tuning;
 		if (!T.bEnableUplandLakes)
@@ -50,7 +50,7 @@ namespace
 		// The freeboard is the margin that keeps the water plane buried between the footprint samples; the ground's small-scale roughness (detail octaves, slopes) grows with
 		// VerticalScale, so the margin does too.
 		const float Freeboard = T.UplandLakeFreeboardCm * T.VerticalScale;
-		const uint32 S = (uint32)FMOWorldGen::HashSeed(Seed, SaltUpland);
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltUpland);
 		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.UplandLakeChance)
 		{
 			return false;
@@ -59,7 +59,7 @@ namespace
 		// The centre stays 0.25 cell from every cell border (Finalize caps the radius so 2.5 radii of reach fit inside that margin).
 		const double Lo[2] = { ((double)CellX + 0.25) * Cell, ((double)CellY + 0.25) * Cell };
 		const double Hi[2] = { ((double)CellX + 0.75) * Cell, ((double)CellY + 0.75) * Cell };
-		auto Base = [&](double X, double Y) { return FMOWorldGen::SampleBaseHeightCm(P, X, Y, Seed, T.VoxelSizeCm); };
+		auto Base = [&](double X, double Y) { return FMOWorldGenDomain::SampleBaseHeightCm(P, X, Y, Seed, T.VoxelSizeCm); };
 
 		bool bHave = false;
 		float BestRelief = TNumericLimits<float>::Max();
@@ -68,7 +68,7 @@ namespace
 			const uint32 SK = S + 16u * (uint32)(K + 1);
 			const uint32 H1 = HashLattice2(CellX, CellY, SK + 1u);
 			const uint32 H2 = HashLattice2(CellX, CellY, SK + 2u);
-			FMOWorldGen::FLake L;
+			FMOWorldGenDomain::FLake L;
 			L.CellX = CellX;
 			L.CellY = CellY;
 			L.RadiusCm = T.UplandLakeRadiusMinCm + (T.UplandLakeRadiusMaxCm - T.UplandLakeRadiusMinCm) * Unit16(H2);
@@ -218,7 +218,7 @@ namespace
 	 * Memoised per thread -- a voxel chunk asks for the same cell thousands of times and the fit check costs dozens to hundreds of base-height samples. A pure function
 	 * of (params, seed, tier, cell): the cache only ever skips recomputing, it cannot change a result. 256 entries: a coarse-LOD chunk spans many cells.
 	 */
-	bool ResolveBasin(const FMOWorldGenParams& P, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FMOWorldGen::FLake& Out)
+	bool ResolveBasin(const FMOWorldGenParams& P, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FMOWorldGenDomain::FLake& Out)
 	{
 		struct FEntry
 		{
@@ -226,7 +226,7 @@ namespace
 			uint32 Seed = 0, ParamsHash = 0;
 			int32 Tier = -1;
 			bool bValid = false, bHasLake = false;
-			FMOWorldGen::FLake Lake;
+			FMOWorldGenDomain::FLake Lake;
 		};
 		// One direct-mapped table PER TIER. Every height sample looks up three basins (tiers 0, 1 and 2 via ApplyWater); with one shared table, a tier-2 lake
 		// cell and a tier-0/1 cell that hash to the same slot evicted each other on EVERY sample, so each point recomputed the upland lake
@@ -260,12 +260,12 @@ namespace
 		}
 
 		const FTier Cfg = TierOf(T, Tier);
-		const uint32 S = (uint32)FMOWorldGen::HashSeed(Seed, SaltBasin + (uint32)Tier * 0x101u);
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltBasin + (uint32)Tier * 0x101u);
 		if (Unit16(HashLattice2(CellX, CellY, S)) < Cfg.Chance)
 		{
 			const uint32 H1 = HashLattice2(CellX, CellY, S + 1u);
 			const uint32 H2 = HashLattice2(CellX, CellY, S + 2u);
-			FMOWorldGen::FLake L;
+			FMOWorldGenDomain::FLake L;
 			L.CellX = CellX;
 			L.CellY = CellY;
 			L.Center = FVector2D(((double)CellX + (double)(0.22f + 0.56f * Unit16(H1))) * (double)Cfg.CellCm, ((double)CellY + (double)(0.22f + 0.56f * Unit16(H1 >> 16))) * (double)Cfg.CellCm);
@@ -283,7 +283,7 @@ namespace
 			{
 				const float Lx = GGrad2[I][0] * L.RadiusCm, Ly = GGrad2[I][1] * L.RadiusCm * L.Aspect;
 				const double Wx = L.Center.X + (double)(L.CosAngle * Lx - L.SinAngle * Ly), Wy = L.Center.Y + (double)(L.SinAngle * Lx + L.CosAngle * Ly);
-				const float Above = FMOWorldGen::SampleBaseHeightCm(P, Wx, Wy, Seed, T.VoxelSizeCm) - T.SeaLevelCm;
+				const float Above = FMOWorldGenDomain::SampleBaseHeightCm(P, Wx, Wy, Seed, T.VoxelSizeCm) - T.SeaLevelCm;
 				bFit = Above >= T.BasinRimMinAboveSeaCm && Above <= T.BasinRimMaxAboveSeaCm;
 			}
 			if (bFit)
@@ -302,7 +302,7 @@ namespace
 		const FMOWorldGenTuning& T = P.Tuning;
 		const float Cell = Tier == 2 ? T.UplandLakeCellCm : TierOf(T, Tier).CellCm;
 		const int64 CellX = (int64)FMath::FloorToDouble(X / (double)Cell), CellY = (int64)FMath::FloorToDouble(Y / (double)Cell);
-		FMOWorldGen::FLake L;
+		FMOWorldGenDomain::FLake L;
 		if (!ResolveBasin(P, Tier, CellX, CellY, Seed, L))
 		{
 			return TNumericLimits<float>::Max();
@@ -336,15 +336,15 @@ namespace
 
 		const double Inv = 1.0 / (double)T.RiverWavelengthCm;
 		const double Px = X * Inv, Py = Y * Inv;
-		const FNoise2 A = GradientNoise2(Px, Py, (uint32)FMOWorldGen::HashSeed(Seed, SaltRiverA));
-		const FNoise2 B = GradientNoise2(Px * 2.0 + 3.1, Py * 2.0 - 1.7, (uint32)FMOWorldGen::HashSeed(Seed, SaltRiverB));
+		const FNoise2 A = GradientNoise2(Px, Py, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltRiverA));
+		const FNoise2 B = GradientNoise2(Px * 2.0 + 3.1, Py * 2.0 - 1.7, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltRiverB));
 		const float F = A.Value + 0.35f * B.Value;                          // the field: rivers run where it crosses zero
 		const float Gx = A.Dx + 0.7f * B.Dx, Gy = A.Dy + 0.7f * B.Dy;     // d(field)/d(lattice unit)
 		// First-order distance to the contour = |field| / |gradient| (per cm). Flat spots (tiny gradient) would make rivers swell, so the gradient is floored.
 		const float Grad = FMath::Max(FMath::Sqrt(Gx * Gx + Gy * Gy), 0.4f) * (float)Inv;
 		const float Dist = FMath::Abs(F) / Grad;
 
-		const float WidthMod = 0.7f + 0.3f * GradientNoise2(Px * 0.9 - 7.3, Py * 0.9 + 2.9, (uint32)FMOWorldGen::HashSeed(Seed, SaltRiverWidth)).Value;
+		const float WidthMod = 0.7f + 0.3f * GradientNoise2(Px * 0.9 - 7.3, Py * 0.9 + 2.9, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltRiverWidth)).Value;
 		const float Half = FMath::Max(0.5f * T.RiverWidthCm * WidthMod, 50.0f);
 
 		float Floor;
@@ -362,7 +362,7 @@ namespace
 	}
 }
 
-float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm, float StepCm)
+float FMOWorldGenDomain::ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm, float StepCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater)
@@ -401,7 +401,7 @@ float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double 
 	return H;
 }
 
-EMOWaterBodyKind FMOWorldGen::ClassifyWaterBody(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+EMOWaterBodyKind FMOWorldGenDomain::ClassifyWaterBody(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater)
@@ -434,12 +434,12 @@ EMOWaterBodyKind FMOWorldGen::ClassifyWaterBody(const FMOWorldGenParams& Params,
 	return Pond <= Lake ? EMOWaterBodyKind::Pond : EMOWaterBodyKind::Lake;
 }
 
-bool FMOWorldGen::GetLakeInCell(const FMOWorldGenParams& Params, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FLake& Out)
+bool FMOWorldGenDomain::GetLakeInCell(const FMOWorldGenParams& Params, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FLake& Out)
 {
 	return Params.Tuning.bEnableWater && (Tier >= 0 && Tier <= 2) && ResolveBasin(Params, Tier, CellX, CellY, Seed, Out);
 }
 
-void FMOWorldGen::GetUplandLakesNear(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FLake>& Out)
+void FMOWorldGenDomain::GetUplandLakesNear(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FLake>& Out)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater || !T.bEnableUplandLakes)
@@ -462,7 +462,7 @@ void FMOWorldGen::GetUplandLakesNear(const FMOWorldGenParams& Params, double X, 
 	}
 }
 
-bool FMOWorldGen::IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii)
+bool FMOWorldGenDomain::IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater || !T.bEnableUplandLakes)
@@ -481,7 +481,7 @@ bool FMOWorldGen::IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, 
 	return Lx * Lx + Ly * Ly <= ZoneRadii * ZoneRadii;
 }
 
-float FMOWorldGen::UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+float FMOWorldGenDomain::UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater || !T.bEnableUplandLakes)
@@ -498,7 +498,7 @@ float FMOWorldGen::UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, do
 	return FMath::Sqrt(Dx * Dx + Dy * Dy) - L.RadiusCm;
 }
 
-bool FMOWorldGen::GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm)
+bool FMOWorldGenDomain::GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater)
@@ -525,7 +525,7 @@ bool FMOWorldGen::GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, d
 	return true;
 }
 
-float FMOWorldGen::UplandLakeBedWeight(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+float FMOWorldGenDomain::UplandLakeBedWeight(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater || !T.bEnableUplandLakes)
@@ -552,6 +552,6 @@ float FMOWorldGen::UplandLakeBedWeight(const FMOWorldGenParams& Params, double X
 		return 0.0f;
 	}
 	// Ragged rim: ~6 m noise cells move the 0.5 contour by up to +-0.6 of the fade.
-	const float Breakup = GradientNoise2(X * (1.0 / 600.0), Y * (1.0 / 600.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltLakeBed)).Value;
+	const float Breakup = GradientNoise2(X * (1.0 / 600.0), Y * (1.0 / 600.0), (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltLakeBed)).Value;
 	return FMath::Clamp(1.0f - (Q - 1.0f) / Fade + 0.6f * Breakup, 0.0f, 1.0f);
 }

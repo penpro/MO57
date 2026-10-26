@@ -3304,7 +3304,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				for (double Dx = -Half; Dx <= Half; Dx += StepCm)
 				{
 					const double X = Origin.X + Dx, Y = Origin.Y + Dy;
-					if (FMath::Abs(X) > P->Tuning.WorldHalfSizeCm || FMath::Abs(Y) > P->Tuning.WorldHalfSizeCm)
+					if (!P->IsInsideWorld(X, Y))
 					{
 						continue;
 					}
@@ -3606,8 +3606,9 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
 
 			TArray<TPair<float, FMOSinkhole>> Found;
-			const int64 Cx0 = (int64)FMath::FloorToDouble((C.X - Radius) / Cell), Cx1 = (int64)FMath::FloorToDouble((C.X + Radius) / Cell);
-			const int64 Cy0 = (int64)FMath::FloorToDouble((C.Y - Radius) / Cell), Cy1 = (int64)FMath::FloorToDouble((C.Y + Radius) / Cell);
+			int64 Cx0 = 0, Cy0 = 0, Cx1 = 0, Cy1 = 0;   // the generator's grid (the world's origin may be moved)
+			FMOWorldGen::WorldToCell(*P, C.X - Radius, C.Y - Radius, Cell, Cx0, Cy0);
+			FMOWorldGen::WorldToCell(*P, C.X + Radius, C.Y + Radius, Cell, Cx1, Cy1);
 			for (int64 Cy = Cy0; Cy <= Cy1; ++Cy)
 			{
 				for (int64 Cx = Cx0; Cx <= Cx1; ++Cx)
@@ -5587,7 +5588,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			{
 				for (int32 Ix = 0; Ix < N; ++Ix)
 				{
-					const double X = -(double)P->Tuning.WorldHalfSizeCm + (Ix + 0.5) * Step, Y = -(double)P->Tuning.WorldHalfSizeCm + (Iy + 0.5) * Step;
+					const double X = P->GetWorldCentre().X - (double)P->Tuning.WorldHalfSizeCm + (Ix + 0.5) * Step;   // the island, wherever its centre is
+					const double Y = P->GetWorldCentre().Y - (double)P->Tuning.WorldHalfSizeCm + (Iy + 0.5) * Step;
 					float H = 0.0f;
 					const int32 B = BiomeAt(*P, X, Y, Seed, H);
 					if (H <= P->Tuning.SeaLevelCm + 5.0f)
@@ -5711,7 +5713,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				for (int32 Ix = -Half; Ix <= Half; ++Ix)
 				{
 					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
-					if (FMath::Abs(X) > P->Tuning.WorldHalfSizeCm || FMath::Abs(Y) > P->Tuning.WorldHalfSizeCm)
+					if (!P->IsInsideWorld(X, Y))
 					{
 						continue;
 					}

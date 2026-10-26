@@ -24,7 +24,11 @@
 Each gameplay level and the menu level has exactly ONE PCG component, on the `PCGVolume` actor (plus the engine's
 `PCGWorldActor`). It is the runtime generator: `GenerationTrigger = GENERATE_AT_RUNTIME`, partitioned (hierarchical generation,
 radii per grid size), so PCG spawns AROUND the generation sources (the local player's pawn / camera) and nowhere else. The
-volume's brush is the generation bounds (about +-65 km) and it holds the graph instance. Deleting it deletes every spawner.
+volume's brush is the generation bounds and it holds the graph instance. Deleting it deletes every spawner. The game level's brush is
++-125 km round (0,0) (Oct 26, `Content/Python/pcg_volume_covers_shifted_world.py`; it was +-65 km): a new world is shifted so its start is
+(0,0), which puts the island's far shore up to ~120 km out (`Docs/World_Creation.md` §2). Runtime generation plants only round the players,
+so the size costs nothing; `UMOWorldSeedSubsystem::RegenerateVoxelWorld` logs an Error when a runtime PCG volume does not cover the island.
+The menu level's stays +-65 km (its backdrop world is never shifted).
 `VoxelSandBox.umap` still has its own PCG actors but is never loaded by the game. The "invoker" in other docs is the VOXEL
 invoker (`AMOCharacter::VoxelCollisionInvoker`), which is separate from PCG.
 

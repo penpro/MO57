@@ -52,7 +52,7 @@ bool FMOBiomeFinder::FindNearest(const FVector2D& From, int32 BiomeIndex, double
 	{
 		return false;
 	}
-	const double Limit = Params->Tuning.WorldHalfSizeCm - 50000.0;   // 500 m inside the world border
+	constexpr double BorderMarginCm = 50000.0;   // 500 m inside the world border (FMOWorldGenParams::IsInsideWorld: the island's centre may be off the origin)
 	const double Step = FMath::Max(CoarseStepCm, 10000.0);
 	const int32 Rings = FMath::CeilToInt(MaxRadiusCm / Step);
 	const bool bSlopeBanded = IsSlopeBanded(BiomeIndex);
@@ -70,7 +70,7 @@ bool FMOBiomeFinder::FindNearest(const FVector2D& From, int32 BiomeIndex, double
 				if (FMath::Max(FMath::Abs(I), FMath::Abs(J)) == R)
 				{
 					const FVector2D P(From.X + I * Step, From.Y + J * Step);
-					if (FMath::Abs(P.X) <= Limit && FMath::Abs(P.Y) <= Limit)
+					if (Params->IsInsideWorld(P.X, P.Y, BorderMarginCm))
 					{
 						Ring.Add(P);
 					}
@@ -106,7 +106,7 @@ bool FMOBiomeFinder::FindNearest(const FVector2D& From, int32 BiomeIndex, double
 			Fine.Sort([&From](const FVector2D& A, const FVector2D& B) { return FVector2D::DistSquared(A, From) < FVector2D::DistSquared(B, From); });
 			for (const FVector2D& F : Fine)
 			{
-				if (FMath::Abs(F.X) <= Limit && FMath::Abs(F.Y) <= Limit && IsDeepInside(F.X, F.Y, BiomeIndex, bRough, Ground))
+				if (Params->IsInsideWorld(F.X, F.Y, BorderMarginCm) && IsDeepInside(F.X, F.Y, BiomeIndex, bRough, Ground))
 				{
 					OutSpot = FVector(F.X, F.Y, Ground);
 					if (OutSamples)

@@ -8,7 +8,7 @@
 
 // DEBUG ONLY (2026-10-11): 1 = the base height ignores the LOD (every octave at every LOD). Two chunks of neighbouring LODs meet at a seam that is only watertight if the coarse samples equal the
 // fine values at the same positions; the octave cut makes them differ. This switch exists to SEE whether that is what tears the far mountains. Never set it in a shipped build: it changes the ground.
-static TAutoConsoleVariable<int32> CVarMOWaterLodGate(TEXT("MO.WorldGen.WaterLodGate"), 1, TEXT("1 = a coarse LOD skips the water basins it cannot resolve (FMOWorldGen::IsWaterTierResolved); 0 = every basin at every LOD (A/B only: far chunks then take seconds each). Set before the world generates."), ECVF_Default);
+static TAutoConsoleVariable<int32> CVarMOWaterLodGate(TEXT("MO.WorldGen.WaterLodGate"), 1, TEXT("1 = a coarse LOD skips the water basins it cannot resolve (FMOWorldGenDomain::IsWaterTierResolved); 0 = every basin at every LOD (A/B only: far chunks then take seconds each). Set before the world generates."), ECVF_Default);
 static TAutoConsoleVariable<int32> CVarMODebugNoLodCull(TEXT("MO.WorldGen.DebugNoLodCull"), 0, TEXT("Debug: 1 = the base height ignores the LOD (no octave culling). Changes the generated ground; test seams only."), ECVF_Default);
 
 // ============================================================================
@@ -241,6 +241,12 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	{
 		H = FnvAddFloat(H, T.VegetationDensityScale);   // a world created with more or less vegetation (only then)
 	}
+	if (!Origin.IsZero())
+	{
+		// A world whose start was moved to (0,0) (only then). The exact doubles: host and client must agree to the bit.
+		H = FnvAdd(H, &Origin.X, sizeof(Origin.X));
+		H = FnvAdd(H, &Origin.Y, sizeof(Origin.Y));
+	}
 	return H;
 }
 
@@ -411,8 +417,8 @@ namespace
 		}
 		const double Px = X / T.WarpWavelengthCm;
 		const double Py = Y / T.WarpWavelengthCm;
-		const uint32 SX = (uint32)FMOWorldGen::HashSeed(Seed, SaltWarpX);
-		const uint32 SY = (uint32)FMOWorldGen::HashSeed(Seed, SaltWarpY);
+		const uint32 SX = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltWarpX);
+		const uint32 SY = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltWarpY);
 		// two octaves: a big lazy swirl plus a half-scale ripple
 		const float Wx = GradientNoise(Px, Py, SX).Value + 0.5f * GradientNoise(Px * 2.0 + 11.7, Py * 2.0 - 5.3, SX + 1u).Value;
 		const float Wy = GradientNoise(Px + 7.31, Py - 3.17, SY).Value + 0.5f * GradientNoise(Px * 2.0 - 4.1, Py * 2.0 + 9.9, SY + 1u).Value;
@@ -425,7 +431,7 @@ namespace
 		const FMOWorldGenTuning& T = P.Tuning;
 		auto Field = [&](uint32 Salt, int32 Octaves, float WavelengthCm)
 		{
-			return FMath::Clamp(Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, Salt), Octaves, 0.5f, WavelengthCm) * T.FieldContrast, -1.0f, 1.0f);
+			return FMath::Clamp(Fbm(Xw, Yw, (uint32)FMOWorldGenDomain::HashSeed(Seed, Salt), Octaves, 0.5f, WavelengthCm) * T.FieldContrast, -1.0f, 1.0f);
 		};
 
 		FMOClimateSample S;
@@ -447,10 +453,10 @@ namespace
 		S.PeaksValleys = 1.0f - FMath::Abs(3.0f * FMath::Abs(Weird) - 2.0f);
 
 		const float Coastal = 1.0f - SmoothStep(-0.25f, 0.25f, S.Continentalness);
-		const float Moist = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltMoisture), 3, 0.5f, T.MoistureWavelengthCm) * T.FieldContrast;
+		const float Moist = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltMoisture), 3, 0.5f, T.MoistureWavelengthCm) * T.FieldContrast;
 		S.Moisture = FMath::Clamp(Moist + T.CoastalMoistureBoost * Coastal, 0.0f, 1.0f);
 
-		float Temp = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltTemperature), 3, 0.5f, T.TemperatureWavelengthCm) * T.FieldContrast;
+		float Temp = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltTemperature), 3, 0.5f, T.TemperatureWavelengthCm) * T.FieldContrast;
 		Temp += 0.5f * T.LatitudeTemperatureGradient * (float)FMath::Clamp(Yw / (double)T.WorldHalfSizeCm, -1.0, 1.0);
 		S.TemperatureSeaLevel = FMath::Clamp(Temp, 0.0f, 1.0f);
 
@@ -459,9 +465,9 @@ namespace
 		S.TemperatureRegion = S.TemperatureSeaLevel;
 		if (T.bRangeMountains && T.ReliefRegionWavelengthCm > 0.0f)
 		{
-			const float MoistRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltMoistureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
+			const float MoistRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltMoistureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
 			S.MoistureRegion = FMath::Clamp(MoistRegion + T.CoastalMoistureBoost * Coastal, 0.0f, 1.0f);
-			float TempRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltTemperatureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
+			float TempRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltTemperatureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
 			TempRegion += 0.5f * T.LatitudeTemperatureGradient * (float)FMath::Clamp(Yw / (double)T.WorldHalfSizeCm, -1.0, 1.0);
 			S.TemperatureRegion = FMath::Clamp(TempRegion, 0.0f, 1.0f);
 		}
@@ -478,11 +484,11 @@ namespace
 	/** The v6 range term WITHOUT the gullies: massif + peaks, metres before VerticalScale (see FMOWorldGenTuning::bRangeMountains). */
 	float RangeBaseM(const FMOWorldGenTuning& T, double X, double Y, int32 Seed, float MinWavelengthCm)
 	{
-		const float Mass = SmoothStep(-0.5f, 1.0f, Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltMassif), 2, 0.5f, T.MassifWavelengthCm, MinWavelengthCm));
+		const float Mass = SmoothStep(-0.5f, 1.0f, Fbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltMassif), 2, 0.5f, T.MassifWavelengthCm, MinWavelengthCm));
 		float Peak = 0.0f;
 		if (T.PeakAmplitudeM > 0.0f)
 		{
-			Peak = FMath::Max(ErodedFbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltPeak), T.PeakOctaves, T.PeakGain, T.PeakWavelengthCm, MinWavelengthCm, true, T.PeakSoftness), 0.0f);
+			Peak = FMath::Max(ErodedFbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltPeak), T.PeakOctaves, T.PeakGain, T.PeakWavelengthCm, MinWavelengthCm, true, T.PeakSoftness), 0.0f);
 		}
 		// Peaks need the massif under them: a thin skin of them stands on the plain, the full height only on the massif.
 		const float Support = SmoothStep(0.05f, 0.75f, Mass);
@@ -511,7 +517,7 @@ namespace
 			const float Steep = SmoothStep(T.GullySlopeLow, T.GullySlopeHigh, Slope);
 			if (GullyFade > 0.0f && Steep > 0.0f)
 			{
-				const float R = ErodedFbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltGully), T.GullyOctaves, 0.5f, T.GullyWavelengthCm, MinWavelengthCm, true, 0.05f);
+				const float R = ErodedFbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltGully), T.GullyOctaves, 0.5f, T.GullyWavelengthCm, MinWavelengthCm, true, 0.05f);
 				Base -= T.GullyAmplitudeM * GullyFade * Steep * (1.0f - FMath::Clamp(R * 1.3f, 0.0f, 1.0f));
 			}
 			const float Ledge = SmoothStep(T.CragSlopeLow, T.CragSlopeHigh, Slope);
@@ -523,15 +529,15 @@ namespace
 				// tilted by a broad noise (strata dip, not contour rings) and the terracing comes in soft-edged patches on the steep flanks only, never region-wide.
 				// Natural, not a staircase: how sheer a riser is varies along the flank (some bands are sheer rock, some only a steeper roll) and the benches keep
 				// 40 % of the slope.
-				const float RiserNoise = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag + 2u), 2, 0.5f, T.CragWavelengthCm * 2.0f, MinWavelengthCm);
+				const float RiserNoise = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCrag + 2u), 2, 0.5f, T.CragWavelengthCm * 2.0f, MinWavelengthCm);
 				const float Riser = FMath::Lerp(0.14f, 0.45f, FMath::Clamp(RiserNoise, 0.0f, 1.0f));
 				const float Step = T.CragAmplitudeM;
-				const float Tilt = Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag + 1u), 2, 0.5f, T.CragWavelengthCm * 4.0f, MinWavelengthCm) * Step * 1.5f;
+				const float Tilt = Fbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCrag + 1u), 2, 0.5f, T.CragWavelengthCm * 4.0f, MinWavelengthCm) * Step * 1.5f;
 				const float Hs = (Base + Tilt) / Step;
 				const float K = FMath::FloorToFloat(Hs);
 				const float F = Hs - K;
 				const float Terraced = (K + 0.4f * F + 0.6f * SmoothStep(1.0f - Riser, 1.0f, F)) * Step - Tilt;
-				const float N = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag), 2, 0.5f, T.CragWavelengthCm, MinWavelengthCm);
+				const float N = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltCrag), 2, 0.5f, T.CragWavelengthCm, MinWavelengthCm);
 				const float Patch = SmoothStep(T.CragEdge - 0.08f, T.CragEdge + 0.08f, N);
 				Base += CragFade * Ledge * Patch * (Terraced - Base);
 			}
@@ -540,7 +546,7 @@ namespace
 	}
 }
 
-int32 FMOWorldGen::HashSeed(int32 Seed, uint32 Salt)
+int32 FMOWorldGenDomain::HashSeed(int32 Seed, uint32 Salt)
 {
 	uint32 H = (uint32)Seed ^ (Salt * 0x9E3779B1u);
 	H ^= H >> 16;
@@ -551,14 +557,14 @@ int32 FMOWorldGen::HashSeed(int32 Seed, uint32 Salt)
 	return (int32)H;
 }
 
-FMOClimateSample FMOWorldGen::SampleClimate(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+FMOClimateSample FMOWorldGenDomain::SampleClimate(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	double Xw = X, Yw = Y;
 	Warp(Params.Tuning, Xw, Yw, Seed);
 	return ClimateWarped(Params, Xw, Yw, Seed);
 }
 
-FMOBiomeRelief FMOWorldGen::BiomeReliefAt(const FMOWorldGenParams& Params, float Moisture, float TemperatureSeaLevel)
+FMOBiomeRelief FMOWorldGenDomain::BiomeReliefAt(const FMOWorldGenParams& Params, float Moisture, float TemperatureSeaLevel)
 {
 	FMOBiomeRelief Out;
 	if (!Params.bBiomeRelief)
@@ -590,7 +596,7 @@ FMOBiomeRelief FMOWorldGen::BiomeReliefAt(const FMOWorldGenParams& Params, float
 	return Out;
 }
 
-float FMOWorldGen::SampleBaseHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
+float FMOWorldGenDomain::SampleBaseHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 
@@ -679,12 +685,12 @@ float FMOWorldGen::SampleBaseHeightCm(const FMOWorldGenParams& Params, double X,
 	return FMath::Clamp(HeightCm, Params.MinHeightCm, Params.MaxHeightCm);
 }
 
-float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
+float FMOWorldGenDomain::SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
 {
 	return ApplyWater(Params, X, Y, Seed, SampleBaseHeightCm(Params, X, Y, Seed, StepCm, OutClimate), StepCm);
 }
 
-bool FMOWorldGen::IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tier, float StepCm)
+bool FMOWorldGenDomain::IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tier, float StepCm)
 {
 	if (CVarMODebugNoLodCull.GetValueOnAnyThread() != 0 || CVarMOWaterLodGate.GetValueOnAnyThread() == 0)
 	{
@@ -695,13 +701,13 @@ bool FMOWorldGen::IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tie
 	return StepCm < MaxRadiusCm;
 }
 
-float FMOWorldGen::TemperatureAtHeight(const FMOWorldGenParams& Params, float TemperatureSeaLevel, float HeightCm)
+float FMOWorldGenDomain::TemperatureAtHeight(const FMOWorldGenParams& Params, float TemperatureSeaLevel, float HeightCm)
 {
 	const float AboveSeaKm = FMath::Max(HeightCm - Params.Tuning.SeaLevelCm, 0.0f) / 100000.0f;
 	return FMath::Clamp(TemperatureSeaLevel - Params.Tuning.TemperatureLapsePerKm * AboveSeaKm, 0.0f, 1.0f);
 }
 
-int32 FMOWorldGen::ResolveBiome(const FMOWorldGenParams& Params, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
+int32 FMOWorldGenDomain::ResolveBiome(const FMOWorldGenParams& Params, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
 {
 	if (Params.ForcedBiomeIndex != INDEX_NONE)
 	{
@@ -717,7 +723,7 @@ int32 FMOWorldGen::ResolveBiome(const FMOWorldGenParams& Params, float HeightCm,
 	return INDEX_NONE;
 }
 
-float FMOWorldGen::SoftThreshold(float Value, float Edge, float Width, float Breakup)
+float FMOWorldGenDomain::SoftThreshold(float Value, float Edge, float Width, float Breakup)
 {
 	const float E = Edge + Breakup;
 	if (Width <= 0.0f)
@@ -727,7 +733,7 @@ float FMOWorldGen::SoftThreshold(float Value, float Edge, float Width, float Bre
 	return MOWorldGenNoise::Smooth01(E - 0.5f * Width, E + 0.5f * Width, Value);
 }
 
-float FMOWorldGen::HeightBlendBandCm(const FMOWorldGenTuning& T, float EdgeCm)
+float FMOWorldGenDomain::HeightBlendBandCm(const FMOWorldGenTuning& T, float EdgeCm)
 {
 	const float Above = FMath::Max(EdgeCm - T.SeaLevelCm, 0.0f);
 	const float Widest = FMath::Max(T.SurfaceHeightBlendCm, T.SurfaceHeightBlendMinCm);
@@ -735,7 +741,7 @@ float FMOWorldGen::HeightBlendBandCm(const FMOWorldGenTuning& T, float EdgeCm)
 	return FMath::Clamp(T.SurfaceHeightBlendFraction * Above, Narrowest, Widest);
 }
 
-int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut)
+int32 FMOWorldGenDomain::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut)
 {
 	if (!Out || MaxOut <= 0 || Params.Biomes.Num() == 0)
 	{
@@ -835,7 +841,7 @@ int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, do
 	return N;
 }
 
-int32 FMOWorldGen::PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
+int32 FMOWorldGenDomain::PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
 {
 	const int32 Hard = ResolveBiome(Params, HeightCm, SlopeDeg, Moisture, Temperature);
 	if (Hard != INDEX_NONE && Params.Biomes[Hard].SlopeMinDeg > 0.0f)
@@ -879,7 +885,7 @@ int32 FMOWorldGen::PickSurfaceBiome(const FMOWorldGenParams& Params, double X, d
 	return Hard;
 }
 
-FMOTerrainSample FMOWorldGen::SampleColumn(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm)
+FMOTerrainSample FMOWorldGenDomain::SampleColumn(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm)
 {
 	FMOClimateSample Clim;
 	const float Height = SampleHeightCm(Params, X, Y, Seed, StepCm, &Clim);

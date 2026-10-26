@@ -122,6 +122,12 @@ with a blur halo whenever the head moved; the skinned strands steady).
   capture`, the per-frame step of hair minus face) moves 0.8-0.9 px per frame with a lag-1 autocorrelation of -0.4 to -0.5: it reverses
   every frame. Physics off: 0.20 px, positive. The SAME groom, damping and animation hovering 5 m from the origin: 0.19-0.21 px with physics
   ON -- the simulation is fine there. A world-space simulation (`bLocalSimulation` off) doubled it far out (1.6 px).
+- Since Oct 26 a new world's start IS the world origin (`Docs/World_Creation.md` §2). The same seed (20261025), the same start, now at
+  (0,0): physics ON 0.200 px, autocorrelation +0.4 / +0.5; OFF 0.193 px. The simulation is steady where the colony lives without this
+  patch; it still jitters on an expedition far out (fork F39 option D: physics on near the origin only).
+- The hair's LOOK does not depend on the position: hovering 3 km up (sky all round) at (0,0) and 20 km out, the same camera and sun, the
+  hair is the same (mean 27-34 vs 29-30 over repeats). A different look at a new start is its light (the plants there are re-rolled by the
+  origin shift: PCG placement follows world coordinates).
 - Not the cause, each measured live: `r.HairStrands.SwapType 3`, `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face LOD, the
   face's own animation, the head velocity fed to the solver, bend damping (0.05 halved it far out, nothing at the origin), AA, motion blur.
 

@@ -123,8 +123,9 @@ void UMOTerrainFunctionLibrary::MOTerrainCavesBounds(FVoxelBox& Bounds) const
 void UMOTerrainFunctionLibrary::ComputeCavesBounds(FVoxelBox& Bounds)
 {
 	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
-	const float Half = Params->Tuning.WorldHalfSizeCm;
-	Bounds = FVoxelBox(FVector(-Half, -Half, Params->CaveMinZCm), FVector(Half, Half, Params->CaveMaxZCm));
+	const double Half = Params->Tuning.WorldHalfSizeCm;
+	const FVector2D C = Params->GetWorldCentre();   // the island in WORLD space (its centre is off the origin when the start was moved there)
+	Bounds = FVoxelBox(FVector(C.X - Half, C.Y - Half, Params->CaveMinZCm), FVector(C.X + Half, C.Y + Half, Params->CaveMaxZCm));
 }
 
 void UMOTerrainFunctionLibrary::ComputeCaves(
@@ -184,8 +185,9 @@ void UMOTerrainFunctionLibrary::ComputeCaves(
 void UMOTerrainFunctionLibrary::ComputeBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange)
 {
 	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
-	const float Half = Params->Tuning.WorldHalfSizeCm;
-	Bounds = FVoxelBox2D(FVector2D(-Half, -Half), FVector2D(Half, Half));
+	const double Half = Params->Tuning.WorldHalfSizeCm;
+	const FVector2D C = Params->GetWorldCentre();   // the island in WORLD space (its centre is off the origin when the start was moved there)
+	Bounds = FVoxelBox2D(FVector2D(C.X - Half, C.Y - Half), FVector2D(C.X + Half, C.Y + Half));
 	HeightRange = FVoxelFloatRange(Params->MinHeightCm, Params->MaxHeightCm);
 }
 

@@ -28,6 +28,25 @@
 > **Reading this file:** the sections below are a dated build log, newest first (Oct 11 night at the top, then back to the Oct 9 exploration
 > and its rationale). The header above is the current state; where a dated section disagrees with it, the header wins.
 
+## World space and the world's origin (2026-10-26)
+
+A new world is generated SHIFTED so its start is the world's (0,0) (Wes, Oct 26; why and how it is chosen: `Docs/World_Creation.md` §2).
+The generator has two faces (`MOWorldGen.h`):
+
+- `FMOWorldGenDomain` is the generator itself, in its own **field**: every noise, grid and the island's square are centred on the field's
+  (0,0). Its math is unchanged (goldens and probes pin it, at origin 0 and at any origin alike).
+- `FMOWorldGen` is what everything outside MOFrameworkCore calls: the same functions in **world** space. Each adds
+  `FMOWorldGenParams::Origin` to the positions it takes and subtracts it from the positions it returns (`MOWorldGenWorld.cpp`): one double
+  addition per coordinate, IEEE-exact, so the moved world is the same land bit for bit (`MOFramework.WorldGen.OriginEquivalence`). It
+  inherits the domain PRIVATELY: a position function nobody wrapped cannot be called from outside, so it fails the build instead of
+  silently reading the field at a world position. Non-positional helpers are re-exported with `using`.
+- Grid cells (`GetLakeInCell`, `GetSinkholeInCell`, `FLake::CellX`) stay in the field's grid: get them with `FMOWorldGen::WorldToCell`,
+  never `floor(X / Cell)` of a world position. Distances it reports (`FMOCoastalSpawn::DistanceFromOriginCm`) are from the island's centre.
+- The island is at `Params.GetWorldCentre()` (= -Origin) with `WorldHalfSizeCm` each way; test a world point with `Params.IsInsideWorld`.
+  The voxel bounds nodes (`MO Terrain Bounds`, `MO Terrain Caves Bounds`), the biome finder, world features, the census and the species
+  gallery all centre on it.
+- A new world-space function: declare it in `FMOWorldGen`, wrap it in `MOWorldGenWorld.cpp`, add it to the equivalence test.
+
 ## Update (2026-10-11, night): Oceanology IS the water now (Epic Water is out of the levels and the code)
 
 Wes: "im installing oceanology so let's switch to that ... you should be able to use most of the oceanology features for what we're doing". Uncommitted. Plugin: `Plugins/Marketplace/Oceanology_Plugin` ("Oceanology Legacy" 5.9.0 for UE 5.8, source +

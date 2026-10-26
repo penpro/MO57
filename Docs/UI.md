@@ -229,7 +229,13 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   patch staged in `Docs/Engine_Patches.md`; physics back on needs it (DECISIONS F-fork). Wrong turns, each measured live: a bend-damping floor
   (0.05 halved it far out but did nothing at the origin -- reverted to the authored values), `r.HairStrands.SwapType 3` (the 5.4 forum fix for a
   lagging groom), `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face at LOD 0, the face's own animation, no head velocity fed to
-  the solver, anti-aliasing, motion blur; a world-space simulation doubled it (all its positions absolute).
+  the solver, anti-aliasing, motion blur; a world-space simulation doubled it (all its positions absolute). Since Oct 26 the start is the world
+  origin: the same start measures 0.200 px with physics ON (0.193 OFF), so physics near the colony needs no engine patch (fork F39 option D).
+- **The hair looks copper / gold in sunlight at some starts** (Wes, Oct 26: "the hair is super shiny and gold now?" after the origin shift):
+  the colour values are unchanged (melanin 0.8, redness 0.25) and the render is the same at any position (hovering at (0,0) and 20 km out:
+  the same hair). The start's light changed: the origin shift re-rolls where plants grow (PCG placement follows world coordinates), so seed
+  20261025's start stands in an open, sunlit sandy clearing instead of among bushes. Whether the default brown should be darker is a look
+  call (BACKLOG, Wes: check by eye).
 - **For a hair-length option later** (Wes: "keep note of the stuff that makes the hair longer"): raising the strands' stretch damping (0.2+)
   let gravity pull the bangs visibly longer (simulated strands only) -- a sag, not a clean length change. The proper control is `UGroomComponent::SetHairLengthScale` /
   `SetHairLengthScaleEnable` (the groom's own length scale, needs the groom's deformation flags), not the physics.
