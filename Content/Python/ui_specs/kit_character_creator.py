@@ -1,7 +1,8 @@
 """The character creator (UMOCharacterCreatorPanel) in the kit look: a new game's first survivor -- name, skin tone, hair colour, eye colour, hair style,
 beard, mustache -- made IN THE WORLD while it finishes loading (the panel frames the survivor with its own camera; see MOCharacterCreatorPanel.h). The
-styles are the MetaHuman groom library (Oct 25 2026); face and body are "coming soon" rows (Wes, Oct 15 2026). Pushed on Layer_Menu by
-UMOSystemMenuUIController::ShowCharacterCreator.
+styles are the MetaHuman groom library (Oct 25 2026); face and body are "coming soon" rows (Wes, Oct 15 2026). The body type is Femme, the only one
+there is; Masc is a coming-soon row (Wes, Oct 26 2026: "make the existing character 'femme' and mark 'masc' as a customization coming soon").
+Pushed on Layer_Menu by UMOSystemMenuUIController::ShowCharacterCreator.
 
 Contract: MOCharacterCreatorPanel (OrbitArea, NameInputBox, SkinToneSlider, HairShadeSlider, HairRednessSlider, EyeColorText, EyePrevButton, EyeNextButton,
 HairStyleText / HairStylePrevButton / HairStyleNextButton, BeardText / ..., MustacheText / ..., RandomizeButton, BeginButton, WorldStatusText).
@@ -10,6 +11,10 @@ Oct 25: the style rows went in after Eyes (build appends; the rows below them we
     for w in SoonSection HairStyleRowBox FaceRowBox BodyRowBox ButtonRow; do python Tools/ue.py ui remove /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel $w; done
 
     python Tools/ue.py ui build Content/Python/ui_specs/kit_character_creator.py
+
+Oct 26: the Body type row went in first under Appearance, and Masc under Coming soon (the same way):
+    for w in SkinToneRowBox HairShadeRowBox HairRedRowBox EyesRowBox HairStyleRowBox BeardRowBox MustacheRowBox SoonSection FaceRowBox BodyRowBox ButtonRow; do
+        python Tools/ue.py ui remove /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel $w; done
 """
 import kit_lib as K
 
@@ -45,6 +50,7 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
         K.text("NameLabel", "caption", "Name", "color.text.secondary", slot={"padding": [0, 0, 0, 6]}),
         {"type": "SizeBox", "name": "NameInputSize", "height": 48, "children": [K.text_input("NameInputBox", "Your survivor's name")]}]},
     K.section_label("LookSection", "Appearance", slot={"padding": [0, 20, 0, 4]}),
+    K.row("BodyType", "Body type", K.text("BodyTypeText", "body.strong", "Femme", "color.text.primary", slot=VC), label_w=LABEL_W, h=44),
     slider_row("SkinTone", "Skin tone", "SkinToneSlider"),
     slider_row("HairShade", "Hair colour", "HairShadeSlider"),
     slider_row("HairRed", "Red in the hair", "HairRednessSlider"),
@@ -59,6 +65,7 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
     K.section_label("SoonSection", "Coming soon", slot={"padding": [0, 16, 0, 2]}),
     soon_row("Face", "Face"),
     soon_row("Body", "Body"),
+    soon_row("Masc", "Masc body type"),
     {"type": "HorizontalBox", "name": "ButtonRow", "slot": {"padding": [0, 24, 0, 0]}, "children": [
         K.button("RandomizeButton", "Randomize", "Tertiary"),
         {"type": "Spacer", "name": "RowSpacer", "slot": FILL_SIZE},

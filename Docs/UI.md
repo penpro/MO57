@@ -204,6 +204,9 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
 - `WBP_CharacterCreatorPanel` (`UMOCharacterCreatorPanel`, spec `kit_character_creator.py`) frames the new game's first survivor in the world.
   Rows: name, skin tone, hair colour, red in the hair, eyes, then **Hair style / Beard / Mustache** pickers ("<  Side swept fringe (medium)  >";
   None -- "Bald" for hair -- first, then the library short to long). Face and body stay "coming soon".
+- Oct 26 (Wes: "make the existing character 'femme' and mark 'masc' as a customization coming soon"): "Body type: Femme" is the first
+  Appearance row (the one body there is), and "Masc body type -- Coming soon" joins the Coming soon rows. The rows were rebuilt the
+  spec's documented way (remove the rows below, `ui build`).
 - The styles are the MetaHuman Creator groom library: 38 hair, 16 beards / goatees, 16 mustaches under
   `/Game/MetaHumans/Common/Optional/Grooms/GroomAssets` (`UMOAppearanceSubsystem` catalogs `HairContentPath`; names by `MakeGroomDisplayName`).
   A choice is a groom path in `FMOCharacterAppearance` (`HairAssetPath`, `BeardAssetPath`, `MustacheAssetPath`; empty = the Blueprint's own
