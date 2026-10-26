@@ -1621,3 +1621,7 @@ References: CL-0189
 ### 2026-10-25 23:05 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0191
 Status: PROGRESS (CL-0190 still holds the build window; editor closed, game instance `hair` open for Wes). Hair styles in the character creator: the MetaHuman groom library (70 grooms, Content/MetaHumans -- gitignored, rebuilt by Tools/import_metahuman_grooms.py -> resave_metahuman_grooms.py -> make_groom_bindings.py), FMOCharacterAppearance groom paths + NoGroom, UMOAppearanceSubsystem::ApplyGroomsToCharacter / FindGroomBinding / MO.Hair.Simulation, AMOMetaHumanCharacter::SetAppearanceLook (was SetAppearanceColors) + ApplyGrooms, creator pickers + OrbitArea orbit + no outside close. Open: Wes sees the hair shift / halo during head motion (investigating; not physics, not AA).
 References: CL-0190
+
+### 2026-10-26 01:10 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0192
+Status: PROGRESS (CL-0190 build window; packaging now for the groom cook check). Hair flicker = the ENGINE's hair simulation far from the world origin (Docs/Engine_Patches.md #3): groom physics now OFF by default (`MO.Hair.Simulation` 0, applied to every groom of a MetaHuman pawn in ApplyGroomsToCharacter). The bend-damping floor tried first was reverted (Content/MetaHumans grooms back to their authored values). Creator: eye picker + sliders aligned with the style pickers. New fork F38 (hair physics back via a HairStrands project-plugin override), N-213 (creator camera must see the face), N-214.
+References: CL-0191

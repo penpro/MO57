@@ -219,6 +219,20 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   trunk behind them (`PlacePreviewCamera`). A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
   "if you click into the world ... it closes the character builder"; "click drag the world to pivot the camera around the character").
 - Randomize picks colours and a hair style (never bald) and takes any beard / mustache off.
+- **Hair physics is OFF by default (`MO.Hair.Simulation 0`): the engine's hair simulation jitters far from the world origin** (Wes, Oct 25:
+  the simulated strands -- the shipped updo's bangs, a whole bob -- "shifting back and forth", "fluttery", a blur halo; the buns, which don't
+  simulate, steady; "they just stopped" with physics off). `UNiagaraDataInterfaceHairStrands::ComputeWorldTransform` casts the groom's and the
+  head bone's world transforms to float before taking their relative transform "in double precision": at the start sites, ~17 km out (single
+  precision ~1 mm), the simulation's frame jumps by rounding error every frame. Measured with a bangs patch tracked against the face over
+  consecutive frames (`Tools/motion_probe.py capture` + the per-frame step of hair minus face): 0.8-0.9 px per frame with a lag-1
+  autocorrelation of -0.4 to -0.5 at the start site; 0.19-0.21 px, positive (= physics off) with the same groom 5 m from the origin. Engine
+  patch staged in `Docs/Engine_Patches.md`; physics back on needs it (DECISIONS F-fork). Wrong turns, each measured live: a bend-damping floor
+  (0.05 halved it far out but did nothing at the origin -- reverted to the authored values), `r.HairStrands.SwapType 3` (the 5.4 forum fix for a
+  lagging groom), `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face at LOD 0, the face's own animation, no head velocity fed to
+  the solver, anti-aliasing, motion blur; a world-space simulation doubled it (all its positions absolute).
+- **For a hair-length option later** (Wes: "keep note of the stuff that makes the hair longer"): raising the strands' stretch damping (0.2+)
+  let gravity pull the bangs visibly longer (simulated strands only) -- a sag, not a clean length change. The proper control is `UGroomComponent::SetHairLengthScale` /
+  `SetHairLengthScaleEnable` (the groom's own length scale, needs the groom's deformation flags), not the physics.
 ### Inventory menu: the transfer buttons follow the visible panel (Oct 18)
 - `UMOUnifiedInventoryMenu::GetTransferTarget()` is the one rule for "<" / ">" / "<<" / ">>": the open container on its tab (all four), the
   ground on Nearby ("<<" picks up all, ">>" drops all), nothing on Gear / Details (all four disabled). Never act on a container the panel

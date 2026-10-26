@@ -10,6 +10,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/GameInstance.h"
 #include "GroomBindingAsset.h"
+#include "HAL/IConsoleManager.h"
 #include "MOAppearanceSubsystem.h"
 #include "MOCharacterAppearance.h"
 #include "Misc/PackageName.h"
@@ -95,6 +96,14 @@ bool FMOAppearance_GroomLibrary::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual(FString::Printf(TEXT("every style has a binding to MH_F_1's face (missing: %s)"), *FString::Join(Unbound, TEXT(", "))), Unbound.Num(), 0);
+
+	// Groom physics is off by default: the engine's hair simulation jitters far from the world origin (the start sites are ~17 km out;
+	// Docs/Engine_Patches.md). A default of 1 would bring back Wes's "shifting back and forth" bangs.
+	const IConsoleVariable* HairSimulation = IConsoleManager::Get().FindConsoleVariable(TEXT("MO.Hair.Simulation"));
+	if (TestNotNull(TEXT("MO.Hair.Simulation exists"), HairSimulation))
+	{
+		TestEqual(TEXT("groom physics off by default"), HairSimulation->GetInt(), 0);
+	}
 	return true;
 }
 

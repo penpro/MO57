@@ -25,6 +25,7 @@ So every patch below is **staged, not applied**. Applying one needs a real sourc
 |---|-------|--------|----------|
 | 1 | Hair strands keep their scene depth when Single Layer Water is in view | Staged (no source engine) | Draft ready: `EnginePatches/0001-upstream-report.md`; not yet posted |
 | 2 | Nanite shading pipelines outlive a material's shader map swap (uncooked game / editor; N-185) | Design only (no source engine); project workaround `MOMaterialKeepAlive.cpp` in place | Not reported |
+| 3 | Groom hair simulation jitters far from the world origin (relative transform taken from float-cast world matrices) | Design; workaround in place: groom physics off (`MO.Hair.Simulation 0`). Appliable WITHOUT a source engine (a plugin: project override) -- Wes's call | Not reported |
 
 ---
 
@@ -110,6 +111,44 @@ issue, no 5.8.x hotfix note). Report text: `EnginePatches/0001-upstream-report.m
 linked from <https://www.unrealengine.com/support/report-a-bug>. Record the thread / issue number here when filed.
 
 ---
+
+## #3 — Groom hair simulation jitters far from the world origin
+
+Found Oct 25 2026 (Wes: the simulated strands of every groom -- the shipped updo's bangs, a whole bob -- "shifting back and forth" / "fluttery"
+with a blur halo whenever the head moved; the skinned strands steady).
+
+### What we see / evidence
+- At the start site (~17.5 km from the origin) a bangs patch tracked against the face over consecutive frames (`Tools/motion_probe.py
+  capture`, the per-frame step of hair minus face) moves 0.8-0.9 px per frame with a lag-1 autocorrelation of -0.4 to -0.5: it reverses
+  every frame. Physics off: 0.20 px, positive. The SAME groom, damping and animation hovering 5 m from the origin: 0.19-0.21 px with physics
+  ON -- the simulation is fine there. A world-space simulation (`bLocalSimulation` off) doubled it far out (1.6 px).
+- Not the cause, each measured live: `r.HairStrands.SwapType 3`, `tick.AnimationDelaysEndGroup 0`, the groom's tick group, the face LOD, the
+  face's own animation, the head velocity fed to the solver, bend damping (0.05 halved it far out, nothing at the origin), AA, motion blur.
+
+### Cause (UE 5.8.3 source)
+`Engine/Plugins/Runtime/HairStrands/Source/HairStrandsCore/Private/Niagara/NiagaraDataInterfaceHairStrands.cpp`, `ComputeWorldTransform` and
+`ComputeBoneTransform`: the groom's world transform (`GroupInstance->GetCurrentLocalToWorld()`, double) and the simulation bone's world
+transform (`BoneTransform * RigidTransform`) are converted to `FMatrix44f` FIRST; the local-simulation branch then rebuilds `FMatrix44d` from
+those floats and takes `World * Bone^-1` "due to large world coordinate ... in double precision". The precision is already gone: at 1.75e6 cm a
+float's step is ~0.125 cm, so the relative transform the solver gets jumps by up to ~1 mm frame to frame as the head moves.
+
+### The fix (design)
+Compute the relative transform from the double transforms and convert only the (small) result:
+`FMatrix44f(GroupInstance->GetCurrentLocalToWorld().ToMatrixWithScale() * (InstanceData->BoneTransform * RigidTransform).ToMatrixWithScale().Inverse())`,
+i.e. a `ComputeBoneTransform` that returns `FMatrix44d` for this use; check every other `FMatrix44f` world matrix the DI hands its shaders
+(`WorldTransform`, `BoneTransform`, `WorldToLocal` in `InterpolateGroomGuides`) for the same absolute-float pattern.
+
+### Applying it here (no source engine needed)
+HairStrands is a PLUGIN: a copy in `MO57/Plugins/HairStrands` overrides the engine's and UBT builds it with the project. Costs: the copy
+(source, shaders, content) to carry and to re-copy on every engine update (5.8.4 is due), and engine plugins that link HairStrandsCore
+(MetaHuman) loading the project's build -- ABI-safe while only .cpp bodies change. Until then groom physics stays off (`MO.Hair.Simulation`
+default 0: the strands follow the head skinned, no sway).
+
+### How to verify once applied
+`MO.Hair.Simulation 1`, the creator at the start site, the bangs-vs-face metric (Docs/UI.md §3): at or near the physics-off figure.
+
+### Upstream
+Not reported. Repro: any simulated MetaHuman groom on a character ~15+ km from the origin, idle animation; compare with the same at the origin.
 
 ## #2 — Nanite shading pipelines outlive a material's shader map swap (uncooked game and editor)
 

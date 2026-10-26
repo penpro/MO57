@@ -21,7 +21,7 @@ LABEL_W = 170
 
 
 def slider_row(name, label, slider):
-    return K.row(name, label, {"type": "SizeBox", "name": name + "SliderBox", "width": 360, "slot": VC, "children": [K.slider(slider)]}, label_w=LABEL_W, h=52)
+    return K.row(name, label, {"type": "SizeBox", "name": name + "SliderBox", "width": 380, "slot": VC, "children": [K.slider(slider)]}, label_w=LABEL_W, h=52)
 
 
 def picker_row(name, label, value, text_w=280):
@@ -50,7 +50,7 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
     slider_row("HairRed", "Red in the hair", "HairRednessSlider"),
     K.row("Eyes", "Eyes", {"type": "HorizontalBox", "name": "EyePicker", "slot": VC, "children": [
         K.button("EyePrevButton", "<", "Secondary", slot=VC),
-        {"type": "SizeBox", "name": "EyeNameBox", "width": 160, "slot": VC, "children": [
+        {"type": "SizeBox", "name": "EyeNameBox", "width": 280, "slot": VC, "children": [
             K.text("EyeColorText", "body.strong", "Brown", "color.text.primary", justification="Center", var=True)]},
         K.button("EyeNextButton", ">", "Secondary", slot=VC)]}, label_w=LABEL_W, h=56),
     picker_row("HairStyle", "Hair style", "Updo braids (short)"),

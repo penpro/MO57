@@ -424,11 +424,18 @@ namespace MOAppearancePrivate
 
 	void ApplyHairSimulationSetting(UGroomComponent* Component);
 
-	/** Dev A/B for Wes's "the hair is jittery" (Oct 25 2026): is it the strands' physics (the MetaHuman library simulates most styles whole; the
-	 *  shipped updo only its braid) or the strands' rendering? Flips every groom in the world at once. */
+	/**
+	 * Groom physics is OFF by default (Wes, Oct 25 2026: the simulated strands -- the shipped updo's bangs, a whole bob -- "shifting back and
+	 * forth" / "fluttery" whenever the head moved; "they just stopped" with physics off). The cause is the ENGINE's hair simulation far from
+	 * the world origin: UNiagaraDataInterfaceHairStrands' ComputeWorldTransform casts the groom's and the head bone's world transforms to float
+	 * BEFORE taking their relative transform "in double precision", so ~17 km out (single precision ~1 mm) the simulation's frame jumps by
+	 * rounding error every frame. Measured: 0.8-0.9 px of back-and-forth per frame at the start site, 0.19-0.21 px (= physics off) 5 m from the
+	 * origin with the same groom and damping. Unfixable in a launcher install: Docs/Engine_Patches.md has the patch. With physics off the
+	 * strands follow the head skinned (no sway). 1 = each groom as its asset says. Flips every groom in the world at once.
+	 */
 	TAutoConsoleVariable<int32> CVarHairSimulation(
-		TEXT("MO.Hair.Simulation"), 1,
-		TEXT("Groom hair physics: 1 = each groom as its asset says (default), 0 = no groom simulates (still hair). Applies at once."),
+		TEXT("MO.Hair.Simulation"), 0,
+		TEXT("Groom hair physics: 0 = no groom simulates (default: the engine's hair simulation jitters far from the world origin), 1 = each groom as its asset says. Applies at once."),
 		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable*)
 		{
 			for (TObjectIterator<UGroomComponent> It; It; ++It)
@@ -541,6 +548,12 @@ bool UMOAppearanceSubsystem::ApplyGroomsToCharacter(AMOMetaHumanCharacter* Chara
 		return true;
 	}
 	USkeletalMeshComponent* Face = Character->GetFaceMesh();
+	// The Blueprint's own grooms follow MO.Hair.Simulation too (rebuilt once when it changes them; cheap afterwards).
+	TInlineComponentArray<UGroomComponent*> Grooms(Character);
+	for (UGroomComponent* Groom : Grooms)
+	{
+		MOAppearancePrivate::ApplyHairSimulationSetting(Groom);
+	}
 	FMOCharacterAppearance Paths = Appearance;
 	bool bAllLoaded = true;
 	for (const MOAppearancePrivate::FGroomSlot& Slot : MOAppearancePrivate::GroomSlots)

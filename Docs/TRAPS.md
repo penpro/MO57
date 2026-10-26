@@ -362,6 +362,10 @@
 
 ## 12. Light, rendering, materials
 
+- **Groom hair SIMULATION jitters far from the world origin** (Oct 25): the engine's hair DI takes a relative transform from float-cast
+  world matrices (`Docs/Engine_Patches.md` #3); the start sites are ~17 km out, where that is ~1 mm of noise per frame on every simulated
+  strand. Skinned strands are fine. Groom physics stays off (`MO.Hair.Simulation 0`). Before blaming a solver setting for motion noise, repeat
+  the measurement near the origin (hover the pawn: `MOVE_FLYING`; the ground there has no collision until the voxel world builds it).
 - **A tint that reads well on the icon can look too dark in game** -> the icon studio renders under studio light, while in-game sun
   on low-roughness metal mostly reflects the surroundings -> judge a tint in PIE: material instance edits show live there (saves are
   refused, so save after ending PIE). Steel needed Brightness 2.8 in game against 1.6 on the icon. (Oct 17)
