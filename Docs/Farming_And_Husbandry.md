@@ -3,11 +3,14 @@
 > **Covers:** crops (seed, field, growth, harvest, processing) and domestic animals (capture, pens, taming, breeding, products): the
 > design, what exists to build on, the build order and the forks. Wild animals as creatures: `Docs/AI_And_Colony.md` §1. Era and
 > recipe placement: `Docs/PROGRESSION_ROADMAP.md` (the design authority; era 3 "Settlement" is where both belong).
-> **Current state (2026-10-26):** design only, from Wes's ask (Oct 26: "let's get farming, animal husbandry, and some other animals
-> going. We will need horses, pigs, cows, etc plus bears, rabbits, birds, chickens, I'm sure there's more"). Built so far: pig and fox
-> as wild species (the pig is the first animal that can become domestic); species are data now, so new animals are cheap once their
-> assets exist (DECISIONS F41). Forks F42-F44 decide the crop timing, the domestication model and the first crops.
-> **Entry points (to come):** a crop plot (buildable), `DT_Crops`, seed items; a pen (buildable), a creature's ownership / tameness.
+> **Current state (2026-10-26):** from Wes's ask (Oct 26: "let's get farming, animal husbandry, and some other animals going. We will
+> need horses, pigs, cows, etc plus bears, rabbits, birds, chickens, I'm sure there's more"). **Built:** the crop core (a field plot,
+> sowing, growth on the game clock through its stages, harvest, saved, replicated) with one crop, wild grain; pig and fox as wild species;
+> species are data, so new animals are cheap once their assets exist (F41). **Not yet:** the founder crops (F44), grinding / porridge,
+> flax, wild stands to gather seed from, water / weeds / frost, husbandry (F43). Forks F42-F44.
+> **Entry points:** `AMOCropPlotActor` (`BP_CropPlot`, recipe `TillFieldPlot`), `FMOCropDefinitionRow` / `FMOCropGrowth` (`MOCropTypes.h`),
+> `DT_Crops`, the world's Growing pace (`EMOWorldPace::Growing`). **Dev verbs:** `MO.Test.AgeCrops <Days> [RadiusCm]`, `MO.Test.WorldAction
+> list|Sow:<Crop>|Harvest|ClearPlot`. **Tests:** `MOFramework.Crop.*`.
 
 ## 1. What already exists to build on
 
@@ -38,6 +41,26 @@ The real sequence, each step a timed action with a real duration (batched where 
 `DT_Crops` (one row per crop): seed item, biome / climate range, sowing season, days to each stage, water need, yield per area, straw,
 products. A `FMOCropPlot` state on the plot actor: crop, sown-at game time, stage, water, weeds; advanced on the clock (also while
 nobody is near: computed from elapsed game time, like the survival stats), saved with the world, replicated as the stage only.
+
+### Built (Oct 26)
+
+- A plot is a building (`TillFieldPlot`: a "Dig" action part, 2,700 s, a hoe optional at 3x without), so it is placed, worked, finished,
+  saved and replicated like any other. Finished, right-click opens its menu (`IMOWorldActionProvider`): **Sow <crop>** for each crop whose
+  seed the pawn carries (the seed is taken when the timed sowing ends), **Harvest** when ripe or overripe (a sickle, or a knife at half
+  pace; what is left falls as it shatters: `FMOCropGrowth::HarvestableFraction`), **Pull up** (clears it). One worker at a time.
+- The server keeps the crop and the game second it was sown; every 10 s it works out the stage (`FMOCropGrowth::StageAt`: Sown, Sprouted
+  for the first fifth after the green shows, Growing, Ripe, Overripe) and the size, and replicates those two (a joiner never needs the
+  host's clock). The plants are instanced meshes on the ground under the plot (each traced to the voxel ground), scaled from a fifth of
+  full height to full at ripe; stand-in meshes for now (Megascans grasses: green, tall green, dry gold).
+- The worked ground is a rigid 4 x 4 m slab: each machine lays it on the plane through the voxel ground under its four corners once that
+  ground exists (`FitToGround`; a slope steeper than 60 degrees keeps it level), and a plant stands on the slab's top or the ground, whichever
+  is higher. Before (first look, Oct 26) the slab stayed level, floated over the downhill side and hid the young plants under it.
+- Saved as the days grown (`FMOPersistedBuildingRecord::CropId / CropDaysGrown`): a load picks the season up where it was.
+- The world's **Growing season** knob (New Game panel, 0.1-4, default 1 = real seasons) stretches every crop (`GetDaysGrown` divides by it).
+- Verified (Oct 26, one game instance, `verify_crops`): a creative world tills a plot at once; with no seed the menu says so; Sow Wild grain
+  takes its time and 5 grain; aged 8 / 50 / 102 days it reads Sprouted / Growing / Ripe (screenshots: a dense patch on the slope);
+  Harvest needs a sickle (the stone sickle did no tool work until the Oct 26 tool fix) and gives 4 sheaves; threshing one in the creative
+  world finished in 0.1 s (6 grain); a second sowing grown 20 days came back from a save and reload at 20.0 days.
 
 ## 3. Domestic animals (the simulation)
 

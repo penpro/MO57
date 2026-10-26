@@ -90,7 +90,11 @@ world with today's gates).
 
 ### Era 3: settlement (mostly GAP)
 - Built: BuildLoom / MakeSimpleLoom (T2), MakeHoe (T2), MakeSickle (T3), BuildSchool (T1), BuildBasketContainer01, storage jars.
-- **GAP: agriculture** -- no seeds, crops or fields exist, though the hoe and sickle do (February plan Era 5 "Domestic Plants").
+- **Agriculture: the core is BUILT (Oct 26), one crop so far.** `TillFieldPlot` (a 4 x 4 m field plot: 45 min of digging with a stone hoe,
+  3x without one; Farming), sow `GrainStore01` (Wild Grain, 5 = ~250 g) -> the `WildGrain` crop (`DT_Crops`: 100 days to ripe on the game clock,
+  5 days ripe, then it shatters over 10) -> harvest with a sickle (a knife at half pace) -> 4 x `GrainSheaf01` -> `ThreshGrain` (10 min, by hand)
+  -> 6 x `GrainStore01` each (~1.2 kg from the plot, a Neolithic ~0.75 t/ha). The founder crops by biome (barley, emmer, flax, pea, millet, taro)
+  wait on DECISIONS F44, grinding / porridge (`Porridge01` has no recipe yet) and flax retting are the next rows (`Docs/Farming_And_Husbandry.md` §4).
 - **GAP: fibre crops and animals** -- FlaxFiber01 (flax / nettle), WoolFleece01 (sheep) have no producer, so SpinFlaxThread,
   SpinWoolThread, WeaveCloth, SewClothTunic and MakeBandage (WovenCloth01) are blocked. Domestic animals also give horn
   (MakeCompositeBow is blocked) and, with birds, feathers.
@@ -131,6 +135,15 @@ world with today's gates).
   domestic horses, or cut: **Needs Wes** (DECISIONS F17).
 - **MakeBandage** needs woven cloth (blocked): a realistic early bandage is plant fibre, moss or hide strips. PROPOSED to add an
   early dressing before cloth exists, so first aid does not wait for the loom: **Needs Wes** (DECISIONS F36, Oct 20).
+
+### Tool capabilities (FIXED Oct 26)
+A tool's power comes only from its `DT_Items` row (`ToolCapabilities`: a tool type and an effectiveness 0-1). Until Oct 26 only the early
+stone tools had one: 18 later tools did NO tool work anywhere (a bronze or iron axe, knife, saw, chisel, the smith's hammer and tongs, the
+sickles, the hoe, the cooking pot, the crucible, the grinding stone). The ladder they got: stone 0.6-0.75 (HandAxe01 0.6, PolishedAxe01 0.7,
+HaftedAxe01 0.75, FlintKnife01 0.7, sickles and hoe 0.6, Adze01 Axe 0.4 + Chisel 0.6, GrindingStone01 Mortar 0.6), copper 0.8 (CopperAwl01),
+bronze 0.85 (axe, knife, saw, chisel), iron 1.0 (axe, knife), and 1.0 for the smith's hammer / tongs, the pot, the crucible. Still without a
+type, because none fits: the planting stick, plowshare, spindle / whorl / loom, potter's wheel, fishing gear, traps, lights, anvil, bellows.
+`MOFramework.Items.ToolsDoTheirWork` holds it: a tool named Axe / Knife / Saw / Chisel / Hoe / Sickle / Tongs / Awl must do that work.
 
 ## 4. The heat ladder (PROPOSED values; fields exist)
 

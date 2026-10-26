@@ -73,6 +73,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOCreature.h"
 #include "MOCreatureDefinitionRow.h"
+#include "MOCropPlotActor.h"
 #include "MODeathRecapWidget.h"
 #include "MOCommonButton.h"
 #include "MOWorldReadinessSubsystem.h"
@@ -1637,6 +1638,32 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				}
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearEmbed: removed %d block(s)"), Removed);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.AgeCrops <Days> [RadiusCm=1500] ----------
+	// Every field plot within RadiusCm of player 0's pawn grows as if Days more game days had passed (AMOCropPlotActor::DevAgeCrop), so a
+	// test sees sprouting, ripening and shattering without waiting a season. Server.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.AgeCrops"),
+		TEXT("Dev (server): crops near player 0 grow Days more game days. Usage: MO.Test.AgeCrops <Days> [RadiusCm=1500]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const double Days = Args.Num() > 0 ? FCString::Atod(*Args[0]) : 1.0;
+			const float Radius = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 1500.0f;
+			APawn* Player = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+			int32 Aged = 0;
+			for (TActorIterator<AMOCropPlotActor> It(World); It && Player; ++It)
+			{
+				if (FVector::Dist(It->GetActorLocation(), Player->GetActorLocation()) <= Radius)
+				{
+					It->DevAgeCrop(Days);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AgeCrops: %s %s -> %s, %.1f days grown, growth %.0f%%"), *It->GetName(), *It->GetCropId().ToString(),
+						*StaticEnum<EMOCropStage>()->GetNameStringByValue(static_cast<int64>(It->GetStage())), It->GetDaysGrown(), It->GetGrowth() * 100.0f);
+					++Aged;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AgeCrops: %d plot(s) aged %.1f days"), Aged, Days);
 		}),
 		ECVF_Default));
 

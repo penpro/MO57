@@ -77,6 +77,10 @@
   is used up by it, a grab from the ground needs the input pushing at the face, built things are not climbable, climbing costs 3 stamina / s.
 - **The survivor is "femme"; "masc" is a coming-soon customization** (Wes: "make the existing character 'femme' and mark 'masc' as a
   customization coming soon"). Settles the creator side of F15 for now.
+- **Tool effectiveness ladder** (Claude's small call, noted Oct 26, found because a stone sickle could not harvest): stone 0.6-0.75,
+  copper 0.8, bronze 0.85, iron 1.0 (`PROGRESSION_ROADMAP.md` § Tool capabilities). Wes may retune any value.
+- **The first crop is wild grain** (Claude's small call, Oct 26): the existing Wild Grain item sown on purpose, the pre-domestic step that
+  needs no new seed item; the founder crops by biome wait on F44.
 - **Farming, animal husbandry and more animals** (Wes: "let's get farming, animal husbandry, and some other animals going. We will need
   horses, pigs, cows, etc plus bears, rabbits, birds, chickens, I'm sure there's more"): in progress (BACKLOG).
 - **F39 option B tried and blocked** (Wes: "Try F39 option B ... on its own branch, and measure it"): UnrealBuildTool refuses a project copy

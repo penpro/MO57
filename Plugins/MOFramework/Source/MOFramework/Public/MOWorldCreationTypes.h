@@ -38,7 +38,8 @@ enum class EMOWorldPace : uint8
 	Building,       // construction progress
 	Terraforming,   // digging and filling ground
 	Inspecting,     // studying an item
-	SkillGain       // skill experience (a rate: more is faster, unlike the times above)
+	SkillGain,      // skill experience (a rate: more is faster, unlike the times above)
+	Growing         // a crop's season, sowing to ripe (Docs/Farming_And_Husbandry.md; DECISIONS F42)
 };
 
 /** How the land is generated. Every field 1 = the generator as authored. */
@@ -103,13 +104,16 @@ struct MOFRAMEWORK_API FMOWorldPace
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
 	float SkillGain = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
+	float Growing = 1.0f;
+
 	/** The multiplier of one activity, clamped to the knob's range (never zero). */
 	float For(EMOWorldPace Activity) const;
 
 	bool operator==(const FMOWorldPace& O) const
 	{
 		return Gathering == O.Gathering && Crafting == O.Crafting && Building == O.Building && Terraforming == O.Terraforming && Inspecting == O.Inspecting
-			&& SkillGain == O.SkillGain;
+			&& SkillGain == O.SkillGain && Growing == O.Growing;
 	}
 	bool operator!=(const FMOWorldPace& O) const { return !(*this == O); }
 };

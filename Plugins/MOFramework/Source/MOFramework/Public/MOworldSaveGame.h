@@ -326,6 +326,14 @@ struct MOFRAMEWORK_API FMOPersistedBuildingRecord
     /** Whether the station is currently active (for crafting stations). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     bool bIsActive = false;
+
+    /** A field plot's crop (AMOCropPlotActor; DT_Crops row), None = fallow. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FName CropId;
+
+    /** How many days that crop had grown (the world's Growing pace applied); < 0 = nothing sown. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    double CropDaysGrown = -1.0;
 };
 
 UCLASS()

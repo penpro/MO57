@@ -143,7 +143,7 @@ void UMOCraftingQueueWidget::BuildDisplayRows_Implementation(TArray<FMOQueueDisp
 	for (int32 i = 0; i < QueueEntries.Num(); ++i)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(QueueEntries[i].RecipeId);
-		FMOQueueDisplayRow Row = BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining, FMOWorldRules::GetPace(this, EMOWorldPace::Crafting));
+		FMOQueueDisplayRow Row = BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining, FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Crafting, 1.0f));   // the pace, 0 in a creative world (instant)
 		if (i == 0 && !Queue->IsCraftingActive())
 		{
 			Row.State = EMOQueueRowState::Paused;

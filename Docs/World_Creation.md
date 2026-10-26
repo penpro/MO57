@@ -28,6 +28,7 @@ existing save (a save from before Oct 22 reads the defaults, which is the world 
 | Digging time | 0.1-4 | terraforming (`UMOTerraformingComponent`, after the rock-hardness factor) |
 | Study time | 0.1-4 | inspecting an item (`FMOInspectionActions`) |
 | Skill learning | 0.1-4 | a RATE: skill experience x it (`UMOSkillsComponent::AddExperience`) |
+| Growing season | 0.1-4 | a crop's days from sowing to ripe x it (`AMOCropPlotActor::GetDaysGrown`; Oct 26; the default is DECISIONS F42) |
 | Creative mode (a world RULE: Off / On, default Off) | 0 / 1 | crafting and building need and consume no materials (BR25-5, Oct 24 2026: Wes, "make a 'creative mode' where crafting and building costs nothing") and since Oct 26 take no time (Wes: "in creative mode make it so building happens instantly, no build time etc", crafting the same): `FMOWorldRules::IsInstant` -> `ScaleSeconds` returns 0 for building and crafting, and a placed building is finished on the spot (`Docs/Building.md`). The one exception to Principle 11: a world rule chosen at creation, never a skip inside a survival world. Read through `FMOWorldRules::IsCreative` in `UMOCraftingSubsystem::HasIngredients`, `UMOCraftingQueueComponent` (a free entry: nothing reserved, nothing refunded on cancel) and `UMOBuildProgressComponent` (materials count as deposited). Host console: `MO.World.Creative [0\|1]` |
 
 The knobs come in three groups (`EMOWorldKnobGroup`): Shape, Pace (time multipliers) and Rules (on / off switches, `FMOWorldKnob::bSwitch`,

@@ -53,8 +53,10 @@ namespace
 			PaceFloor, 4.0f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Pace.Inspecting; }));
 		K.Add(Knob(TEXT("SkillGain"), G::Pace, LOCTEXT("SkillGain", "Skill learning"), LOCTEXT("SkillGainHint", "How fast skills grow with use. 2 = twice as fast."),
 			PaceFloor, 4.0f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Pace.SkillGain; }));
+		K.Add(Knob(TEXT("Growing"), G::Pace, LOCTEXT("Growing", "Growing season"), LOCTEXT("GrowingHint", "How long crops take from sowing to ripe. 1 = real seasons (barley about three months)."),
+			PaceFloor, 4.0f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Pace.Growing; }));
 		FMOWorldKnob Creative = Knob(TEXT("CreativeMode"), G::Rules, LOCTEXT("CreativeMode", "Creative mode"),
-			LOCTEXT("CreativeModeHint", "Crafting and building cost no materials. The work still takes its time."),
+			LOCTEXT("CreativeModeHint", "Crafting and building cost no materials and finish at once."),
 			0.0f, 1.0f, 1.0f, [](FMOWorldCreationSettings& S) { return &S.CreativeMode; });
 		Creative.Default = 0.0f;
 		Creative.bSwitch = true;
@@ -84,6 +86,7 @@ float FMOWorldPace::For(EMOWorldPace Activity) const
 	case EMOWorldPace::Terraforming: V = Terraforming; break;
 	case EMOWorldPace::Inspecting:   V = Inspecting; break;
 	case EMOWorldPace::SkillGain:    V = SkillGain; break;
+	case EMOWorldPace::Growing:      V = Growing; break;
 	}
 	return FMath::IsFinite(V) ? FMath::Clamp(V, PaceFloor, 4.0f) : 1.0f;
 }

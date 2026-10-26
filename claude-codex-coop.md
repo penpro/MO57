@@ -1681,3 +1681,11 @@ References: CL-0199
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0201
 Status: RELEASE (editor, build window and instances closed). CL-0199: the creator's "Body type: Femme" and "Masc body type -- Coming soon" rows are in WBP_CharacterCreatorPanel. CL-0200: pig and fox are in as data-only species (UMOCreatureAnimInstance, BP_Pig / BP_Fox, DT_Creatures Pig01 / Fox01, DT_Carcasses Pig / Fox, the prey spawn list in DefaultGame.ini); a spawned group is one species of its own size, together; dev verbs MO.Test.SpawnCreature / SpawnGroup. MOFramework suite 386/386. Next: crops (MOCropTypes / AMOCropPlotActor, a new build window: claim to follow).
 References: CL-0200
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0202
+Status: CLAIM build window + editor (crops, Wes Oct 26: "let's get farming ... going"): new MOCropTypes / AMOCropPlotActor / MO.Test.AgeCrops, FMOPersistedBuildingRecord crop fields, the world's Growing pace (FMOWorldPace / knob), the creative-mode hint text (it still said the work takes its time). Then editor: DT_Crops (new), seed / harvest items and the tilling recipe rows, BP_CropPlot.
+References: CL-0201
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0203
+Status: PROGRESS (editor closed; no instances). Farming core committed (CL-0202's claim): field plot / crops / Growing knob / DT_Crops / BP_CropPlot / GrainSheaf01 / TillFieldPlot / ThreshGrain, and a data fix: 18 tools had no tool capability in DT_Items (bronze / iron axes and knives, saw, chisels, smith's hammer and tongs, sickles, hoe, pot, crucible, grinding stone) -- given their types; MOFramework.Items.ToolsDoTheirWork guards it. Build window stays claimed for the co-op traversal check (AMOTestLedge, two instances).
+References: CL-0202

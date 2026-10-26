@@ -80,7 +80,7 @@ bool FMOWorldCreation_Knobs::RunTest(const FString& Parameters)
 		++PerGroup.FindOrAdd(K.Group);
 	}
 	TestEqual(TEXT("six shape knobs"), PerGroup.FindRef(EMOWorldKnobGroup::Shape), 6);
-	TestEqual(TEXT("six pace knobs"), PerGroup.FindRef(EMOWorldKnobGroup::Pace), 6);
+	TestEqual(TEXT("seven pace knobs (Growing season: Oct 26)"), PerGroup.FindRef(EMOWorldKnobGroup::Pace), 7);
 	TestEqual(TEXT("one world rule (creative mode)"), PerGroup.FindRef(EMOWorldKnobGroup::Rules), 1);
 
 	TestTrue(TEXT("set a known knob"), FMOWorldCreation::SetKnob(S, TEXT("Crafting"), 0.0f));
