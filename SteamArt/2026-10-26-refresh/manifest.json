@@ -1,0 +1,390 @@
+{
+  "project": "Metaverse: Origins",
+  "createdUtc": "2026-10-26T08:23:52.989Z",
+  "pipeline": "Deterministic Sharp image processing; no AI image generation/repainting",
+  "userDirection": "Yes—preserve actual gameplay (Recommended)",
+  "inputs": [
+    {
+      "file": "sources/01_rocky_coast.jpg",
+      "width": 2107,
+      "height": 1018,
+      "bytes": 244939,
+      "sha256": "4c892a5c7f2d4a839348d9cbe573846691bcdcaed3caa4049c7827dd25b3f847"
+    },
+    {
+      "file": "sources/02_river.jpg",
+      "width": 1722,
+      "height": 1018,
+      "bytes": 255120,
+      "sha256": "758a7a6245e494eaa330f778441be47c239419aa165a2688d1813b76636bbdad"
+    },
+    {
+      "file": "sources/03_cliffs.jpg",
+      "width": 1810,
+      "height": 1015,
+      "bytes": 378122,
+      "sha256": "ddd1c04621a5add5c77ce5a1dfa85bc4f77890f6cf4f17e4118d2740ee770265"
+    },
+    {
+      "file": "sources/04_beach.jpg",
+      "width": 1834,
+      "height": 1009,
+      "bytes": 103194,
+      "sha256": "0652e35ef67711b5d173bd6340a5d3465e18db53b2359bdf5c3945062bc40b70"
+    },
+    {
+      "file": "sources/05_night.jpg",
+      "width": 1756,
+      "height": 1018,
+      "bytes": 94700,
+      "sha256": "a9394f82d0a6dde999593e78ee2430f435b471525957d151ccd67d4f260f1727"
+    },
+    {
+      "file": "sources/06_fog_forest.jpg",
+      "width": 1741,
+      "height": 1017,
+      "bytes": 205190,
+      "sha256": "a2d461401efa6af22d5d4a9ab44989f4455435ae7ea1ac4fb1d4d9fad5855785"
+    }
+  ],
+  "screenshots": [
+    {
+      "source": "03_cliffs.jpg",
+      "file": "screenshots/01_cliffs_1920x1080.png",
+      "nativeSize": [
+        1810,
+        1015
+      ],
+      "crop": {
+        "left": 9,
+        "top": 3,
+        "width": 1792,
+        "height": 1008
+      },
+      "outputSize": [
+        1920,
+        1080
+      ],
+      "resizeScale": 1.0714285714285714,
+      "grade": {
+        "ev": 0.04,
+        "gamma": 0.965,
+        "contrast": 0.06,
+        "saturation": 1.035,
+        "gains": [
+          1.005,
+          1,
+          0.998
+        ]
+      },
+      "sharpening": {
+        "sigma": 0.5,
+        "m1": 0.35,
+        "m2": 0.7
+      },
+      "edits": "Existing pixel values only: tonal curve, saturation, crop, Lanczos resize, mild sharpening."
+    },
+    {
+      "source": "04_beach.jpg",
+      "file": "screenshots/02_beach_1920x1080.png",
+      "nativeSize": [
+        1834,
+        1009
+      ],
+      "crop": {
+        "left": 21,
+        "top": 0,
+        "width": 1792,
+        "height": 1008
+      },
+      "outputSize": [
+        1920,
+        1080
+      ],
+      "resizeScale": 1.0714285714285714,
+      "grade": {
+        "ev": 0.025,
+        "gamma": 1,
+        "contrast": 0.06,
+        "saturation": 1.025,
+        "gains": [
+          1.003,
+          1,
+          0.998
+        ]
+      },
+      "sharpening": {
+        "sigma": 0.5,
+        "m1": 0.35,
+        "m2": 0.7
+      },
+      "edits": "Existing pixel values only: tonal curve, saturation, crop, Lanczos resize, mild sharpening."
+    },
+    {
+      "source": "05_night.jpg",
+      "file": "screenshots/03_night_1920x1080.png",
+      "nativeSize": [
+        1756,
+        1018
+      ],
+      "crop": {
+        "left": 6,
+        "top": 18,
+        "width": 1744,
+        "height": 981
+      },
+      "outputSize": [
+        1920,
+        1080
+      ],
+      "resizeScale": 1.1009174311926606,
+      "grade": {
+        "ev": 0.12,
+        "gamma": 0.92,
+        "contrast": 0.02,
+        "saturation": 1.02,
+        "gains": [
+          1,
+          1,
+          1
+        ]
+      },
+      "sharpening": {
+        "sigma": 0.5,
+        "m1": 0.35,
+        "m2": 0.7
+      },
+      "edits": "Existing pixel values only: tonal curve, saturation, crop, Lanczos resize, mild sharpening."
+    }
+  ],
+  "capsules": [
+    {
+      "file": "main_capsule_1232x706.png",
+      "size": [
+        1232,
+        706
+      ],
+      "source": "03_cliffs",
+      "focus": [
+        0.5,
+        0.5
+      ],
+      "logoWidth": 0.76,
+      "logoTop": 0.052,
+      "topOpacity": 0.68,
+      "sourceCrop": {
+        "left": 20,
+        "top": 0,
+        "width": 1771,
+        "height": 1015
+      },
+      "logoPixelBounds": {
+        "left": 148,
+        "top": 36.5,
+        "width": 936.5,
+        "height": 250
+      },
+      "onlyText": "METAVERSE / ORIGINS (existing wordmark)"
+    },
+    {
+      "file": "header_capsule_920x430.png",
+      "size": [
+        920,
+        430
+      ],
+      "source": "03_cliffs",
+      "focus": [
+        0.5,
+        0.41
+      ],
+      "logoWidth": 0.74,
+      "logoTop": 0.05,
+      "topOpacity": 0.71,
+      "sourceCrop": {
+        "left": 0,
+        "top": 0,
+        "width": 1810,
+        "height": 846
+      },
+      "logoPixelBounds": {
+        "left": 119.5,
+        "top": 21.5,
+        "width": 681,
+        "height": 182
+      },
+      "onlyText": "METAVERSE / ORIGINS (existing wordmark)"
+    },
+    {
+      "file": "small_capsule_462x174.png",
+      "size": [
+        462,
+        174
+      ],
+      "source": "05_night",
+      "focus": [
+        0.5,
+        0.36
+      ],
+      "logoWidth": 0.93,
+      "logoTop": 0.17,
+      "topOpacity": 0.18,
+      "padOpacity": 0.58,
+      "sourceCrop": {
+        "left": 0,
+        "top": 36,
+        "width": 1756,
+        "height": 661
+      },
+      "logoPixelBounds": {
+        "left": 16.5,
+        "top": 29.5,
+        "width": 429.5,
+        "height": 114.5
+      },
+      "onlyText": "METAVERSE / ORIGINS (existing wordmark)"
+    },
+    {
+      "file": "vertical_capsule_748x896.png",
+      "size": [
+        748,
+        896
+      ],
+      "source": "03_cliffs",
+      "focus": [
+        0.356,
+        0.5
+      ],
+      "logoWidth": 0.88,
+      "logoTop": 0.075,
+      "topOpacity": 0.68,
+      "sourceCrop": {
+        "left": 221,
+        "top": 0,
+        "width": 847,
+        "height": 1015
+      },
+      "logoPixelBounds": {
+        "left": 45,
+        "top": 67,
+        "width": 658,
+        "height": 175.5
+      },
+      "onlyText": "METAVERSE / ORIGINS (existing wordmark)"
+    }
+  ],
+  "background": {
+    "source": "06_fog_forest.jpg",
+    "crop": {
+      "left": 650,
+      "top": 200,
+      "width": 1091,
+      "height": 615
+    },
+    "outputSize": [
+      1438,
+      810
+    ],
+    "text": false
+  },
+  "branding": {
+    "source": "SteamArt/wordmark_transparent.png",
+    "copiedSource": "sources/wordmark_transparent.png",
+    "sha256": "eb97abee8f347bd33c449aec45c8d8821743cd0a128f472c024e529c5e3cb796",
+    "font": "Existing Sitka Display wordmark; reused without redrawing",
+    "kit": "DesignKit/MO57_UI_Kit/MO57_UI_Kit",
+    "kitDisplayFont": "Bitter (specified, not bundled)",
+    "palette": {
+      "cream": "#EEE7D7",
+      "iron": "#0E0D0B",
+      "verdigris": "#6CB8A9",
+      "highlight": "#88CBBE"
+    }
+  },
+  "steamReferencesChecked": "2026-10-26",
+  "steamSources": [
+    "https://partner.steamgames.com/doc/store/assets/standard",
+    "https://partner.steamgames.com/doc/store/assets/rules"
+  ],
+  "exports": [
+    {
+      "file": "main_capsule_1232x706.png",
+      "width": 1232,
+      "height": 706,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 2030803,
+      "sha256": "d18f56986ef051a35cb8168656cce4b1e449163fb4667d90b97140e68f30460d"
+    },
+    {
+      "file": "header_capsule_920x430.png",
+      "width": 920,
+      "height": 430,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 933000,
+      "sha256": "931787fc391141fd406778b01a2eb036b20f6544d47f2f7a83dd9504b744553f"
+    },
+    {
+      "file": "small_capsule_462x174.png",
+      "width": 462,
+      "height": 174,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 133090,
+      "sha256": "5cbe422148c47d37594db22015d83302e6de51e862bf0fc22830182059b0c7ef"
+    },
+    {
+      "file": "vertical_capsule_748x896.png",
+      "width": 748,
+      "height": 896,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 1526586,
+      "sha256": "d9eac75a0f58d1acd153b609ac93dee46eefefc9e2c6ce3e7542c79df73a9e00"
+    },
+    {
+      "file": "page_background_1438x810.png",
+      "width": 1438,
+      "height": 810,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 533042,
+      "sha256": "00a6b5fb282ccbdd9ac95e420c95116c1853534037f031b1dc55f7753dc81c75"
+    },
+    {
+      "file": "screenshots/01_cliffs_1920x1080.png",
+      "width": 1920,
+      "height": 1080,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 5282044,
+      "sha256": "bb176386fb29b9b64f3ec3d0ddaf4f51d601f9bcadf71ae40e28b72baa7b626a"
+    },
+    {
+      "file": "screenshots/02_beach_1920x1080.png",
+      "width": 1920,
+      "height": 1080,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 1706585,
+      "sha256": "8a5886136dcfe12645d075c0adae9ee9bba1c4033e6ea5d95ebd27f7d947e6ef"
+    },
+    {
+      "file": "screenshots/03_night_1920x1080.png",
+      "width": 1920,
+      "height": 1080,
+      "channels": 3,
+      "hasAlpha": false,
+      "colourSpace": "srgb",
+      "bytes": 2001160,
+      "sha256": "2d3ef8e907c96f6ac4cd17a4c27506c2b621baf4a70d21fcc028e2b24dadf92b"
+    }
+  ]
+}
