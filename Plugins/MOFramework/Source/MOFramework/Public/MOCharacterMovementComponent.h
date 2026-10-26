@@ -261,6 +261,8 @@ private:
 	// Traversal / climbing (see IsTraversing / IsClimbing). Saved and restored by FSavedMove_MO.
 	void StartTraversal(const FTraversalPlan& Plan);
 	void StartClimbing(const FHitResult& Wall, EMOClimbSurface Surface);
+	/** SetMovementMode(MOVE_Custom, Mode) from a jump, keeping the jump press for the move the server replays (see the .cpp). */
+	void EnterCustomModeFromJump(uint8 Mode);
 	void PhysTraverse(float DeltaTime, int32 Iterations);
 	void PhysClimb(float DeltaTime, int32 Iterations);
 	/** The body's facing for traversal probes: the face held while climbing, else where the body looks (flat). */

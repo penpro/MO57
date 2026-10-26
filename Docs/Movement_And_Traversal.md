@@ -48,7 +48,11 @@ Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and
   **Climb** holds the capsule `ClimbWallGapCm` from the face and moves it along the face with the input.
 - They start in `DoJump`, which the movement component runs from the jump input on the joiner AND, from the same input in the moves, on the
   server: both machines trace the same world and start the same move. The traversal's state (path, duration, elapsed) and the face held
-  ride in the saved moves (`FSavedMove_MO`), so a replay after a correction runs them the same way. A root-motion source was considered
+  ride in the saved moves (`FSavedMove_MO`), so a replay after a correction runs them the same way. **The jump press must ride the move
+  that starts it** (`EnterCustomModeFromJump`): changing to any mode but falling clears the press (`ACharacter::OnMovementModeChanged` ->
+  `ResetJumpState`), and the joiner's machine changes mode inside `DoJump`, BEFORE it records the move for the server. Until Oct 26 the
+  server therefore never saw the press, never started the move and pulled the joiner back (a plain jump goes to falling, which keeps
+  it, so plain jumps always worked). Found by the first two-process run. A root-motion source was considered
   and dropped: its path curve is compared by pointer between machines (`FRootMotionSource_MoveToForce::Matches`), and a delayed second leg
   is not handled under corrections (engine comment).
 - `FindTraversal` probes: rays at knee to reach height for a face (reach = capsule radius + 60 cm; the MetaHuman's radius is 28.9 cm);
@@ -60,5 +64,12 @@ Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and
 
 Hop up onto a 90 cm block (standing on it after); vault a 90 x 30 cm fence (1.58 m on, same ground height); pull up onto a 170 cm ledge; a
 4 m plain block: no move (control); a 4 m climbable block: grabbed while pushing at it, 120 cm climbed in 4 s, crouch let go and the body
-landed standing; a 3.2 m climbable block with W held: climbed and pulled over the top (standing on it). Not yet checked: a joiner
-climbing on a listen server (the prediction path), a real cliff and tree in the world (the classification is unit-tested), how it looks.
+landed standing; a 3.2 m climbable block with W held: climbed and pulled over the top (standing on it).
+
+**A joiner (Oct 26, `python Tools/ue.py nettest traversal`: host + joiner processes, real input actions on the joiner):** hops up onto a
+90 cm block and is on it on both machines (0.0 cm apart); jumping at a 4 m climbable face while pushing at it grabs it on both; W climbs
+120 cm in 4 s on both (0.0 cm apart); crouch lets go on both. The blocks are `AMOTestLedge`s (replicated with their size and climbable
+flag: an `AStaticMeshActor`'s scale and tags do not replicate, so a joiner saw a 1 m plain cube where the host had a 4 m climbable face);
+`MO.Test.SpawnLedge ... [PlayerIndex]` on the host puts one in front of the joiner's pawn. The host logs why it refused a joiner's jump
+(`[MOTraversal] server: ... has no traversal: <why>`). Not yet checked: a real cliff and tree in the world (the classification is
+unit-tested), how it looks.

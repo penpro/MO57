@@ -1689,3 +1689,7 @@ References: CL-0201
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0203
 Status: PROGRESS (editor closed; no instances). Farming core committed (CL-0202's claim): field plot / crops / Growing knob / DT_Crops / BP_CropPlot / GrainSheaf01 / TillFieldPlot / ThreshGrain, and a data fix: 18 tools had no tool capability in DT_Items (bronze / iron axes and knives, saw, chisels, smith's hammer and tongs, sickles, hoe, pot, crucible, grinding stone) -- given their types; MOFramework.Items.ToolsDoTheirWork guards it. Build window stays claimed for the co-op traversal check (AMOTestLedge, two instances).
 References: CL-0202
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0204
+Status: RELEASE (build window, editor and every instance closed). N-219 done: a joiner's vault / hop up / grab never happened on the server (the custom-mode change inside DoJump cleared the jump press before the client recorded the move) -- fixed (UMOCharacterMovementComponent::EnterCustomModeFromJump); AMOTestLedge (replicated test block); new `ue.py nettest traversal` (Tools/ue_inst.py traversal_test, Tools/ue.py mode list). nettest traversal PASS; standalone traversal / building-mode / creative checks PASS on the same build.
+References: CL-0203

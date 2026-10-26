@@ -38,11 +38,15 @@ Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one
 stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|click|drag|key ...` (real input / window capture for instances and packaged windows; `drag -X -Y -X2 -Y2` is a real
 UMG drag and drop). `MO.Test.InjectInput <IA_Name> [X Y] [Seconds]` feeds a REAL Enhanced Input action (from `/MOFramework/Input/`) through the
 controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input` skips (it calls the pawn directly): use it for naive-player passes.
+Crops (Oct 26): `MO.Test.AgeCrops <Days> [RadiusCm=1500]` (plots near player 0 grow that many more days; logs stage and growth), with
+`MO.Test.WorldAction list|Sow:<CropId>|Harvest|ClearPlot` on the plot. A creative world tills a plot at once; `Gathering=0.1` shortens sowing / harvest.
 Creatures (Oct 26): `MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] [SideCm=0]` (on the ground in front of player 0; Species = Pig ->
 `/MOFramework/MOBS/Pig/BP_Pig`), `MO.Test.SpawnGroup <Species|ClassPath> [DistanceCm=1500]` (a whole group as the spawner makes it; logs its size and
 spread). Python cannot spawn actors in a `-game` instance. Prey bolt from a player on sight: to photograph one, stop its brain
 (`ctrl.brain_component.stop_logic("photo")`) and hide instanced foliage (`ShowFlag.InstancedStaticMeshes 0`, `...InstancedFoliage 0`, `...InstancedGrass 0`).
-Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90]` (a test block in front of the pawn, which turns to
+Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go; host and joiner must agree; ~6 min).
+Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
+that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to
 face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, `MO.Test.Traversal` (what a jump would do, and why not).
 
 ## 2. Build

@@ -74,6 +74,7 @@
 #include "MOCreature.h"
 #include "MOCreatureDefinitionRow.h"
 #include "MOCropPlotActor.h"
+#include "MOTestLedge.h"
 #include "MODeathRecapWidget.h"
 #include "MOCommonButton.h"
 #include "MOWorldReadinessSubsystem.h"
@@ -1767,20 +1768,22 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	}
 
 	// ---------- MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] / MO.Test.ClearLedges / MO.Test.Traversal ----------
-	// A test obstacle for the traversal moves (MOTraversal.h): a block HeightCm tall standing on the ground DistanceCm in front of the local
-	// player's pawn, 2 m wide, DepthCm deep; Climbable tags it MOClimbable (a rock face to climb). The pawn turns to face it. MO.Test.Traversal
-	// reports what a jump would do where the pawn stands. Run on the machine whose pawn it is.
+	// A test obstacle for the traversal moves (MOTraversal.h): a block HeightCm tall standing on the ground DistanceCm in front of player
+	// PlayerIndex's pawn, 2 m wide, DepthCm deep; Climbable tags it MOClimbable (a rock face to climb). The pawn turns to face it (a joiner's
+	// own client must turn it: its moves own its rotation). The block is an AMOTestLedge: on a listen server it replicates, shape and tags,
+	// so a joiner climbs the same block the host does (N-219). MO.Test.Traversal reports what a jump would do where the local pawn stands.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.SpawnLedge"),
-		TEXT("Dev: a test block in front of the pawn for vault / hop up / pull-up / climbing. Usage: MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90]"),
+		TEXT("Dev: a test block in front of a pawn for vault / hop up / pull-up / climbing (replicated from a host). Usage: MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			APawn* Pawn = World ? UGameplayStatics::GetPlayerPawn(World, 0) : nullptr;
+			const int32 PlayerIndex = Args.Num() > 4 ? FCString::Atoi(*Args[4]) : 0;
+			APawn* Pawn = World ? UGameplayStatics::GetPlayerPawn(World, PlayerIndex) : nullptr;
 			ACharacter* Character = Cast<ACharacter>(Pawn);
-			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-			if (!Character || !Cube || Args.Num() < 1)
+			if (!Character || Args.Num() < 1 || (PlayerIndex != 0 && World->GetNetMode() == NM_Client))
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SpawnLedge: %s"), !Character ? TEXT("no pawn") : (!Cube ? TEXT("cube mesh missing") : TEXT("usage: MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]")));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SpawnLedge: %s"), !Character ? TEXT("no pawn") : (Args.Num() < 1
+					? TEXT("usage: MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm] [PlayerIndex]") : TEXT("another player's block: run it on the host")));
 				return;
 			}
 			const float Height = FMath::Clamp(FCString::Atof(*Args[0]), 10.0f, 5000.0f);
@@ -1792,15 +1795,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			Facing.Z = 0.0;
 			Facing.Normalize();
 			const FVector Center = Character->GetActorLocation() + Facing * (Distance + Depth * 0.5f);
-			AStaticMeshActor* Block = World->SpawnActor<AStaticMeshActor>(FVector(Center.X, Center.Y, FeetZ + Height * 0.5f - 2.0f), Facing.Rotation());
-			Block->SetMobility(EComponentMobility::Movable);
-			Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
-			Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
-			Block->SetActorScale3D(FVector(Depth / 100.0f, 2.0f, (Height + 4.0f) / 100.0f));   // the engine cube is 100 uu
-			Block->Tags.Add(TEXT("MOTestLedge"));
-			if (bClimbable)
+			AMOTestLedge* Block = World->SpawnActor<AMOTestLedge>(FVector(Center.X, Center.Y, FeetZ + Height * 0.5f - 2.0f), Facing.Rotation());
+			if (Block)
 			{
-				Block->Tags.Add(TEXT("MOClimbable"));
+				Block->Configure(Height, Depth, bClimbable);
 			}
 			if (AController* Controller = Character->GetController())
 			{
@@ -1818,9 +1816,9 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			int32 Removed = 0;
-			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			for (TActorIterator<AMOTestLedge> It(World); It; ++It)
 			{
-				if (It->Tags.Contains(TEXT("MOTestLedge")))
+				if (It->HasAuthority())
 				{
 					It->Destroy();
 					++Removed;

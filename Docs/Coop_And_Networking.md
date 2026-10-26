@@ -163,6 +163,8 @@ python Tools/ue.py inst list              # the running instances; drive one wit
   `_client_light_fire` (Oct 20: the joiner's hand drill runs on the host, and the joiner's OWN screen shows "Firemaking +25 XP": the server ->
   joiner skill toast, which the bridge's Python cannot test because it runs RPCs locally; the drill is shortened by `MO.Test.FireAttemptSeconds`)
   (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
+- `nettest traversal` (Oct 26): a joiner hops up onto a replicated test block, grabs a climbable face, climbs it and lets go; the host and the
+  joiner must agree at each step (`Docs/Movement_And_Traversal.md` §4-5). It found that a move started inside `DoJump` lost the jump press.
 - `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an
   internet session's rubber banding (Wes, Oct 17). Its controls (a 4 KB/s rate cap must saturate, a joiner walking 1.6x faster than the
   server allows must be corrected, +100 ms of `NetEmulation.PktLag` must show as delay) prove each measure can fail. Real tests: section 7.

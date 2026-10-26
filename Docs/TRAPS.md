@@ -154,6 +154,24 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **A joiner's move that starts on a jump was pulled back** -> a movement-mode change to anything but falling clears the jump press
+  (`ACharacter::OnMovementModeChanged` -> `ResetJumpState`). Done inside `DoJump` it happens BEFORE the client records the move, so the
+  server never sees the press. Keep it across the change (`UMOCharacterMovementComponent::EnterCustomModeFromJump`). Standalone hides
+  this: the authority runs the move itself. (Oct 26)
+- **A rerun's instance "closed by request" seconds in**: the OLD test script was still running (its instance stopped, the script
+  still waiting); when it ended, its `finally: ui.stop(NAME)` closed the new run's instance of the same name. Stop the old script
+  itself (its recorded PID), not only its instance, or give the rerun a fresh instance name. (Oct 26)
+- **Python cannot spawn an actor in a `-game` instance** (`GameplayStatics.begin_deferred_actor_spawn_from_class` is not exposed; the
+  editor-only spawners need GEditor): spawn through a dev verb (`MO.Test.SpawnCreature`, `MO.Test.SpawnLedge`). (Oct 26)
+- **`a.is_dead()` raised "'bool' object is not callable"**: a UPROPERTY named like a UFUNCTION (`bIsDead` -> `is_dead`) shadows it in
+  Python. Read the attribute (`a.is_dead`). (Oct 26)
+- **After `MO.Save.LoadFrom` player 0 has no pawn** until one is picked: a verb that works around "player 0's pawn" (`MO.Test.AgeCrops`,
+  `HitCreature`) finds nothing. Assert on the load's own log lines instead (`[MOCrop] ... now <Stage>`, `LOAD BUILDINGS`). (Oct 26)
+- **A test block a joiner must use cannot be an `AStaticMeshActor`**: its scale and its tags do not replicate (the joiner saw a 1 m plain
+  cube). Use a replicated actor that carries its shape (`AMOTestLedge`). (Oct 26)
+- **Prey bolt from a player on sight**: a creature spawned in front of the camera is 30 m away a second later. To photograph one, stop
+  its brain (`ctrl.brain_component.stop_logic("photo")`); to hit one, spawn it 3 m away and hit at once. (Oct 26)
+
 - **`MO.Test.HitTest` does not click** (Oct 25): it only asks Slate where a real click at a widget's centre WOULD land (REACHES /
   BLOCKED). Style swaps logged after a hit test were Wes clicking in the instance window. `MO.Test.ClickWidget` clicks (simulated).
 - **Screenshots seconds apart cannot measure jitter** (Oct 25, groom hair): the idle animation and the wind move more between two `shot`s

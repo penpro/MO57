@@ -685,10 +685,24 @@ void UMOCharacterMovementComponent::StartTraversal(const FTraversalPlan& Plan)
 	Traverse.Elapsed = 0.0f;
 	ClimbSurface = EMOClimbSurface::None;
 	Velocity = FVector::ZeroVector;
-	SetMovementMode(MOVE_Custom, CMOVE_Traverse);
+	EnterCustomModeFromJump(CMOVE_Traverse);
 	static const TCHAR* Names[] = { TEXT("none"), TEXT("vault"), TEXT("hop up"), TEXT("pull-up") };
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: %s onto %.0f cm in %.2f s"), *GetNameSafe(CharacterOwner), Names[static_cast<int32>(Plan.Kind)],
 		Plan.HeightCm, Plan.Duration);
+}
+
+void UMOCharacterMovementComponent::EnterCustomModeFromJump(uint8 Mode)
+{
+	// A traversal or a grab starts inside DoJump, before a joiner's machine records the move it sends the server. Changing to any mode but
+	// falling clears the jump press (ACharacter::OnMovementModeChanged -> ResetJumpState), so that move reached the server without the
+	// press, the server never started the same traversal and pulled the joiner back (N-219, Oct 26). The press rides this move, as a jump's
+	// does; ClearJumpInput drops it after the move as usual.
+	const bool bPressed = CharacterOwner && CharacterOwner->bPressedJump;
+	SetMovementMode(MOVE_Custom, Mode);
+	if (bPressed)
+	{
+		CharacterOwner->bPressedJump = true;
+	}
 }
 
 void UMOCharacterMovementComponent::StartClimbing(const FHitResult& Wall, EMOClimbSurface Surface)
@@ -696,7 +710,7 @@ void UMOCharacterMovementComponent::StartClimbing(const FHitResult& Wall, EMOCli
 	ClimbNormal = Wall.ImpactNormal;
 	ClimbSurface = Surface;
 	Velocity = FVector::ZeroVector;
-	SetMovementMode(MOVE_Custom, CMOVE_Climb);
+	EnterCustomModeFromJump(CMOVE_Climb);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: climbing %s at %s"), *GetNameSafe(CharacterOwner),
 		Surface == EMOClimbSurface::Tree ? TEXT("a tree") : TEXT("rock"), *Wall.ImpactPoint.ToCompactString());
 }
@@ -736,12 +750,20 @@ bool UMOCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime
 		Velocity = Away * ClimbPushOffSpeed + FVector(0.0, 0.0, ClimbPushOffUpSpeed);
 		return true;
 	}
+	// A joiner's jump re-run on the server (N-219): what the server decided, so a refused move is visible in the host's log.
+	const bool bServerForRemote = CharacterOwner && CharacterOwner->HasAuthority() && !CharacterOwner->IsLocallyControlled();
 	if (CharacterOwner && !CharacterOwner->bIsCrouched && (IsMovingOnGround() || IsFalling()))
 	{
-		if (FindTraversal(Plan))
+		FString WhyNot;
+		if (FindTraversal(Plan, bServerForRemote ? &WhyNot : nullptr))
 		{
 			StartTraversal(Plan);
 			return true;
+		}
+		if (bServerForRemote)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] server: %s's jump (replay=%d) has no traversal: %s; at %s facing %s"), *CharacterOwner->GetName(),
+				bReplayingMoves ? 1 : 0, *WhyNot, *UpdatedComponent->GetComponentLocation().ToCompactString(), *TraversalFacing().ToCompactString());
 		}
 		FHitResult Wall;
 		EMOClimbSurface Surface = EMOClimbSurface::None;

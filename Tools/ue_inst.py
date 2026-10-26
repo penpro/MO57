@@ -5145,3 +5145,90 @@ def steam_host_test(uproject, editor_exe, keep=False, boot_timeout=240, map_path
         print(f"[nettest] steam-host: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
         if not keep:
             stop(name)
+
+
+_TRAV_FACE = r"""
+import math
+w = game or world
+pc = unreal.GameplayStatics.get_player_controller(w, 0)
+p = unreal.GameplayStatics.get_player_pawn(w, 0)
+blocks = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.MOTestLedge)
+if blocks:
+    b = min(blocks, key=lambda a: a.get_actor_location().distance(p.get_actor_location()))
+    d = b.get_actor_location() - p.get_actor_location()
+    pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=math.degrees(math.atan2(d.y, d.x))))
+    out("FACED %s %.0f cm tags %s" % (b.get_name(), d.length(), [str(t) for t in b.tags]))
+else:
+    out("FACED none")
+"""
+_TRAV_VIEW = "w = game or world\np = unreal.GameplayStatics.get_player_pawn(w, IDX)\nm = p.character_movement\nl = p.get_actor_location()\nout('TRAVVIEW mode=%d custom=%d z=%.1f x=%.1f y=%.1f' % (int(m.movement_mode.value), m.custom_movement_mode, l.z, l.x, l.y))"
+
+
+def _trav_view(name, idx):
+    m = re.search(r"TRAVVIEW mode=(\d+) custom=(\d+) z=(-?[\d.]+) x=(-?[\d.]+) y=(-?[\d.]+)", _probe(name, _TRAV_VIEW.replace("IDX", str(idx))))
+    return tuple(float(v) for v in m.groups()) if m else None
+
+
+def _trav_gap(h, c):
+    return ((h[2] - c[2]) ** 2 + (h[3] - c[3]) ** 2 + (h[4] - c[4]) ** 2) ** 0.5 if h and c else -1.0
+
+
+def _trav_ledge(host, client, height, depth, climbable):
+    """A replicated AMOTestLedge in front of the joiner's pawn (made on the host), the joiner's own client turned to it. Returns its top z."""
+    console(host, "MO.Test.ClearLedges")
+    time.sleep(2.5)
+    off = log_size(host)
+    console(host, f"MO.Test.SpawnLedge {height} {depth} {climbable} 60 1")
+    m = wait_log(host, r"SpawnLedge: [^\r\n]*feet z (-?[\d.]+), top z (-?[\d.]+)", since=off, timeout=10)
+    time.sleep(1.5)
+    _probe(client, _TRAV_FACE)
+    time.sleep(0.8)
+    return float(m.group(2)) if m else None
+
+
+def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
+    """A JOINER hops up and climbs on a listen server (N-219, Docs/Movement_And_Traversal.md): the moves start inside DoJump on the joiner's
+    machine and the server must replay the same move. Before the Oct 26 fix the joiner's machine predicted them and the server, which never
+    got the jump press (the custom-mode change cleared it), pulled the joiner back. Real processes, real input actions on the joiner."""
+    rep = Report()
+    host, client = "travhost", "travclient"
+    try:
+        start(host, uproject, editor_exe, pos=(0, 0), nosteam=True)
+        start(client, uproject, editor_exe, pos=(660, 0), nosteam=True)
+        if not _host_and_join(rep, host, client, "TraversalTest", boot_timeout=boot_timeout):
+            return False
+        time.sleep(30)   # the world builds round both pawns
+
+        top = _trav_ledge(host, client, 90, 150, 0)
+        console(client, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
+        time.sleep(2.5)
+        h, c = _trav_view(host, 1), _trav_view(client, 0)
+        rep.step("a joiner hops up onto a 90 cm block: on it on both machines (centre ~ top + 88)",
+                 bool(h and c and top) and abs(h[2] - (top + 88)) < 25 and abs(c[2] - (top + 88)) < 25, f"host {h} client {c} top {top}")
+        rep.step("... host and joiner agree where it is (< 20 cm)", 0 <= _trav_gap(h, c) < 20, f"gap {_trav_gap(h, c):.1f} cm")
+
+        _trav_ledge(host, client, 400, 150, 1)
+        console(client, "MO.Test.InjectInput IA_MOMove 0 1 3.0")
+        time.sleep(0.3)
+        console(client, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
+        time.sleep(2.0)
+        h0, c0 = _trav_view(host, 1), _trav_view(client, 0)
+        rep.step("a joiner jumping at a climbable face while pushing at it grabs it: climbing on both machines",
+                 bool(h0 and c0) and h0[0] == 6 and h0[1] == 2 and c0[0] == 6 and c0[1] == 2, f"host {h0} client {c0}")
+        console(client, "MO.Test.InjectInput IA_MOMove 0 1 4.0")
+        time.sleep(4.5)
+        h1, c1 = _trav_view(host, 1), _trav_view(client, 0)
+        rise_h = h1[2] - h0[2] if h0 and h1 else -1
+        rise_c = c1[2] - c0[2] if c0 and c1 else -1
+        rep.step("... W climbs it on both (70-170 cm in 4 s)", 70 < rise_h < 170 and 70 < rise_c < 170, f"host rose {rise_h:.0f}, client rose {rise_c:.0f}")
+        rep.step("... and they agree where the climber is (< 25 cm)", 0 <= _trav_gap(h1, c1) < 25, f"gap {_trav_gap(h1, c1):.1f} cm")
+        console(client, "MO.Test.InjectInput IA_Crouch 1 0 0.3")
+        time.sleep(3.0)
+        h2, c2 = _trav_view(host, 1), _trav_view(client, 0)
+        rep.step("... crouch lets go: walking again on both", bool(h2 and c2) and h2[0] == 1 and c2[0] == 1, f"host {h2} client {c2}")
+        return rep.ok
+    finally:
+        print(f"[nettest] traversal: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        if not keep:
+            stop(client)
+            stop(host)
