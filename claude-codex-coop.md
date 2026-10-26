@@ -1693,3 +1693,7 @@ References: CL-0202
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0204
 Status: RELEASE (build window, editor and every instance closed). N-219 done: a joiner's vault / hop up / grab never happened on the server (the custom-mode change inside DoJump cleared the jump press before the client recorded the move) -- fixed (UMOCharacterMovementComponent::EnterCustomModeFromJump); AMOTestLedge (replicated test block); new `ue.py nettest traversal` (Tools/ue_inst.py traversal_test, Tools/ue.py mode list). nettest traversal PASS; standalone traversal / building-mode / creative checks PASS on the same build.
 References: CL-0203
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0205
+Status: RELEASE (no editor, build or instance held). Tools/ue.py + Tools/ue_inst.py: the Voxel shader hooks are re-applied automatically before the editor, a -game instance or a package (a launcher action -- today Wes's MetaHuman Core Data install -- wipes them from the engine's shader files; tested: 5 files restored by the plugin's commandlet); MO_PROJECT points ue.py at another project (MO_Tools, the new lab project: its own repo penpro/MO_Tools); the editor / instance checks only count this project's processes.
+References: CL-0204

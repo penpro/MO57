@@ -105,6 +105,8 @@ def start(name, uproject, editor_exe, **kw):
     pid = read_pid(name)
     if is_alive(pid):
         raise RuntimeError(f"instance {name!r} is already running (pid {pid}); `ue.py inst stop {name}` first")
+    import ue  # a -game instance compiles shaders: the Voxel hooks must be in the engine first (ue.ensure_voxel_shader_hooks)
+    ue.ensure_voxel_shader_hooks("instance " + name)
     d = inst_dir(name)
     os.makedirs(d, exist_ok=True)
     # The last run's log survives one restart as game.prev.log: a one-off failure (an empty world, a crash) found only after a
@@ -4300,6 +4302,9 @@ def _package_build():
     """Re-package the Development build (RunUAT BuildCookRun, ~90 s). The editor must be closed."""
     import ue  # the one engine root (UE_ENGINE_ROOT or the per-machine install), not a hard-coded path
     uat = os.path.join(ue.ENGINE_ROOT, "Engine", "Build", "BatchFiles", "RunUAT.bat")
+    if not ue.ensure_voxel_shader_hooks("packaging"):   # a cook compiles the engine's shaders: unhooked = broken voxel materials shipped
+        print("[nettest] packaged: refused -- the Voxel shader hooks are not applied", flush=True)
+        return False
     project = os.path.abspath(os.path.join(HERE, "..", "MO57.uproject"))
     log = os.path.abspath(os.path.join(HERE, "..", "Saved", "Logs", "package.log"))
     stage = os.path.abspath(os.path.join(HERE, "..", "Saved", "StagedBuilds_DevTest"))

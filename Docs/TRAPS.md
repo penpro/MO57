@@ -154,6 +154,13 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **"Voxel Shader Hook is not applied" comes back every few days** -> the Voxel plugin writes its hooks INTO the engine's shader files
+  (`Engine/Shaders/Private/MaterialTemplate.ush`, `Nanite/*`, `CapsuleLightIntegrate.ush`, `RectLightIntegrate.ush`; backups in
+  `Engine/Saved/VoxelShaderHooks/`). Any launcher action on the engine (an update, Options such as the MetaHuman Creator Core Data, Verify)
+  restores those files: applied Jun 30, Sep 22, Oct 5, Oct 15 (the 5.8.3 update), Oct 22; wiped again Oct 26 15:01 by the MetaHuman Core
+  Data install. `ue.py` now re-applies them with the plugin's commandlet before the editor, a -game instance or a package
+  (`ensure_voxel_shader_hooks`; packaging refuses without them: a cook would ship unhooked shaders). By hand: the popup's Settings. (Oct 26)
+
 - **A joiner's move that starts on a jump was pulled back** -> a movement-mode change to anything but falling clears the jump press
   (`ACharacter::OnMovementModeChanged` -> `ResetJumpState`). Done inside `DoJump` it happens BEFORE the client records the move, so the
   server never sees the press. Keep it across the change (`UMOCharacterMovementComponent::EnterCustomModeFromJump`). Standalone hides

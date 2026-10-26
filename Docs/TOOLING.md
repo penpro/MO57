@@ -44,6 +44,10 @@ Creatures (Oct 26): `MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] 
 `/MOFramework/MOBS/Pig/BP_Pig`), `MO.Test.SpawnGroup <Species|ClassPath> [DistanceCm=1500]` (a whole group as the spawner makes it; logs its size and
 spread). Python cannot spawn actors in a `-game` instance. Prey bolt from a player on sight: to photograph one, stop its brain
 (`ctrl.brain_component.stop_logic("photo")`) and hide instanced foliage (`ShowFlag.InstancedStaticMeshes 0`, `...InstancedFoliage 0`, `...InstancedGrass 0`).
+Another project (Oct 26): `MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py build|editor start|py|run|inst ...` drives MO_Tools, the lab
+(`D:/UEProjects/MO_Tools/CLAUDE.md`): its own log, its own bridge folder (%TEMP%/claude/MO_Tools), its own build target; "is the editor
+running" only counts that project's processes. Voxel shader hooks: `ue.py` re-applies them (the plugin's ApplyVoxelShaderHooks commandlet)
+before the editor, a -game instance or a package whenever a launcher action has wiped them (TRAPS).
 Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go; host and joiner must agree; ~6 min).
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to

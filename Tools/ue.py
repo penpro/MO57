@@ -56,7 +56,7 @@ def _gamelog():
     override = os.environ.get("MO57_GAMELOG")
     if override:
         return override
-    found = [p for p in glob.glob(os.path.join(ROOT, "Saved", "Logs", "MO57*.log"))
+    found = [p for p in glob.glob(os.path.join(ROOT, "Saved", "Logs", f"{PROJECT_NAME}*.log"))
              if "-backup-" not in os.path.basename(p)]
     return max(found, key=os.path.getmtime) if found else GAMELOG
 
@@ -94,15 +94,24 @@ def _mcp_url(root):
     return configured.get("url", "http://127.0.0.1:8000/mcp")
 
 
-ROOT = os.path.abspath(os.environ.get(
+# The project this tooling drives: MO57 by default. MO_PROJECT (a project folder or its .uproject) points the same verbs at another one --
+# MO_Tools, the lab (its CLAUDE.md): `MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py build` (Wes, Oct 26).
+_MO_PROJECT = os.environ.get("MO_PROJECT", "").strip()
+if _MO_PROJECT.lower().endswith(".uproject"):
+    os.environ.setdefault("MO57_UPROJECT", _MO_PROJECT)
+    _MO_PROJECT = os.path.dirname(_MO_PROJECT)
+ROOT = os.path.abspath(_MO_PROJECT or os.environ.get(
     "MO57_ROOT", os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)))
 UPROJECT = _find_uproject(ROOT)
+PROJECT_NAME = os.path.splitext(os.path.basename(UPROJECT))[0]
 ENGINE_ROOT = _engine_root(UPROJECT)
-GAMELOG = os.path.join(ROOT, "Saved", "Logs", "MO57.log")  # default; see _gamelog()
+GAMELOG = os.path.join(ROOT, "Saved", "Logs", f"{PROJECT_NAME}.log")  # default; see _gamelog()
 RESULTS = os.path.join(ROOT, "Saved", "MOTestResults.txt")
 BOOT_PS1 = os.path.join(ROOT, "Tools", "agent_boot_newgame.ps1")
+# The editor bridge's folder. Another project gets its own (claude/<Project>), so two open editors never read each other's commands; its
+# Content/Python/claude_bridge.py defaults to the same folder.
 TMP = os.path.abspath(os.environ.get(
-    "MO57_BRIDGE_DIR", os.path.join(tempfile.gettempdir(), "claude")))
+    "MO57_BRIDGE_DIR", os.path.join(tempfile.gettempdir(), "claude", *([] if PROJECT_NAME == "MO57" else [PROJECT_NAME]))))
 CMD_FILE = os.path.join(TMP, "ue_cmd.txt")
 OUT_FILE = os.path.join(TMP, "ue_out.txt")
 MCP_URL = _mcp_url(ROOT)
@@ -775,17 +784,26 @@ def _is_game_instance(cmdline):
     return re.search(r"(?:^|\s)-game(?:\s|$)", cmdline or "", re.I) is not None
 
 
+def _is_this_project(cmd):
+    """A process is this project's when its command line names this .uproject; one naming no project counts as MO57's (the default).
+    Without it, MO_Tools' tooling read Wes's open MO57 editor as its own and refused to build (Oct 26)."""
+    low = cmd.lower().replace("\\", "/")
+    if ".uproject" not in low:
+        return PROJECT_NAME == "MO57"
+    return (PROJECT_NAME.lower() + ".uproject") in low
+
+
 def editor_running():
-    """The EDITOR, not a -game instance: an instance running alongside used to read as "the editor", so `editor start` refused and
-    `editor stop` sent QUIT_EDITOR to the bridge of a process that has none (Oct 18 2026)."""
-    return any(not _is_game_instance(cmd) for _, cmd in _unreal_processes())
+    """This project's EDITOR, not a -game instance: an instance running alongside used to read as "the editor", so `editor start` refused
+    and `editor stop` sent QUIT_EDITOR to the bridge of a process that has none (Oct 18 2026)."""
+    return any(not _is_game_instance(cmd) and _is_this_project(cmd) for _, cmd in _unreal_processes())
 
 
 def game_instances_running():
     """[(pid, instance name or '?')] of the -game processes. They load the project's module DLLs, so a build can't link while one runs."""
     out = []
     for pid, cmd in _unreal_processes():
-        if _is_game_instance(cmd):
+        if _is_game_instance(cmd) and _is_this_project(cmd):
             m = re.search(r"inst_([A-Za-z0-9_-]+)", cmd)
             out.append((pid, m.group(1) if m else "?"))
     return out
@@ -821,7 +839,48 @@ def editor_stop(wait=90):
     return False
 
 
+# ---- the Voxel plugin's shader hooks (Docs/TRAPS.md) ----
+# The hooks are written INTO the engine's own shader files. Any launcher action on the engine install -- an engine update, Options (the
+# MetaHuman Creator Core Data install, Oct 26 15:01), Verify -- restores those files and drops them: the editor nags "Voxel Shader Hook is
+# not applied", voxel materials render wrong, and a cook or a -game instance compiles the unhooked shaders. Applied with the plugin's own
+# commandlet (UApplyVoxelShaderHooksCommandlet) before anything that compiles shaders: the editor, a -game instance, a package.
+VOXEL_HOOK_FILES = ("MaterialTemplate.ush", "Nanite/NaniteRasterizationCommon.ush", "Nanite/NaniteVertexFactory.ush",
+                    "CapsuleLightIntegrate.ush", "RectLightIntegrate.ush")
+
+
+def voxel_hooks_missing():
+    """The hooked engine shader files that have lost their '// BEGIN VOXEL' blocks (empty = all applied)."""
+    base = os.path.join(ENGINE_ROOT, "Engine", "Shaders", "Private")
+    missing = []
+    for rel in VOXEL_HOOK_FILES:
+        try:
+            with open(os.path.join(base, rel), encoding="utf-8", errors="replace") as f:
+                if "BEGIN VOXEL" not in f.read():
+                    missing.append(rel)
+        except OSError:
+            missing.append(rel)
+    return missing
+
+
+def ensure_voxel_shader_hooks(why):
+    """Re-apply the Voxel shader hooks if the engine lost them. True when they are all in place afterwards."""
+    missing = voxel_hooks_missing()
+    if not missing:
+        return True
+    print(f"[hooks] the Voxel shader hooks are gone from the engine ({', '.join(missing)}): applying them before {why} (~1-2 min) ...", flush=True)
+    try:
+        subprocess.run([EDITOR_CMD, UPROJECT, "-run=ApplyVoxelShaderHooks", "-unattended", "-nopause", "-nosplash", "-NoSound"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1200)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"[hooks] FAILED to run the commandlet: {e}", flush=True)
+    left = voxel_hooks_missing()
+    print("[hooks] applied" if not left else f"[hooks] STILL MISSING in {', '.join(left)}: open the editor's Project Settings > Voxel Shader Hooks",
+          flush=True)
+    return not left
+
+
 def editor_start(wait_bridge_s=360):
+    ensure_voxel_shader_hooks("the editor starts")
     os.makedirs(TMP, exist_ok=True)
     for p in (CMD_FILE, OUT_FILE):  # truncate so no stale commands/markers replay
         open(p, "w").close()
@@ -867,8 +926,9 @@ def scrap_dev_saves():
     print(f"[saves] scrapped {len(gone)} dev save(s) / autosave folder(s)" + (": " + ", ".join(gone[:12]) + (" ..." if len(gone) > 12 else "") if gone else ""))
 
 
-def build(target="MO57Editor"):
-    """Run UBT; returns True on success. Streams the tail of the output."""
+def build(target=None):
+    """Run UBT for target (default: this project's editor target); returns True on success. Streams the tail of the output."""
+    target = target or f"{PROJECT_NAME}Editor"
     proc = subprocess.Popen(
         [UBT, target, "Win64", "Development", f"-Project={UPROJECT}", "-NoHotReload"],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -1807,7 +1867,7 @@ def main():
     s.set_defaults(fn=cmd_auto)
 
     s = sub.add_parser("build", help="UBT build (refuses if editor is running)")
-    s.add_argument("--target", default="MO57Editor")
+    s.add_argument("--target", default=None)
     s.add_argument("--force", action="store_true")
     s.add_argument("--keep-saves", action="store_true", help="skip scrapping the dev saves + editor autosaves (scrap_dev_saves)")
     s.set_defaults(fn=cmd_build)
@@ -1817,7 +1877,7 @@ def main():
     s.set_defaults(fn=cmd_editor)
 
     s = sub.add_parser("cycle", help="close editor -> build -> reopen -> [--boot] -> [--test]")
-    s.add_argument("--target", default="MO57Editor")
+    s.add_argument("--target", default=None)
     s.add_argument("--boot", action="store_true")
     s.add_argument("--seed", type=int)
     s.add_argument("--test", action="store_true")
