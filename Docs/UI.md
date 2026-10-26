@@ -238,11 +238,10 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   `Appearance.HairSimulationNearOrigin`) decides; each MetaHuman pawn re-checks every `HairSimulationCheckSeconds` (1 s); a groom that
   crosses the line is rebuilt once (a one-off settle of the strands). 0 = never, 1 = always (for A/B).
 - **The hair looks copper / gold in sunlight now** (Wes, Oct 26: "the hair is super shiny and gold now?", then "looks good up close, but at
-  a distance it looks really odd ... an LOD change issue?"): the colour values are unchanged (melanin 0.8, redness 0.25) and the LOD is
-  still forced to 0. Near the world origin the strands shade as authored: bright copper with gold highlights in full sun; 15+ km out --
-  where every start was before Oct 26 -- the engine's strand shading collapses to near black (measured at a fixed exposure,
-  `Docs/Engine_Patches.md` #3). So the old brown was the broken render. At a distance the true colour reads as an orange blob in full sun;
-  whether the default should be darker is a look call (BACKLOG, Wes: check by eye).
+  a distance it looks really odd ... an LOD change issue?"): the colour values are unchanged (melanin 0.8, redness 0.25), the LOD is still
+  forced to 0, and the strands shade the same at any distance from the origin (measured in open sky, `Docs/Engine_Patches.md` #3). It is the
+  scene: the new start is an open, sunlit clearing (the origin shift re-rolled the plants there) and melanin 0.8 in full sun reads copper,
+  an orange blob at a distance. Whether the default should be darker is a look call (BACKLOG, Wes: check by eye).
 - **For a hair-length option later** (Wes: "keep note of the stuff that makes the hair longer"): raising the strands' stretch damping (0.2+)
   let gravity pull the bangs visibly longer (simulated strands only) -- a sag, not a clean length change. The proper control is `UGroomComponent::SetHairLengthScale` /
   `SetHairLengthScaleEnable` (the groom's own length scale, needs the groom's deformation flags), not the physics.

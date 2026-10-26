@@ -63,9 +63,9 @@
 - **F39 hair physics: D** (Wes: "Yes, build F39 option D: hair physics on near the world origin, off far out"). Built: `MO.Hair.Simulation 2`
   (default), a groom simulates while every coordinate is within `MO.Hair.SimulationRadiusKm` 5 of the origin (`Docs/UI.md` §3). The
   HairStrands precision patch stays staged for expeditions (`Docs/Engine_Patches.md` #3).
-- **The hair's copper look near the origin is the true render** (Wes: "the hair is super shiny and gold now?", "at a distance it looks
-  really odd ... LOD?"): the engine's strand shading darkens to near black 15+ km out, where every start used to be; the LOD is still forced
-  to 0. Whether the default brown should be darker: Wes, by eye (BACKLOG).
+- **The hair's copper look is the scene, not a bug** (Wes: "the hair is super shiny and gold now?", "at a distance it looks really odd ...
+  LOD?"): the LOD is still forced to 0 and the strands shade the same at any distance (measured in open sky; a "black past 10 km" reading
+  was the survivor hovering inside a mountain). Whether the default brown should be darker: Wes, by eye (BACKLOG).
 - **A new world starts at the world's origin** (Wes: "can we have the landfall script the picks the starting location shift the entire world
   to 0,0 so we're always starting at an origin point?", then "build the world-origin shift here: offset in FMOWorldGenParams, spawn at (0,0),
   saved per world, synced to co-op, old saves at 0, with the equivalence test"). Built: `Docs/World_Creation.md` §2 (the origin),
