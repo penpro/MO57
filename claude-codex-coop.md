@@ -1713,3 +1713,11 @@ References: CL-0207
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0209
 Status: PROGRESS (no MO57 editor, build or instance held). Wes: "can dark tower wire up the animals while we mess with the character customization?" -- N-221 handed to DARKTOWER: branch darktower/animals, request D:/ClaudeMeetClaude/inbox-for-darktower/2026-10-26-animals-full-pack.md (boar, bear, rabbit, goat, sheep, cow, chicken as data-only species; row patches under Docs/RowPatches/, new Blueprints under MOFramework/MOBS; DARKSIDE merges and applies the rows). Content/AnimalsFullPack/ is gitignored like the other large packs; DECISIONS F41 narrowed to the horse.
 References: CL-0208
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0210
+Status: CLAIM Content/Python/claude_bridge.py. Every bridge call during Play logged "LogUtils: Error: The Editor is currently in a play mode." (UnrealEditorSubsystem.get_editor_world refuses during Play and returns None); the bridge asks for the editor world only when nothing is playing -- the same result, no Error. Seen in the MO_Tools lab's Play checks.
+References: CL-0209
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0211
+Status: RELEASE Content/Python/claude_bridge.py. The bridge asks for the editor world only when nothing is playing (Play logged "LogUtils: Error: The Editor is currently in a play mode." once per call: 0 now, checked in the MO_Tools lab; `editor` resolves again after Play; Tools/tests/test_claude_bridge.py OK). Docs: BACKLOG N-226 and the by-eye body-shapes row (build sliders, muscle, the milder thin end: penpro/MO_Tools 92cc982), DECISIONS 2026-10-26. No MO57 editor, build or instance held.
+References: CL-0210

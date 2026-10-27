@@ -42,7 +42,10 @@ def _get_worlds():
         # no GEditor, hence no editor subsystems. Python and this tick still run there; resolve the world
         # from the game instance instead.
         return _standalone_game_world(), None
-    return ues.get_game_world(), ues.get_editor_world()
+    # get_editor_world() refuses during Play: it returns None and logs "LogUtils: Error: The Editor is currently in a play mode." (once
+    # per bridge call, Oct 26 2026). Ask for it only when nothing is playing: the same result, no Error.
+    game = ues.get_game_world()
+    return game, (None if game else ues.get_editor_world())
 
 
 _world_paths = []

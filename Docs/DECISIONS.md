@@ -64,6 +64,16 @@
 ## Decisions, newest first
 
 ### 2026-10-26
+- **Body shape: a milder thin end, build sliders, muscle** (Wes: "thin is too thin in that pic, dial it back about 10%" / "set the low end
+  to maybe 10% of the current range"; "can we adjust any body parameters independently? breasts, butt, waist, etc? and can we blend
+  between the fat levels?"; "are there any morphs for muscle mass?"): the thinnest body is 90 % of the earlier one (waist 59.8 cm, was
+  56.8), still at 8 % body fat; bust, hips and butt, waist and thighs are build sliders (-1..1) chosen at character creation; muscle
+  follows the simulated `MuscleMass` (20 / 30 / 40 kg). Weights are continuous in body fat and muscle, so the body changes as slowly as
+  the metabolism does; the half-way bodies measure within 0.3 cm of a straight blend, so no in-between shapes. Built in MO_Tools
+  (penpro/MO_Tools 92cc982); in game: BACKLOG N-226.
+- **The MO_Tools lab plays** (Wes: "give me sliders in a menu in the mo toolkit project ... three levels"): L_Menu -> Characters with
+  the slider panel. Voxel / PCG look-tuning goes in its own lab project (Wes: "maybe that should be it's own project???"): the Voxel
+  plugin would weigh down the character lab.
 - **F41: the Animals Full Pack** (Wes: "i added the animal pack to the project"): PROTOFACTOR's ANIMALS FULL PACK at
   `Content/AnimalsFullPack/` (30 species, 2.1 GB), local only like the other large packs (gitignored; each machine copies it, nothing is
   edited inside it). Wiring the land species is DARKTOWER's branch `darktower/animals` (request
