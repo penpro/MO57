@@ -231,6 +231,12 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   round the survivor (yaw free, pitch -15..40 deg, 0.35 deg per pixel), the wheel zooms 110-420 cm, and the camera is swept out of any slope or
   trunk behind them (`PlacePreviewCamera`). A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
   "if you click into the world ... it closes the character builder"; "click drag the world to pivot the camera around the character").
+- **The camera frames the FACE, and finds it again** (Oct 27; Wes: a swap "sometimes pivots the camera to the back of the character ... make
+  sure there's a check when swapping that it re-finds face"): the orbit's zero is where the head looks (`UMOCharacterCreatorPanel::FaceYawDeg`:
+  the body's head bone against its reference pose, so a turned actor, mesh or pose all count), not the actor's yaw taken once at opening. A
+  base swap re-aims in front of the new face 0.2 s later (its first pose; the orbit back to the front); the 0.5 s timer re-aims, keeping the
+  player's orbit, whenever the survivor has turned over 30 deg or moved over 50 cm from the framing (a load's re-grounding). Checked by
+  `Tools/check_creator_bases.py` (after a swap; the survivor turned 180 deg behind the camera's back).
 - Randomize picks colours and a hair style (never bald) and takes any beard / mustache off.
 - **Hair physics runs only near the world origin (`MO.Hair.Simulation 2`, the default since Oct 26; it was 0 = off): the engine's hair
   simulation jitters far from the origin** (Wes, Oct 25:

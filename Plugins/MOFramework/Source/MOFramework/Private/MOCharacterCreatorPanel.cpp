@@ -10,6 +10,7 @@
 #include "MOUIUtils.h"
 #include "MOWorldReadinessSubsystem.h"
 
+#include "AnimationRuntime.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -171,7 +172,11 @@ void UMOCharacterCreatorPanel::NativeOnActivated()
 	}
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(WorldStatusTimer, FTimerDelegate::CreateUObject(this, &UMOCharacterCreatorPanel::RefreshWorldStatus), 0.5f, true);
+		World->GetTimerManager().SetTimer(WorldStatusTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			RefreshWorldStatus();
+			KeepFaceFramed();
+		}), 0.5f, true);
 	}
 }
 
@@ -180,6 +185,7 @@ void UMOCharacterCreatorPanel::NativeOnDeactivated()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(WorldStatusTimer);
+		World->GetTimerManager().ClearTimer(AimAtFaceTimer);
 	}
 	GroomPreloads.Empty();   // the styles not chosen can go
 	ReleaseCamera(0.6f);
@@ -199,16 +205,9 @@ void UMOCharacterCreatorPanel::FrameSurvivor()
 		return;
 	}
 
-	// Level with the chest, in front of the survivor (PlacePreviewCamera: offset so they stand at PreviewScreenX across the screen, right of the panel).
-	const float HalfHeight = Survivor->GetCapsuleComponent() ? Survivor->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
-	const FVector Feet = Survivor->GetActorLocation() - FVector(0.0f, 0.0f, HalfHeight);
-	PreviewFocus = Feet + FVector(0.0f, 0.0f, PreviewFocusHeightCm);
-	PreviewBaseYawDeg = Survivor->GetActorRotation().Yaw;
-	OrbitYawDeg = 0.0f;
-	OrbitPitchDeg = 0.0f;
 	PreviewDistanceCm = PreviewCameraDistanceCm;
 	bOrbitDragging = false;
-	ACameraActor* Camera = World->SpawnActor<ACameraActor>(PreviewFocus, FRotator::ZeroRotator);
+	ACameraActor* Camera = World->SpawnActor<ACameraActor>(Survivor->GetActorLocation(), FRotator::ZeroRotator);
 	if (!Camera)
 	{
 		return;
@@ -229,9 +228,65 @@ void UMOCharacterCreatorPanel::FrameSurvivor()
 	}
 	Lens->PostProcessBlendWeight = 1.0f;
 	PreviewCamera = Camera;
-	PlacePreviewCamera();
+	AimAtFace(/*bResetOrbit=*/true);
 	PC->SetViewTarget(Camera);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacterCreator] Framing %s at %s, camera %.0f cm away"), *Survivor->GetName(), *Feet.ToCompactString(), PreviewCameraDistanceCm);
+}
+
+float UMOCharacterCreatorPanel::FaceYawDeg(const AMOMetaHumanCharacter* Survivor)
+{
+	const USkeletalMeshComponent* Body = Survivor ? Survivor->GetMesh() : nullptr;
+	const USkeletalMesh* Mesh = Body ? Body->GetSkeletalMeshAsset() : nullptr;
+	const int32 Head = Mesh ? Mesh->GetRefSkeleton().FindBoneIndex(TEXT("head")) : INDEX_NONE;
+	if (Head != INDEX_NONE)
+	{
+		// A skeletal mesh faces +Y in its own space: that direction in the head bone's axes (from its reference pose, whatever the rig's bone
+		// axes are), carried by the head as it is posed now.
+		const FTransform RefHead = FAnimationRuntime::GetComponentSpaceTransformRefPose(Mesh->GetRefSkeleton(), Head);
+		const FVector FaceInHead = RefHead.InverseTransformVectorNoScale(FVector::YAxisVector);
+		FVector Face = Body->GetSocketTransform(TEXT("head"), RTS_World).TransformVectorNoScale(FaceInHead);
+		Face.Z = 0.0f;
+		if (Face.Normalize())
+		{
+			return Face.Rotation().Yaw;
+		}
+	}
+	return Survivor ? Survivor->GetActorRotation().Yaw : 0.0f;
+}
+
+void UMOCharacterCreatorPanel::AimAtFace(bool bResetOrbit)
+{
+	AMOMetaHumanCharacter* Survivor = GetSurvivor();
+	if (!Survivor || !PreviewCamera.IsValid())
+	{
+		return;
+	}
+	// Level with the chest, in front of the face (PlacePreviewCamera: offset so they stand at PreviewScreenX across the screen, right of the panel).
+	const float HalfHeight = Survivor->GetCapsuleComponent() ? Survivor->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
+	FramedAt = Survivor->GetActorLocation();
+	PreviewFocus = FramedAt - FVector(0.0f, 0.0f, HalfHeight) + FVector(0.0f, 0.0f, PreviewFocusHeightCm);
+	PreviewBaseYawDeg = FaceYawDeg(Survivor);
+	if (bResetOrbit)
+	{
+		OrbitYawDeg = 0.0f;
+		OrbitPitchDeg = 0.0f;
+	}
+	PlacePreviewCamera();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacterCreator] Framing %s's face: looks along %.1f deg (actor %.1f), at %s, orbit %.1f deg%s"), *Survivor->GetName(),
+		PreviewBaseYawDeg, Survivor->GetActorRotation().Yaw, *FramedAt.ToCompactString(), OrbitYawDeg, bResetOrbit ? TEXT(" (reset)") : TEXT(""));
+}
+
+void UMOCharacterCreatorPanel::KeepFaceFramed()
+{
+	const AMOMetaHumanCharacter* Survivor = GetSurvivor();
+	if (!Survivor || !PreviewCamera.IsValid() || bOrbitDragging)
+	{
+		return;
+	}
+	const float Turned = FMath::Abs(FMath::FindDeltaAngleDegrees(PreviewBaseYawDeg, FaceYawDeg(Survivor)));
+	if (Turned > 30.0f || FVector::Dist(Survivor->GetActorLocation(), FramedAt) > 50.0f)
+	{
+		AimAtFace(/*bResetOrbit=*/false);
+	}
 }
 
 void UMOCharacterCreatorPanel::PlacePreviewCamera()
@@ -457,6 +512,11 @@ void UMOCharacterCreatorPanel::SetBase(FName BaseId)
 	}
 	RefreshControls();
 	PreloadGroomNeighbours(EMOAppearanceCategory::Hair);
+	// Back in front of the new face once its mesh has posed (a fraction of a second: the new body's first animation update).
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(AimAtFaceTimer, FTimerDelegate::CreateWeakLambda(this, [this]() { AimAtFace(/*bResetOrbit=*/true); }), 0.2f, false);
+	}
 }
 
 void UMOCharacterCreatorPanel::SetBuild(FName Driver, float Value)

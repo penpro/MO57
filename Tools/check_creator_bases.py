@@ -50,6 +50,24 @@ def query(verb, pattern, timeout=8):
     return m.group(0) if m else ""
 
 
+FRAMING_RE = re.compile(r"\[MOCharacterCreator\] Framing \S+ face: looks along (-?[\d.]+) deg \(actor (-?[\d.]+)\).*")
+
+
+def framing(since):
+    """(the face yaw the creator last framed, the preview camera's yaw, the framing log line) -- the camera sits in front of the face when
+    its yaw is the face's + 180."""
+    lines = FRAMING_RE.findall(ui.read_log_from(NAME, since))
+    code, out = ui.call(NAME, ["py", "-c", "pc = unreal.GameplayStatics.get_player_controller(world, 0); v = pc.get_view_target(); "
+                               "out('CAMYAW %.1f %s' % (v.get_actor_rotation().yaw, v.get_class().get_name()))"], timeout=30)
+    cam = re.search(r"CAMYAW (-?[\d.]+) (\S+)", out)
+    face = float(lines[-1][0]) if lines else None
+    return face, (float(cam.group(1)) if cam else None), (cam.group(2) if cam else "")
+
+
+def faces_camera(face, cam):
+    return face is not None and cam is not None and abs((cam - (face + 180.0) + 180.0) % 360.0 - 180.0) < 5.0
+
+
 def hair_state():
     """The player's Hair groom: (groom name, the LOD bias of each of its groups, its materials' own names)."""
     code, out = ui.call(NAME, ["py", "-c", (
@@ -80,8 +98,13 @@ def main(keep=False):
 
         hit = query("MO.Test.HitTest BaseNextButton", r"HITTEST '[^']*BaseNextButton[^']*' at .*")
         rep.step("a real click on the Base '>' reaches it", "REACHES it" in hit, hit[:200])
+        off = ui.log_size(NAME)
         query("MO.Test.ClickWidget BaseNextButton", r"ClickWidget: '[^']*BaseNextButton")
         time.sleep(4)   # her meshes load, the grooms swap
+        # Wes, Oct 27: a swap "sometimes pivots the camera to the back of the character" -- every swap re-finds the face.
+        face, cam, kind = framing(off)
+        rep.step("after the swap the camera re-finds her face (framed again, in front of where the face looks)",
+                 kind == "CameraActor" and faces_camera(face, cam), f"face {face} camera {cam} ({kind})")
         mine = ui._bodyshape(NAME, True)
         rep.step("'>' puts Lillian on: her body and face, at her own body (12.4 % / 28.5 kg), no shape on",
                  bool(mine) and mine[0] == "Lillian" and abs(mine[1] - 12.4) < 0.2 and abs(mine[2] - 28.5) < 0.2 and "SKM_MH_Lillian_Base_BodyMesh" in mine[3]
@@ -91,6 +114,18 @@ def main(keep=False):
         # The Hair style row names her own updo at once (Oct 27: it named the femme's braids, still drawn while her updo loaded).
         label = query("MO.Test.FindWidget HairStyleText", r"\[MOQUERY\] WIDGET 'HairStyleText' .*")
         rep.step("the Hair style row names her own updo ('Updo (short)'), not the groom it replaces", "text='Updo (short)'" in label, label[:200])
+
+        # The survivor turned round behind the framing's back (a load's re-grounding, a new pose): the camera follows the face within a second.
+        off = ui.log_size(NAME)
+        ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); pc = unreal.GameplayStatics.get_player_controller(world, 0); "
+                       "r = p.get_actor_rotation(); p.set_actor_rotation(unreal.Rotator(0.0, r.yaw + 180.0, 0.0), False); "
+                       "c = pc.get_control_rotation(); pc.set_control_rotation(unreal.Rotator(c.pitch, c.yaw + 180.0, 0.0)); out('TURNED')"], timeout=30)
+        time.sleep(2.0)
+        turned, cam, kind = framing(off)
+        rep.step("the survivor turned round: the camera comes back in front of her face",
+                 turned is not None and face is not None and abs((turned - face + 180.0) % 360.0 - 180.0) > 90.0 and faces_camera(turned, cam),
+                 f"face {face} -> {turned}, camera {cam}")
+        screenshot("2b_turned_round")
 
         hit = query("MO.Test.HitTest BustSlider", r"HITTEST '[^']*BustSlider[^']*' at .*")
         rep.step("a real click on the Bust slider reaches it", "REACHES it" in hit, hit[:200])

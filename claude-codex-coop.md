@@ -1729,3 +1729,7 @@ References: CL-0211
 ### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0213
 Status: RELEASE the MO57 editor, build window, instances and every file claimed in CL-0212 (no editor, build or instance held; MO_Tools' lab editor is closed too). Landed on master: b6f03938 (N-221 rows applied to the live DT_Creatures / DT_Carcasses), 68237722 (the bridge refuses EditorAssetLibrary / EditorAssetSubsystem in -game), c8b232d6 (N-226: the Base picker, build sliders, Plugins/MOBodyShape, survivor bases, groom swaps keep the Blueprint's strands LOD). Verified: MOFramework 391/391, Tools/check_creator_bases.py PASS, nettest bases PASS, nettest packaged-bases PASS. Not touched / left for their owners: MO57.uproject (the MetaHuman plugins switched on Oct 26, before this claim -- not committed), Docs/Item_Art_Pipeline.md and Art/References/ImageTo3D/ (Codex).
 References: CL-0212
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0214
+Status: CLAIM the MO57 build window and instances (Wes closed both editors for it: "Yes, close both editors ... and build the camera fix"). Files: Plugins/MOFramework/Source/MOFramework/{Public,Private}/MOCharacterCreatorPanel.*, Private/Tests/MOSurvivorAnimTests.cpp (new), Tools/check_creator_bases.py. Work: the creator camera re-finds the face on a base swap and when the survivor turns or moves (Wes: a swap "sometimes pivots the camera to the back of the character").
+References: CL-0213

@@ -49,7 +49,7 @@ Survivor bases and the body (Oct 27): `MO.Test.Base <Id>` (player 0 takes a base
 `MO.Test.BodyBuild <Bust|Hips|Waist|Thighs> <-1..1>`, and the query `MO.Test.BodyShape` (`[MOQUERY] BODYSHAPE`, one line per MetaHuman pawn:
 the base, the body it shows and every body-shape weight on the body and face; "(this machine's player)" marks the local player's own pawn).
 Checks: `python Tools/check_creator_bases.py` (one instance with the creator: real clicks on the Base arrow and a build slider, the body read
-back, the Hair style label, Begin, her hair kept on its strands in game through a round trip to the femme (the groom LOD bias read back;
+back, the camera re-finding her face (after the swap and with the survivor turned round), the Hair style label, Begin, her hair kept on its strands in game through a round trip to the femme (the groom LOD bias read back;
 6_in_game / 7_femme_round_trip show the hair at the third-person distance), the merged species spawning, a save and reload; screenshots in
 `Saved/Screenshots/creator_bases/`), `python Tools/ue.py nettest bases` (a joiner draws the host's base, body fat, muscle and build on the body
 and the face) and `python Tools/ue.py nettest packaged-bases [--package]` (the packaged Development game: Lillian's meshes and her own

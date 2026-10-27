@@ -166,6 +166,17 @@ private:
 	void RefreshWorldStatus();
 	void ApplyLookToSurvivor();
 	void FrameSurvivor();
+	/**
+	 * The framing on the survivor's FACE: the focus over its feet and the orbit's zero where the face looks now (FaceYawDeg: the head bone, so a
+	 * turned actor, mesh or pose all count), the camera placed there. bResetOrbit: back in front of the face (a new base: Wes, Oct 27 -- a swap
+	 * "sometimes pivots the camera to the back of the character"); false keeps the player's own orbit round it.
+	 */
+	void AimAtFace(bool bResetOrbit);
+	/** The timer's check: the survivor turned (> 30 deg) or moved (> 50 cm) out from under the framing -- a load's re-grounding, a mesh swap's
+	 *  new pose -- so the camera follows the face (keeping the player's orbit). */
+	void KeepFaceFramed();
+	/** The yaw the survivor's face looks along, flat (the body's head bone against its reference pose; the actor's yaw without one). */
+	static float FaceYawDeg(const class AMOMetaHumanCharacter* Survivor);
 	/** The preview camera at the orbit (OrbitYawDeg / OrbitPitchDeg around PreviewFocus, PreviewDistanceCm away), the survivor at PreviewScreenX
 	 *  across the screen, pulled in front of any ground or rock between them. */
 	void PlacePreviewCamera();
@@ -264,8 +275,11 @@ private:
 	FMOCharacterAppearance Look;
 	TWeakObjectPtr<ACameraActor> PreviewCamera;
 	FTimerHandle WorldStatusTimer;
+	FTimerHandle AimAtFaceTimer;
 
 	FVector PreviewFocus = FVector::ZeroVector;
+	/** Where the survivor stood when framed (KeepFaceFramed: moved out from under it). */
+	FVector FramedAt = FVector::ZeroVector;
 	float PreviewBaseYawDeg = 0.0f;
 	float OrbitYawDeg = 0.0f;
 	float OrbitPitchDeg = 0.0f;
