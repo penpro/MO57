@@ -55,6 +55,10 @@ back, the Hair style label, Begin, her hair kept on its strands in game through 
 and the face) and `python Tools/ue.py nettest packaged-bases [--package]` (the packaged Development game: Lillian's meshes and her own
 groom were cooked, the heavy shape draws).
 `MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there).
+Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then Lillian -- standing, walking and crouched, the feet's spacing and
+height and the pelvis over the capsule's floor, the foot IK's virtual bones; shots from behind and the side in `Saved/Screenshots/legs/`).
+Their content fixes, run in the editor: `Content/Python/ensure_foot_ik_virtual_bones.py` (after any refresh of `/Game/MetaHumans/Common`)
+and `Content/Python/repair_crouch_pelvis.py` (idempotent; TRAPS §10).
 **`MO.Save.LoadFrom` reloads in place without the post-load handoff** (re-grounding, re-possessing the last-played pawn: `AMOGameMode`'s
 load path): the player is left with no pawn and every survivor under its AI controller. Read records after it, not the player's state (Oct 27).
 Another project (Oct 26): `MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py build|editor start|py|run|inst ...` drives MO_Tools, the lab

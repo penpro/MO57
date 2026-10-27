@@ -404,6 +404,23 @@
 - **Fab panel imports eat keystrokes / re-import existing assets** -> check the front window first; right-column cards ignore clicks; check the folder id before wiring. (fab-sourcing)
 - **A hull on a plant mesh blocks the player** -> check it isn't world foliage (referencers) before `item_mesh_prepare`. (fab-sourcing)
 - **Icon studio crashes on HDR textures** -> an explicit exporter skips SupportsObject -> let UE pick by extension. (geology)
+- **The survivor's legs stop walking (the feet stay put, the legs splay) after a MetaHuman content refresh** -> the foot IK rig
+  (`CR_MH_F`, run by `ABP_MH_F`) plants the feet on the skeleton's VIRTUAL BONES `VB root_root`, `VB VB root_root_foot_l` / `_r`: a project
+  addition the Creator's own `metahuman_base_skel` lacks, so copying Common over ours (Oct 27, for the Lillian base) wiped them; a rig
+  missing its bones does nothing and logs nothing -> `Content/Python/ensure_foot_ik_virtual_bones.py` (re-runnable; test
+  `MOFramework.Animation.FootIKVirtualBones`, measured by `Tools/check_legs.py`). Adding them marks every clip on the skeleton dirty;
+  resaved, they came out byte-identical.
+- **Crouched, her backside drops to the floor** (Wes: "crouching makes her ass fall off") -> the retargeted crouch clips (Oct 12) had the
+  PELVIS ON THE FLOOR (-5 cm over the root; standing 85) with the crouch's height carried by its children (spine_01 and both thighs
+  translated ~40 cm): the torso and legs land right, the vertices skinned to the pelvis do not. Seen in game as a crouched pelvis at
+  -5 cm over the capsule floor -> `Content/Python/repair_crouch_pelvis.py` moved the offset back into the pelvis frame by frame (no other
+  bone moves in the world): crouched pelvis 31-34 cm. A new retarget: read the pelvis height before shipping it.
+- **A bone key reads back with a constant added** -> `AnimationLibrary.get_bone_pose_for_frame` returns the pose with the skeleton's
+  translation retargeting applied (the MetaHuman pelvis: +(0, 0.11, -5.25)), so writing back what you read shifts the bone by it ->
+  measure it (write zeros, read) and write target - offset. Writing keys from Python: `AnimationDataController.set_bone_track_keys`
+  takes `unreal.Vector` / `unreal.Quat` arrays (`Quat4f` has no fields in Python, the float overload is not exposed); build every array
+  BEFORE `open_bracket` (an exception inside leaves the editor's transaction open: close it with `close_bracket`). `os.environ` set
+  through the bridge stays set in the editor process for later calls. (Oct 27)
 - **Retargeted clips move only the root / slide** -> a 5.8 IKRetargeter is an op stack (add_default_ops + auto_map_chains); root motion folds into the pelvis (zero the root on copies). `get_raw_track_data` is empty in 5.8. (animation-retarget)
 - **New MO content disappears from git** -> `Plugins/MOFramework/Content/Characters/MetaHumans/` and `Content/PCG/` are gitignored. (swimming, package-cook-errors)
 - **A case-only rename returns False** -> FName is case-insensitive -> go through a temporary name. (footsteps, animation-retarget)
