@@ -76,8 +76,10 @@ def _standalone_game_world():
 
 # Editor-only script libraries that dereference GEditor. In a `-game` process (no GEditor) one call is an
 # access violation that takes the whole instance down -- a probe killed the first-ten-minutes pass on
-# Oct 15 2026 this way. Refuse the code instead of running it.
-_GEDITOR_ONLY = ("EditorLevelLibrary", "EditorUtilityLibrary", "EditorActorSubsystem", "LevelEditorSubsystem")
+# Oct 15 2026 this way, and an EditorAssetLibrary call one of DARKTOWER's instances on Oct 26. Refuse the
+# code instead of running it.
+_GEDITOR_ONLY = ("EditorLevelLibrary", "EditorUtilityLibrary", "EditorActorSubsystem", "LevelEditorSubsystem",
+                 "EditorAssetLibrary", "EditorAssetSubsystem")
 
 
 def _execute(line):

@@ -56,5 +56,30 @@ class BridgeNestingTests(unittest.TestCase):
             self.assertFalse(bridge._state["busy"])
 
 
+class BridgeGameProcessGuardTests(unittest.TestCase):
+    def run_line(self, bridge, line, editor_subsystem):
+        bridge.unreal.get_editor_subsystem = lambda cls: editor_subsystem
+        bridge.unreal.UnrealEditorSubsystem = object
+        out = []
+        with mock.patch.object(bridge, "_get_worlds", return_value=(None, None)), mock.patch.object(bridge, "_append", side_effect=out.append):
+            bridge._execute(line)
+        return out
+
+    def test_an_editor_asset_call_is_refused_in_a_game_process(self):
+        # Oct 26 2026: an EditorAssetLibrary call took one of DARKTOWER's -game instances down (no GEditor). Expected: refused, never run.
+        with tempfile.TemporaryDirectory() as td:
+            bridge = load_bridge(td)
+            for code in ("unreal.EditorAssetLibrary.load_asset('/Game/X'); out('ran')", "unreal.EditorAssetSubsystem; out('ran')"):
+                out = self.run_line(bridge, "py:" + code, None)
+                self.assertTrue(out and "refused" in out[0], out)
+                self.assertNotIn("ran", out)
+
+    def test_the_same_call_runs_in_the_editor(self):
+        with tempfile.TemporaryDirectory() as td:
+            bridge = load_bridge(td)
+            out = self.run_line(bridge, "py:EditorAssetLibrary = 1; out('ran')", object())
+            self.assertIn("ran", out)
+
+
 if __name__ == "__main__":
     unittest.main()
