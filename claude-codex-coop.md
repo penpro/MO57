@@ -1709,3 +1709,7 @@ References: CL-0206
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0208
 Status: PROGRESS (no MO57 editor, build or instance held). Body weight (Wes Oct 26) built and verified in the MO_Tools lab (penpro/MO_Tools e1fb0b2, plugin MOBodyShape); Docs/BACKLOG.md: N-226 (waiting on the survivor remade in the Creator and auto-rigged, then the MO57 integration) and a by-eye row for the shapes.
 References: CL-0207
+
+### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0209
+Status: PROGRESS (no MO57 editor, build or instance held). Wes: "can dark tower wire up the animals while we mess with the character customization?" -- N-221 handed to DARKTOWER: branch darktower/animals, request D:/ClaudeMeetClaude/inbox-for-darktower/2026-10-26-animals-full-pack.md (boar, bear, rabbit, goat, sheep, cow, chicken as data-only species; row patches under Docs/RowPatches/, new Blueprints under MOFramework/MOBS; DARKSIDE merges and applies the rows). Content/AnimalsFullPack/ is gitignored like the other large packs; DECISIONS F41 narrowed to the horse.
+References: CL-0208

@@ -28,6 +28,9 @@ Content/BlackAlder/
 Content/CommonHazel/
 Content/MetaHumans/
 Content/UltraDynamicSky/
+# PROTOFACTOR Animals Full Pack (Fab, bought Oct 26: DECISIONS F41): 2.1 GB, local only like the plant packs; each machine copies it.
+# Never edit inside it: the species' Blueprints live in MOFramework/MOBS (tracked).
+Content/AnimalsFullPack/
 Plugins/MOFramework/Content/Characters/MetaHumans/
 
 # Voxel Plugin (dev-phy build) — large vendored tree kept out of git history.
