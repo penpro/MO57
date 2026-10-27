@@ -1721,3 +1721,11 @@ References: CL-0209
 ### 2026-10-26 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0211
 Status: RELEASE Content/Python/claude_bridge.py. The bridge asks for the editor world only when nothing is playing (Play logged "LogUtils: Error: The Editor is currently in a play mode." once per call: 0 now, checked in the MO_Tools lab; `editor` resolves again after Play; Tools/tests/test_claude_bridge.py OK). Docs: BACKLOG N-226 and the by-eye body-shapes row (build sliders, muscle, the milder thin end: penpro/MO_Tools 92cc982), DECISIONS 2026-10-26. No MO57 editor, build or instance held.
 References: CL-0210
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0212
+Status: CLAIM the MO57 editor, build window and instances for the night (Wes: "keep working over night"). Work: merge darktower/animals (N-221) and apply its row patches; the MetaHuman bases Wes made in MO_Tools into the game with the body shapes (N-226): Plugins/MOBodyShape (copied from MO_Tools), MOFramework appearance / MetaHuman pawn / character creator files, MO57.uproject, MOFramework.uplugin, Content/MetaHumans (local, gitignored). Codex: please leave these until RELEASE.
+References: CL-0211
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0213
+Status: RELEASE the MO57 editor, build window, instances and every file claimed in CL-0212 (no editor, build or instance held; MO_Tools' lab editor is closed too). Landed on master: b6f03938 (N-221 rows applied to the live DT_Creatures / DT_Carcasses), 68237722 (the bridge refuses EditorAssetLibrary / EditorAssetSubsystem in -game), c8b232d6 (N-226: the Base picker, build sliders, Plugins/MOBodyShape, survivor bases, groom swaps keep the Blueprint's strands LOD). Verified: MOFramework 391/391, Tools/check_creator_bases.py PASS, nettest bases PASS, nettest packaged-bases PASS. Not touched / left for their owners: MO57.uproject (the MetaHuman plugins switched on Oct 26, before this claim -- not committed), Docs/Item_Art_Pipeline.md and Art/References/ImageTo3D/ (Codex).
+References: CL-0212
