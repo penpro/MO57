@@ -1,5 +1,6 @@
 #include "MOCreatureController.h"
 #include "MOBlackboardKeys.h"
+#include "MOCharacter.h"
 #include "MOPredatorCreature.h"
 #include "MOFramework.h"
 #include "MOCreatureDefinitionRow.h"
@@ -48,6 +49,10 @@ void AMOCreatureController::Tick(float DeltaTime)
 	if (ThreatUpdateAccumulator >= ThreatUpdateInterval)
 	{
 		ThreatUpdateAccumulator = 0.0f;
+		if (IsOutOfTheWorld(CurrentThreatActor.Get()))
+		{
+			ForgetOutOfTheWorldThreat();   // seen before its creator opened (or a dev reopened it): let it go now
+		}
 		UpdatePursuit();   // may give the chase up (and clear the threat)
 		if (CurrentThreatActor.IsValid())
 		{
@@ -273,6 +278,19 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 
 	// Don't target other creatures of the same type
 	if (OtherPawn->GetClass() == ControlledPawn->GetClass())
+	{
+		return;
+	}
+
+	// A survivor still in the character creator is not in the world yet: no quarry, nothing to flee (Wes, Oct 27: no bears in the creator).
+	if (IsOutOfTheWorld(OtherPawn))
+	{
+		return;
+	}
+
+	// A predator takes no quarry inside the start area unless it was attacked by it (AMOCreature::KeepsOutOfStartAreaAt).
+	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Stimulus.WasSuccessfullySensed()
+		&& Creature->KeepsOutOfStartAreaAt(OtherPawn->GetActorLocation(), OtherPawn))
 	{
 		return;
 	}
@@ -632,6 +650,7 @@ void AMOCreatureController::NotifyDamaged(AActor* DamageInstigator)
 		return;
 	}
 	GivenUpUntil.Remove(DamageInstigator);   // it hurt us: no longer ignored
+	MarkProvoked(DamageInstigator);
 	PanicUntilTime = World->GetTimeSeconds() + WoundedPanicSeconds;
 	CurrentThreatActor = DamageInstigator;
 	RememberedThreatActor = DamageInstigator;
@@ -656,6 +675,12 @@ void AMOCreatureController::NotifyPackThreat(AActor* Threat, const APawn* Caller
 	if (!ControlledPawn || !IsValid(Threat) || Threat == ControlledPawn || !bPursuesThreats || IsDead())
 	{
 		return;
+	}
+	// A packmate that was attacked calls the pack into its fight: the pack is attacked too (a hunting call is not).
+	if (const AMOCreatureController* CallerController = Caller ? Cast<AMOCreatureController>(Caller->GetController()) : nullptr;
+		CallerController && CallerController->IsProvokedBy(Threat))
+	{
+		MarkProvoked(Threat);
 	}
 	if (CurrentThreatActor.Get() == Threat)
 	{
@@ -733,10 +758,16 @@ void AMOCreatureController::UpdatePursuit()
 	// Waiting at the edge of a fire is not failing to gain on the quarry: the chase clock waits with it. Without this the torch went out and
 	// the still-angry wolf gave up at its next check -- its last gain was before half a minute of holding off (Oct 22, found when the
 	// harness re-provoked it a second sooner than before).
-	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Creature->IsWaryOfFireAt(Quarry->GetActorLocation()))
+	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Creature->IsWaryOfFireAt(Quarry->GetActorLocation(), Quarry))
 	{
 		ChaseBestDistance = Distance;
 		ChaseLastGainTime = Now;
+		return;
+	}
+	// Unlike a fire, the start area is not waited out at its edge: a predator leaves a quarry that went in (Wes, Oct 27: they "stay away").
+	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Creature->KeepsOutOfStartAreaAt(Quarry->GetActorLocation(), Quarry))
+	{
+		GiveUpChase(TEXT("its quarry is in the start area"));
 		return;
 	}
 	if (const TCHAR* Reason = JudgeChase(Distance, FVector::Dist2D(ControlledPawn->GetActorLocation(), HomeLocation), Now, AttackRange * 1.5f,
@@ -744,6 +775,41 @@ void AMOCreatureController::UpdatePursuit()
 	{
 		GiveUpChase(Reason);
 	}
+}
+
+bool AMOCreatureController::IsProvokedBy(const AActor* Actor) const
+{
+	const UWorld* World = GetWorld();
+	return Actor && World && ProvokedBy.Get() == Actor && World->GetTimeSeconds() < ProvokedUntil;
+}
+
+void AMOCreatureController::MarkProvoked(AActor* By)
+{
+	if (const UWorld* World = GetWorld(); World && By)
+	{
+		ProvokedBy = By;
+		ProvokedUntil = World->GetTimeSeconds() + WoundedPanicSeconds;
+	}
+}
+
+bool AMOCreatureController::IsOutOfTheWorld(const AActor* Actor)
+{
+	const AMOCharacter* Survivor = Cast<AMOCharacter>(Actor);
+	return Survivor && Survivor->IsInCharacterCreator();
+}
+
+void AMOCreatureController::ForgetOutOfTheWorldThreat()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s lets %s go: in the character creator"), *GetNameSafe(GetPawn()), *GetNameSafe(CurrentThreatActor.Get()));
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
+	}
+	CurrentThreatActor.Reset();
+	RememberedThreatActor.Reset();
+	ChaseQuarry.Reset();
+	PanicUntilTime = -1.0;
+	UpdateBlackboardThreatInfo();
 }
 
 void AMOCreatureController::GiveUpChase(const TCHAR* Reason)

@@ -23,6 +23,7 @@
 #include "Net/UnrealNetwork.h"
 #include "MOAmbientEnvironmentProvider.h"
 #include "MOFootstepComponent.h"
+#include "MOStartSiteSubsystem.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 
@@ -379,10 +380,28 @@ float AMOCreature::NearestFlameDistanceCm(const UWorld* World, const FVector& Lo
 	return Nearest;
 }
 
-bool AMOCreature::IsWaryOfFireAt(const FVector& Location) const
+namespace MOCreaturePrivate
+{
+	/** The quarry attacked this creature or its pack lately: neither a fire nor the start area holds it off that one. */
+	bool IsProvokedBy(const AMOCreature* Creature, const AActor* Quarry)
+	{
+		const AMOCreatureController* Controller = Quarry ? Cast<AMOCreatureController>(Creature->GetController()) : nullptr;
+		return Controller && Controller->IsProvokedBy(Quarry);
+	}
+}
+
+bool AMOCreature::IsWaryOfFireAt(const FVector& Location, const AActor* Quarry) const
 {
 	const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow();
-	return Definition && Definition->FireFearRadiusCm > 0.0f && NearestFlameDistanceCm(GetWorld(), Location) <= Definition->FireFearRadiusCm;
+	return Definition && Definition->FireFearRadiusCm > 0.0f && NearestFlameDistanceCm(GetWorld(), Location) <= Definition->FireFearRadiusCm
+		&& !MOCreaturePrivate::IsProvokedBy(this, Quarry);
+}
+
+bool AMOCreature::KeepsOutOfStartAreaAt(const FVector& Location, const AActor* Quarry) const
+{
+	const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow();
+	return Definition && Definition->bIsPredator && UMOStartSiteSubsystem::IsInPredatorFreeArea(this, Location)
+		&& !MOCreaturePrivate::IsProvokedBy(this, Quarry);
 }
 
 void AMOCreature::PlayHitReactionFrom(const AActor* Attacker)

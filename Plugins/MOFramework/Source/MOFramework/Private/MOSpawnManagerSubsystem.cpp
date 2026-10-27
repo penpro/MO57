@@ -1,4 +1,5 @@
 #include "MOSpawnManagerSubsystem.h"
+#include "MOStartSiteSubsystem.h"
 #include "MOCreature.h"
 #include "MOCreatureDefinitionRow.h"
 #include "MOTickWatchdog.h"
@@ -909,6 +910,12 @@ TArray<AMOSpawnPoint*> UMOSpawnManagerSubsystem::GetValidSpawnPoints(EMOSpawnCat
 			continue;
 		}
 
+		// No predator in the start area (Wes, Oct 27: predators "stay away from the starting area, like 200m").
+		if (Category == EMOSpawnCategory::Predator && UMOStartSiteSubsystem::IsInPredatorFreeArea(this, Point->GetActorLocation()))
+		{
+			continue;
+		}
+
 		Result.Add(Point);
 	}
 
@@ -1285,6 +1292,12 @@ APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpa
 		return nullptr;
 	}
 	const float GroundZ = GroundHit.ImpactPoint.Z;
+
+	// No predator in the start area (the spawn-point path checks it too).
+	if (Config.Category == EMOSpawnCategory::Predator && UMOStartSiteSubsystem::IsInPredatorFreeArea(this, GroundHit.ImpactPoint))
+	{
+		return nullptr;
+	}
 
 	// Land pawns: ground under the sea or a lake is the bed, not a place to stand (a deer spawned on the sea floor, Oct 13 2026).
 	if (MOSpawnClearance::IsUnderOpenWater(World, GroundHit.ImpactPoint))

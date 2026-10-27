@@ -127,6 +127,20 @@ def main(keep=False):
                  f"face {face} -> {turned}, camera {cam}")
         screenshot("2b_turned_round")
 
+        # Wes, Oct 27: "make sure we're not getting mauled by bears during character creation" -- a bear 6 m away (it hunts within 15 m)
+        # leaves a survivor in the creator alone; killed again before Begin so the rest of the check is not a bear fight.
+        state = ui.wait_log(NAME, r"\[MOCharacter\] \S+ is in the character creator.*", since=0, timeout=5)
+        bear = query("MO.Test.SpawnCreature Bear 600", r"\[MOTEST\] SpawnCreature: .*")
+        time.sleep(12)
+        code, out = ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                                   "out('WOUNDS %d' % len(p.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds()))"], timeout=30)
+        wounds = re.search(r"WOUNDS (\d+)", out)
+        rep.step("a bear 6 m away leaves the survivor in the creator alone (12 s, no wound)", bool(state) and "Bear" in bear and bool(wounds)
+                 and wounds.group(1) == "0", f"{state.group(0)[:120] if state else 'no in-creator line'} | {bear.strip()[:100]} | wounds {wounds.group(1) if wounds else '?'}")
+        ui.call(NAME, ["py", "-c", "B = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')]; "
+                       "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) for b in B]; "
+                       "out('BEARS %d' % len(B))"], timeout=30)
+
         hit = query("MO.Test.HitTest BustSlider", r"HITTEST '[^']*BustSlider[^']*' at .*")
         rep.step("a real click on the Bust slider reaches it", "REACHES it" in hit, hit[:200])
         query("MO.Test.ClickWidget BustSlider at=0.9", r"ClickWidget: '[^']*BustSlider")
@@ -156,6 +170,37 @@ def main(keep=False):
         rep.step("Begin closes the creator with the base and the build", bool(began) and "base 'Lillian'" in began.group(0)
                  and bool(re.search(r"Bust \+(0\.[6-9]\d|1\.00)", began.group(0))),
                  began.group(0)[:300] if began else "no Begin line")
+        left = ui.wait_log(NAME, r"\[MOCharacter\] \S+ left the character creator.*", since=0, timeout=10)
+        rep.step("... and the survivor is in the world again (creatures may take it for quarry)", bool(left), left.group(0)[:160] if left else "no line")
+
+        # Wes, Oct 27: every predator stays out of the start area (200 m round the site) unless attacked -- the same rule as a fire's. A bear 6 m
+        # from the survivor at the start leaves it alone; hit it and it fights back. Killed after its first bite (the rest is not a bear fight).
+        def wounds_now():
+            c, o = ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                                  "out('WOUNDS %d' % len(p.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds()))"], timeout=30)
+            m = re.search(r"WOUNDS (\d+)", o)
+            return int(m.group(1)) if m else -1
+        bear = query("MO.Test.SpawnCreature Bear 600", r"\[MOTEST\] SpawnCreature: .*")
+        w0 = wounds_now()
+        time.sleep(15)
+        w1 = wounds_now()
+        rep.step("at the start a bear 6 m away leaves the survivor alone (15 s, no wound: the start area)", "Bear" in bear and w0 == w1 >= 0,
+                 f"{bear.strip()[:100]} | wounds {w0} -> {w1}")
+        ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); pl = p.get_actor_location(); "
+                       "b = min([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')], "
+                       "key=lambda a: (a.get_actor_location() - pl).length()); "
+                       "out('HIT %s' % b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, p))"], timeout=30)
+        bitten, w2 = False, w1
+        for _ in range(25):
+            time.sleep(1.0)
+            w2 = wounds_now()
+            if w2 > w1:
+                bitten = True
+                break
+        ui.call(NAME, ["py", "-c", "B = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')]; "
+                       "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) for b in B]; "
+                       "out('BEARS %d' % len(B))"], timeout=30)
+        rep.step("... hit it and it fights back (attacked: the start area no longer holds it off)", bitten, f"wounds {w1} -> {w2}")
         time.sleep(6)
         screenshot("6_in_game")
         # Her own updo stays on its strands at the third-person distance: the survivor Blueprint's LOD bias (-7 on each group) carried onto

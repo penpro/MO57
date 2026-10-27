@@ -1,5 +1,7 @@
 #include "BTTask_CreatureWander.h"
 #include "MOFramework.h"
+#include "MOCreature.h"
+#include "MOStartSiteSubsystem.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -284,6 +286,20 @@ void UBTTask_CreatureWander::PickNewHeadingAdjustment(APawn* Pawn, FBTWanderMemo
 
 	// Check if we're too far from home - if so, bias toward home
 	float DistanceFromHome = FVector::Dist2D(CurrentLocation, HomeLocation);
+
+	// A predator stays out of the start area (Wes, Oct 27: "like 200m"): in it, or heading into it, it turns straight away from the site.
+	FVector SiteCenter;
+	const AMOCreature* Creature = Cast<AMOCreature>(Pawn);
+	const UMOStartSiteSubsystem* StartSite = UMOStartSiteSubsystem::Get(Pawn);
+	if (Creature && StartSite && StartSite->GetSiteCenter(SiteCenter)
+		&& (Creature->KeepsOutOfStartAreaAt(CurrentLocation) || Creature->KeepsOutOfStartAreaAt(ProposedLocation)))
+	{
+		const FVector Away = (CurrentLocation - SiteCenter).GetSafeNormal2D();
+		Memory->CurrentHeading = (Away.IsNearlyZero() ? -Memory->CurrentHeading : Away).RotateAngleAxis(FMath::RandRange(-30.f, 30.f), FVector::UpVector);
+		Memory->CurrentHeading.Z = 0.f;
+		Memory->CurrentHeading.Normalize();
+		return;
+	}
 
 	if (bNeedsWaterAvoidance)
 	{

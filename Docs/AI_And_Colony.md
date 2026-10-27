@@ -138,8 +138,17 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
 - **Fire-fear** (N-096, Oct 20): a creature will not close on a target within its species' `FireFearRadiusCm` of a flame (a carried torch or
   a campfire: the flames `UMOAmbientEnvironmentRegistry` knows, `AMOCreature::IsWaryOfFireAt`). `BTTask_ChaseTarget` stops about 6 m short
   and fails ("[MOCreature] Wolf_C_0 holds off from X: fire within N cm"); the tree wanders it and tries again, so it circles; and
-  `BTTask_CreatureAttack` makes no bite within the radius of a flame. Wolf01 400 cm; the deer 0 (prey flees threats anyway). Proof:
-  `nettest actions` `_host_wolf_holds_off_fire` (control: the torch put out, the same wolf bites).
+  `BTTask_CreatureAttack` makes no bite within the radius of a flame. Wolf01 400 cm, Bear01 500; the deer 0 (prey flees threats anyway).
+  **Unless attacked** (Wes, Oct 27: predators stay away from fires "unless attacked and brought into range of fires"): a predator the
+  person attacked, or whose pack they attacked, while its anger lasts (`WoundedPanicSeconds`, the bear's 30 s; `AMOCreatureController::IsProvokedBy`) fights on through the fire
+  (until Oct 27 a wolf hit once still held off). Proof: `nettest actions` `_host_predator_fire_rules` (a hunting bear holds off a torch;
+  hit, it bites through the fire; control: the torch out, a fresh bear bites).
+- **The start area** (Wes, Oct 27: predators "stay away from the starting area, like 200m"): no predator spawns (both spawn paths),
+  wanders (`BTTask_CreatureWander` turns it away from the site), takes a quarry, chases (its controller gives the chase up) or bites within
+  `UMOStartSiteSettings::PredatorFreeRadiusCm` (200 m) of the start site -- the same "unless attacked" exception
+  (`AMOCreature::KeepsOutOfStartAreaAt`). No placed site, no area (old saves, test worlds); `MO.AI.PredatorFreeAreaM <m>` overrides it
+  (0 = none). And a survivor in the character creator is no creature's quarry (`AMOCharacter::IsInCharacterCreator`). Proof:
+  `Tools/check_creator_bases.py` (a bear 6 m off in the creator and at the start leaves the survivor alone; hit, it fights back).
   While it holds off, its chase clock waits (`AMOCreatureController::UpdatePursuit`): circling a fire is not failing to gain, so when
   the flame goes out the still-angry creature closes in instead of giving up at once (Oct 22).
 - Creature ABP state machines (locomotion / rest / sleep / death) and EQS query assets (`EQ_FindHarvestableItems`,

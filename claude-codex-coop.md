@@ -1733,3 +1733,7 @@ References: CL-0212
 ### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0214
 Status: CLAIM the MO57 build window and instances (Wes closed both editors for it: "Yes, close both editors ... and build the camera fix"). Files: Plugins/MOFramework/Source/MOFramework/{Public,Private}/MOCharacterCreatorPanel.*, Private/Tests/MOSurvivorAnimTests.cpp (new), Tools/check_creator_bases.py. Work: the creator camera re-finds the face on a base swap and when the survivor turns or moves (Wes: a swap "sometimes pivots the camera to the back of the character").
 References: CL-0213
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0215
+Status: RELEASE the MO57 build window and instances (CL-0214) and the files below. Landed: the creator camera (0ba71746); predators keep out of the start area and off fires unless attacked, and a survivor in the character creator is no creature's quarry (this commit: MOCharacter, MOCreature, MOCreatureController, BTTask_ChaseTarget / CreatureAttack / CreatureWander, MOStartSiteSubsystem, MOSpawnManagerSubsystem, MOCharacterCreatorPanel; Tools/ue_inst.py, Tools/check_creator_bases.py). Verified: MOFramework 392/392, check_creator_bases PASS, nettest actions -- the affected cases PASS (MO_ACTIONS_ONLY rerun); N-227 (a stale building-look case since Oct 25) left open. Both editors stay closed (Wes closed them for the build).
+References: CL-0214

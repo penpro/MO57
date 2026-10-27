@@ -189,8 +189,14 @@ public:
 	static EMOCreatureHitSide ClassifyHitSide(const FVector& CreatureForward, const FVector& ToAttacker);
 
 	/** True when a flame (a carried torch, a campfire) burns within this species' FireFearRadiusCm of Location: the chase stops short of a
-	 *  target holding fire or standing by one, and no bite is made by a fire (BTTask_ChaseTarget / BTTask_CreatureAttack). */
-	bool IsWaryOfFireAt(const FVector& Location) const;
+	 *  target holding fire or standing by one, and no bite is made by a fire (BTTask_ChaseTarget / BTTask_CreatureAttack). Not against a
+	 *  Quarry that attacked it or its pack (AMOCreatureController::IsProvokedBy; Wes, Oct 27: "unless attacked and brought into range"). */
+	bool IsWaryOfFireAt(const FVector& Location, const AActor* Quarry = nullptr) const;
+
+	/** True when this is a predator (its row's bIsPredator) and Location lies in the start area (UMOStartSiteSubsystem::IsInPredatorFreeArea;
+	 *  Wes, Oct 27: predators "stay away from the starting area, like 200m"): it does not spawn, wander, hunt or bite there -- unless Quarry
+	 *  attacked it or its pack, the same exception as the fire's. */
+	bool KeepsOutOfStartAreaAt(const FVector& Location, const AActor* Quarry = nullptr) const;
 
 	/** The distance from Location to the nearest registered flame (cm), or a huge number when none burns. */
 	static float NearestFlameDistanceCm(const UWorld* World, const FVector& Location);

@@ -189,6 +189,12 @@ public:
 	 *  PackCallMemorySeconds (its own senses take over once it sees it). Prey and the dead ignore it; never re-calls the pack. */
 	void NotifyPackThreat(AActor* Threat, const APawn* Caller);
 
+	/**
+	 * Actor attacked this creature, or its pack (a packmate it hurt called it), within WoundedPanicSeconds: then a fire or the start area does
+	 * not hold it off that actor (Wes, Oct 27 2026: predators stay away from fires "unless attacked and brought into range of fires").
+	 */
+	bool IsProvokedBy(const AActor* Actor) const;
+
 	/** How long a pack call holds the threat for a wolf that has not seen it yet (s): long enough to run to the fight. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Perception")
 	float PackCallMemorySeconds = 20.f;
@@ -350,6 +356,11 @@ protected:
 	/** Quarries given up on, until when (world time): perception ignores them till then. */
 	TMap<TWeakObjectPtr<AActor>, double> GivenUpUntil;
 
+	/** IsProvokedBy: who attacked it (or its pack), and until when that holds. */
+	TWeakObjectPtr<AActor> ProvokedBy;
+	double ProvokedUntil = -1.0;
+	void MarkProvoked(AActor* By);
+
 	/** Interval between blackboard threat updates (seconds). */
 	static constexpr float ThreatUpdateInterval = 0.2f;
 
@@ -381,6 +392,12 @@ private:
 
 	/** Drop the current threat and ignore it for ChaseGiveUpCooldownSeconds. */
 	void GiveUpChase(const TCHAR* Reason);
+
+	/** A survivor still in the character creator (AMOCharacter::IsInCharacterCreator): not in the world yet, no quarry and nothing to flee. */
+	static bool IsOutOfTheWorld(const AActor* Actor);
+
+	/** Drop a current threat that went out of the world (no give-up cooldown: it is quarry again once it Begins). */
+	void ForgetOutOfTheWorldThreat();
 
 	/** Forget the threat after Seconds unless something renews it (a sighting, a sound, a wound). */
 	void StartThreatForgetTimer(AActor* Threat, float Seconds);

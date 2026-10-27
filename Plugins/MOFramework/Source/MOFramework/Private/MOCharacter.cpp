@@ -1463,6 +1463,17 @@ bool AMOCharacter::IsClimbing() const
 	return Move && Move->IsClimbing();
 }
 
+void AMOCharacter::SetInCharacterCreator(bool bInCreator)
+{
+	if (bInCharacterCreator == bInCreator)
+	{
+		return;
+	}
+	bInCharacterCreator = bInCreator;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s %s the character creator: %s"), *GetName(), bInCreator ? TEXT("is in") : TEXT("left"),
+		bInCreator ? TEXT("no creature takes it for quarry") : TEXT("in the world"));
+}
+
 void AMOCharacter::HandleAsphyxiaDeath()
 {
 	DieOf(EMODeathCause::Drowned, EMOBodyPartType::Brain);   // drowning kills by hypoxia of the brain

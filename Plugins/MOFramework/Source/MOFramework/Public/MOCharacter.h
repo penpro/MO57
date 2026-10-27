@@ -584,6 +584,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsDead() const { return bIsDead; }
 
+	/**
+	 * The survivor is still in the character creator: not in the world yet, so no creature takes it for quarry (Wes, Oct 27 2026: "we need to
+	 * make sure we're not getting mauled by bears during character creation"). Server state (the creatures' AI runs there); the creator panel
+	 * sets it while it is open over the host's own pawn.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|State")
+	bool IsInCharacterCreator() const { return bInCharacterCreator; }
+	void SetInCharacterCreator(bool bInCreator);
+
 	/** What killed this character (meaningful once IsDead). */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	EMODeathCause GetDeathCause() const { return DeathCause; }
@@ -1082,6 +1091,9 @@ public:
 	/** Whether the character is dead. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|State")
 	bool bIsDead = false;
+
+	/** IsInCharacterCreator (server state, not replicated: only the server's creatures read it). */
+	bool bInCharacterCreator = false;
 
 	/** What killed it (DieOf); a death that arrives without a cause (anatomy's OnInstantDeath) is a destroyed body part. */
 	EMODeathCause DeathCause = EMODeathCause::BodyPartDestroyed;

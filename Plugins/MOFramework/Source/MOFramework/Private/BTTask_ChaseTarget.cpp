@@ -142,7 +142,7 @@ void UBTTask_ChaseTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Nod
 	// Fire: a target holding a torch or standing by a campfire is not closed on (the species' FireFearRadiusCm). The chase stops at the edge
 	// and fails; the tree wanders the creature and tries again -- it circles the fire. Measured from the target, so the creature stops about
 	// one fear radius out.
-	if (const AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); Creature && Creature->IsWaryOfFireAt(TargetActor->GetActorLocation())
+	if (const AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); Creature && Creature->IsWaryOfFireAt(TargetActor->GetActorLocation(), TargetActor)
 		&& DistanceToTarget < AMOCreature::NearestFlameDistanceCm(OwnerPawn->GetWorld(), TargetActor->GetActorLocation()) + FireHoldOffMarginCm)
 	{
 		FBTChaseMemory* Memory = reinterpret_cast<FBTChaseMemory*>(NodeMemory);
@@ -150,6 +150,16 @@ void UBTTask_ChaseTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* Nod
 		AIController->StopMovement();
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCreature] %s holds off from %s: fire within %.0f cm of it"), *OwnerPawn->GetName(), *TargetActor->GetName(),
 			AMOCreature::NearestFlameDistanceCm(OwnerPawn->GetWorld(), TargetActor->GetActorLocation()));
+		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+		return;
+	}
+
+	// The start area: a predator does not follow its quarry in (unless the quarry attacked it); its controller gives the chase up.
+	if (const AMOCreature* Creature = Cast<AMOCreature>(OwnerPawn); Creature && Creature->KeepsOutOfStartAreaAt(TargetActor->GetActorLocation(), TargetActor))
+	{
+		FBTChaseMemory* Memory = reinterpret_cast<FBTChaseMemory*>(NodeMemory);
+		RestoreMovementSpeed(OwnerPawn, Memory);
+		AIController->StopMovement();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 		return;
 	}

@@ -148,6 +148,11 @@ void UMOCharacterCreatorPanel::NativeOnActivated()
 
 	if (AMOMetaHumanCharacter* Survivor = GetSurvivor())
 	{
+		// Not in the world until Begin: no creature takes them for quarry (the host's own pawn: the server, where the creatures think).
+		if (Survivor->HasAuthority())
+		{
+			Survivor->SetInCharacterCreator(true);
+		}
 		Look = Survivor->GetAppearance();
 		// The shipped eye has no preset of its own (it is baked): start on the first one, so the label and the eye agree.
 		if (Look.EyeColor.IsNone() && UMOAppearanceSubsystem::GetEyeColorPresets().Num() > 0)
@@ -188,6 +193,10 @@ void UMOCharacterCreatorPanel::NativeOnDeactivated()
 		World->GetTimerManager().ClearTimer(AimAtFaceTimer);
 	}
 	GroomPreloads.Empty();   // the styles not chosen can go
+	if (AMOMetaHumanCharacter* Survivor = GetSurvivor(); Survivor && Survivor->HasAuthority())
+	{
+		Survivor->SetInCharacterCreator(false);   // in the world now, however the creator closed
+	}
 	ReleaseCamera(0.6f);
 	Super::NativeOnDeactivated();
 }

@@ -57,6 +57,13 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Start Site")
 	float BearingDeg = 140.0f;
 
+	/**
+	 * No predator spawns, wanders or hunts within this of the site (cm; Wes, Oct 27 2026: predators "stay away from the starting area, like
+	 * 200m") -- unless the one it would close on attacked it (AMOCreature::KeepsOutOfStartAreaAt). 0 = no such area.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Start Site", meta=(ClampMin="0"))
+	float PredatorFreeRadiusCm = 20000.0f;
+
 	/** Most the ground may rise across one prop's footprint (cm) before the spot counts as too steep. */
 	UPROPERTY(EditAnywhere, Config, Category="Start Site", meta=(ClampMin="0"))
 	float MaxFootprintReliefCm = 60.0f;
@@ -117,6 +124,12 @@ public:
 
 	bool IsPlaced() const { return SaveData.bPlaced; }
 	const FMOStartSiteSaveData& GetSaveData() const { return SaveData; }
+
+	/** Where the site is (the middle of its props); false before it is placed (a world saved before Oct 24 has none, nor has a test world). */
+	bool GetSiteCenter(FVector& OutCenter) const;
+
+	/** Location is within UMOStartSiteSettings::PredatorFreeRadiusCm of the placed site (flat distance). False without a site. */
+	static bool IsInPredatorFreeArea(const UObject* WorldContextObject, const FVector& Location);
 
 	//~ Begin IMOSaveDomain
 	virtual FName GetSaveDomainName() const override { return TEXT("StartSite"); }

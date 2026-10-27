@@ -2387,7 +2387,7 @@ def _appearance_replicates(rep, host, client):
     rep.step("CONTROL: before the host sets a look, no survivor on the client has it", "0.66/0.22/Blue" not in before, before.strip()[-200:])
     setv = _probe(host,
         "p = unreal.GameplayStatics.get_player_pawn(world, 0); a = p.get_appearance(); a.skin_tone = 0.66; a.hair_melanin = 0.22; a.eye_color = 'Blue'; "
-        "p.set_appearance_colors(a); out('LOOK_SET %s' % p.get_name())")
+        "p.set_appearance_look(a); out('LOOK_SET %s' % p.get_name())")
     if not rep.step("host: set its survivor's look (skin 0.66, hair 0.22, blue eyes)", "LOOK_SET" in setv, setv.strip()[-160:]):
         return
     got = ""
@@ -2732,9 +2732,10 @@ def _client_sees_creature_flinch(rep, host, client):
     joiner's earlier builds and the larger rock tiers the angry wolf stuck 5 m off for 19 s, backing up, and gave up without a bite)."""
     _to_clear_ground(host, 1, bring_host=False)
     hoff = log_size(host)
-    console(host, "MO.AI.StressSpawn 1 500 800")
-    spawned = wait_log(host, r"\[MO.AI.StressSpawn\] Done[^\r\n]*", since=hoff, timeout=20)
-    if not rep.step("CONTROL: the host spawned a wolf", bool(spawned), spawned.group(0) if spawned else "no StressSpawn Done line"):
+    # A wolf by species: StressSpawn draws from the predator list, which has the bear too since the Animals Full Pack (Oct 27)
+    console(host, "MO.Test.SpawnCreature /MOFramework/MOBS/Wolf/Wolf.Wolf_C 650")
+    spawned = wait_log(host, r"\[MOTEST\] SpawnCreature: Wolf[^\r\n]*", since=hoff, timeout=20)
+    if not rep.step("CONTROL: the host spawned a wolf", bool(spawned), spawned.group(0) if spawned else "no SpawnCreature Wolf line"):
         return
     # Stand the wolf by the joiner and wait until the JOINER's world has it: a cue sent before the client has the creature is dropped (Oct 21:
     # the wolf was teleported and hit in one step; the joiner logged the bite but never the flinch).
@@ -2925,55 +2926,71 @@ def _host_torch_in_rain(rep, host, client):
     console(host, "MO.Weather.SetPreset Clear_Skies")
 
 
-def _host_wolf_holds_off_fire(rep, host, client):
-    """A wolf will not close on someone holding fire (N-096 fire-fear, Oct 20 2026): within its species' FireFearRadiusCm of a flame (a carried
-    torch, a campfire) the chase stops short and no bite is made; it circles. The host holds a lit torch with the joiner moved far off, a wolf is
-    spawned beside the host: it holds off. Control: the torch put out, the same wolf bites."""
+def _host_predator_fire_rules(rep, host, client):
+    """Every predator keeps off a fire unless attacked (N-096 fire-fear, Oct 20; Wes, Oct 27 2026: predators "stay away from fires unless
+    attacked and brought into range of fires"): within its species' FireFearRadiusCm of a flame (a carried torch, a campfire) a predator
+    hunting someone stops short and does not bite -- but one that person attacked (or attacked its pack) fights on through the fire. A bear
+    (it hunts anyone within 15 m; a wolf left alone does not come for a player) beside the torch-bearing host, the joiner far off, the start
+    area off for the case (MO.AI.PredatorFreeAreaM 0: the host stands at the start, where no predator hunts at all): it holds off; the host
+    hits it: it bites through the fire; CONTROL: the torch out, a fresh bear hunts and bites (the first, held off long enough, has lost
+    interest for good: a quarry forgotten in plain sight is not taken again)."""
     wounds = "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('WOUNDS %d' % len(p.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds()))"
+    bear = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
+            "b = min([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_class().get_name().startswith('BP_Bear')], "
+            "key=lambda a: (a.get_actor_location() - hl).length()); ")
+
+    def host_wounds(default):
+        return int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, str(default)])[1])
+
+    def bitten_within(seconds, since_wounds):
+        for _ in range(int(seconds / 5)):
+            time.sleep(5.0)
+            if host_wounds(0) > since_wounds:
+                return True
+        return False
+
+    console(host, "MO.AI.PredatorFreeAreaM 0")
     _probe(host, "import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_W_HOME = j.get_actor_location(); "
                  "j.set_actor_location(j.get_actor_location() + unreal.Vector(6000.0, 6000.0, 300.0), False, True); out('JOINER_AWAY')")
     console(host, "MO.Light.Carried give")
     time.sleep(3.0)
     lit = _motest(host, "MO.Light.Carried light", r"\[MOQUERY\] LIGHT Carried light: (\d)")
     if not rep.step("CONTROL: the host holds a lit torch, the joiner is 85 m off", bool(lit) and lit.group(1) == "1", lit.group(0) if lit else "no light line"):
+        console(host, "MO.AI.PredatorFreeAreaM -1")
         return
-    w0 = int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "0"])[1])
+    w0 = host_wounds(0)
     hoff = log_size(host)
-    console(host, "MO.AI.StressSpawn 1 600 900")
-    wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=hoff, timeout=15)
-    # StressSpawn adds a deer with every wolf, and the wolf hunts the deer (Oct 20: it chased it 200 m off): only the host is left to close on
-    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); [a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPreyCreature) "
-                 "if (a.get_actor_location() - h.get_actor_location()).length() < 5000]; out('NO_DEER')")
-    # A wolf left alone did not come for the host at all (Oct 20: no bite in 40 s even with the torch out, two runs): it turns on whoever hurts
-    # it (AMOCreatureController::NotifyDamaged), so the host's blow makes it want the host -- the torch decides whether it closes.
-    provoke = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
-               "w = min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), key=lambda a: (a.get_actor_location() - hl).length()); "
-               "w.set_actor_location(hl + unreal.Vector(600.0, 0.0, 120.0), False, True); "
-               "out('PROVOKED %s %s' % (w.get_name(), w.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, h)))")
-    angry = re.search(r"PROVOKED (\S+) (\w+)", _probe(host, provoke))
-    rep.step("CONTROL: the host's blow turns the wolf on the host", bool(angry), angry.group(0) if angry else "no wolf to provoke")
-    console(host, "MO.Footstep.LogAll 1")   # the wolf's own footfalls too (N-132: a creature has no foot bones; it steps by distance)
+    spawned = _motest(host, "MO.Test.SpawnCreature Bear 700", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
+    rep.step("CONTROL: a bear stands 7 m from the host", bool(spawned) and "Bear" in spawned.group(0), spawned.group(0)[:160] if spawned else "no spawn line")
+    console(host, "MO.Footstep.LogAll 1")   # the bear's own footfalls too (a creature has no foot bones; it steps by distance)
     time.sleep(30.0)
     console(host, "MO.Footstep.LogAll 0")
     hlog = read_log_from(host, hoff)
-    held = re.search(r"\[MOCreature\] (\S+) holds off from \S+: fire within (\d+) cm", hlog)
-    w1 = int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "-1"])[1])
-    rep.step("the wolf holds off from the torch-bearer (no bite in 30 s)", bool(held) and w1 == w0, (held.group(0) if held else "no hold-off line") + f"; host wounds {w0} -> {w1}")
-    paw = re.search(r"\[MOQUERY\] FOOTSTEP step stride [^\r\n]*vol=([\d.]+)[^\r\n]* pawn=(\S*(?:Wolf|Predator)\S*)", hlog)
-    rep.step("the host hears the wolf's steps as it comes (a creature steps by distance, softly)", bool(paw),
-             f"{paw.group(2)} vol={paw.group(1)}" if paw else "no stride step from a wolf")
+    held = re.search(r"\[MOCreature\] (\S*Bear\S*) holds off from \S+: fire within (\d+) cm", hlog)
+    w1 = host_wounds(-1)
+    rep.step("the bear hunting the torch-bearer holds off (no bite in 30 s)", bool(held) and w1 == w0, (held.group(0) if held else "no hold-off line") + f"; host wounds {w0} -> {w1}")
+    paw = re.search(r"\[MOQUERY\] FOOTSTEP step stride [^\r\n]*vol=([\d.]+)[^\r\n]* pawn=(\S*(?:Bear|Predator)\S*)", hlog)
+    rep.step("the host hears the bear's steps as it comes (a creature steps by distance, softly)", bool(paw),
+             f"{paw.group(2)} vol={paw.group(1)}" if paw else "no stride step from the bear")
+    hit = re.search(r"HIT (\S+) (\w+)", _probe(host, bear + "out('HIT %s %s' % (b.get_name(), b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage("
+                                                        "unreal.MOBodyPartType.TORSO, 2.0, unreal.MOWoundType.BLUNT, h)))"))
+    rep.step("attacked by the torch-bearer, the bear fights on through the fire (Wes: \"unless attacked\")", bool(hit) and bitten_within(40, w1),
+             (hit.group(0) if hit else "no bear to hit") + " -> a new wound on the host")
+    # CONTROL: the hold-off was the fire's. A bear that held off long enough has lost interest in the host for good (perception reports a
+    # change in what it sees; a quarry forgotten in plain sight is not taken again, Oct 27), so a FRESH bear, the torch out: it hunts and bites.
     console(host, "MO.Light.Carried out")
-    _probe(host, provoke)   # its anger may have run out while it circled
-    bitten = False
-    for _ in range(8):
-        time.sleep(5.0)
-        if int((re.search(r"WOUNDS (\d+)", _probe(host, wounds)) or [0, "0"])[1]) > w1:
-            bitten = True
-            break
-    rep.step("CONTROL: with the torch out, the wolf closes and bites", bitten, "a new wound on the host" if bitten else "no bite in 40 s | " + _nav_between(host,
-             "min(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature), "
-             "key=lambda w: (w.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 0).get_actor_location()).length())",
-             "unreal.GameplayStatics.get_player_pawn(world, 0)"))
+    _probe(host, "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) "
+                 "for b in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)]; out('BEARS_DOWN')")
+    w2 = host_wounds(-1)
+    fresh = _motest(host, "MO.Test.SpawnCreature Bear 700", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
+    rep.step("CONTROL: with no fire, a fresh bear 7 m off hunts the host and bites", bool(fresh) and "Bear" in fresh.group(0) and bitten_within(40, w2),
+             (fresh.group(0)[:120] if fresh else "no spawn line") + " -> a new wound on the host")
+    console(host, "MO.Light.Carried out")
+    console(host, "MO.AI.PredatorFreeAreaM -1")
+    # The bear's bites close here: a pawn the host leaves later would stay the worst bleeder in the medic case's settlement (Oct 27: its medic
+    # went to the host's old pawn, bleeding 1.5 mL/s from these bites, and never to the host).
+    _probe(host, "a = unreal.GameplayStatics.get_player_pawn(world, 0).get_component_by_class(unreal.MOAnatomyComponent); "
+                 "[a.heal_wound(w.wound_id, 1000.0) for w in a.get_all_wounds()]; out('HEALED %d' % len(a.get_all_wounds()))")
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
                  "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature) for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - h.get_actor_location()).length() < 4000]; import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); "
@@ -3131,13 +3148,18 @@ def _host_wolf_pack(rep, host, client):
     hoff = log_size(host)
     # The wolves THIS case spawns, by name: the two nearest predators could be an earlier case's (dead, or on someone else) -- N-188
     _probe(host, "import builtins; builtins.MO_PACK_BEFORE = set(a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)); out('PACK_BEFORE')")
-    console(host, "MO.AI.StressSpawn 2 600 900")
-    if not rep.step("CONTROL: the host spawned two wolves", bool(wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=hoff, timeout=20)), "StressSpawn 2"):
+    # Two wolves by species (StressSpawn draws from the predator list, which has the bear too since Oct 27: it paired a wolf with a bear)
+    console(host, "MO.Test.SpawnCreature /MOFramework/MOBS/Wolf/Wolf.Wolf_C 800 -200")
+    console(host, "MO.Test.SpawnCreature /MOFramework/MOBS/Wolf/Wolf.Wolf_C 800 200")
+    time.sleep(1.0)
+    wolves = re.findall(r"\[MOTEST\] SpawnCreature: (Wolf\S*)", read_log_from(host, hoff))
+    if not rep.step("CONTROL: the host spawned two wolves", len(wolves) >= 2, " ".join(wolves) or "no SpawnCreature Wolf lines"):
         return
     soff = log_size(host)   # a wolf that sees the host when it is placed calls the other right away (Oct 20): count calls from here
     setup = _probe(host, "import builtins; h = unreal.GameplayStatics.get_player_pawn(world, 0); hl = h.get_actor_location(); "
                          "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPreyCreature) if (a.get_actor_location() - hl).length() < 5000]; "
-                         "ws = sorted([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_name() not in builtins.MO_PACK_BEFORE], "
+                         "ws = sorted([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if a.get_name() not in builtins.MO_PACK_BEFORE "
+                         "and a.get_class().get_name().startswith('Wolf')], "
                          "key=lambda a: (a.get_actor_location() - hl).length())[:2]; "
                          "[w.set_actor_location(hl + unreal.Vector(800.0, -200.0 + 400.0 * i, 120.0), False, True) for i, w in enumerate(ws)]; "
                          "out('PACK %s' % ' '.join(w.get_name() for w in ws))")
@@ -3172,8 +3194,8 @@ def _host_colony_alerts(rep, host, client):
     name = m.group(1)
     console(host, f"MO.Colony.Recruit {name}")
     wait_log(host, r"\[MOQUERY\] COLONY Recruit \S+ possessable=(\d)", since=off, timeout=15)
-    console(host, "MO.AI.StressSpawn 1 2000 2500")
-    wait_log(host, r"\[MO.AI.StressSpawn\] Done", since=off, timeout=20)
+    console(host, "MO.Test.SpawnCreature /MOFramework/MOBS/Wolf/Wolf.Wolf_C 2200")   # by species: the predator list has the bear too since Oct 27
+    wait_log(host, r"\[MOTEST\] SpawnCreature: Wolf", since=off, timeout=20)
     time.sleep(12.0)   # one upkeep tick sees the colonist unhurt (the wound count it compares with)
     aoff = log_size(host)
     bit = _probe(host, f"c = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
@@ -4184,7 +4206,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
         case_seconds = []
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_wolf_holds_off_fire, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
+        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_predator_fire_rules, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
             if only and fn.__name__ not in only:
                 continue
             t0 = time.time()

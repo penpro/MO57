@@ -11,6 +11,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 #include "GameFramework/Pawn.h"
 #include "Net/UnrealNetwork.h"
 
@@ -175,6 +176,35 @@ UMOStartSiteSubsystem* UMOStartSiteSubsystem::Get(const UObject* WorldContextObj
 {
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	return World ? World->GetSubsystem<UMOStartSiteSubsystem>() : nullptr;
+}
+
+bool UMOStartSiteSubsystem::GetSiteCenter(FVector& OutCenter) const
+{
+	if (!SaveData.bPlaced || SaveData.Props.IsEmpty())
+	{
+		return false;
+	}
+	FVector Sum = FVector::ZeroVector;
+	for (const FMOStartSitePropRecord& Prop : SaveData.Props)
+	{
+		Sum += Prop.Transform.GetLocation();
+	}
+	OutCenter = Sum / SaveData.Props.Num();
+	return true;
+}
+
+static TAutoConsoleVariable<float> CVarPredatorFreeAreaM(
+	TEXT("MO.AI.PredatorFreeAreaM"), -1.0f,
+	TEXT("The start area no predator spawns, wanders or hunts in, in metres round the start site: -1 = UMOStartSiteSettings::PredatorFreeRadiusCm "
+		"(200 m), 0 = none (a test of fire alone, near the start)."));
+
+bool UMOStartSiteSubsystem::IsInPredatorFreeArea(const UObject* WorldContextObject, const FVector& Location)
+{
+	const float Override = CVarPredatorFreeAreaM.GetValueOnGameThread();
+	const float Radius = Override >= 0.0f ? Override * 100.0f : GetDefault<UMOStartSiteSettings>()->PredatorFreeRadiusCm;
+	const UMOStartSiteSubsystem* Site = Get(WorldContextObject);
+	FVector Center;
+	return Radius > 0.0f && Site && Site->GetSiteCenter(Center) && FVector::DistSquared2D(Center, Location) < FMath::Square(Radius);
 }
 
 bool UMOStartSiteSubsystem::ShouldCreateSubsystem(UObject* Outer) const
