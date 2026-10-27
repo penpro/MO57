@@ -5,7 +5,8 @@
 > recipe placement: `Docs/PROGRESSION_ROADMAP.md` (the design authority; era 3 "Settlement" is where both belong).
 > **Current state (2026-10-26):** from Wes's ask (Oct 26: "let's get farming, animal husbandry, and some other animals going. We will
 > need horses, pigs, cows, etc plus bears, rabbits, birds, chickens, I'm sure there's more"). **Built:** the crop core (a field plot,
-> sowing, growth on the game clock through its stages, harvest, saved, replicated) with one crop, wild grain; pig and fox as wild species;
+> sowing, growth on the game clock through its stages, harvest, saved, replicated) with one crop, wild grain; pig, fox, boar, rabbit and bear as wild species; goat, sheep, cow and
+> chicken built as species (Blueprints and rows, from the Animals Full Pack) but not spawned until F43 decides how they become domestic;
 > species are data, so new animals are cheap once their assets exist (F41). **Not yet:** the founder crops (F44), grinding / porridge,
 > flax, wild stands to gather seed from, water / weeds / frost, husbandry (F43). Forks F42-F44.
 > **Entry points:** `AMOCropPlotActor` (`BP_CropPlot`, recipe `TillFieldPlot`), `FMOCropDefinitionRow` / `FMOCropGrowth` (`MOCropTypes.h`),
@@ -84,7 +85,8 @@ tameness, and the spawner never despawns an owned animal. Persistence: owned ani
 
 ## 4. Build order
 
-1. Done (Oct 26): species as data; pig and fox wild; groups of one species.
+1. Done (Oct 26): species as data; pig and fox wild; groups of one species. Then (N-221) boar, rabbit and bear wild; goat, sheep, cow
+   and chicken built, with carcass yields (fleece, horn, feathers), and left out of the spawn lists (F43).
 2. Crops core: `DT_Crops`, seed items, the field plot buildable, sowing, growth on the clock, harvest, save / load, co-op (stage
    replicated); the first crops by F44; wild stands for seed.
 3. Processing: threshing, winnowing, grinding into the existing porridge; flax retting -> `FlaxFiber01` (unblocks cloth).

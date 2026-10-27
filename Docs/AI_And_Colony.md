@@ -2,8 +2,8 @@
 
 > **Covers:** creature AI (prey and predators), survivor pawns (recruitment, jobs, the village loop), the colony manager's upkeep
 > passes, possession of any pawn, and the planned colony management UI.
-> **Current state (2026-10-26):** creatures are deer, pig and fox (prey) and wolf (predator) on behavior trees; pig and fox are the first
-> species added as data (`UMOCreatureAnimInstance`, no AnimBlueprint); a spawned group is one species of its own size, together; survivors run a C++ simple-job
+> **Current state (2026-10-26):** creatures are deer, pig, fox, boar and rabbit (prey) and wolf and bear (predator) on behavior trees, plus
+> goat, sheep, cow and chicken built but not spawned (F43); every species after deer and wolf is data (`UMOCreatureAnimInstance`, no AnimBlueprint); a spawned group is one species of its own size, together; survivors run a C++ simple-job
 > state machine in `AMOSurvivorController` (NO behavior-tree assets for survivors); the July village slice is live (craft jobs,
 > quotas, skill decay / schools, relationships, seasons, courtship, real children, winter shelter, fire heat and refuel hauling);
 > the colony UI is partly built (history, personality, colony manager, overview, portrait exist; colony bar, task assignment UI and
@@ -154,6 +154,31 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   Pig (`BP_Pig`, `Pig01`: walk 1.02 m/s / run 6.56 m/s cycles, a sounder of 3-6, ~90 kg: 27 meat, hide, bladder) and fox (`BP_Fox`,
   `Fox01`: 0.45 / 2.63 m/s cycles played up to 2.5x, alone, keen hearing 30 m, wary of fire, a pelt and 2 meat) are in the prey list.
   The crow is not: a bird needs flight (its own movement and AI). Deer and wolf keep their AnimBlueprints.
+- **The Animals Full Pack species (Oct 26, N-221, wired on DARKTOWER).** PROTOFACTOR's pack is local-only (`Content/AnimalsFullPack`,
+  gitignored; copy it from DARKSIDE). The Blueprints and their assets are tracked under `/MOFramework/MOBS/<Species>/`. Every mesh faces +Y
+  with its pivot at the feet, so the mesh sits at yaw -90 and z = -capsule half-height. Cycle speeds are measured from each `_RM` twin's
+  root track. Rows: `Docs/RowPatches/2026-10-26-animals-DT_Creatures.json` / `-DT_Carcasses.json`. Meat runs at the pig's ~0.3
+  `RawMeat01` (0.5 kg) per kg of live weight.
+
+  | Species | Blueprint / row | Cycles walk / run (m/s), max rate | Group | Weight -> meat | Spawn list |
+  |---|---|---|---|---|---|
+  | Wild boar | `BP_Boar` / `Boar01` | 0.83 / 6.25, 1.5x (runs 8) | 2-6 | ~80 kg -> 24, hide, bones | prey |
+  | Brown bear | `BP_Bear` / `Bear01` (`AMOPredatorCreature`) | 2.14 / 4.22, 2.4x (charges 10) | 1 | ~250 kg -> 75, hide | predator |
+  | Rabbit | `BP_Rabbit` / `Rabbit01` | 0.99 / 1.74 (gallop), 3x (runs 5.2) | 1-3 | ~1.8 kg -> 1, hide | prey |
+  | Goat | `BP_Goat` / `Goat01` | 0.60 / 3.53, 1.7x | 3-8 | ~50 kg -> 15, hide, 2 horn | none (F43) |
+  | Sheep | `BP_Sheep` / `Sheep01` | 0.49 / 3.00, 1.85x | 4-10 | ~60 kg -> 18, fleece, hide, 2 horn | none (F43) |
+  | Cow | `BP_Cow` / `Cow01` | 1.00 / 6.18, 1.1x | 4-10 | ~450 kg -> 135, hide, 2 horn | none (F43) |
+  | Chicken | `BP_Chicken` / `Chicken01` | 0.30 / 1.63, 2.5x | 3-8 | ~2 kg -> 1, 3 feathers | none (F43) |
+
+  - **The bear's bite.** `BT_Predator`'s attack node plays the wolf's `AM_WolfBite`, which cannot play on another skeleton. So the bear runs
+    `MOBS/Bear/BT_Bear`, a copy whose attack node plays `MOBS/Bear/AM_BearBite` (from `ANIM_Bear_BiteAttack4Legs`, DefaultSlot) at 40
+    damage and 2 m. The attack task deals its own `BaseDamage`, not the row's. A new predator needs its own tree the same way.
+  - **Verified (one -game instance, seed 777).** Each species loads with its mesh, the native anim instance and an `AMOCreatureController`,
+    and stands on the ground. A blow plays its hit clip from the side it came, except the rabbit, whose pack has no hit clip. It then runs
+    at its row's run speed with the legs cycling (12-68 cm of bone motion between samples), and a kill leaves its carcass. A hurt bear
+    charges at 10 m/s and bites with `AM_BearBite`.
+  - **Not wired, by design:** the African animals, the sea animals and the birds of the pack. The list and recommendations are in the
+    N-221 handoff note.
 - **A spawned group is one species, together (Oct 26).** The spawner picks the group's class once; its size is the species' own
   (`FMOCreatureDefinitionRow::Min / MaxGroupSize`: deer 2-5, pig 3-6, fox 1; 0 = the category's) and the members stand 3-12 m from
   the first (`UMOSpawnManagerSubsystem::SpawnGroupMemberNear`; the category's entity separation, hundreds of metres, is for groups).
