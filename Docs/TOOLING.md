@@ -44,6 +44,19 @@ Creatures (Oct 26): `MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] 
 `/MOFramework/MOBS/Pig/BP_Pig`), `MO.Test.SpawnGroup <Species|ClassPath> [DistanceCm=1500]` (a whole group as the spawner makes it; logs its size and
 spread). Python cannot spawn actors in a `-game` instance. Prey bolt from a player on sight: to photograph one, stop its brain
 (`ctrl.brain_component.stop_logic("photo")`) and hide instanced foliage (`ShowFlag.InstancedStaticMeshes 0`, `...InstancedFoliage 0`, `...InstancedGrass 0`).
+Survivor bases and the body (Oct 27): `MO.Test.Base <Id>` (player 0 takes a base as the creator gives it: meshes, grooms, the base's body),
+`MO.Test.BodyComposition <fat %> [muscle kg]` (the metabolism's body, at a weight that holds; the body follows within 2 s),
+`MO.Test.BodyBuild <Bust|Hips|Waist|Thighs> <-1..1>`, and the query `MO.Test.BodyShape` (`[MOQUERY] BODYSHAPE`, one line per MetaHuman pawn:
+the base, the body it shows and every body-shape weight on the body and face; "(this machine's player)" marks the local player's own pawn).
+Checks: `python Tools/check_creator_bases.py` (one instance with the creator: real clicks on the Base arrow and a build slider, the body read
+back, the Hair style label, Begin, her hair kept on its strands in game through a round trip to the femme (the groom LOD bias read back;
+6_in_game / 7_femme_round_trip show the hair at the third-person distance), the merged species spawning, a save and reload; screenshots in
+`Saved/Screenshots/creator_bases/`), `python Tools/ue.py nettest bases` (a joiner draws the host's base, body fat, muscle and build on the body
+and the face) and `python Tools/ue.py nettest packaged-bases [--package]` (the packaged Development game: Lillian's meshes and her own
+groom were cooked, the heavy shape draws).
+`MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there).
+**`MO.Save.LoadFrom` reloads in place without the post-load handoff** (re-grounding, re-possessing the last-played pawn: `AMOGameMode`'s
+load path): the player is left with no pawn and every survivor under its AI controller. Read records after it, not the player's state (Oct 27).
 Another project (Oct 26): `MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py build|editor start|py|run|inst ...` drives MO_Tools, the lab
 (`D:/UEProjects/MO_Tools/CLAUDE.md`): its own log, its own bridge folder (%TEMP%/claude/MO_Tools), its own build target; "is the editor
 running" only counts that project's processes. Voxel shader hooks: `ue.py` re-applies them (the plugin's ApplyVoxelShaderHooks commandlet)
@@ -55,7 +68,7 @@ face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, 
 
 ## 2. Build
 
-`python Tools/ue.py build` (or `cycle`). The engine is the UE 5.8.3 LAUNCHER install: engine modules are precompiled; engine fixes are staged
+`python Tools/ue.py build` (or `cycle`). The engine is the UE 5.8.4 LAUNCHER install (updated from 5.8.3 by the launcher Oct 26; an engine update rebuilds every module once, the Voxel plugin included): engine modules are precompiled; engine fixes are staged
 in `Docs/Engine_Patches.md`. Before a build: the editor must be closed (Live Coding blocks UBT) -- `ue.py editor stop`; check the module DLL
 mtime if a change seems not to apply (Live Coding may have hot-patched). Run `python Tools/check_unity_collisions.py` before committing new
 .cpp files. After code changes: `python -m graphify update .`.

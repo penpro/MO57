@@ -49,6 +49,7 @@
 | F46 | The bear's temperament | As a predator it hunts anyone within 15 m (`AggroRange`). Real brown bears mostly avoid people and attack when surprised, cornered, hurt or with cubs. **A** a defensive behaviour (keeps its distance, warns, charges when provoked or too close) -- new C++ AI; **B** keep the predator (simple, more dangerous than real). **Recommended: A** (the realism pillar) | `D:\ClaudeMeetClaude\inbox-for-darkside\2026-10-26-animals.md`, `Docs/AI_And_Colony.md` §1 | Oct 27 |
 | F47 | Meat per carcass | Every carcass row (pig, deer, wolf and the 7 new) gives about 0.3 `RawMeat01` (0.5 kg) per kg of live weight: ~15 % of the animal as meat. Real boneless yield is ~35-40 %. **A** raise the whole table to the real yield together; **B** keep the scarcer meat as a balance choice. **Recommended: A** (no game-y rates, principle 11) -- food gets more plentiful from a kill, the pace knobs can answer that | `D:\ClaudeMeetClaude\inbox-for-darkside\2026-10-26-animals.md`, `Docs/AI_And_Colony.md` §1 | Oct 27 |
 | F48 | Fat and small pelts from carcasses | Bear, boar and pig fat has no item (`AnimalFat01`: tallow -- lamps, cooking, waterproofing, soap), and the rabbit gives a whole `AnimalHide01`. **A** add `AnimalFat01` and a small pelt item (rabbit, fox) through `PROGRESSION_ROADMAP.md`; **B** leave the yields as they are. **Recommended: A** | `D:\ClaudeMeetClaude\inbox-for-darkside\2026-10-26-animals.md`, `Docs/AI_And_Colony.md` §1, `Docs/PROGRESSION_ROADMAP.md` | Oct 27 |
+| F49 | What a Creator base wears | Lillian (and every base from the 5.8 Creator) wears briefs only: in game she is topless. The femme's grey top and shorts are part of her body asset (MH_F_1), and the starting clothing items are inventory, not drawn. **A** dress each base in the Creator's wardrobe (an outfit built with it) and carry the body shapes onto the outfit (`TransferBodyMorphs`, the neck seam's tool, with a wider reach) so it follows weight; **B** a top painted into the base's body texture, like the femme's; **C** leave it until clothing items draw meshes. **Recommended: A** -- it is the Creator's own path and the shapes already carry over | BACKLOG N-226, `Docs/DECISIONS.md` 2026-10-27 | Oct 27 |
 | F23 | Rejected Steam art | `SteamArt/` (~15 MB LFS, pushed): delete only if Wes says so | `SteamArt/README.md` | Oct 13 |
 
 ## Answered 2026-10-17 (knowledge consolidation; Wes's words)
@@ -66,6 +67,19 @@
 | N9 | PATCH_NOTES.md frozen since June 30 | "so long as you can extract steam update patch notes from git commits we don't need it, might just need to note when the last steam patch was every time i ask for steam patch notes so you have a date/time though" | Docs/Archive/PATCH_NOTES.md archived; Steam patch notes are generated from `git log` since the last recorded Steam patch, and each request records its date / time / commit in `Docs/STEAM_RELEASES.md`. |
 
 ## Decisions, newest first
+
+### 2026-10-27
+- **The MetaHuman bases in the game** (Wes: "ok i made a few bases with the new metahumans stuff, see if you can get them all customizable
+  and out into the game"; then "im going to bed, keep working over night"). Built overnight; Claude's calls, noted:
+  - The creator's "Body type" row became the **Base** picker (Femme (original) = the survivor Blueprint's MH_F_1, then Lillian), with the
+    build sliders bust, hips and butt, waist, thighs under it; Face and Masc stay "coming soon" (one line). `Docs/UI.md`.
+  - **A base gives the survivor its own body**: the body fat and muscle its MetaHuman was made with (Lillian 12.4 % / 28.5 kg, 53.7 kg),
+    set so it holds through the metabolism's weight update; the body shapes are off there. (The default composition does not hold:
+    75 kg at 18 % becomes 21.8 % on the first update -- left alone for the Blueprint's own survivor; `Docs/Medical_And_Survival.md` §3.)
+  - **MO57's MetaHuman Common content is the 5.8 Creator's now**: Lillian's build needs it; 151 shared files replaced, 16 added. The
+    originals are in `D:\UEProjects\MO57_Backups\2026-10-27_MH_Lillian_Base\` (MANIFEST.txt). The femme survivor still renders right.
+  - Only Lillian is in: Jalena and Trey are not Auto-Rigged yet (Epic's cloud service: Wes's click, then a build in the Creator). Each
+    is then a bake in MO_Tools, a copy, two config lines (`+Bases`, its cook directory) and its groom bindings -- no code (BACKLOG N-226).
 
 ### 2026-10-26
 - **Body shape: a milder thin end, build sliders, muscle** (Wes: "thin is too thin in that pic, dial it back about 10%" / "set the low end

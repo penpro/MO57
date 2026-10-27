@@ -78,6 +78,7 @@ public class MOFramework : ModuleRules
 			{
 				"MOFrameworkCore",          // C1 split: types/interfaces/rows layer
 				"MOFrameworkMedical",       // C1 split: physiological simulation layer
+				"MOBodyShape",              // the body shapes (Plugins/MOBodyShape, made in MO_Tools): AMOMetaHumanCharacter::BodyShape
 				"Core",
 				"UMG",
 				"InputCore",

@@ -6,6 +6,7 @@
 #include "MOIdentityComponent.h"
 #include "MOMetaHumanCharacter.h"
 #include "MOPlayerController.h"
+#include "MOSurvivorBase.h"
 #include "MOUIUtils.h"
 #include "MOWorldReadinessSubsystem.h"
 
@@ -56,6 +57,36 @@ void UMOCharacterCreatorPanel::NativeConstruct()
 		HairRednessSlider->OnValueChanged.RemoveDynamic(this, &UMOCharacterCreatorPanel::HandleHairRednessChanged);
 		HairRednessSlider->OnValueChanged.AddDynamic(this, &UMOCharacterCreatorPanel::HandleHairRednessChanged);
 	}
+	// The build sliders: -1 (the smaller shape) .. 0 (the base as made) .. +1 (the larger).
+	for (USlider* Slider : { BustSlider.Get(), HipsSlider.Get(), WaistSlider.Get(), ThighsSlider.Get() })
+	{
+		if (Slider)
+		{
+			Slider->SetMinValue(-1.0f);
+			Slider->SetMaxValue(1.0f);
+			Slider->SetStepSize(0.01f);
+		}
+	}
+	if (BustSlider)
+	{
+		BustSlider->OnValueChanged.RemoveDynamic(this, &UMOCharacterCreatorPanel::HandleBustChanged);
+		BustSlider->OnValueChanged.AddDynamic(this, &UMOCharacterCreatorPanel::HandleBustChanged);
+	}
+	if (HipsSlider)
+	{
+		HipsSlider->OnValueChanged.RemoveDynamic(this, &UMOCharacterCreatorPanel::HandleHipsChanged);
+		HipsSlider->OnValueChanged.AddDynamic(this, &UMOCharacterCreatorPanel::HandleHipsChanged);
+	}
+	if (WaistSlider)
+	{
+		WaistSlider->OnValueChanged.RemoveDynamic(this, &UMOCharacterCreatorPanel::HandleWaistChanged);
+		WaistSlider->OnValueChanged.AddDynamic(this, &UMOCharacterCreatorPanel::HandleWaistChanged);
+	}
+	if (ThighsSlider)
+	{
+		ThighsSlider->OnValueChanged.RemoveDynamic(this, &UMOCharacterCreatorPanel::HandleThighsChanged);
+		ThighsSlider->OnValueChanged.AddDynamic(this, &UMOCharacterCreatorPanel::HandleThighsChanged);
+	}
 	auto Bind = [this](UMOCommonButton* Button, void (UMOCharacterCreatorPanel::*Handler)())
 	{
 		if (Button)
@@ -64,6 +95,8 @@ void UMOCharacterCreatorPanel::NativeConstruct()
 			Button->OnClicked().AddUObject(this, Handler);
 		}
 	};
+	Bind(BasePrevButton, &UMOCharacterCreatorPanel::HandleBasePrev);
+	Bind(BaseNextButton, &UMOCharacterCreatorPanel::HandleBaseNext);
 	Bind(EyePrevButton, &UMOCharacterCreatorPanel::HandleEyePrev);
 	Bind(EyeNextButton, &UMOCharacterCreatorPanel::HandleEyeNext);
 	Bind(HairStylePrevButton, &UMOCharacterCreatorPanel::HandleHairStylePrev);
@@ -81,7 +114,8 @@ void UMOCharacterCreatorPanel::NativeConstruct()
 void UMOCharacterCreatorPanel::NativeDestruct()
 {
 	for (UMOCommonButton* Button : { EyePrevButton.Get(), EyeNextButton.Get(), HairStylePrevButton.Get(), HairStyleNextButton.Get(), BeardPrevButton.Get(),
-		BeardNextButton.Get(), MustachePrevButton.Get(), MustacheNextButton.Get(), RandomizeButton.Get(), BeginButton.Get() })
+		BeardNextButton.Get(), MustachePrevButton.Get(), MustacheNextButton.Get(), BasePrevButton.Get(), BaseNextButton.Get(), RandomizeButton.Get(),
+		BeginButton.Get() })
 	{
 		if (Button)
 		{
@@ -366,6 +400,69 @@ void UMOCharacterCreatorPanel::RefreshControls()
 	{
 		MustacheText->SetText(GetGroomLabel(EMOAppearanceCategory::Mustache));
 	}
+	if (BaseText)
+	{
+		const TArray<FMOSurvivorBase>& Bases = UMOSurvivorBaseSettings::GetBases();
+		BaseText->SetText(Bases.IsValidIndex(GetBaseIndex()) ? Bases[GetBaseIndex()].DisplayName : FText::GetEmpty());
+	}
+	for (const FName Driver : GetBuildDrivers())
+	{
+		if (USlider* Slider = GetBuildSlider(Driver))
+		{
+			Slider->SetValue(Look.GetBuildValue(Driver));
+		}
+	}
+}
+
+const TArray<FName>& UMOCharacterCreatorPanel::GetBuildDrivers()
+{
+	static const TArray<FName> Drivers = { TEXT("Bust"), TEXT("Hips"), TEXT("Waist"), TEXT("Thighs") };
+	return Drivers;
+}
+
+USlider* UMOCharacterCreatorPanel::GetBuildSlider(FName Driver) const
+{
+	return Driver == TEXT("Bust") ? BustSlider.Get() : Driver == TEXT("Hips") ? HipsSlider.Get() : Driver == TEXT("Waist") ? WaistSlider.Get()
+		: Driver == TEXT("Thighs") ? ThighsSlider.Get() : nullptr;
+}
+
+int32 UMOCharacterCreatorPanel::GetBaseIndex() const
+{
+	const int32 Index = UMOSurvivorBaseSettings::GetBases().IndexOfByPredicate([this](const FMOSurvivorBase& Base) { return Base.Id == Look.BaseId; });
+	return FMath::Max(Index, 0);
+}
+
+void UMOCharacterCreatorPanel::StepBase(int32 Delta)
+{
+	const TArray<FMOSurvivorBase>& Bases = UMOSurvivorBaseSettings::GetBases();
+	if (Bases.Num() > 0)
+	{
+		SetBase(Bases[(GetBaseIndex() + Delta + Bases.Num()) % Bases.Num()].Id);
+	}
+}
+
+void UMOCharacterCreatorPanel::SetBase(FName BaseId)
+{
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(BaseId);
+	if (!Base)
+	{
+		return;
+	}
+	Base->ApplyToLook(Look);
+	ApplyLookToSurvivor();
+	// A new game's survivor starts with the body the base was made with (the host owns it: authority).
+	if (AMOMetaHumanCharacter* Survivor = GetSurvivor())
+	{
+		Survivor->ApplyBaseStartingBody();
+	}
+	RefreshControls();
+	PreloadGroomNeighbours(EMOAppearanceCategory::Hair);
+}
+
+void UMOCharacterCreatorPanel::SetBuild(FName Driver, float Value)
+{
+	Look.SetBuildValue(Driver, FMath::Clamp(Value, -1.0f, 1.0f));
+	ApplyLookToSurvivor();
 }
 
 TArray<FMOAppearanceAssetEntry> UMOCharacterCreatorPanel::GetGroomChoices(EMOAppearanceCategory GroomSlot) const
@@ -389,7 +486,15 @@ int32 UMOCharacterCreatorPanel::GetGroomIndex(EMOAppearanceCategory GroomSlot, c
 	const FString& Path = *UMOAppearanceSubsystem::GetGroomPath(Current, GroomSlot);
 	if (!Path.IsEmpty())
 	{
-		return Choices.IndexOfByPredicate([&Path](const FMOAppearanceAssetEntry& E) { return E.AssetPath == Path; });
+		const int32 Exact = Choices.IndexOfByPredicate([&Path](const FMOAppearanceAssetEntry& E) { return E.AssetPath == Path; });
+		if (Exact != INDEX_NONE)
+		{
+			return Exact;
+		}
+		// A base's own groom (<Character>/Grooms/<Groom>) is not in the library's list: its library namesake's place, so the label names it at
+		// once -- not the groom still drawn while it loads (Oct 27: "Updo braids" under Lillian's updo) -- and the arrows step from there.
+		const FString Name = FPackageName::ObjectPathToObjectName(Path);
+		return Choices.IndexOfByPredicate([&Name](const FMOAppearanceAssetEntry& E) { return FPackageName::ObjectPathToObjectName(E.AssetPath) == Name; });
 	}
 	const UGroomComponent* Component = UMOAppearanceSubsystem::FindGroomComponent(GetSurvivor(), GroomSlot);
 	if (!Component || !Component->GroomAsset)
@@ -407,6 +512,12 @@ FText UMOCharacterCreatorPanel::GetGroomLabel(EMOAppearanceCategory GroomSlot) c
 	if (Choices.IsValidIndex(Index))
 	{
 		return Choices[Index].DisplayName;
+	}
+	FMOCharacterAppearance Current = Look;
+	const FString& Path = *UMOAppearanceSubsystem::GetGroomPath(Current, GroomSlot);
+	if (!Path.IsEmpty())
+	{
+		return UMOAppearanceSubsystem::MakeGroomDisplayName(FPackageName::ObjectPathToObjectName(Path));   // the look's groom, worn or loading
 	}
 	const UGroomComponent* Component = UMOAppearanceSubsystem::FindGroomComponent(GetSurvivor(), GroomSlot);
 	return Component && Component->GroomAsset ? UMOAppearanceSubsystem::MakeGroomDisplayName(Component->GroomAsset->GetName()) : FText::GetEmpty();
@@ -514,9 +625,19 @@ void UMOCharacterCreatorPanel::HandleBegin()
 		}
 	}
 	ApplyLookToSurvivor();
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacterCreator] Begin: '%s', skin %.2f, hair %.2f / %.2f, eyes %s, hair style '%s', beard '%s', mustache '%s'"),
-		*Name, Look.SkinTone, Look.HairMelanin, Look.HairRedness, *Look.EyeColor.ToString(), *GetGroomLabel(EMOAppearanceCategory::Hair).ToString(),
-		*GetGroomLabel(EMOAppearanceCategory::Beard).ToString(), *GetGroomLabel(EMOAppearanceCategory::Mustache).ToString());
+	if (Survivor && !Look.BaseId.IsNone())
+	{
+		Survivor->ApplyBaseStartingBody();   // the base's body, whatever the minutes in the creator did to the metabolism
+	}
+	FString Build;
+	for (const FName Driver : GetBuildDrivers())
+	{
+		Build += FString::Printf(TEXT(" %s %+.2f"), *Driver.ToString(), Look.GetBuildValue(Driver));
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacterCreator] Begin: '%s', base '%s',%s, skin %.2f, hair %.2f / %.2f, eyes %s, hair style '%s', beard '%s', mustache '%s'"),
+		*Name, *Look.BaseId.ToString(), *Build, Look.SkinTone, Look.HairMelanin, Look.HairRedness, *Look.EyeColor.ToString(),
+		*GetGroomLabel(EMOAppearanceCategory::Hair).ToString(), *GetGroomLabel(EMOAppearanceCategory::Beard).ToString(),
+		*GetGroomLabel(EMOAppearanceCategory::Mustache).ToString());
 
 	// The world may still be filling in (the creator was quick): the loading overlay covers the rest of the readiness cycle.
 	const UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(this);

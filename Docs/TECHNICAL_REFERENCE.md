@@ -18,6 +18,9 @@ The plugin `Plugins/MOFramework/` is **three runtime modules + an editor module*
 **MOFrameworkCore** (types, contracts, clock, registries, the world generator `FMOWorldGen`) <- **MOFrameworkMedical**
 (anatomy, vitals, metabolism, mental state, adrenaline, respiration, medical subsystem) <- **MOFramework** (everything else);
 **MOFrameworkEditor** (editor utilities such as `MOWidgetEditorUtils`, `MOEditorContentUtils`). Upward includes are forbidden.
+Feature plugins made in the MO_Tools lab (`D:\UEProjects\MO_Tools`, its `CLAUDE.md`) come in as their own plugins with no MOFramework
+dependency, and MOFramework depends on them: **`Plugins/MOBodyShape`** (Oct 27 2026; `UMOBodyShapeComponent`, the body shapes baked from
+the MetaHuman Creator's body model, and its editor baker). Its source is MO_Tools' -- change it there and copy it over, never here.
 
 **Core-contract-and-registration** (the load-bearing pattern since the C1/C2 carve, July 2026): when an upper-layer system must
 feed a lower-layer one without the lower layer knowing it exists, put a plain-C++ (or U-) interface + a tiny registry in

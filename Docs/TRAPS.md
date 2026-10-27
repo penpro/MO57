@@ -29,14 +29,18 @@
 - **WinError 206 from ue.py** -> request bodies over ~30 KB overran the command line -> fixed (`_curl` sends the body on stdin). (overnight-polish)
 - **A background probe keeps running and teleports the shared instance** -> launched with `&` inside the Bash tool -> use `run_in_background`. (oct16)
 
-## 2. Engine, build and C++ (UE 5.8.3)
+## 2. Engine, build and C++ (UE 5.8.4 since Oct 26 15:33; it was 5.8.3)
 
+- **"Unable to build while Live Coding is active" with MO57's editor closed** -> another editor on the same engine is open (the MO_Tools
+  lab, Oct 27): Live Coding is engine-wide, so UBT refuses every project's build while any editor of that install runs -> close it
+  (`MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py editor stop`, after checking it holds nothing unsaved), then build. (Oct 27)
 - **The package build fails on a test that the editor build compiled** -> the GAME target compiles the automation tests too
   (`WITH_DEV_AUTOMATION_TESTS`), without `WITH_EDITOR`; `ue.py build` builds only the editor -> a test that calls editor-only code
   (an `#if WITH_EDITOR` function: `FMOWorldFeatureCook::CollectCookPackages`) goes inside `#if WITH_EDITOR` itself. (Oct 25)
 - **Engine upgrade: a new stock network channel would silently vanish** -> `Config/DefaultEngine.ini` replaces the whole
   `[/Script/Engine.NetDriver]` ChannelDefinitions list (`!ClearArray`) to swap the Actor channel for `MONetStatsActorChannel`. On every engine
-  upgrade, re-diff it against the new `BaseEngine.ini` list. Matched UE 5.8.3's four channels exactly on Oct 17. (Oct 17 review of afb9aabc)
+  upgrade, re-diff it against the new `BaseEngine.ini` list. Matched UE 5.8.3's four channels exactly on Oct 17; re-diffed for 5.8.4 on
+  Oct 27: the same four (Control, Voice, DataStream, Actor). (Oct 17 review of afb9aabc)
 - **An engine `.cpp` edit changes nothing** -> `D:\UnrealEngine\UE_5.8` is the LAUNCHER install (`Engine/Build/InstalledBuild.txt`) -> engine fixes
   are staged in `Docs/Engine_Patches.md` + `Docs/EnginePatches/`; check InstalledBuild.txt before proposing one. (engine-installed-build-patches)
 - **A project copy of an engine plugin does not build when other ENGINE plugins depend on it** (Oct 26, HairStrands) -> UBT: "Module
@@ -312,6 +316,10 @@
 
 ## 7. Packaging, cook and Shipping
 
+- **An asset named only in config never reaches the package** -> the cooker does not follow config paths (a `UDeveloperSettings`
+  `FSoftObjectPath` or groom path string): the survivor bases (`MOSurvivorBaseSettings`) would load in the editor and be missing from a
+  packaged build (the pawn keeps its Blueprint's meshes, logged) -> each base's folder is in `DirectoriesToAlwaysCook`. A new base = its
+  `+Bases` line AND its cook line. (Oct 27)
 - Full list: `Docs/Packaging.md` §2. In short: cook-world `GetSubsystem` fatal; non-`ECVF_Scalability` cvars in DefaultScalability.ini are
   fatal; Substrate legacy shading-model pins (`fix_substrate_shading_model_pin.py` after every ED / Megascans migration); soft-referenced plugin
   content not cooked (`DirectoriesToAlwaysCook`) but too-wide dirs cook DX11-incompatible Niagara (X3662); SLW materials need the legacy output
@@ -404,6 +412,14 @@
 
 ## 12. Light, rendering, materials
 
+- **A swapped-in groom is bald in third person but fine up close** -> the swap dropped the Blueprint's per-group settings: the MetaHuman
+  Blueprint's groom components carry LOD bias -7 on each group (the strands at every distance), and `UGroomComponent` re-initialises its
+  groups to the defaults whenever a groom with ANOTHER GROUP COUNT goes on (`UpdateHairGroupsDesc`). From the cards' distance on the
+  hair is then on its cards LODs, and a Creator character's OWN groom (`<Character>/Grooms/<Groom>`) draws nothing there, even with its
+  own `MI_WI_*` instances on (a library groom's cards draw). -> `UMOAppearanceSubsystem::KeepGroupSettings` (the archetype's settings
+  onto every group of the new groom) on every swap. Found Oct 27: Lillian's 2-group updo, and the femme's 3-group braids after a round
+  trip through her (`Tools/check_creator_bases.py` reads the bias back in game and shoots both; `MOFramework.Appearance.SurvivorBases`).
+  `ApplyOwnGroomMaterials` (her own instances back on) was the first guess: it is right for the look, not the cause.
 - **Groom hair SIMULATION jitters far from the world origin** (Oct 25): the engine's hair DI takes a relative transform from float-cast
   world matrices (`Docs/Engine_Patches.md` #3); the start sites are ~17 km out, where that is ~1 mm of noise per frame on every simulated
   strand. Skinned strands are fine. Groom physics stays off (`MO.Hair.Simulation 0`). Before blaming a solver setting for motion noise, repeat

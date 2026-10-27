@@ -17,6 +17,10 @@
 #include "MOForagingSubsystem.h"
 #include "MOGroundContextMenu.h"
 #include "Kismet/GameplayStatics.h"
+#include "MOBodyShapeComponent.h"
+#include "MOMetaHumanCharacter.h"
+#include "MOMetabolismComponent.h"
+#include "MOSurvivorBase.h"
 #include "MOSpawnClearance.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
@@ -1717,6 +1721,102 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				APawn* Spawned = World->SpawnActor<APawn>(Class, Location, Facing, Params);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SpawnCreature: %s (%s) at %s, %.0f cm from the player"), *GetNameSafe(Spawned), *Class->GetName(),
 					*Location.ToString(), FVector::Dist(Location, Player->GetActorLocation()));
+			}),
+			ECVF_Default));
+		// ---------- The survivor bases and the body shapes (Oct 27 2026) ----------
+		// MO.Test.Base <Id>: player 0's pawn takes a base as the character creator gives it (meshes, grooms, the base's body). MO.Test.BodyComposition
+		// <fat %> [muscle kg]: its metabolism's body, at a weight that holds (the body follows within ShownBodyRefreshSeconds). MO.Test.BodyBuild
+		// <Driver> <Value>: a build slider. MO.Test.BodyShape: the base, the shown body and every body-shape weight on the body and face.
+		auto PlayerMetaHuman = [](UWorld* World) { return World ? Cast<AMOMetaHumanCharacter>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr; };
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.Base"),
+			TEXT("Dev (server): player 0's survivor takes a base as the character creator gives it. Usage: MO.Test.Base <Id> (UMOSurvivorBaseSettings)"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([PlayerMetaHuman](const TArray<FString>& Args, UWorld* World)
+			{
+				AMOMetaHumanCharacter* Pawn = PlayerMetaHuman(World);
+				const FMOSurvivorBase* Base = Args.Num() > 0 ? UMOSurvivorBaseSettings::Find(FName(*Args[0])) : nullptr;
+				if (!Pawn || !Base || World->GetNetMode() == NM_Client)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Base: FAILED (%s)"), !Pawn ? TEXT("no MetaHuman player pawn") : !Base ? TEXT("no such base") : TEXT("a client"));
+					return;
+				}
+				FMOCharacterAppearance Look = Pawn->GetAppearance();
+				Base->ApplyToLook(Look);
+				Pawn->SetAppearanceLook(Look);
+				Pawn->ApplyBaseStartingBody();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Base: %s now wears base '%s'"), *Pawn->GetName(), *Base->Id.ToString());
+			}),
+			ECVF_Default));
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.BodyComposition"),
+			TEXT("Dev (server): player 0's body fat and muscle (the metabolism's, at a weight that holds). Usage: MO.Test.BodyComposition <BodyFatPercent> [MuscleMassKg]"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([PlayerMetaHuman](const TArray<FString>& Args, UWorld* World)
+			{
+				AMOMetaHumanCharacter* Pawn = PlayerMetaHuman(World);
+				UMOMetabolismComponent* Metabolism = Pawn ? Pawn->GetMetabolismComponent() : nullptr;
+				if (!Metabolism || Args.Num() < 1 || World->GetNetMode() == NM_Client)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] BodyComposition: FAILED (no pawn / metabolism, no value, or a client)"));
+					return;
+				}
+				FMOBodyComposition& Body = Metabolism->BodyComposition;
+				Body.SetBody(FCString::Atof(*Args[0]), Args.Num() > 1 ? FCString::Atof(*Args[1]) : Body.MuscleMass);
+				Pawn->RefreshShownBody();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] BodyComposition: %.1f %% body fat, %.1f kg of muscle, %.1f kg"), Body.BodyFatPercent, Body.MuscleMass, Body.TotalWeight);
+			}),
+			ECVF_Default));
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.BodyBuild"),
+			TEXT("Dev (server): a build slider on player 0's survivor. Usage: MO.Test.BodyBuild <Bust|Hips|Waist|Thighs> <-1..1>"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([PlayerMetaHuman](const TArray<FString>& Args, UWorld* World)
+			{
+				AMOMetaHumanCharacter* Pawn = PlayerMetaHuman(World);
+				if (!Pawn || Args.Num() < 2 || World->GetNetMode() == NM_Client)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] BodyBuild: FAILED (no MetaHuman player pawn, no driver / value, or a client)"));
+					return;
+				}
+				FMOCharacterAppearance Look = Pawn->GetAppearance();
+				Look.SetBuildValue(FName(*Args[0]), FMath::Clamp(FCString::Atof(*Args[1]), -1.0f, 1.0f));
+				Pawn->SetAppearanceLook(Look);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] BodyBuild: %s = %.2f"), *Args[0], Look.GetBuildValue(FName(*Args[0])));
+			}),
+			ECVF_Default));
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Test.BodyShape"),
+			TEXT("Query: every MetaHuman pawn's base, the body it shows (body fat, muscle) and every body-shape weight on its body and face, as this machine draws them (a joiner: the host's survivor too). Logs [MOQUERY] BODYSHAPE, one line per pawn."),
+			FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+			{
+				int32 Count = 0;
+				for (TActorIterator<AMOMetaHumanCharacter> It(World); It; ++It)
+				{
+					AMOMetaHumanCharacter* Pawn = *It;
+					if (!Pawn->GetBodyShape())
+					{
+						continue;
+					}
+					++Count;
+					FString Weights;
+					for (USkeletalMeshComponent* Mesh : { Pawn->GetMesh(), Pawn->GetFaceMesh() })
+					{
+						const USkeletalMesh* Asset = Mesh ? Mesh->GetSkeletalMeshAsset() : nullptr;
+						Weights += FString::Printf(TEXT(" | %s (%s):"), Mesh ? *Mesh->GetName() : TEXT("?"), Asset ? *Asset->GetName() : TEXT("none"));
+						for (const FMOBodyShapeMorph& Shape : Pawn->GetBodyShape()->Shapes)
+						{
+							if (Asset && Asset->FindMorphTarget(Shape.MorphTarget))
+							{
+								Weights += FString::Printf(TEXT(" %s %.2f"), *Shape.MorphTarget.ToString().Replace(TEXT("MO_Body_"), TEXT("")), Mesh->GetMorphTarget(Shape.MorphTarget));
+							}
+						}
+					}
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BODYSHAPE %s%s base '%s' shows %.1f %% body fat, %.1f kg of muscle%s"), *Pawn->GetName(),
+						Pawn->IsPlayerControlled() && Pawn->IsLocallyControlled() ? TEXT(" (this machine's player)") : TEXT(""), *Pawn->GetAppearance().BaseId.ToString(), Pawn->GetShownBodyFatPercent(),
+						Pawn->GetShownMuscleMassKg(), *Weights);
+				}
+				if (Count == 0)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BODYSHAPE no MetaHuman pawn"));
+				}
 			}),
 			ECVF_Default));
 		ConsoleCommands.Add(CM.RegisterConsoleCommand(
@@ -5132,7 +5232,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.ClickWidget <NameSubstring> ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.ClickWidget"),
-		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center. Usage: MO.Test.ClickWidget <NameSubstring> | text=<button label> (locate names via MO.Test.FindWidget)"),
+		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center (at=<0..1>: that far across instead -- a slider takes the value there). Usage: MO.Test.ClickWidget <NameSubstring> [at=<0..1>] | text=<button label> (locate names via MO.Test.FindWidget)"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (!World || Args.Num() < 1)
@@ -5211,8 +5311,17 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: no live widget matching '%s' (try MO.Test.FindWidget)"), *Needle);
 				return;
 			}
+			// "at=<0..1>": how far across the widget the click lands (a slider takes the value under it; Oct 27, the creator's build sliders).
+			float Across = 0.5f;
+			for (const FString& Arg : Args)
+			{
+				if (Arg.StartsWith(TEXT("at="), ESearchCase::IgnoreCase))
+				{
+					Across = FMath::Clamp(FCString::Atof(*Arg.RightChop(3)), 0.0f, 1.0f);
+				}
+			}
 			const FGeometry& Geo = W->GetCachedGeometry();
-			const FVector2D Center = FVector2D(Geo.GetAbsolutePosition()) + FVector2D(Geo.GetAbsoluteSize()) * 0.5f;
+			const FVector2D Center = FVector2D(Geo.GetAbsolutePosition()) + FVector2D(Geo.GetAbsoluteSize()) * FVector2D(Across, 0.5f);
 			FSlateApplication& Slate = FSlateApplication::Get();
 			// Move the pointer there first, as a hand does: an SButton clicks on release only while HOVERED, and hover comes from a move
 			// event. Without it a synthesized down/up never pressed a button -- and still logged PASS (a recipe row "did nothing",

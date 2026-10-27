@@ -371,6 +371,10 @@ bool UMOAppearanceSubsystem::ApplyAppearance(AMOMetaHumanCharacter* Character, c
 		}
 	}
 
+	// A survivor base (Appearance.BaseId) puts its own body and face on, over any mesh path: before the grooms, which bind to the face. It reads
+	// the pawn's appearance, which is this one when the pawn applies its own (ApplyCurrentAppearance).
+	Character->ApplyBaseMeshes();
+
 	// The grooms before the colours: a new groom brings its own materials, which the colours then tint (a groom still loading swaps in later,
 	// AMOMetaHumanCharacter::ApplyGrooms tints it then).
 	bSuccess &= Character->ApplyGrooms(Appearance);
@@ -572,6 +576,46 @@ UGroomBindingAsset* UMOAppearanceSubsystem::FindGroomBinding(const UGroomAsset* 
 	return nullptr;
 }
 
+int32 UMOAppearanceSubsystem::ApplyOwnGroomMaterials(UGroomComponent* Component, const UGroomAsset* Groom)
+{
+	if (!Component || !Groom)
+	{
+		return 0;
+	}
+	const FString Folder = FPackageName::GetLongPackagePath(Groom->GetOutermost()->GetName());
+	const TArray<FHairGroupsMaterial>& Slots = Groom->GetHairGroupsMaterials();
+	int32 Applied = 0;
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		FString Slot = Slots[Index].SlotName.ToString();
+		Slot.RemoveFromStart(TEXT("MI_"));
+		const FString Name = FString::Printf(TEXT("MI_WI_%s_%s"), *Groom->GetName(), *Slot);
+		const FString Package = Folder / Name;
+		if (!FPackageName::DoesPackageExist(Package))
+		{
+			continue;
+		}
+		if (UMaterialInterface* Own = Cast<UMaterialInterface>(FSoftObjectPath(Package + TEXT(".") + Name).TryLoad()))
+		{
+			Component->SetMaterial(Index, Own);
+			++Applied;
+		}
+	}
+	return Applied;
+}
+
+bool UMOAppearanceSubsystem::KeepGroupSettings(UGroomComponent* Component, const UGroomComponent* From, const UGroomAsset* Groom)
+{
+	if (!Component || !From || From->GroomGroupsDesc.IsEmpty() || !Groom)
+	{
+		return false;
+	}
+	// One entry per group of the new groom, each the Blueprint's first (it sets the same on every group); UpdateHairGroupsDesc keeps a list of
+	// the right length as it is.
+	Component->GroomGroupsDesc.Init(From->GroomGroupsDesc[0], Groom->GetNumHairGroups());
+	return true;
+}
+
 bool UMOAppearanceSubsystem::ApplyGroomsToCharacter(AMOMetaHumanCharacter* Character, const FMOCharacterAppearance& Appearance, bool bWaitUntilReady,
 	bool* bOutPending, bool* bOutChanged)
 {
@@ -659,14 +703,17 @@ bool UMOAppearanceSubsystem::ApplyGroomsToCharacter(AMOMetaHumanCharacter* Chara
 			Character->AddInstanceComponent(Component);
 		}
 		Component->EmptyOverrideMaterials();   // the old groom's material overrides (the MetaHuman assembly's per-wardrobe instances) don't fit the new groom
+		KeepGroupSettings(Component, Cast<UGroomComponent>(Component->GetArchetype()), Groom);   // the Blueprint's strands at every distance
 		Component->SetGroomAsset(Groom, Binding);
+		const int32 OwnMaterials = ApplyOwnGroomMaterials(Component, Groom);   // a character's own groom: its own instances
 		MOAppearancePrivate::ApplyHairSimulationSetting(Component);
 		if (Groom && !Binding)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s: no binding of %s to %s -- the groom is projected at run time (Content/Python/make_groom_bindings.py makes one)"),
 				*Character->GetName(), *Groom->GetName(), *Face->GetSkeletalMeshAsset()->GetName());
 		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: %s -> %s"), *Character->GetName(), Slot.Name, Groom ? *Groom->GetName() : TEXT("none"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: %s -> %s%s"), *Character->GetName(), Slot.Name, Groom ? *Groom->GetName() : TEXT("none"),
+			OwnMaterials > 0 ? *FString::Printf(TEXT(" (its own %d material instance(s))"), OwnMaterials) : TEXT(""));
 	}
 	return bAllLoaded;
 }
@@ -678,13 +725,9 @@ bool UMOAppearanceSubsystem::ApplyBodyParameters(AMOMetaHumanCharacter* Characte
 		return false;
 	}
 
-	// TODO: Integrate with Mutable plugin for actual body morphing
-	// For now, we store the values but don't apply visual changes
-	// This is where Mutable's CustomizableObject would be updated
-
-	// DEBUG (MOAppearanceSubsystem, disabled Oct 18): re-enable to trace verbose detail
-	// UE_LOG(LogMOFramework, Verbose, TEXT("UMOAppearanceSubsystem: Body params - Fat: %.2f, Muscle: %.2f, Height: %.2f"),
-	// 	BodyFat, MuscleMass, Height);
+	// The body shapes (Oct 27 2026): the base's neutral point, the build sliders and the body fat and muscle the metabolism simulates
+	// (AMOMetaHumanCharacter::ApplyBodyShape) -- not BodyFat / MuscleMass here, which no survivor sets (the metabolism owns its body).
+	Character->ApplyBodyShape();
 
 	// Height can be applied via actor scale as a simple fallback
 	Character->SetActorScale3D(FVector(1.0f, 1.0f, Height));

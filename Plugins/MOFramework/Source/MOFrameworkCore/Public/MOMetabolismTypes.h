@@ -120,6 +120,21 @@ struct MOFRAMEWORKCORE_API FMOBodyComposition
 	/** Get lean mass in kg. */
 	float GetLeanMass() const { return TotalWeight - GetFatMass(); }
 
+	/** Organs, blood, water and the rest: the weight that is neither fat, muscle nor bone (UMOMetabolismComponent::UpdateBodyWeight). */
+	static constexpr float OtherMassKg = 15.0f;
+
+	/**
+	 * A body of this fat percentage and muscle mass, with the total weight the metabolism computes from them (fat + muscle + bone + the rest),
+	 * so it holds on the next weight update. The defaults do not: 75 kg at 18 % becomes 62 kg at 21.8 % on the first update. A survivor base's
+	 * starting body -- the body fat and muscle its MetaHuman was made with (Oct 27 2026).
+	 */
+	void SetBody(float InBodyFatPercent, float InMuscleMassKg)
+	{
+		BodyFatPercent = FMath::Clamp(InBodyFatPercent, 3.0f, 50.0f);
+		MuscleMass = FMath::Max(1.0f, InMuscleMassKg);
+		TotalWeight = (MuscleMass + BoneMass + OtherMassKg) / (1.0f - BodyFatPercent / 100.0f);
+	}
+
 	/** Get cold resistance multiplier from body fat. */
 	float GetColdResistance() const
 	{

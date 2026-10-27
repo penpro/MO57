@@ -134,6 +134,24 @@ public:
 	static bool ApplyGroomsToCharacter(AMOMetaHumanCharacter* Character, const FMOCharacterAppearance& Appearance, bool bWaitUntilReady = true,
 		bool* bOutPending = nullptr, bool* bOutChanged = nullptr);
 
+	/**
+	 * A groom built for one character (a MetaHuman assembly's <Character>/Grooms/<Groom>) has its own material instances beside it,
+	 * MI_WI_<Groom>_<Slot> (MI_Hair_Cards -> MI_WI_Hair_S_Updo_Hair_Cards), which the character's Blueprint sets as overrides; the swap clears
+	 * overrides, so this puts them back on Component (the femme's braids after a base round trip wear what her Blueprint gives them). A library
+	 * groom has none beside it and keeps its own. Returns how many slots took one. ApplyGroomsToCharacter calls it on every swap. (It is not
+	 * what keeps such a groom from going bald at a distance: KeepGroupSettings.)
+	 */
+	static int32 ApplyOwnGroomMaterials(UGroomComponent* Component, const UGroomAsset* Groom);
+
+	/**
+	 * The per-group settings a Blueprint gives its groom component (From: the component's archetype), carried onto every group of Groom before
+	 * it goes on. The MetaHuman Blueprint's are LOD bias -7 on each group: the strands at every distance. The component re-initialises its
+	 * groups to the defaults whenever a groom with another group count goes on (UGroomComponent::UpdateHairGroupsDesc), and a Creator
+	 * character's own groom draws NOTHING on its cards LODs: bald from a third-person distance on, fine up close (Oct 27: Lillian's 2-group
+	 * updo; the femme's 3-group braids after a round trip through her). False (nothing changed) when From has no groups or Groom is null.
+	 */
+	static bool KeepGroupSettings(UGroomComponent* Component, const UGroomComponent* From, const UGroomAsset* Groom);
+
 	/** Every binding of a groom (any face), from the registry alone: the creator preloads a style's bindings with it. */
 	static TArray<FSoftObjectPath> FindGroomBindingPaths(const FSoftObjectPath& Groom);
 
@@ -164,7 +182,8 @@ public:
 	static void ApplyHairSimulation(AActor* Actor);
 
 	/**
-	 * Apply body parameters (for Mutable integration).
+	 * The body: AMOMetaHumanCharacter::ApplyBodyShape (the survivor base's neutral point, the build sliders, the simulated body fat and muscle;
+	 * BodyFat / MuscleMass are not read -- the metabolism owns the body), and Height as the actor's vertical scale.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	bool ApplyBodyParameters(AMOMetaHumanCharacter* Character, float BodyFat, float MuscleMass, float Height);

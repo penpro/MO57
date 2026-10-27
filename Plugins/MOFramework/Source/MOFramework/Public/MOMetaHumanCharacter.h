@@ -49,6 +49,7 @@
 
 class USkeletalMeshComponent;
 class UMOAppearanceSubsystem;
+class UMOBodyShapeComponent;
 
 /**
  * MetaHuman-compatible character class.
@@ -133,6 +134,34 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
 	float HairSimulationCheckSeconds = 1.0f;
 
+	// ============================================================================
+	// BASE AND BODY SHAPE (Oct 27 2026: the survivor bases, MOSurvivorBase.h)
+	// ============================================================================
+
+	/** The body shapes (MOBodyShape): the shown body fat and muscle, the base's neutral point, the appearance's build sliders. */
+	UMOBodyShapeComponent* GetBodyShape() const { return BodyShape; }
+
+	/** The body fat (%) and muscle (kg) the body shows: the metabolism's, which the server copies here (the metabolism replicates to its owner
+	 *  only, and every machine draws this body). */
+	float GetShownBodyFatPercent() const { return ShownBodyFatPercent; }
+	float GetShownMuscleMassKg() const { return ShownMuscleMassKg; }
+
+	/** Put the appearance's base meshes (body, face) on, if they are not on already; the leader pose follows. False: no base, or it is on. */
+	bool ApplyBaseMeshes();
+
+	/** The body shapes from the base (neutral point), the build (the appearance's sliders) and the shown composition. */
+	void ApplyBodyShape();
+
+	/** Server: the survivor's body becomes its base's -- the metabolism's composition = the base's body fat and muscle, at a weight that holds
+	 *  (FMOBodyComposition::SetBody). The character creator, when a new game's survivor takes a base; MO.Test.Base. */
+	void ApplyBaseStartingBody();
+
+	/** Server: copy the metabolism's composition into the shown one when it has moved (every ShownBodyRefreshSeconds, and at once on a change). */
+	void RefreshShownBody();
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Appearance")
+	float ShownBodyRefreshSeconds = 2.0f;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -174,6 +203,19 @@ protected:
 	UFUNCTION()
 	void OnRep_CurrentAppearance();
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Appearance")
+	TObjectPtr<UMOBodyShapeComponent> BodyShape;
+
+	/** The body the pawn shows (RefreshShownBody). Starts at the composition's defaults until the server's first copy. */
+	UPROPERTY(ReplicatedUsing=OnRep_ShownBody)
+	float ShownBodyFatPercent = 18.0f;
+
+	UPROPERTY(ReplicatedUsing=OnRep_ShownBody)
+	float ShownMuscleMassKg = 30.0f;
+
+	UFUNCTION()
+	void OnRep_ShownBody();
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** The skin look pass (AMOCharacter) + this character's grooms and colours (skin tone, hair, eyes): it runs at BeginPlay and again once the
@@ -183,6 +225,7 @@ protected:
 private:
 	FTimerHandle GroomRetryTimer;
 	FTimerHandle HairSimulationTimer;
+	FTimerHandle ShownBodyTimer;
 	/** When the oldest groom still waiting to swap in was asked for (world seconds); negative = none waiting. */
 	double GroomWaitStartSeconds = -1.0;
 };

@@ -812,7 +812,7 @@ void UMOMetabolismComponent::UpdateBodyWeight(float DeltaTime)
 	float FatMass = BodyComposition.GetFatMass();
 	float MuscleMass = BodyComposition.MuscleMass;
 	float BoneMass = BodyComposition.BoneMass;
-	float OtherMass = 15.0f;  // Rough estimate for organs, blood, etc.
+	float OtherMass = FMOBodyComposition::OtherMassKg;  // organs, blood, etc.
 
 	float OldWeight = BodyComposition.TotalWeight;
 	BodyComposition.TotalWeight = FatMass + MuscleMass + BoneMass + OtherMass;

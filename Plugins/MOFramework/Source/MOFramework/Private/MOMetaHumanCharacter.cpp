@@ -1,7 +1,11 @@
 #include "MOMetaHumanCharacter.h"
 #include "MOFramework.h"
 #include "MOAppearanceSubsystem.h"
+#include "MOBodyShapeComponent.h"
+#include "MOMetabolismComponent.h"
+#include "MOSurvivorBase.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -12,6 +16,9 @@ AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectIni
 	// Face mesh follows Body via Leader Pose
 	FaceMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FaceMesh"));
 	FaceMesh->SetupAttachment(GetMesh());
+
+	// The body shapes: it sets the MO_Body_* weights on every skeletal mesh of the pawn that carries them (a base's body and face).
+	BodyShape = CreateDefaultSubobject<UMOBodyShapeComponent>(TEXT("BodyShape"));
 
 	// Update hand socket names for MetaHuman skeleton
 	// MetaHuman uses different socket naming convention
@@ -31,6 +38,20 @@ void AMOMetaHumanCharacter::BeginPlay()
 	if (bAutoApplyAppearance && CurrentAppearance.IsValid())
 	{
 		ApplyCurrentAppearance();
+	}
+
+	// The body: the base's meshes (a restored or replicated look that names one), then the shapes. The server copies the metabolism's body fat
+	// and muscle into the shown body now and whenever it moves (it changes over days: a check every couple of seconds is plenty).
+	ApplyBaseMeshes();
+	ApplyBodyShape();
+	if (HasAuthority())
+	{
+		RefreshShownBody();
+		if (ShownBodyRefreshSeconds > 0.0f)
+		{
+			GetWorldTimerManager().SetTimer(ShownBodyTimer, FTimerDelegate::CreateWeakLambda(this, [this]() { RefreshShownBody(); }),
+				ShownBodyRefreshSeconds, /*bLoop=*/true, FMath::FRandRange(0.0f, ShownBodyRefreshSeconds));
+		}
 	}
 
 	// Hair physics follows where the pawn is (near the world origin only, MO.Hair.Simulation 2): a groom that crosses the line is rebuilt once.
@@ -89,8 +110,98 @@ void AMOMetaHumanCharacter::SetAppearance(const FMOCharacterAppearance& NewAppea
 void AMOMetaHumanCharacter::SetAppearanceLook(const FMOCharacterAppearance& Look)
 {
 	CurrentAppearance.CopyLookFrom(Look);
+	ApplyBaseMeshes();   // a new base's meshes first: the grooms bind to its face, the colours tint its materials
 	ApplyGrooms(CurrentAppearance);
 	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
+	ApplyBodyShape();
+}
+
+bool AMOMetaHumanCharacter::ApplyBaseMeshes()
+{
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(CurrentAppearance.BaseId);
+	if (!Base || !GetMesh() || !FaceMesh)
+	{
+		return false;
+	}
+	USkeletalMesh* Body = Cast<USkeletalMesh>(Base->Body.TryLoad());
+	USkeletalMesh* Face = Cast<USkeletalMesh>(Base->Face.TryLoad());
+	if (!Body || !Face)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAppearance] %s: base '%s' has no %s mesh (%s) -- the pawn keeps its own"), *GetName(), *Base->Id.ToString(),
+			!Body ? TEXT("body") : TEXT("face"), *(!Body ? Base->Body : Base->Face).ToString());
+		return false;
+	}
+	if (GetMesh()->GetSkeletalMeshAsset() == Body && FaceMesh->GetSkeletalMeshAsset() == Face)
+	{
+		return false;
+	}
+	// The old meshes' material instances (the colours' dynamic instances among them) must not stay on the new meshes: the colours make new ones
+	// from the new meshes' materials (every caller applies them next).
+	GetMesh()->EmptyOverrideMaterials();
+	FaceMesh->EmptyOverrideMaterials();
+	SetupMetaHumanMeshes(Body, Face);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: base '%s' (%s, %s)"), *GetName(), *Base->Id.ToString(), *Body->GetName(), *Face->GetName());
+	return true;
+}
+
+void AMOMetaHumanCharacter::ApplyBodyShape()
+{
+	if (!BodyShape)
+	{
+		return;
+	}
+	// A pawn with no base keeps its Blueprint's meshes, which carry no shapes: its neutral point is the composition's default.
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(CurrentAppearance.BaseId);
+	const FMOBodyComposition Default;
+	BodyShape->SetNeutralComposition(Base ? Base->BodyFatPercent : Default.BodyFatPercent, Base ? Base->MuscleMassKg : Default.MuscleMass);
+	for (const FName Driver : BodyShape->GetDriverNames())
+	{
+		if (Driver != UMOBodyShapeComponent::BodyFat && Driver != UMOBodyShapeComponent::MuscleMass)
+		{
+			BodyShape->SetDriver(Driver, CurrentAppearance.GetBuildValue(Driver));
+		}
+	}
+	BodyShape->SetComposition(ShownBodyFatPercent, ShownMuscleMassKg);
+}
+
+void AMOMetaHumanCharacter::ApplyBaseStartingBody()
+{
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(CurrentAppearance.BaseId);
+	UMOMetabolismComponent* Metabolism = HasAuthority() ? GetMetabolismComponent() : nullptr;
+	if (!Base || !Metabolism)
+	{
+		return;
+	}
+	Metabolism->BodyComposition.SetBody(Base->BodyFatPercent, Base->MuscleMassKg);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAppearance] %s: base '%s' body -- %.1f %% body fat, %.1f kg of muscle, %.1f kg"), *GetName(), *Base->Id.ToString(),
+		Metabolism->BodyComposition.BodyFatPercent, Metabolism->BodyComposition.MuscleMass, Metabolism->BodyComposition.TotalWeight);
+	RefreshShownBody();
+}
+
+void AMOMetaHumanCharacter::RefreshShownBody()
+{
+	const UMOMetabolismComponent* Metabolism = HasAuthority() ? GetMetabolismComponent() : nullptr;
+	if (!Metabolism)
+	{
+		return;
+	}
+	// Only a visible change goes out: a tenth of a percent of fat (half a percent of the heavy shape), a tenth of a kg of muscle.
+	const FMOBodyComposition& Body = Metabolism->GetBodyComposition();
+	if (FMath::Abs(Body.BodyFatPercent - ShownBodyFatPercent) < 0.1f && FMath::Abs(Body.MuscleMass - ShownMuscleMassKg) < 0.1f)
+	{
+		return;
+	}
+	ShownBodyFatPercent = Body.BodyFatPercent;
+	ShownMuscleMassKg = Body.MuscleMass;
+	OnRep_ShownBody();   // the server draws it too
+}
+
+void AMOMetaHumanCharacter::OnRep_ShownBody()
+{
+	if (BodyShape)
+	{
+		BodyShape->SetComposition(ShownBodyFatPercent, ShownMuscleMassKg);
+	}
 }
 
 bool AMOMetaHumanCharacter::ApplyGrooms(const FMOCharacterAppearance& Look)
@@ -137,6 +248,8 @@ void AMOMetaHumanCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AMOMetaHumanCharacter, CurrentAppearance);
+	DOREPLIFETIME(AMOMetaHumanCharacter, ShownBodyFatPercent);
+	DOREPLIFETIME(AMOMetaHumanCharacter, ShownMuscleMassKg);
 }
 
 void AMOMetaHumanCharacter::ApplySkinLook()

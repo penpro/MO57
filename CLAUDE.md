@@ -1,6 +1,6 @@
 # MO57: rules for every agent (Claude and Codex)
 
-MO57 ("Metaverse: Origins") is an ultra-realistic procedural survival game on Unreal Engine 5.8.3 with destructible voxel terrain,
+MO57 ("Metaverse: Origins") is an ultra-realistic procedural survival game on Unreal Engine 5.8.4 with destructible voxel terrain,
 possess-any-pawn colonies and Steam co-op. Plugin: `Plugins/MOFramework/` (MOFrameworkCore <- MOFrameworkMedical <- MOFramework, + Editor).
 This file holds the non-negotiable rules and a router; everything else is one hop away (`Docs/INDEX.md`). Wes's global rules (the Seven
 Laws) also apply; where this file differs, this file wins for MO57 (e.g. commits, N1).
@@ -104,7 +104,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
 
 ## Traps that bite every session (full list: `Docs/TRAPS.md`)
 
-1. Engine = UE **5.8.3 launcher install** at `D:\UnrealEngine\UE_5.8`: build with its UBT (`ue.py build`); the UE_5.7 path fails in ~5 s.
+1. Engine = UE **5.8.4 launcher install** (the launcher updated it from 5.8.3 on Oct 26 15:33) at `D:\UnrealEngine\UE_5.8`: build with its UBT (`ue.py build`); the UE_5.7 path fails in ~5 s.
 2. Editor Python runs every RPC LOCALLY: test verbs that send RPCs defer a tick; assert on the game's own logs.
 3. `MSYS_NO_PATHCONV=1` for `/Game/...` and `/MOFramework/...` paths in Git Bash.
 4. `-ExecCmds` splits on commas, not semicolons (`py x.py,QUIT_EDITOR`).

@@ -191,6 +191,37 @@ struct MOFRAMEWORK_API FMOCharacterAppearance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Body", meta=(ClampMin="0.8", ClampMax="1.2"))
 	float HipWidth = 1.0f;
 
+	// BASE AND BUILD (Oct 27 2026): the survivor base -- a MetaHuman from the Creator: body and face meshes carrying the body shapes, its grooms,
+	// the body fat and muscle it was made with (UMOSurvivorBaseSettings) -- and the build the character creator sets over it, the body shapes'
+	// sliders (UMOBodyShapeComponent: Bust, Hips, Waist, Thighs). Body fat and muscle themselves are the metabolism's, not the look's.
+
+	/** The survivor base (UMOSurvivorBaseSettings); None keeps the pawn Blueprint's own meshes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Body")
+	FName BaseId;
+
+	/** The build sliders: a body-shape driver (Bust, Hips, Waist, Thighs) in MorphName and its value, -1..1 (0 = the base as made). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Body")
+	TArray<FMOMorphTargetValue> BodyBuild;
+
+	float GetBuildValue(FName Driver) const
+	{
+		const FMOMorphTargetValue* Entry = BodyBuild.FindByPredicate([Driver](const FMOMorphTargetValue& V) { return V.MorphName == Driver; });
+		return Entry ? Entry->Value : 0.0f;
+	}
+
+	void SetBuildValue(FName Driver, float Value)
+	{
+		FMOMorphTargetValue* Entry = BodyBuild.FindByPredicate([Driver](const FMOMorphTargetValue& V) { return V.MorphName == Driver; });
+		if (Entry)
+		{
+			Entry->Value = Value;
+		}
+		else
+		{
+			BodyBuild.Add(FMOMorphTargetValue(Driver, Value));
+		}
+	}
+
 	// ============================================================================
 	// COLORS -- the MetaHuman lookdev's own physical parameters (Oct 15 2026: the character creator), applied by
 	// UMOAppearanceSubsystem::ApplyColors to the skin, groom and eye materials. The defaults are the MetaHuman as shipped.
@@ -224,10 +255,13 @@ struct MOFRAMEWORK_API FMOCharacterAppearance
 		EyeColor = Other.EyeColor;
 	}
 
-	/** The look the character creator edits over a pawn's own meshes: the colours and the grooms (an empty groom path keeps the pawn's own). */
+	/** The look the character creator edits over a pawn's own meshes: the colours, the grooms (an empty groom path keeps the pawn's own), the base
+	 *  (None keeps the pawn's own meshes) and the build. */
 	void CopyLookFrom(const FMOCharacterAppearance& Other)
 	{
 		CopyColorsFrom(Other);
+		BaseId = Other.BaseId;
+		BodyBuild = Other.BodyBuild;
 		HairAssetPath = Other.HairAssetPath;
 		EyebrowsAssetPath = Other.EyebrowsAssetPath;
 		EyelashesAssetPath = Other.EyelashesAssetPath;

@@ -1959,9 +1959,11 @@ def _client_harvest_full_pack(rep, host, client):
                                 f"out('NEAR %d' % len([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) "
                                 f"if (a.get_actor_location() - pl).length() < 300 and str(a.get_component_by_class(unreal.MOItemComponent).get_editor_property('item_definition_id')) == '{laid.group(1)}']))")
         after = {i: _joiner_item_count(host, i) for i in yields}
+        # Outside the f-string: a backslash inside an f-string expression needs Python 3.12 (DARKTOWER runs 3.11, Oct 26).
+        near_count = (re.search(r"NEAR \d+", near) or re.search(r"$", near)).group(0)
         rep.step(f"client harvest with a full pack ({action} on {mesh}): the yield lies on the ground by the joiner (host)",
                  bool(laid) and laid.group(2) != "0" and bool(re.search(r"NEAR [1-9]", near)) and after == before,
-                 (laid.group(0) if laid else "no 'laid on the ground' line on the host") + f" | {(re.search(r'NEAR \d+', near) or re.search(r'$', near)).group(0)} within 3 m | pack {before} -> {after}")
+                 (laid.group(0) if laid else "no 'laid on the ground' line on the host") + f" | {near_count} within 3 m | pack {before} -> {after}")
         rep.step("... and the joiner is told it lies at its feet (not 'Inventory Full')", bool(outcome) and outcome.group(5) == "1" and outcome.group(2) == "0",
                  outcome.group(0) if outcome else "no outcome line on the client")
         break
@@ -5237,3 +5239,131 @@ def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not keep:
             stop(client)
             stop(host)
+
+
+BODYSHAPE_RE = re.compile(r"\[MOQUERY\] BODYSHAPE (\S+)( \(this machine's player\))? base '(\w*)' shows ([\d.]+) % body fat, ([\d.]+) kg of muscle(.*)")
+
+
+def _bodyshape(name, mine, base=None):
+    """MO.Test.BodyShape on instance `name`: the line of this machine's player's pawn (mine), another pawn's (not mine), or any (None)
+    -> (base, fat, muscle, rest) or None.
+    Another machine's: the one wearing `base` when given (a world can hold NPC survivors, MetaHumans with no base)."""
+    off = log_size(name)
+    console(name, "MO.Test.BodyShape")
+    wait_log(name, r"\[MOQUERY\] BODYSHAPE", since=off, timeout=8)
+    time.sleep(0.5)
+    lines = [m for m in BODYSHAPE_RE.finditer(read_log_from(name, off)) if mine is None or bool(m.group(2)) == mine]
+    pick = next((m for m in lines if base is None or m.group(3) == base), lines[0] if lines else None)
+    return (pick.group(3), float(pick.group(4)), float(pick.group(5)), pick.group(6)) if pick else None
+
+
+def _weight(rest, mesh, shape):
+    """A body-shape weight from a BODYSHAPE line's rest: mesh 'CharacterMesh0' (the body) or 'FaceMesh'; -1 if absent."""
+    part = re.search(r"\| " + mesh + r" \(([^)]*)\):([^|]*)", rest or "")
+    m = re.search(r"\b" + shape + r" ([\d.]+)", part.group(2)) if part else None
+    return float(m.group(1)) if m else -1.0
+
+
+def bases_test(uproject, editor_exe, keep=False, boot_timeout=300):
+    """The survivor bases and the body shapes in co-op (Oct 27; N-226, MOSurvivorBase.h): the host's survivor takes a base (Lillian) as the
+    character creator gives it, and a JOINER must draw it -- the base's body and face meshes, its own composition as made (no shape on), then
+    the host's simulated body fat and muscle (the metabolism replicates to its owner only: the pawn's shown body carries it to everyone) and
+    the build sliders, on the body AND the face (the neck seam). Real processes."""
+    rep = Report()
+    host, client = "basehost", "baseclient"
+    try:
+        start(host, uproject, editor_exe, pos=(0, 0), nosteam=True)
+        start(client, uproject, editor_exe, pos=(660, 0), nosteam=True)
+        if not _host_and_join(rep, host, client, "BasesTest", boot_timeout=boot_timeout):
+            return False
+        time.sleep(10)
+        out = console(host, "MO.Test.Base Lillian")
+        rep.step("host: the survivor takes the Lillian base", "now wears base 'Lillian'" in out, out.strip()[-200:])
+        time.sleep(3)
+        h = _bodyshape(host, True)
+        rep.step("host: Lillian's body and face, at her own body (12.4 % / 28.5 kg), no shape on",
+                 bool(h) and h[0] == "Lillian" and abs(h[1] - 12.4) < 0.2 and abs(h[2] - 28.5) < 0.2 and "SKM_MH_Lillian_Base_BodyMesh" in h[3]
+                 and "SKM_MH_Lillian_Base_FaceMesh" in h[3] and _weight(h[3], "CharacterMesh0", "Heavy") == 0.0 and _weight(h[3], "CharacterMesh0", "Thin") == 0.0,
+                 str(h)[:400])
+        c = _bodyshape(client, False, "Lillian")
+        rep.step("joiner: draws the host's survivor as Lillian (her meshes, her body)",
+                 bool(c) and c[0] == "Lillian" and abs(c[1] - 12.4) < 0.2 and "SKM_MH_Lillian_Base_BodyMesh" in c[3] and "SKM_MH_Lillian_Base_FaceMesh" in c[3],
+                 str(c)[:400])
+        console(host, "MO.Test.BodyComposition 40")
+        time.sleep(4)   # the server copies the metabolism's body within ShownBodyRefreshSeconds (2 s); then replication
+        c = _bodyshape(client, False, "Lillian")
+        rep.step("joiner: the host gains fat to 40 % -> the heavy shape full on the body and the face's neck",
+                 bool(c) and abs(c[1] - 40.0) < 0.2 and _weight(c[3], "CharacterMesh0", "Heavy") == 1.0 and _weight(c[3], "FaceMesh", "Heavy") == 1.0,
+                 str(c)[:400])
+        console(host, "MO.Test.BodyBuild Bust 1")
+        time.sleep(3)
+        c = _bodyshape(client, False, "Lillian")
+        rep.step("joiner: the host's build slider (bust +1) -> BustLarge 1.00", bool(c) and _weight(c[3], "CharacterMesh0", "BustLarge") == 1.0, str(c)[:400])
+        console(host, "MO.Test.BodyComposition 8 20")
+        time.sleep(4)
+        c = _bodyshape(client, False, "Lillian")
+        rep.step("joiner: starved to 8 % and 20 kg of muscle -> thin and wasted full on, heavy off",
+                 bool(c) and _weight(c[3], "CharacterMesh0", "Thin") == 1.0 and _weight(c[3], "CharacterMesh0", "Wasted") == 1.0
+                 and _weight(c[3], "CharacterMesh0", "Heavy") == 0.0 and _weight(c[3], "FaceMesh", "Thin") == 1.0, str(c)[:400])
+        out = console(host, "MO.Test.Base Femme")
+        time.sleep(3)
+        c = _bodyshape(client, False, "Femme")
+        rep.step("joiner: back to the femme base -> her own meshes again (no shapes)",
+                 bool(c) and c[0] == "Femme" and "SKM_MH_F_1_BodyMesh" in c[3] and "SKM_MH_F_1_FaceMesh" in c[3], str(c)[:400])
+        return rep.ok
+    finally:
+        print(f"[nettest] bases: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        if not keep:
+            stop(client)
+            stop(host)
+
+
+def packaged_bases_test(package=False, seed=777, boot_timeout=480):
+    """The PACKAGED Development game, ONE copy: a new game, then (after ready) the survivor takes the Lillian base, gains fat to 40 % and the
+    body is read back (MO.Test.BodyShape) with a screenshot. Why: a base is named only by config paths, which the cooker does not follow --
+    its folder must be in DirectoriesToAlwaysCook (TRAPS §7); the editor cannot tell, a missing base silently keeps the Blueprint's meshes.
+    Refuses to run if any MO57.exe is already running (it only ever stops the process tree it started)."""
+    rep = Report()
+    pid = None
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        _pkg_wait_none()
+        running = _pkg_alive_count()
+        if not rep.step("no other MO57.exe is running (this mode must own the log and never touches others)", running == 0, f"{running} running"):
+            return False
+        log_path = os.path.join(PKG_LOGS, "MO57.log")
+        if os.path.exists(log_path):
+            os.remove(log_path)
+        cmds = ",".join([f"MO.NewGame {seed}", "MO.Test.AfterReady MO.Test.Base Lillian", "MO.Test.AfterReady MO.Test.BodyComposition 40",
+                         "MO.Test.AfterReady MO.Test.BodyShape", "MO.Test.AfterReady shot showui"])
+        print(f"[nettest] packaged-bases: launching one packaged copy ({cmds}) ...", flush=True)
+        pid = _pkg_launch(f'-NoSteam -NoQualityBenchmark -windowed -ResX=1600 -ResY=900 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+        deadline, found = time.time() + boot_timeout, None
+        while time.time() < deadline and found is None:
+            found = BODYSHAPE_RE.search(_pkg_read("MO57.log"))
+            time.sleep(3)
+        time.sleep(5)   # the screenshot
+        log = _pkg_read("MO57.log")
+        lines = [m for m in BODYSHAPE_RE.finditer(log) if m.group(2)]
+        line = lines[-1] if lines else found
+        rep.step("the cooked game puts Lillian on (her meshes were cooked: the base's folder is always cooked)",
+                 bool(line) and line.group(3) == "Lillian" and "SKM_MH_Lillian_Base_BodyMesh" in line.group(6) and "SKM_MH_Lillian_Base_FaceMesh" in line.group(6),
+                 line.group(0)[:300] if line else log[-300:].replace(chr(10), " | "))
+        rep.step("... and 40 % body fat draws the heavy shape on the body and the face",
+                 bool(line) and _weight(line.group(6), "CharacterMesh0", "Heavy") == 1.0 and _weight(line.group(6), "FaceMesh", "Heavy") == 1.0,
+                 line.group(0)[:300] if line else "no BODYSHAPE line")
+        missing = re.search(r"base 'Lillian' has no (body|face) mesh.*", log)
+        rep.step("no base mesh missing from the package", missing is None, missing.group(0) if missing else "")
+        hair = re.search(r"\[MOAppearance\] \S+: Hair -> Hair_S_Updo.*", log)
+        nogroom = re.search(r"\[MOAppearance\] \S+: no groom at .*", log)
+        rep.step("her own updo was cooked and goes on (and no groom is missing)", bool(hair) and nogroom is None,
+                 (nogroom or hair).group(0)[:300] if (nogroom or hair) else "no 'Hair -> Hair_S_Updo' line")
+        fatal = PKG_FATAL_RE.search(log)
+        rep.step("no crash, ensure or assertion in the log", fatal is None, "" if fatal is None else fatal.group(0))
+        return rep.ok
+    finally:
+        print(f"[nettest] packaged-bases: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(pid)

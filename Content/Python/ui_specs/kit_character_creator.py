@@ -4,8 +4,9 @@ styles are the MetaHuman groom library (Oct 25 2026); face and body are "coming 
 there is; Masc is a coming-soon row (Wes, Oct 26 2026: "make the existing character 'femme' and mark 'masc' as a customization coming soon").
 Pushed on Layer_Menu by UMOSystemMenuUIController::ShowCharacterCreator.
 
-Contract: MOCharacterCreatorPanel (OrbitArea, NameInputBox, SkinToneSlider, HairShadeSlider, HairRednessSlider, EyeColorText, EyePrevButton, EyeNextButton,
-HairStyleText / HairStylePrevButton / HairStyleNextButton, BeardText / ..., MustacheText / ..., RandomizeButton, BeginButton, WorldStatusText).
+Contract: MOCharacterCreatorPanel (OrbitArea, NameInputBox, BaseText / BasePrevButton / BaseNextButton, BustSlider, HipsSlider, WaistSlider, ThighsSlider,
+SkinToneSlider, HairShadeSlider, HairRednessSlider, EyeColorText, EyePrevButton, EyeNextButton, HairStyleText / HairStylePrevButton / HairStyleNextButton,
+BeardText / ..., MustacheText / ..., RandomizeButton, BeginButton, WorldStatusText).
 
 Oct 25: the style rows went in after Eyes (build appends; the rows below them were removed first so they come back in order):
     for w in SoonSection HairStyleRowBox FaceRowBox BodyRowBox ButtonRow; do python Tools/ue.py ui remove /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel $w; done
@@ -15,6 +16,14 @@ Oct 25: the style rows went in after Eyes (build appends; the rows below them we
 Oct 26: the Body type row went in first under Appearance, and Masc under Coming soon (the same way):
     for w in SkinToneRowBox HairShadeRowBox HairRedRowBox EyesRowBox HairStyleRowBox BeardRowBox MustacheRowBox SoonSection FaceRowBox BodyRowBox ButtonRow; do
         python Tools/ue.py ui remove /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel $w; done
+
+Oct 27 (Wes: "i made a few bases with the new metahumans stuff, see if you can get them all customizable and out into the game"): the Body type
+row became the Base picker (UMOSurvivorBaseSettings: Femme, Lillian, ...) with the build sliders under it (bust, hips and butt, waist, thighs:
+the body shapes, -1..1), the Body "coming soon" row went and Face / Masc share one "Coming soon" line, and the rows got shorter (pickers 48,
+sliders 44, build sliders 40) so the panel (~890 tall, centred: the "Left" anchor centres it vertically) fits 1080 -- the first try, the same
+rows at their old heights moved up 60 px, cut its title off the top of the screen. The whole panel was rebuilt:
+    python Tools/ue.py ui remove /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel CreatorPanel_Size
+    python Tools/ue.py ui build Content/Python/ui_specs/kit_character_creator.py
 """
 import kit_lib as K
 
@@ -25,21 +34,17 @@ FILL_SIZE = {"size": {"size_rule": "Fill", "value": 1.0}}
 LABEL_W = 170
 
 
-def slider_row(name, label, slider):
-    return K.row(name, label, {"type": "SizeBox", "name": name + "SliderBox", "width": 380, "slot": VC, "children": [K.slider(slider)]}, label_w=LABEL_W, h=52)
+def slider_row(name, label, slider, h=44):
+    return K.row(name, label, {"type": "SizeBox", "name": name + "SliderBox", "width": 380, "slot": VC, "children": [K.slider(slider)]}, label_w=LABEL_W, h=h)
 
 
-def picker_row(name, label, value, text_w=280):
+def picker_row(name, label, value, text_w=280, h=48):
     """'<  value  >': a prev / next pair around the current choice (<name>PrevButton, <name>Text, <name>NextButton)."""
     return K.row(name, label, {"type": "HorizontalBox", "name": name + "Picker", "slot": VC, "children": [
         K.button(name + "PrevButton", "<", "Secondary", slot=VC),
         {"type": "SizeBox", "name": name + "NameBox", "width": text_w, "slot": VC, "children": [
             K.text(name + "Text", "body.strong", value, "color.text.primary", justification="Center", var=True)]},
-        K.button(name + "NextButton", ">", "Secondary", slot=VC)]}, label_w=LABEL_W, h=56)
-
-
-def soon_row(name, label):
-    return K.row(name, label, K.text(name + "Soon", "body", "Coming soon", "color.text.secondary", slot=VC), label_w=LABEL_W, h=40)
+        K.button(name + "NextButton", ">", "Secondary", slot=VC)]}, label_w=LABEL_W, h=h)
 
 
 COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
@@ -50,7 +55,11 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
         K.text("NameLabel", "caption", "Name", "color.text.secondary", slot={"padding": [0, 0, 0, 6]}),
         {"type": "SizeBox", "name": "NameInputSize", "height": 48, "children": [K.text_input("NameInputBox", "Your survivor's name")]}]},
     K.section_label("LookSection", "Appearance", slot={"padding": [0, 20, 0, 4]}),
-    K.row("BodyType", "Body type", K.text("BodyTypeText", "body.strong", "Femme", "color.text.primary", slot=VC), label_w=LABEL_W, h=44),
+    picker_row("Base", "Base", "Femme (original)"),
+    slider_row("Bust", "Bust", "BustSlider", h=40),
+    slider_row("Hips", "Hips and butt", "HipsSlider", h=40),
+    slider_row("Waist", "Waist", "WaistSlider", h=40),
+    slider_row("Thighs", "Thighs", "ThighsSlider", h=40),
     slider_row("SkinTone", "Skin tone", "SkinToneSlider"),
     slider_row("HairShade", "Hair colour", "HairShadeSlider"),
     slider_row("HairRed", "Red in the hair", "HairRednessSlider"),
@@ -58,14 +67,11 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
         K.button("EyePrevButton", "<", "Secondary", slot=VC),
         {"type": "SizeBox", "name": "EyeNameBox", "width": 280, "slot": VC, "children": [
             K.text("EyeColorText", "body.strong", "Brown", "color.text.primary", justification="Center", var=True)]},
-        K.button("EyeNextButton", ">", "Secondary", slot=VC)]}, label_w=LABEL_W, h=56),
+        K.button("EyeNextButton", ">", "Secondary", slot=VC)]}, label_w=LABEL_W, h=48),
     picker_row("HairStyle", "Hair style", "Updo braids (short)"),
     picker_row("Beard", "Beard", "None"),
     picker_row("Mustache", "Mustache", "None"),
-    K.section_label("SoonSection", "Coming soon", slot={"padding": [0, 16, 0, 2]}),
-    soon_row("Face", "Face"),
-    soon_row("Body", "Body"),
-    soon_row("Masc", "Masc body type"),
+    K.row("Soon", "Coming soon", K.text("SoonText", "body", "Face, masc body type", "color.text.secondary", slot=VC), label_w=LABEL_W, h=36),
     {"type": "HorizontalBox", "name": "ButtonRow", "slot": {"padding": [0, 24, 0, 0]}, "children": [
         K.button("RandomizeButton", "Randomize", "Tertiary"),
         {"type": "Spacer", "name": "RowSpacer", "slot": FILL_SIZE},
@@ -85,7 +91,7 @@ CREATOR = {
     "root": {"type": "CanvasPanel", "name": "CreatorCanvas", "children": [
         {"type": "Border", "name": "OrbitArea", "var": True, "props": {"brush_color": [0, 0, 0, 0], "visibility": "Visible"},
          "slot": K.slot_anchored((0.0, 0.0), (1.0, 1.0))},
-        K.panel("CreatorPanel", 2, [COLUMN], w=600, padding=[28, 24, 28, 24], slot=K.place(120, 120, 600, 760, "Left", auto_height=True))]},
+        K.panel("CreatorPanel", 2, [COLUMN], w=600, padding=[28, 24, 28, 24], slot=K.place(120, 160, 600, 760, "Left", auto_height=True))]},
 }
 
 SPECS = [CREATOR]

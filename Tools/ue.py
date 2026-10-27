@@ -1533,6 +1533,8 @@ def cmd_nettest(a):
         sys.exit(0 if ui.features_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "packaged":
         sys.exit(0 if ui.packaged_test(package=a.package, withhold_sync=a.withhold_sync) else 1)
+    if a.mode == "packaged-bases":
+        sys.exit(0 if ui.packaged_bases_test(package=a.package) else 1)
     if a.mode == "packaged-suite":
         sys.exit(0 if ui.packaged_suite_test(package=a.package, seed=a.seed or 1029024224) else 1)
     if a.mode == "packaged-removal":
@@ -1545,6 +1547,8 @@ def cmd_nettest(a):
         sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep, seed=a.seed) else 1)
     if a.mode == "traversal":
         sys.exit(0 if ui.traversal_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "bases":
+        sys.exit(0 if ui.bases_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "churn":
         sys.exit(0 if ui.churn_test(UPROJECT, EDITOR_EXE, rounds=a.rounds if a.rounds != 6 else 3, keep=a.keep) else 1)
     if a.mode == "soak":
@@ -1855,7 +1859,7 @@ def main():
     ip.set_defaults(fn=cmd_inst)
 
     s = sub.add_parser("nettest", help="two-process (lan) / real-Steam (steam-host) session test; PASS/FAIL + exit code")
-    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "packaged-suite", "packaged-removal", "bugreport", "churn", "netdiag", "traversal"])
+    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "packaged-suite", "packaged-removal", "bugreport", "churn", "netdiag", "traversal", "bases", "packaged-bases"])
     s.add_argument("--seconds", type=int, default=60, help="netdiag mode: seconds per measured phase (controls run half as long, at least 15)")
     s.add_argument("--phases", default="", help="netdiag mode: comma list of phases to run (clean,lag50,loss1,ctl_ratecap,ctl_speedhack); default all")
     s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")

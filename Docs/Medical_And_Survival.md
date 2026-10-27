@@ -107,6 +107,16 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
   Its valid/version marker, six meter values and nutrition restore atomically on authority after finite-data validation, clamped to
   the owning class's limits. Missing legacy data leaves defaults alone. It neither changes the approved clock pacing nor advances
   an extra offline interval. Tests: `MOFramework.Survival.Persistence` and the existing pacing gates. The F1 model choice stays open.
+- **The body shows its composition** (Oct 27; Wes, Oct 26: "a single character go from skinny to fat and vice versa, starvation etc"). A
+  survivor on a base (a Creator MetaHuman: `MOSurvivorBase.h`) carries body shapes (`Plugins/MOBodyShape`, baked in MO_Tools): heavier as body
+  fat rises to 40 %, thinner as it falls to 8 %, more muscular toward 40 kg of muscle, wasted toward 20 kg -- from the base's own body, where
+  the shapes are off (Lillian: 12.4 % / 28.5 kg). The weights are continuous, so the body changes as slowly as the metabolism does.
+  - The metabolism's `BodyComposition` replicates to its owner only, so the server copies body fat and muscle into the pawn
+    (`AMOMetaHumanCharacter::ShownBodyFatPercent` / `ShownMuscleMassKg`, replicated to all, re-checked every 2 s, sent on a 0.1 change).
+  - A base gives a new survivor its own body (`ApplyBaseStartingBody`, the character creator): `FMOBodyComposition::SetBody` sets the fat %,
+    the muscle and the weight they make together, so it holds through `UpdateBodyWeight`. **The defaults do not:** 75 kg at 18 % becomes
+    62 kg at 21.8 % on the first update (fat mass 13.5 kg + muscle 30 + bone 3.5 + the rest 15). Test `MOFramework.Metabolism.StartingBodyHolds`.
+  - The pawn Blueprint's own survivor (MH_F_1) has no shapes; its body never shows the composition.
 
 ## 4. Body temperature (F2: single node shipped as the interim, Oct 19)
 

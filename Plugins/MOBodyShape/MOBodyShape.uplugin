@@ -1,0 +1,36 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "MO Body Shape",
+	"Description": "A MetaHuman's body follows its body composition and its chosen build: shapes (morph targets) baked from the MetaHuman Creator's body model onto the survivor's own body, driven at runtime by body fat and muscle (MO57's metabolism) and by build sliders (bust, hips, waist, thighs). Built in MO_Tools; no dependency on MOFramework.",
+	"Category": "MO",
+	"CreatedBy": "MO57",
+	"CanContainContent": true,
+	"Modules": [
+		{
+			"Name": "MOBodyShape",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "MOBodyShapeEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "MetaHumanCharacter",
+			"Enabled": true
+		},
+		{
+			"Name": "MetaHumanCoreTech",
+			"Enabled": true
+		},
+		{
+			"Name": "RigLogic",
+			"Enabled": true
+		}
+	]
+}

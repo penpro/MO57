@@ -7,8 +7,9 @@
  * The character creator (Wes, Oct 15 2026): the name, skin tone, hair colour (melanin + redness), eye colour and -- Oct 25 2026 -- hair style, beard and
  * mustache (the MetaHuman groom library: UMOAppearanceSubsystem's catalog, None first) of the one starting survivor. It opens IN THE WORLD as soon as a
  * new game's first pawn has landed -- instead of the loading screen -- and frames that pawn with its own camera, so the vegetation and texture streaming
- * (the rest of UMOWorldReadinessSubsystem's cycle) happen behind it: "at least the first load in will be effectively instant". Face and body are still
- * "coming soon" rows.
+ * (the rest of UMOWorldReadinessSubsystem's cycle) happen behind it: "at least the first load in will be effectively instant". Oct 27 2026: the Base
+ * picker (a MetaHuman from the Creator -- UMOSurvivorBaseSettings: its body, face and grooms, and the body the survivor starts with) and the build
+ * sliders under it (bust, hips and butt, waist, thighs: the body shapes). The face is still a "coming soon" row.
  *
  * FLOW: AMOGameMode::OnPawnLandedSafely (new game only) hides the loading overlay and calls AMOPlayerController::ClientOpenCharacterCreator ->
  * UMOSystemMenuUIController::ShowCharacterCreator pushes this on Layer_Menu. Every change goes straight to the pawn (AMOMetaHumanCharacter::
@@ -80,6 +81,19 @@ public:
 	/** Step a slot's groom through GetGroomChoices (wraps). */
 	void StepGroom(EMOAppearanceCategory GroomSlot, int32 Delta);
 
+	/** Select a survivor base by id (UMOSurvivorBaseSettings; Oct 27 2026): its meshes, its grooms and its body (the survivor starts with the body
+	 *  fat and muscle the base was made with). Tests, tools; the Base picker steps through them. */
+	void SetBase(FName BaseId);
+
+	/** Step the base through the list (wraps). */
+	void StepBase(int32 Delta);
+
+	/** Set a build slider (a body-shape driver: Bust, Hips, Waist, Thighs; -1..1). */
+	void SetBuild(FName Driver, float Value);
+
+	/** The build sliders, in the panel's order: driver and widget. */
+	static const TArray<FName>& GetBuildDrivers();
+
 	/** Preview camera: distance from the survivor, the height it looks at (chest / face) above the feet, field of view, where on the screen
 	 *  (0..1 across) the survivor stands -- right of the panel -- and the aperture that softens the world still loading behind them. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|CharacterCreator")
@@ -128,6 +142,16 @@ private:
 	void HandleBeardNext() { StepGroom(EMOAppearanceCategory::Beard, 1); }
 	void HandleMustachePrev() { StepGroom(EMOAppearanceCategory::Mustache, -1); }
 	void HandleMustacheNext() { StepGroom(EMOAppearanceCategory::Mustache, 1); }
+	void HandleBasePrev() { StepBase(-1); }
+	void HandleBaseNext() { StepBase(1); }
+	UFUNCTION() void HandleBustChanged(float Value) { SetBuild(TEXT("Bust"), Value); }
+	UFUNCTION() void HandleHipsChanged(float Value) { SetBuild(TEXT("Hips"), Value); }
+	UFUNCTION() void HandleWaistChanged(float Value) { SetBuild(TEXT("Waist"), Value); }
+	UFUNCTION() void HandleThighsChanged(float Value) { SetBuild(TEXT("Thighs"), Value); }
+	/** The build slider of a driver (BustSlider ...), or null. */
+	USlider* GetBuildSlider(FName Driver) const;
+	/** Where Look's base sits in the list; a look with no base wears the pawn Blueprint's own meshes, the first base's (Femme). */
+	int32 GetBaseIndex() const;
 	void HandleRandomize();
 	void HandleBegin();
 
@@ -204,6 +228,28 @@ private:
 
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> MustacheNextButton;
+
+	/** The base picker ("<  Lillian  >") and the build sliders under it (Oct 27 2026). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> BaseText;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> BasePrevButton;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> BaseNextButton;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<USlider> BustSlider;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<USlider> HipsSlider;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<USlider> WaistSlider;
+
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<USlider> ThighsSlider;
 
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> RandomizeButton;

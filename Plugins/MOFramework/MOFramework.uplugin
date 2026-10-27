@@ -38,6 +38,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "MOBodyShape",
+			"Enabled": true
+		},
+		{
 			"Name": "OnlineSubsystem",
 			"Enabled": true
 		},

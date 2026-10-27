@@ -207,6 +207,16 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
 - Oct 26 (Wes: "make the existing character 'femme' and mark 'masc' as a customization coming soon"): "Body type: Femme" is the first
   Appearance row (the one body there is), and "Masc body type -- Coming soon" joins the Coming soon rows. The rows were rebuilt the
   spec's documented way (remove the rows below, `ui build`).
+- **Oct 27: the Base picker and the build sliders** (Wes: "i made a few bases with the new metahumans stuff, see if you can get them all
+  customizable and out into the game"). "Body type" became **Base** ("<  Lillian  >": `UMOSurvivorBaseSettings` in `Config/DefaultGame.ini`,
+  `MOSurvivorBase.h`: Femme (original) -- the survivor Blueprint's MH_F_1 -- then Lillian), with **Bust / Hips and butt / Waist / Thighs** sliders
+  under it (-1..1, 0 = the base as made; the body shapes, `Plugins/MOBodyShape`). A base puts on its body and face, its own grooms (hair,
+  eyebrows, eyelashes; the Hair style row names a base's own hair by its library namesake -- Lillian's own updo reads "Updo (short)" -- and
+  the arrows step from there; every library style has a binding to every base's face; a swap keeps the Blueprint's strands at every distance,
+  `UMOAppearanceSubsystem::KeepGroupSettings`, TRAPS §12) and its body: the
+  survivor starts with the body fat and muscle the base was made with (`AMOMetaHumanCharacter::ApplyBaseStartingBody`). Everything rides the
+  look (`FMOCharacterAppearance::BaseId`, `BodyBuild`): replicated, saved. The Body "coming soon" row went; Face and Masc stay. The whole panel was
+  rebuilt (`ui remove ... CreatorPanel_Size`, `ui build`) and moved up 60 px for the four rows.
 - The styles are the MetaHuman Creator groom library: 38 hair, 16 beards / goatees, 16 mustaches under
   `/Game/MetaHumans/Common/Optional/Grooms/GroomAssets` (`UMOAppearanceSubsystem` catalogs `HairContentPath`; names by `MakeGroomDisplayName`).
   A choice is a groom path in `FMOCharacterAppearance` (`HairAssetPath`, `BeardAssetPath`, `MustacheAssetPath`; empty = the Blueprint's own
