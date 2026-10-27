@@ -21,7 +21,7 @@ and UE_5.8.
 | `build [--target MO57Editor]` / `cycle [--boot --seed N] [--test]` | UBT 5.8 build / the whole loop: stop editor -> build -> relaunch -> wait bridge -> boot -> RunAll |
 | `auto [--filter MOFramework]` | headless automation via UnrealEditor-Cmd -nullrhi (editor must be CLOSED); parses the report JSON |
 | `test [--suite RunAll|ValidateData]` | in-editor runtime suites, exit code = pass / fail |
-| `editor start|stop|wait` | `stop` = QUIT_EDITOR through the bridge, never a force-kill, refuses with unsaved packages |
+| `editor start|stop|wait` | `stop` = File > Exit (`CLOSE_SLATE_MAINFRAME`) through the bridge, never a force-kill, refuses with unsaved packages; not `QUIT_EDITOR`, which crashes an editor with a skeletal mesh editor open (TRAPS §3) |
 | `boot [--seed N]`, `pie begin|end` | to in-game / PIE control |
 | `seq file.py` | tick-driven multi-frame sequences (claude_seq); read `inst_<name>/ue_out.txt` for tracebacks |
 | `rows get|set|list <table> [--file rows.json]` | DataTable authoring with readback verify, TMap guard, per-row add+set (section 4) |

@@ -824,9 +824,9 @@ def game_instances_running():
 
 
 def editor_stop(wait=90):
-    """Quit the editor the way a person would: QUIT_EDITOR through the bridge. Never force-kills -- Wes's rule (unsaved work
-    dies with a killed process; this used to be taskkill /F by image name). Refuses while packages are unsaved, since
-    QUIT_EDITOR would sit on the save dialog: save or discard them, then retry. True once the process is gone."""
+    """Quit the editor the way a person would: File > Exit (CLOSE_SLATE_MAINFRAME) through the bridge. Never force-kills -- Wes's rule
+    (unsaved work dies with a killed process; this used to be taskkill /F by image name). Refuses while packages are unsaved, since the
+    quit would sit on the save dialog: save or discard them, then retry. True once the process is gone."""
     if not editor_running():
         return True
     if not bridge_alive():
@@ -843,7 +843,12 @@ def editor_stop(wait=90):
     if dirty:
         print("editor_stop: unsaved packages, not quitting (save or discard them first): " + dirty)
         return False
-    bridge_run(["QUIT_EDITOR"], timeout=10, want_log=False)
+    # File > Exit's path (IMainFrameModule::RequestCloseEditor -> FMainFrameHandler::ShutDownEditor): it broadcasts the editor's close,
+    # which closes every asset editor, and saves the layout. QUIT_EDITOR skips all that (RequestEngineExit; the engine's own comment: "Don't
+    # call quit_editor directly with slate") and an open skeletal mesh editor (Persona) then dereferences null while the main window is
+    # destroyed: the MO_Tools lab crashed on it (Oct 27 02:02 with Wes's mesh / MetaHuman editors open; reproduced 3 of 3 the same morning,
+    # UnrealEditor-Persona + 0x5f8790, "EditorExit").
+    bridge_run(["CLOSE_SLATE_MAINFRAME"], timeout=10, want_log=False)
     deadline = time.time() + wait
     while time.time() < deadline:
         if not editor_running():

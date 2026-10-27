@@ -49,7 +49,7 @@
   (`Docs/Engine_Patches.md` #3). A plugin nothing in the engine depends on can still be overridden from `Plugins/`.
 - **Build fails in ~5 s: `CS0117 ... V7` / RulesError** -> the UE_5.7 UBT -> use the UE_5.8 UBT (`Docs/TOOLING.md` § Build) or `ue.py build` / `cycle`. (build_engine_path)
 - **"Unable to build while Live Coding is active" / LNK1104** -> the editor (or a crashed editor's CrashReportClientEditor window) holds the
-  DLL -> `ue.py editor stop` (graceful: QUIT_EDITOR, refuses with unsaved packages); close a crash reporter by PID. Check the DLL mtime: Live
+  DLL -> `ue.py editor stop` (graceful: File > Exit, refuses with unsaved packages); close a crash reporter by PID. Check the DLL mtime: Live
   Coding sometimes hot-patched instead. (user_preferences, Handoff_2026-10-13) Crashed `-game` INSTANCES leave one too: every instance starts a
   `CrashReportClientEditor -RespawnedInstance -MONITOR=<its pid>` that stays open after a crash (nine piled up on Oct 21, one holding
   UnrealEditor-Voxel.dll) -> after crash-heavy test runs list them (`Get-CimInstance Win32_Process -Filter "Name='CrashReportClientEditor.exe'"`,
@@ -72,6 +72,14 @@
 
 ## 3. Editor, Python bridge and MCP
 
+- **The editor crashes on quit (EXCEPTION_ACCESS_VIOLATION in UnrealEditor-Persona, "EditorExit") with a skeletal mesh editor open** ->
+  it was quit with `QUIT_EDITOR`, which goes straight to `RequestEngineExit` and skips the main frame's shutdown (the editor-close
+  broadcast that closes every asset editor, the layout save); Persona then dereferences null while the main window is destroyed. The
+  engine's own comment: "Don't call quit_editor directly with slate". -> quit with `CLOSE_SLATE_MAINFRAME` (File > Exit's path:
+  `IMainFrameModule::RequestCloseEditor`), which `ue.py editor stop` sends since Oct 27. Found: the MO_Tools lab crashed on Claude's
+  overnight stop (Oct 27 02:02) with Wes's mesh / MetaHuman editors open; reproduced 3 of 3 with `QUIT_EDITOR`, 0 of 2 with the File >
+  Exit path, and MO57's editor stops the new way with no Save Content dialog (22 s). `QUIT_EDITOR` stays fine in `-ExecCmds` runs that
+  open no asset editor.
 - **A package redirect cannot rename the OBJECT** (Oct 25, MetaHuman groom import): `+PackageRedirects=(OldName=".../MI_PeachFuzz", NewName=
   ".../MI_Facial_Hair")` loads the new package but still looks for an object named `MI_PeachFuzz` in it -> the import fails and the slot is
   left empty -> redirect only to a package holding the same object name, and fix the rest after the resave (`resave_metahuman_grooms.py`).
