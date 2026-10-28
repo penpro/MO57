@@ -58,11 +58,11 @@ def side_shot(label):
     cb.SHOTS_OUT = SHOTS_OUT
     cb.screenshot(label + "_back")
     ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); r = p.get_actor_rotation(); "
-                   "p.set_actor_rotation(unreal.Rotator(0.0, r.yaw + 90.0, 0.0), False); out('TURNED')"], timeout=30)
+                   "p.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=r.yaw + 90.0), False); out('TURNED')"], timeout=30)
     time.sleep(1.0)
     cb.screenshot(label + "_side")
     ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); r = p.get_actor_rotation(); "
-                   "p.set_actor_rotation(unreal.Rotator(0.0, r.yaw - 90.0, 0.0), False); out('TURNED')"], timeout=30)
+                   "p.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=r.yaw - 90.0), False); out('TURNED')"], timeout=30)
 
 
 def measure(rep, who):
@@ -70,8 +70,8 @@ def measure(rep, who):
     rep.step(f"{who}: the foot IK's virtual bones are on the skeleton", stand.get("vb", -1) >= 0, str(stand))
     # GASP's idle (Oct 27) stands relaxed, the weight on one leg and that foot set out: 31 cm across on the femme, 46 on Lillian, both
     # planted and natural by eye. Crossed or collapsed legs (the foot IK failing) read under 15. Measured as the feet's spacing on the
-    # ground: GASP's root offset keeps the body's facing while she stands, so after this check turns the actor for its side shots the
-    # actor's right vector is not the body's (Jalena read 0.9 cm "across" with her feet planted apart).
+    # ground, which holds whichever way the body faces: GASP's root offset keeps the body's facing while she stands, so an actor turned
+    # in place (the side shots) is not facing where the body is (TRAPS §5).
     rep.step(f"{who} standing: feet under the hips (15-50 cm apart), on the floor (within 15 cm)",
              bool(stand) and 15 <= stand["span"] <= 50 and abs(stand["feet_z"]) <= 15, str(stand))
     side_shot(f"{who}_stand")
@@ -119,8 +119,8 @@ def main(keep=False):
             if start:
                 x, y, z, yaw, cyaw = (float(v) for v in start.groups())
                 ui.call(NAME, ["py", "-c", f"p = unreal.GameplayStatics.get_player_pawn(world, 0); pc = unreal.GameplayStatics.get_player_controller(world, 0); "
-                                           f"p.set_actor_location(unreal.Vector({x}, {y}, {z}), False, True); p.set_actor_rotation(unreal.Rotator(0.0, {yaw}, 0.0), False); "
-                                           f"c = pc.get_control_rotation(); pc.set_control_rotation(unreal.Rotator(c.pitch, {cyaw}, 0.0)); out('BACK')"], timeout=30)
+                                           f"p.set_actor_location(unreal.Vector({x}, {y}, {z}), False, True); p.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw={yaw}), False); "
+                                           f"c = pc.get_control_rotation(); pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=c.pitch, yaw={cyaw})); out('BACK')"], timeout=30)
                 time.sleep(1.0)
             cb.query(f"MO.Test.Base {base['id']}", r"\[MOTEST\] Base.*")
             time.sleep(6)

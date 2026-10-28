@@ -130,8 +130,8 @@ def main(keep=False):
         head0 = re.search(r"HEADYAW (-?[\d.]+)", ui.call(NAME, ["py", "-c", head], timeout=30)[1])
         off = ui.log_size(NAME)
         ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); pc = unreal.GameplayStatics.get_player_controller(world, 0); "
-                       "r = p.get_actor_rotation(); p.set_actor_rotation(unreal.Rotator(0.0, r.yaw + 180.0, 0.0), False); "
-                       "c = pc.get_control_rotation(); pc.set_control_rotation(unreal.Rotator(c.pitch, c.yaw + 180.0, 0.0)); out('TURNED')"], timeout=30)
+                       "r = p.get_actor_rotation(); p.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=r.yaw + 180.0), False); "
+                       "c = pc.get_control_rotation(); pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=c.pitch, yaw=c.yaw + 180.0)); out('TURNED')"], timeout=30)
         turned, cam, kind = None, None, ""
         for _ in range(16):
             time.sleep(0.5)
@@ -236,7 +236,7 @@ def main(keep=False):
                        "key=lambda a: (a.get_actor_location() - pl).length()); "
                        "b.set_actor_location(pl + p.get_actor_forward_vector() * 400.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); "
                        # facing the survivor: a creature goes by what it sees, and 12 s of wandering may have turned it away
-                       "r = unreal.MathLibrary.find_look_at_rotation(b.get_actor_location(), pl); b.set_actor_rotation(unreal.Rotator(0.0, r.yaw, 0.0), False); out('BEAR_IN')"], timeout=30)
+                       "r = unreal.MathLibrary.find_look_at_rotation(b.get_actor_location(), pl); b.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=r.yaw), False); out('BEAR_IN')"], timeout=30)
         took = ui.wait_log(NAME, rf"\[MOCreatureController\] {re.escape(name)} takes \S+ as its quarry at (\d+) cm \(aggro range (\d+) cm[^\r\n]*", since=aoff, timeout=20)
         ui.call(NAME, ["py", "-c", "B = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')]; "
                        "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) for b in B]; "

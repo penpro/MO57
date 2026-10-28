@@ -304,7 +304,9 @@ class Report:
 
     @property
     def ok(self):
-        return all(r[1] for r in self.rows)
+        # A test that raised part-way is no pass, though every step it reached passed: the verdicts print from `finally`, where an exception
+        # on its way out is still visible (Oct 27: packaged-bases died on a NameError after packaging and printed PASS).
+        return all(r[1] for r in self.rows) and sys.exc_info()[0] is None
 
 
 def lan_test(uproject, editor_exe, keep=False, boot_timeout=240, map_path=DEFAULT_MAP):
@@ -4352,9 +4354,6 @@ PKG_SUITE_RE = re.compile(r"\[MOTEST\] ===== RunAll: (\d+) passed, (\d+) failed"
 def packaged_suite_test(package=False, seed=7, boot_timeout=420):
     """The PACKAGED Development game, ONE copy: a new game on a fixed seed, then MO.Test.AfterReady MO.Test.RunAll (drop/pickup identity, attack, craft, data + art validation) once the world is ready.
     The cooked game has different data paths than the editor (cooked DataTables, soft references, always-cook folders): this runs the regression gate against the artifact that ships."""
-    import survivor_bases as sb
-    B = sb.new_bases()[0]
-    bid = B["id"]
     rep = Report()
     pid = None
     try:
@@ -5370,6 +5369,9 @@ def packaged_bases_test(package=False, seed=777, boot_timeout=480):
     body is read back (MO.Test.BodyShape) with a screenshot. Why: a base is named only by config paths, which the cooker does not follow --
     its folder must be in DirectoriesToAlwaysCook (TRAPS §7); the editor cannot tell, a missing base silently keeps the Blueprint's meshes.
     Refuses to run if any MO57.exe is already running (it only ever stops the process tree it started)."""
+    import survivor_bases as sb
+    B = sb.new_bases()[0]
+    bid = B["id"]
     rep = Report()
     pid = None
     try:

@@ -79,6 +79,10 @@
 
 ## 3. Editor, Python bridge and MCP
 
+- **`unreal.Rotator(0.0, yaw, 0.0)` tips the actor over instead of turning it** -> Python's Rotator takes (ROLL, PITCH, YAW) positionally (it
+  follows `MakeRotator`), not FRotator's (Pitch, Yaw, Roll): that call sets pitch = yaw and yaw = 0 -> always use keywords:
+  `unreal.Rotator(roll=0.0, pitch=0.0, yaw=y)`. Found Oct 27 in check_legs / check_creator_bases (side shots, the creator's turn, the
+  bear's facing): those steps had been tipping the survivor and zeroing her yaw. (GASP bases night)
 - **The editor crashes on quit (EXCEPTION_ACCESS_VIOLATION in UnrealEditor-Persona, "EditorExit") with a skeletal mesh editor open** ->
   it was quit with `QUIT_EDITOR`, which goes straight to `RequestEngineExit` and skips the main frame's shutdown (the editor-close
   broadcast that closes every asset editor, the layout save); Persona then dereferences null while the main window is destroyed. The
@@ -185,7 +189,7 @@
 
 - **A check that spins the survivor with `set_actor_rotation` no longer turns the body** (since GASP, Oct 27) -> GASP's root offset holds
   the body's facing while she stands (orient to movement: she turns as she moves) -> measure the body itself (a bone's world rotation,
-  the feet's ground spacing), not the actor's vectors; a test that needs her turned walks her (`MO.Footstep.Walk`). (check_creator_bases, check_legs)
+  the feet's ground spacing), not the actor's vectors; a test that needs her turned walks her (`MO.Footstep.Walk`). Measured: actor turned 180 degrees, head 24. (check_creator_bases, check_legs)
 - **"Voxel Shader Hook is not applied" comes back every few days** -> the Voxel plugin writes its hooks INTO the engine's shader files
   (`Engine/Shaders/Private/MaterialTemplate.ush`, `Nanite/*`, `CapsuleLightIntegrate.ush`, `RectLightIntegrate.ush`; backups in
   `Engine/Saved/VoxelShaderHooks/`). Any launcher action on the engine (an update, Options such as the MetaHuman Creator Core Data, Verify)
