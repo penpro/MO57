@@ -1741,3 +1741,7 @@ References: CL-0214
 ### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0216
 Status: CLAIM + RELEASE (done) the MO57 editor (rows set only), build window and instances for the bear's aggro range (Wes: "bears should be considered predators in context of the game, just a smaller agro range"): DT_Creatures Bear01 AggroRange 600 (VERIFIED 1/1; patch Docs/RowPatches/2026-10-27-bear-aggro-DT_Creatures.json); MOCreatureController reads AggroRange (it was never read). No editor, build or instance held now.
 References: CL-0215
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0217
+Status: CLAIM the MO57 editor, build window and instances, and these files, for GASP phase 1 (Wes: "start phase 1: plugins, migrate the CMC character and its animation set (keep our MetaHumans/Common), and drive our survivor with it"): MO57.uproject (plugin enables), .gitignore (the imported GASP folders), Tools/import_gasp.py + Tools/data/gasp_packages.json (new), Plugins/MOFramework/MOFramework.uplugin, MOFramework.Build.cs, MOCharacter.h/.cpp, MOBodyRetargetAnimInstance.h/.cpp (new), MOFrameworkEditor MOEditorContentUtils.h/.cpp, BP_MOMetaHuman_Female, Docs/Animation_GASP.md (new), DECISIONS / TOOLING / TRAPS rows.
+References: CL-0216

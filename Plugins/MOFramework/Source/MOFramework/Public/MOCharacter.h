@@ -262,6 +262,8 @@ class UMOFootstepComponent;
 class UAnimSequence;
 class UAnimMontage;
 class UAnimInstance;
+class UIKRetargeter;
+class USkeletalMesh;
 class UMOCharacterMovementComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
@@ -1356,6 +1358,75 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
 	TSoftObjectPtr<UAnimSequence> SwimUnderDownAnim;
+
+	// ---- locomotion: Epic's Game Animation Sample (GASP phase 1, Oct 27 2026; Docs/Animation_GASP.md) ----
+	// Walking, running, sprinting, crouching, jumping and landing come from GASP's motion-matching character: a hidden UEFN mannequin (the
+	// locomotion driver, attached to the body) runs GASP's SandboxCharacter_CMC_ABP, which asks this pawn for its movement through GASP's pawn
+	// interface (BPI_SandboxCharacter_Pawn::Get_PropertiesForAnimation, implemented in the survivor Blueprint from the getters below). The body runs
+	// UMOBodyRetargetAnimInstance: the driver's pose retargeted onto the MetaHuman, then the DefaultSlot our montages use. The three assets are soft:
+	// a pawn without them, or a clone without the imported GASP content (Tools/import_gasp.py), keeps the body's own animation blueprint.
+
+public:
+	/** The hidden mannequin that runs the locomotion; null while this pawn animates with the body's own blueprint. */
+	USkeletalMeshComponent* GetLocomotionDriver() const { return LocomotionDriver; }
+
+	/** The retarget from the driver's skeleton onto the body (loaded with the driver). */
+	UIKRetargeter* GetBodyRetargeter() const { return LoadedBodyRetargeter; }
+
+	/** The gait the animation shows, GASP's E_Gait order: 0 walk, 1 run (our jog), 2 sprint. The owner and the server read the gait the moves
+	 *  carry; another machine reads it from the replicated speed. */
+	int32 GetAnimGait() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	bool IsAnimGaitSprint() const { return GetAnimGait() == 2; }
+
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	bool IsAnimGaitWalk() const { return GetAnimGait() == 0; }
+
+	/** Landed within the last 0.3 s (GASP's landing window). Every machine sees the landing in the replicated movement. */
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	bool HasJustLanded() const;
+
+	/** The velocity the last landing came down with. */
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	FVector GetLandVelocity() const { return AnimLandVelocity; }
+
+	/** The floor under the feet (the movement's last floor hit): its normal, and where it was struck. */
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	FVector GetAnimGroundNormal() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|Animation")
+	FVector GetAnimGroundLocation() const;
+
+private:
+	/** The driver's mesh: GASP's UEFN mannequin (SKM_UEFN_Mannequin). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Locomotion", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<USkeletalMesh> LocomotionDriverMesh;
+
+	/** The driver's animation blueprint: GASP's SandboxCharacter_CMC_ABP. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Locomotion", meta=(AllowPrivateAccess="true"))
+	TSoftClassPtr<UAnimInstance> LocomotionDriverAnimClass;
+
+	/** The retarget from the mannequin onto the body: GASP's RTG_UEFN_to_Metahuman_nrw. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Locomotion", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UIKRetargeter> BodyRetargeter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMeshComponent> LocomotionDriver;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UIKRetargeter> LoadedBodyRetargeter;
+
+	/** Make the driver and hand the body to the retarget (BeginPlay; once). */
+	void SetUpLocomotionDriver();
+
+	/** Watch the movement for a landing (every tick, every machine). */
+	void UpdateLandingForAnimation();
+
+	bool bWasFallingForAnim = false;
+	FVector AnimFallVelocity = FVector::ZeroVector;
+	FVector AnimLandVelocity = FVector::ZeroVector;
+	double AnimLandedAtSeconds = -1000.0;
 
 	// ---- crouch ----
 	// ACharacter::Crouch() is a silent no-op unless NavAgentProps.bCanCrouch is set (it never was: CanEverCrouch() was false). The capsule shrinks and the walk slows; the pose comes from the locomotion

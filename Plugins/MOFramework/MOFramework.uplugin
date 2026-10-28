@@ -74,6 +74,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "IKRig",
+			"Enabled": true
+		},
+		{
 			"Name": "HairStrands",
 			"Enabled": true
 		},

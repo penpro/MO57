@@ -31,4 +31,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Editor")
 	static UFont* MakeCompositeFont(const FString& AssetPath, const TArray<FName>& TypefaceNames, const TArray<UFontFace*>& Faces);
+
+	/**
+	 * Make Blueprint implement InterfaceClass (a Blueprint Interface's generated class or a native UInterface), adding a graph for each of its functions
+	 * that returns a value; true if it does now (also when it already did). Python cannot do this (the Class Settings "Implemented Interfaces" list);
+	 * GASP phase 1 needs it for the survivor to answer BPI_SandboxCharacter_Pawn (Docs/Animation_GASP.md). Not compiled or saved: do both after.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Editor")
+	static bool ImplementInterface(UBlueprint* Blueprint, UClass* InterfaceClass);
 };

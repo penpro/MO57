@@ -17,6 +17,8 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "MOBodyRetargetAnimInstance.h"
+#include "Retargeter/IKRetargeter.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOPersistenceSubsystem.h"
@@ -313,6 +315,7 @@ void AMOCharacter::BeginPlay()
 			}
 		}
 	}
+	SetUpLocomotionDriver();
 
 	// The gait speeds live on the movement component, which picks one per move from the gait the move carries (see UMOCharacterMovementComponent::SetWantedGait)
 	if (UMOCharacterMovementComponent* MOMove = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
@@ -556,6 +559,7 @@ void AMOCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	TickWater(DeltaTime);
+	UpdateLandingForAnimation();
 
 	// Check for falling through the world
 	if (bEnableFallThroughSafety)
@@ -1032,6 +1036,105 @@ void AMOCharacter::SetAnimationBlueprint(TSubclassOf<UAnimInstance> NewAnimClass
 	{
 		GetMesh()->SetAnimInstanceClass(NewAnimClass);
 	}
+}
+
+void AMOCharacter::SetUpLocomotionDriver()
+{
+	USkeletalMeshComponent* Body = GetMesh();
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	// Cosmetic, so not on a dedicated server (the body holds no pose there either: nothing renders it).
+	if (LocomotionDriver || !Body || !Move || IsNetMode(NM_DedicatedServer)
+		|| LocomotionDriverMesh.IsNull() || LocomotionDriverAnimClass.IsNull() || BodyRetargeter.IsNull())
+	{
+		return;
+	}
+	USkeletalMesh* DriverMesh = LocomotionDriverMesh.LoadSynchronous();
+	UClass* DriverAnimClass = LocomotionDriverAnimClass.LoadSynchronous();
+	UIKRetargeter* Retargeter = BodyRetargeter.LoadSynchronous();
+	if (!DriverMesh || !DriverAnimClass || !Retargeter)
+	{
+		// The GASP content is imported, not committed (Tools/import_gasp.py): a clone without it walks with the body's own blueprint.
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: the GASP locomotion assets are missing (driver mesh %s, blueprint %s, retargeter %s): the body keeps its own animation blueprint. Run Tools/import_gasp.py."),
+			*GetName(), DriverMesh ? TEXT("ok") : TEXT("MISSING"), DriverAnimClass ? TEXT("ok") : TEXT("MISSING"), Retargeter ? TEXT("ok") : TEXT("MISSING"));
+		return;
+	}
+	LoadedBodyRetargeter = Retargeter;
+
+	// The driver sits exactly on the body (attached at identity), so it follows every offset ACharacter gives the body -- the crouch's capsule
+	// adjustment, the network smoothing, the swimmer's lift -- and GASP's foot placement traces from where the body stands.
+	LocomotionDriver = NewObject<USkeletalMeshComponent>(this, TEXT("LocomotionDriver"));
+	LocomotionDriver->SetupAttachment(Body);
+	LocomotionDriver->SetSkeletalMesh(DriverMesh);
+	LocomotionDriver->SetAnimInstanceClass(DriverAnimClass);
+	LocomotionDriver->SetVisibility(false);
+	LocomotionDriver->SetCastShadow(false);
+	LocomotionDriver->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	LocomotionDriver->SetGenerateOverlapEvents(false);
+	// Unseen, so it must pose regardless, and at its full skeleton (a hidden mesh's predicted LOD would strip the fingers the retarget reads).
+	LocomotionDriver->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	LocomotionDriver->SetForcedLOD(1);
+	LocomotionDriver->RegisterComponent();
+
+	// Movement, then the driver's pose (it reads this frame's movement), then the body (it copies the driver's finished pose). Attaching made
+	// the driver tick after its parent, the body: that order would hand the body last frame's pose (and refuse the body's prerequisite as a
+	// cycle), and nothing in the body's tick moves the driver (the capsule's movement does, before either ticks), so it goes.
+	LocomotionDriver->PrimaryComponentTick.RemovePrerequisite(Body, Body->PrimaryComponentTick);
+	LocomotionDriver->PrimaryComponentTick.AddPrerequisite(Move, Move->PrimaryComponentTick);
+	Body->PrimaryComponentTick.AddPrerequisite(LocomotionDriver, LocomotionDriver->PrimaryComponentTick);
+	Body->SetAnimInstanceClass(UMOBodyRetargetAnimInstance::StaticClass());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: GASP drives the locomotion (%s with %s, retargeted by %s)"),
+		*GetName(), *DriverMesh->GetName(), *DriverAnimClass->GetName(), *Retargeter->GetName());
+}
+
+void AMOCharacter::UpdateLandingForAnimation()
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move)
+	{
+		return;
+	}
+	// From the movement mode, so a remote pawn lands on every machine as it does on its own (GASP watches IsMovingOnGround the same way).
+	const bool bFalling = Move->IsFalling();
+	if (bFalling)
+	{
+		AnimFallVelocity = Move->Velocity;
+	}
+	else if (bWasFallingForAnim)
+	{
+		AnimLandVelocity = AnimFallVelocity;
+		AnimLandedAtSeconds = GetWorld()->GetTimeSeconds();
+	}
+	bWasFallingForAnim = bFalling;
+}
+
+int32 AMOCharacter::GetAnimGait() const
+{
+	// The owner and the server know the gait the moves carry; another machine sees only the replicated speed, halfway between the gait speeds.
+	const UMOCharacterMovementComponent* MOMove = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (MOMove && (IsLocallyControlled() || HasAuthority()))
+	{
+		return MOMove->WantsToSprint() ? 2 : (MOMove->WantsToJog() ? 1 : 0);
+	}
+	const float Speed = GetVelocity().Size2D();
+	return Speed > 0.5f * (JogSpeed + SprintSpeed) ? 2 : (Speed > 0.5f * (WalkSpeed + JogSpeed) ? 1 : 0);
+}
+
+bool AMOCharacter::HasJustLanded() const
+{
+	const UWorld* World = GetWorld();
+	return World && World->GetTimeSeconds() - AnimLandedAtSeconds < 0.3;
+}
+
+FVector AMOCharacter::GetAnimGroundNormal() const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	return Move && Move->CurrentFloor.HitResult.bBlockingHit ? FVector(Move->CurrentFloor.HitResult.ImpactNormal) : FVector::UpVector;
+}
+
+FVector AMOCharacter::GetAnimGroundLocation() const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	return Move && Move->CurrentFloor.HitResult.bBlockingHit ? FVector(Move->CurrentFloor.HitResult.ImpactPoint) : GetActorLocation();
 }
 
 // ============================================================================
@@ -1628,8 +1731,10 @@ void AMOCharacter::UpdateCrouchAnimation(float DeltaTime, bool bSwimming)
 	}
 	USkeletalMeshComponent* Body = GetMesh();
 	UCharacterMovementComponent* Move = GetCharacterMovement();
-	// The swim override replaces the animation blueprint (no DefaultSlot then); a dead or airborne pawn is not in a crouch pose.
-	const bool bWantPose = Body && Move && bIsCrouched && !bSwimming && !bIsDead && Move->IsMovingOnGround() && CurrentSwimPose == ESwimPose::None;
+	// The swim override replaces the animation blueprint (no DefaultSlot then); a dead or airborne pawn is not in a crouch pose. Under GASP the
+	// motion matching crouches (its Stance follows bIsCrouched): a crouch clip in the body's slot would cover it.
+	const bool bWantPose = Body && Move && bIsCrouched && !bSwimming && !bIsDead && Move->IsMovingOnGround() && CurrentSwimPose == ESwimPose::None
+		&& !LocomotionDriver;
 	if (!bWantPose)
 	{
 		if (CurrentCrouchPose != ECrouchPose::None)

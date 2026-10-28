@@ -32,6 +32,16 @@ Content/UltraDynamicSky/
 # Never edit inside it: the species' Blueprints live in MOFramework/MOBS (tracked).
 Content/AnimalsFullPack/
 Plugins/MOFramework/Content/Characters/MetaHumans/
+# Epic's Game Animation Sample (Fab; Oct 27: Docs/Animation_GASP.md): 1.4 GB, local only like the Animals Full Pack -- Tools/import_gasp.py
+# copies it from the sample project at the same /Game paths. MO57's own Blueprints that use it are tracked elsewhere.
+Content/Blueprints/
+Content/Characters/UE4_Mannequin/
+Content/Characters/UE5_Mannequins/
+Content/Characters/UEFN_Mannequin/
+Content/Misc/
+Content/Audio/Foley/
+Content/Audio/Mix/
+Content/Audio/DefaultAttenuation.uasset
 
 # Voxel Plugin (dev-phy build) — large vendored tree kept out of git history.
 # Recover from the Phyronnaz dev-phy branch if a fresh checkout needs it.

@@ -96,7 +96,8 @@ public class MOFramework : ModuleRules
 				"VoxelGraph",               // Voxel plugin - graph types (FVoxelExposedSeed)
 				"VoxelPCG",                 // Voxel plugin - PCG point nodes
 				"ProceduralMeshComponent",  // Water mesh generation
-				"HairStrandsCore"           // MetaHuman groom/hair components
+				"HairStrandsCore",          // MetaHuman groom/hair components
+				"IKRig"                     // GASP locomotion: the body retargets the driver's pose (MOBodyRetargetAnimInstance)
 			}
 			);
 			

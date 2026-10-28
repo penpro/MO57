@@ -84,6 +84,17 @@
 - **Animation work waits for the Game Animation Sample** (Wes: "quit fucking with the animations until we look at the animations demo
   project and start getting all that linked up"): the crouch's remaining jank (after the Oct 27 pelvis repair) is not chased further;
   the sample's set comes first (F50).
+- **GASP phase 1: the survivor walks with the Game Animation Sample** (Wes: "Yes, start phase 1: plugins, migrate the CMC character and
+  its animation set (keep our MetaHumans/Common), and drive our survivor with it"; "i like everything in the animation level"). Built
+  (`Docs/Animation_GASP.md`): GASP's UEFN mannequin runs its CMC motion-matching blueprint unchanged as a hidden driver on the body; the
+  MetaHuman body retargets it; the survivor Blueprint answers GASP's pawn interface from our movement. The sample's content is imported
+  by `Tools/import_gasp.py` and gitignored (1.4 GB, free on Fab), like the Animals Full Pack. Claude's calls, noted: the body runs a
+  native retarget + `DefaultSlot` instance instead of GASP's `ABP_GenericRetarget` (no slot there: our combat and swim montages would
+  vanish); the driver hangs off the body (it inherits the crouch / smoothing offsets ACharacter gives the body; nothing in ACharacter
+  changes); our gait speeds and acceleration stay as they are for now (GASP's set is tuned to walk 200 / run 500 / accel 800 -- a
+  separate feel call once Wes has seen it move); GASP's trace channels are not taken (they collide with Interactable / WaterTrace;
+  traversal is phase 2); the aiming rotation is the pawn's base aim rotation (GASP's control-rotation branch picked the Controller's
+  function in our Blueprint).
 
 - **The MetaHuman bases in the game** (Wes: "ok i made a few bases with the new metahumans stuff, see if you can get them all customizable
   and out into the game"; then "im going to bed, keep working over night"). Built overnight; Claude's calls, noted:

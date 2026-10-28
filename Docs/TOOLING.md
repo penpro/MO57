@@ -57,6 +57,9 @@ groom were cooked, the heavy shape draws).
 `MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there).
 Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then Lillian -- standing, walking and crouched, the feet's spacing and
 height and the pelvis over the capsule's floor, the foot IK's virtual bones; shots from behind and the side in `Saved/Screenshots/legs/`).
+GASP locomotion (Oct 27, `Docs/Animation_GASP.md`): `python Tools/import_gasp.py [--from <GameAnimationSample>]` imports the sample's content
+(gitignored, never overwrites), then `python Tools/ue.py py --file Content/Python/setup_gasp_survivor.py` (editor open) points the survivor
+Blueprint at it and writes its `Get_PropertiesForAnimation`. An instance logs `GASP drives the locomotion` per survivor.
 Their content fixes, run in the editor: `Content/Python/ensure_foot_ik_virtual_bones.py` (after any refresh of `/Game/MetaHumans/Common`)
 and `Content/Python/repair_crouch_pelvis.py` (idempotent; TRAPS §10).
 **`MO.Save.LoadFrom` reloads in place without the post-load handoff** (re-grounding, re-possessing the last-played pawn: `AMOGameMode`'s

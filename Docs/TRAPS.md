@@ -67,6 +67,13 @@
 - **A default-constructed `FMOWorldGenParamsRef` kills the editor at first use** -> a TSharedRef default is FATAL -> `FMOWorldGenParamsProvider::MakeDefault()`. (world-features)
 - **Editor and packaged builds disagree on `MO.WorldGen.Checksum`** -> Editor targets compile /fp:precise, Game /fp:fast -> `FPSemantics = Precise`
   in `MOFrameworkCore.Build.cs`; rerun the checksum in BOTH after any build-rule or toolchain change. (caves-and-lighting)
+- **A native anim instance with an `FAnimNode_Slot` crashes the game thread's worker** ("Assertion failed: Subsystem", AnimInstance.h:937,
+  in MovieSceneAnimMixer) -> 5.8's slot node calls the Sequencer mixer (`IAnimGraphRuntime_SequencerMixerTargetConnector`, the
+  MovieSceneAnimMixer plugin that GASP enables), which asks the instance for a blueprint's anim subsystem -> keep the slot by hand in the
+  proxy (`RegisterSlotNodeWithAnimInstance` / `GetSlotWeight` / `SlotEvaluatePose`: `UMOCreatureAnimInstance`, `UMOBodyRetargetAnimInstance`). (Oct 27, GASP)
+- **"could not use X as a prerequisite ... because it would form a cycle"** -> attaching a component makes it tick after its parent
+  (`AttachToComponent` adds the prerequisite) -> to have the parent tick after the child (the body copying its hidden driver's pose),
+  `RemovePrerequisite(Parent, Parent->PrimaryComponentTick)` on the child after registering it. (Oct 27, GASP)
 - 5.8 API changes met: `GAverageFPS` is gone; `LexToString(EBuildConfiguration)` replaced `EBuildConfigurations::ToString`; `UEditableTextBox::SetWidgetStyle`
   keeps a pointer to the caller's local (`Docs/UI.md` §4); `UGameInstanceSubsystem` is ClassWithin UGameInstance (tests need that outer). (crash-endpoint, ue58)
 
@@ -147,6 +154,12 @@
   did not override yet) -> never chain sets with `and`; set each, then read back (`get_material_instance_scalar_parameter_value`). (Oct 25)
 - **A flag passed through `os.environ` to an editor script sticks** -> the editor's Python is ONE process: a dry-run flag set for one
   `ue.py py` call is still set for the next, which then silently dry-runs too -> a script consumes its flag (`os.environ.pop`). (Oct 25)
+- **The graph DSL (`BlueprintTools.write_graph_dsl`) won't connect a `select` of enum names to an enum pin** ("Could not connect pin
+  ReturnValue ... incompatible types") -> bare quoted values make the select's options strings -> give it typed inputs:
+  `(select c (Utilities|Enum|LiteralenumE_Gait "NewEnumerator2") ...)`. Also: `Pawn|GetControlRotation` resolves to the CONTROLLER's
+  function in a pawn Blueprint ("self is not a Controller"); and a `find_node_types` suffix match can pick another class's variable of the
+  same name (GASP's ABP has `GetLandVelocity` too) -> match the full id (`MO|Animation|...`). A property getter that `read_graph_dsl`
+  prints as `(|GetbOrientRotationToMovement ...)` is written as `Class|CharacterMovementComponent|GetOrientRotationtoMovement`. (Oct 27, GASP)
 - **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
   cancels nothing -> read the first run's output (or MO57.log), never re-send. (Oct 25: a harmless double substrate-pin pass)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)

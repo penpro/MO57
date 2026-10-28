@@ -5,6 +5,8 @@
 #include "HAL/FileManager.h"
 #include "UObject/Package.h"
 #include "Misc/PackageName.h"
+#include "Engine/Blueprint.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 
 bool UMOEditorContentUtils::MountContentPath(const FString& RootPath, const FString& DiskContentDir)
 {
@@ -63,4 +65,26 @@ UFont* UMOEditorContentUtils::MakeCompositeFont(const FString& AssetPath, const 
 		FAssetRegistryModule::AssetCreated(Font);
 	}
 	return Font;
+}
+
+bool UMOEditorContentUtils::ImplementInterface(UBlueprint* Blueprint, UClass* InterfaceClass)
+{
+	if (!Blueprint || !InterfaceClass || !InterfaceClass->HasAnyClassFlags(CLASS_Interface))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOEditorContentUtils] ImplementInterface: %s is not an interface (or no Blueprint)"), *GetNameSafe(InterfaceClass));
+		return false;
+	}
+	for (const FBPInterfaceDescription& Existing : Blueprint->ImplementedInterfaces)
+	{
+		if (Existing.Interface == InterfaceClass)
+		{
+			return true;
+		}
+	}
+	if (!FBlueprintEditorUtils::ImplementNewInterface(Blueprint, InterfaceClass->GetClassPathName()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOEditorContentUtils] %s could not implement %s"), *Blueprint->GetName(), *InterfaceClass->GetName());
+		return false;
+	}
+	return true;
 }

@@ -64,8 +64,10 @@ def side_shot(label):
 def measure(rep, who):
     stand = summary(samples(6))
     rep.step(f"{who}: the foot IK's virtual bones are on the skeleton", stand.get("vb", -1) >= 0, str(stand))
-    rep.step(f"{who} standing: feet under the hips (15-35 cm apart), on the floor (within 15 cm)",
-             bool(stand) and 15 <= stand["across"] <= 35 and abs(stand["feet_z"]) <= 15, str(stand))
+    # GASP's idle (Oct 27) stands relaxed, the weight on one leg and that foot set out: 31 cm across on the femme, 46 on Lillian, both
+    # planted and natural by eye. Crossed or collapsed legs (the foot IK failing) read under 15.
+    rep.step(f"{who} standing: feet under the hips (15-50 cm apart), on the floor (within 15 cm)",
+             bool(stand) and 15 <= stand["across"] <= 50 and abs(stand["feet_z"]) <= 15, str(stand))
     side_shot(f"{who}_stand")
     ui.console(NAME, "MO.Footstep.Walk 20 walk")   # long enough for the samples (each a bridge call of a second or more)
     time.sleep(1.0)
