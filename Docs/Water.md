@@ -71,7 +71,9 @@
   `GetSurfaceZ`: wading drag (~half speed chest deep); swim at 0.70 immersion; stop only below 0.50 AND with walkable ground
   under the feet (holding Space at the surface cannot pop in/out); buoyancy 1.27 floats the head (settles at 0.79, eyes ~10 cm
   above). The capsule stays upright (`ShouldRemainVertical`), the mesh lies down. `GetPhysicsVolume()` returns ONE brushless
-  `APhysicsVolume` with `bWaterVolume` while swimming (PhysSwimming flips to falling if the volume is not water).
+  `APhysicsVolume` with `bWaterVolume` while swimming (PhysSwimming flips to falling if the volume is not water). The volume is spawned
+  when the world begins play (`UMOWaterSubsystem::OnWorldBeginPlay`), never from the getter: GASP's animation reaches `GetPhysicsVolume`
+  on worker threads (Oct 28: two swimmers spawning it at once crashed a joiner).
 - `AMOCharacter::TickWater`: Space = rise, steering by camera pitch with a +-12 deg dead zone, hustle = crawl; stamina / MET /
   exertion / XP / wetness. Swim poses play single-node on the body mesh (`Plugins/MOFramework/Content/Characters/Swim/*_MH`, the
   plugin's Manny set retargeted: `Docs/TOOLING.md` § animation retarget); the ABP is restored on exit (crouch and swim never overlap).

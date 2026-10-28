@@ -10,6 +10,12 @@ bool UMOWaterSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) c
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
 }
 
+void UMOWaterSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	GetSwimVolume();
+}
+
 UMOWaterSubsystem* UMOWaterSubsystem::Get(const UObject* WorldContext)
 {
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
@@ -82,12 +88,13 @@ bool UMOWaterSubsystem::FindWaterAlongRay(const FVector& Start, const FVector& D
 
 APhysicsVolume* UMOWaterSubsystem::GetSwimVolume()
 {
-	if (!SwimVolume && GetWorld())
+	if (!SwimVolume && GetWorld() && IsInGameThread())
 	{
 		FActorSpawnParameters Params;
 		Params.ObjectFlags |= RF_Transient;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.Name = TEXT("MOSwimVolume");
+		Params.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;   // a name already taken gets a suffix; the default (Required_Fatal) crashes
 		SwimVolume = GetWorld()->SpawnActor<APhysicsVolume>(APhysicsVolume::StaticClass(), FTransform::Identity, Params);
 		if (SwimVolume)
 		{

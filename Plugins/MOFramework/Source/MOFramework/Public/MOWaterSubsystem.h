@@ -22,6 +22,7 @@ class MOFRAMEWORK_API UMOWaterSubsystem : public UWorldSubsystem
 
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
 	static UMOWaterSubsystem* Get(const UObject* WorldContext);
 
@@ -41,7 +42,12 @@ public:
 	 */
 	bool FindWaterAlongRay(const FVector& Start, const FVector& Dir, float MaxCm, float BlockedAtCm, FVector& OutPoint, EMOWaterBodyKind& OutKind) const;
 
-	/** The world's one shared brushless water volume (bWaterVolume, a high fluid friction so a swimmer's motion damps like a swimmer's). Spawned on first use; null if it cannot be spawned. */
+	/**
+	 * The world's one shared brushless water volume (bWaterVolume, a high fluid friction so a swimmer's motion damps like a swimmer's). Spawned on the game thread when the
+	 * world begins play (or on a game-thread call before that); null if it cannot be spawned. Never spawns off the game thread: the movement component's GetPhysicsVolume
+	 * reaches here from GetGravityZ, which GASP's trajectory (PoseSearchTrajectoryLibrary) calls from the animation worker threads -- two swimmers' graphs spawning it at
+	 * once crashed a joiner on the second spawn's name (Oct 28).
+	 */
 	APhysicsVolume* GetSwimVolume();
 
 private:
