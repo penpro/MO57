@@ -77,6 +77,8 @@ Mover, NetworkPrediction, MovieSceneAnimMixer, AnimationLocomotionLibrary; MOFra
   our acceleration 2048 / braking 2000 against GASP's 800 / 500-2000. Motion matching picks the nearest frames, so a mismatch shows as a
   little foot slide or a clipped start. Tuning is a separate call (feel vs. the simulation's numbers).
 - **Rotation**: we turn the capsule at 500 deg/s; GASP turns it instantly on the ground and lets the ABP's root offset smooth the mesh.
+  The same root offset holds the body's facing while she stands: an actor turned without movement (a teleport, `set_actor_rotation` in a
+  check) leaves the body as it was until she moves (TRAPS §5).
 - **Cost**: the driver poses even off screen (it must, to feed the body). Fine for a handful of survivors; a colony may want the driver's
   tick tied to the body being rendered.
 - **Swim**: the strokes play in the body's slot over the retargeted pose (blended now; before, the override swapped blueprints).

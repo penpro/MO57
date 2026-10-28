@@ -183,6 +183,9 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **A check that spins the survivor with `set_actor_rotation` no longer turns the body** (since GASP, Oct 27) -> GASP's root offset holds
+  the body's facing while she stands (orient to movement: she turns as she moves) -> measure the body itself (a bone's world rotation,
+  the feet's ground spacing), not the actor's vectors; a test that needs her turned walks her (`MO.Footstep.Walk`). (check_creator_bases, check_legs)
 - **"Voxel Shader Hook is not applied" comes back every few days** -> the Voxel plugin writes its hooks INTO the engine's shader files
   (`Engine/Shaders/Private/MaterialTemplate.ush`, `Nanite/*`, `CapsuleLightIntegrate.ush`, `RectLightIntegrate.ush`; backups in
   `Engine/Saved/VoxelShaderHooks/`). Any launcher action on the engine (an update, Options such as the MetaHuman Creator Core Data, Verify)

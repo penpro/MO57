@@ -4352,6 +4352,9 @@ PKG_SUITE_RE = re.compile(r"\[MOTEST\] ===== RunAll: (\d+) passed, (\d+) failed"
 def packaged_suite_test(package=False, seed=7, boot_timeout=420):
     """The PACKAGED Development game, ONE copy: a new game on a fixed seed, then MO.Test.AfterReady MO.Test.RunAll (drop/pickup identity, attack, craft, data + art validation) once the world is ready.
     The cooked game has different data paths than the editor (cooked DataTables, soft references, always-cook folders): this runs the regression gate against the artifact that ships."""
+    import survivor_bases as sb
+    B = sb.new_bases()[0]
+    bid = B["id"]
     rep = Report()
     pid = None
     try:
@@ -5288,10 +5291,14 @@ def _weight(rest, mesh, shape):
 
 
 def bases_test(uproject, editor_exe, keep=False, boot_timeout=300):
-    """The survivor bases and the body shapes in co-op (Oct 27; N-226, MOSurvivorBase.h): the host's survivor takes a base (Lillian) as the
-    character creator gives it, and a JOINER must draw it -- the base's body and face meshes, its own composition as made (no shape on), then
-    the host's simulated body fat and muscle (the metabolism replicates to its owner only: the pawn's shown body carries it to everyone) and
-    the build sliders, on the body AND the face (the neck seam). Real processes."""
+    """The survivor bases and the body shapes in co-op (Oct 27; N-226, MOSurvivorBase.h): the host's survivor takes a base (the first new one
+    the config lists, Tools/survivor_bases.py) as the character creator gives it, and a JOINER must draw it -- the base's body and face meshes,
+    its own composition as made (no shape on), then the host's simulated body fat and muscle (the metabolism replicates to its owner only: the
+    pawn's shown body carries it to everyone) and the build sliders, on the body AND the face (the neck seam); and GASP's locomotion on the
+    joiner's copy of the host (Docs/Animation_GASP.md: the driver, the retargeted body, the gait read from the replicated speed). Real processes."""
+    import survivor_bases as sb
+    B = sb.new_bases()[0]
+    bid, fat, muscle = B["id"], B["fat"], B["muscle"]
     rep = Report()
     host, client = "basehost", "baseclient"
     try:
@@ -5300,34 +5307,50 @@ def bases_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "BasesTest", boot_timeout=boot_timeout):
             return False
         time.sleep(10)
-        out = console(host, "MO.Test.Base Lillian")
-        rep.step("host: the survivor takes the Lillian base", "now wears base 'Lillian'" in out, out.strip()[-200:])
+        out = console(host, f"MO.Test.Base {bid}")
+        rep.step(f"host: the survivor takes the {bid} base", f"now wears base '{bid}'" in out, out.strip()[-200:])
         time.sleep(3)
         h = _bodyshape(host, True)
-        rep.step("host: Lillian's body and face, at her own body (12.4 % / 28.5 kg), no shape on",
-                 bool(h) and h[0] == "Lillian" and abs(h[1] - 12.4) < 0.2 and abs(h[2] - 28.5) < 0.2 and "SKM_MH_Lillian_Base_BodyMesh" in h[3]
-                 and "SKM_MH_Lillian_Base_FaceMesh" in h[3] and _weight(h[3], "CharacterMesh0", "Heavy") == 0.0 and _weight(h[3], "CharacterMesh0", "Thin") == 0.0,
+        rep.step(f"host: {bid}'s body and face, at its own body ({fat} % / {muscle} kg), no shape on",
+                 bool(h) and h[0] == bid and abs(h[1] - fat) < 0.2 and abs(h[2] - muscle) < 0.2 and B["body"] in h[3]
+                 and B["face"] in h[3] and _weight(h[3], "CharacterMesh0", "Heavy") == 0.0 and _weight(h[3], "CharacterMesh0", "Thin") == 0.0,
                  str(h)[:400])
-        c = _bodyshape(client, False, "Lillian")
-        rep.step("joiner: draws the host's survivor as Lillian (her meshes, her body)",
-                 bool(c) and c[0] == "Lillian" and abs(c[1] - 12.4) < 0.2 and "SKM_MH_Lillian_Base_BodyMesh" in c[3] and "SKM_MH_Lillian_Base_FaceMesh" in c[3],
+        c = _bodyshape(client, False, bid)
+        rep.step(f"joiner: draws the host's survivor as {bid} (its meshes, its body)",
+                 bool(c) and c[0] == bid and abs(c[1] - fat) < 0.2 and B["body"] in c[3] and B["face"] in c[3],
                  str(c)[:400])
         console(host, "MO.Test.BodyComposition 40")
         time.sleep(4)   # the server copies the metabolism's body within ShownBodyRefreshSeconds (2 s); then replication
-        c = _bodyshape(client, False, "Lillian")
+        c = _bodyshape(client, False, bid)
         rep.step("joiner: the host gains fat to 40 % -> the heavy shape full on the body and the face's neck",
                  bool(c) and abs(c[1] - 40.0) < 0.2 and _weight(c[3], "CharacterMesh0", "Heavy") == 1.0 and _weight(c[3], "FaceMesh", "Heavy") == 1.0,
                  str(c)[:400])
         console(host, "MO.Test.BodyBuild Bust 1")
         time.sleep(3)
-        c = _bodyshape(client, False, "Lillian")
+        c = _bodyshape(client, False, bid)
         rep.step("joiner: the host's build slider (bust +1) -> BustLarge 1.00", bool(c) and _weight(c[3], "CharacterMesh0", "BustLarge") == 1.0, str(c)[:400])
         console(host, "MO.Test.BodyComposition 8 20")
         time.sleep(4)
-        c = _bodyshape(client, False, "Lillian")
+        c = _bodyshape(client, False, bid)
         rep.step("joiner: starved to 8 % and 20 kg of muscle -> thin and wasted full on, heavy off",
                  bool(c) and _weight(c[3], "CharacterMesh0", "Thin") == 1.0 and _weight(c[3], "CharacterMesh0", "Wasted") == 1.0
                  and _weight(c[3], "CharacterMesh0", "Heavy") == 0.0 and _weight(c[3], "FaceMesh", "Thin") == 1.0, str(c)[:400])
+        # GASP (Oct 27): the joiner's copy of the host's survivor runs the hidden driver and the retargeted body, and reads the host's gait
+        # from the replicated speed (the moves' gait never reaches it): the host sprints.
+        console(host, "MO.Footstep.Walk 6 sprint")
+        time.sleep(2.5)
+        code, out = call(client, ["py", "-c", (
+            "ps = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if not a.is_locally_controlled()]; "
+            "p = max(ps, key=lambda a: a.get_velocity().length()) if ps else None; m = p.get_editor_property('mesh') if p else None; "
+            "d = [c for c in p.get_components_by_class(unreal.SkeletalMeshComponent) if c.get_name() == 'LocomotionDriver'] if p else []; "
+            "out('GASPNET speed=%.0f sprint=%s body=%s driver=%s' % (p.get_velocity().length() if p else -1.0, p.is_anim_gait_sprint() if p else None, "
+            "m.get_anim_instance().get_class().get_name() if m and m.get_anim_instance() else None, "
+            "d[0].get_anim_instance().get_class().get_name() if d and d[0].get_anim_instance() else None))")], timeout=30)
+        g = re.search(r"GASPNET speed=([\d.-]+) sprint=(\w+) body=(\S+) driver=(\S+)", out)
+        rep.step("joiner: the host sprinting reads as GASP's Sprint on its copy, driven by the hidden mannequin, the body retargeted",
+                 bool(g) and float(g.group(1)) > 600 and g.group(2) == "True" and g.group(3) == "MOBodyRetargetAnimInstance"
+                 and g.group(4) == "SandboxCharacter_CMC_ABP_C", g.group(0) if g else out.strip()[-200:])
+        time.sleep(4)
         out = console(host, "MO.Test.Base Femme")
         time.sleep(3)
         c = _bodyshape(client, False, "Femme")
@@ -5342,7 +5365,8 @@ def bases_test(uproject, editor_exe, keep=False, boot_timeout=300):
 
 
 def packaged_bases_test(package=False, seed=777, boot_timeout=480):
-    """The PACKAGED Development game, ONE copy: a new game, then (after ready) the survivor takes the Lillian base, gains fat to 40 % and the
+    """The PACKAGED Development game, ONE copy: a new game, then (after ready) the survivor takes a new base (the first after the femme in the
+    config, Tools/survivor_bases.py), gains fat to 40 % and the
     body is read back (MO.Test.BodyShape) with a screenshot. Why: a base is named only by config paths, which the cooker does not follow --
     its folder must be in DirectoriesToAlwaysCook (TRAPS §7); the editor cannot tell, a missing base silently keeps the Blueprint's meshes.
     Refuses to run if any MO57.exe is already running (it only ever stops the process tree it started)."""
@@ -5360,7 +5384,7 @@ def packaged_bases_test(package=False, seed=777, boot_timeout=480):
         log_path = os.path.join(PKG_LOGS, "MO57.log")
         if os.path.exists(log_path):
             os.remove(log_path)
-        cmds = ",".join([f"MO.NewGame {seed}", "MO.Test.AfterReady MO.Test.Base Lillian", "MO.Test.AfterReady MO.Test.BodyComposition 40",
+        cmds = ",".join([f"MO.NewGame {seed}", f"MO.Test.AfterReady MO.Test.Base {bid}", "MO.Test.AfterReady MO.Test.BodyComposition 40",
                          "MO.Test.AfterReady MO.Test.BodyShape", "MO.Test.AfterReady shot showui"])
         print(f"[nettest] packaged-bases: launching one packaged copy ({cmds}) ...", flush=True)
         pid = _pkg_launch(f'-NoSteam -NoQualityBenchmark -windowed -ResX=1600 -ResY=900 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
@@ -5372,18 +5396,18 @@ def packaged_bases_test(package=False, seed=777, boot_timeout=480):
         log = _pkg_read("MO57.log")
         lines = [m for m in BODYSHAPE_RE.finditer(log) if m.group(2)]
         line = lines[-1] if lines else found
-        rep.step("the cooked game puts Lillian on (her meshes were cooked: the base's folder is always cooked)",
-                 bool(line) and line.group(3) == "Lillian" and "SKM_MH_Lillian_Base_BodyMesh" in line.group(6) and "SKM_MH_Lillian_Base_FaceMesh" in line.group(6),
+        rep.step(f"the cooked game puts {bid} on (its meshes were cooked: the base's folder is always cooked)",
+                 bool(line) and line.group(3) == bid and B["body"] in line.group(6) and B["face"] in line.group(6),
                  line.group(0)[:300] if line else log[-300:].replace(chr(10), " | "))
         rep.step("... and 40 % body fat draws the heavy shape on the body and the face",
                  bool(line) and _weight(line.group(6), "CharacterMesh0", "Heavy") == 1.0 and _weight(line.group(6), "FaceMesh", "Heavy") == 1.0,
                  line.group(0)[:300] if line else "no BODYSHAPE line")
-        missing = re.search(r"base 'Lillian' has no (body|face) mesh.*", log)
+        missing = re.search(r"base '\w+' has no (body|face) mesh.*", log)
         rep.step("no base mesh missing from the package", missing is None, missing.group(0) if missing else "")
-        hair = re.search(r"\[MOAppearance\] \S+: Hair -> Hair_S_Updo.*", log)
+        hair = re.search(r"\[MOAppearance\] \S+: Hair -> " + re.escape(B["hair"]) + ".*", log)
         nogroom = re.search(r"\[MOAppearance\] \S+: no groom at .*", log)
-        rep.step("her own updo was cooked and goes on (and no groom is missing)", bool(hair) and nogroom is None,
-                 (nogroom or hair).group(0)[:300] if (nogroom or hair) else "no 'Hair -> Hair_S_Updo' line")
+        rep.step(f"its own hair ({B['hair']}) was cooked and goes on (and no groom is missing)", bool(hair) and nogroom is None,
+                 (nogroom or hair).group(0)[:300] if (nogroom or hair) else f"no 'Hair -> {B['hair']}' line")
         fatal = PKG_FATAL_RE.search(log)
         rep.step("no crash, ensure or assertion in the log", fatal is None, "" if fatal is None else fatal.group(0))
         return rep.ok

@@ -49,13 +49,18 @@ Survivor bases and the body (Oct 27): `MO.Test.Base <Id>` (player 0 takes a base
 `MO.Test.BodyBuild <Bust|Hips|Waist|Thighs> <-1..1>`, and the query `MO.Test.BodyShape` (`[MOQUERY] BODYSHAPE`, one line per MetaHuman pawn:
 the base, the body it shows and every body-shape weight on the body and face; "(this machine's player)" marks the local player's own pawn).
 Checks: `python Tools/check_creator_bases.py` (one instance with the creator: real clicks on the Base arrow and a build slider, the body read
-back, the camera re-finding her face (after the swap and with the survivor turned round), the Hair style label, Begin, her hair kept on its strands in game through a round trip to the femme (the groom LOD bias read back;
+back, the camera re-finding the face (after the swap and with the survivor turned round), the Hair style label, Begin, its hair kept on its strands in game through a round trip to the femme (the groom LOD bias read back;
 6_in_game / 7_femme_round_trip show the hair at the third-person distance), the merged species spawning, a save and reload; screenshots in
 `Saved/Screenshots/creator_bases/`), `python Tools/ue.py nettest bases` (a joiner draws the host's base, body fat, muscle and build on the body
-and the face) and `python Tools/ue.py nettest packaged-bases [--package]` (the packaged Development game: Lillian's meshes and her own
-groom were cooked, the heavy shape draws).
+and the face; GASP on the joiner's copy of the host) and `python Tools/ue.py nettest packaged-bases [--package]` (the packaged Development
+game: a new base's meshes and its own groom were cooked, the heavy shape draws). The checks take their bases from the config
+(`Tools/survivor_bases.py`): the creator check walks to the first new base whose hair is not the femme's, the nettests use the first new one,
+the legs check every one.
+A new base (MO_Tools CLAUDE.md "A base"): bake and `Tools/body_shape/transfer_face.py` in the lab, `base_deps.py`, then here
+`python Tools/copy_metahuman_base.py <MH_X_Base>` (backs up what it replaces), `Content/Python/ensure_foot_ik_virtual_bones.py`,
+`make_groom_bindings.py` with `GROOMBIND_FACE` on its face, and its `+Bases` + `DirectoriesToAlwaysCook` lines.
 `MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there).
-Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then Lillian -- standing, walking and crouched, the feet's spacing and
+Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then every other base -- standing, walking and crouched, the feet's spacing and
 height and the pelvis over the capsule's floor, the foot IK's virtual bones; shots from behind and the side in `Saved/Screenshots/legs/`).
 GASP locomotion (Oct 27, `Docs/Animation_GASP.md`): `python Tools/import_gasp.py [--from <GameAnimationSample>]` imports the sample's content
 (gitignored, never overwrites), then `python Tools/ue.py py --file Content/Python/setup_gasp_survivor.py` (editor open) points the survivor

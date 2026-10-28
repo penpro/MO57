@@ -105,6 +105,20 @@ bool FMOAppearance_SurvivorBases::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a base names itself on the look"), Look.BaseId, Bases.Last().Id);
 		TestEqual(TEXT("and puts its own hair on"), Look.HairAssetPath, Bases.Last().Hair);
 	}
+	// Facial hair: a base names its own, and one without takes the last base's off (a bearded base, then a woman: clean-shaven).
+	{
+		FMOSurvivorBase Bearded;
+		Bearded.Id = TEXT("Bearded");
+		Bearded.Beard = TEXT("/Game/Some/Beard.Beard");
+		FMOSurvivorBase Shaven;
+		Shaven.Id = TEXT("Shaven");
+		FMOCharacterAppearance Look;
+		Bearded.ApplyToLook(Look);
+		TestEqual(TEXT("a bearded base puts its beard on"), Look.BeardAssetPath, Bearded.Beard);
+		TestEqual(TEXT("and no mustache it does not have"), Look.MustacheAssetPath, FMOCharacterAppearance::NoGroom);
+		Shaven.ApplyToLook(Look);
+		TestEqual(TEXT("a base without a beard takes it off"), Look.BeardAssetPath, FMOCharacterAppearance::NoGroom);
+	}
 
 	// The survivor Blueprint keeps its hair on the strands at every distance (LOD bias -7 on each group); a base's own groom draws nothing on
 	// its cards LODs, so a swap carries that onto every group of the new groom, whatever its group count (bald in third person otherwise, Oct 27).
@@ -131,7 +145,8 @@ bool FMOAppearance_SurvivorBases::RunTest(const FString& Parameters)
 				Component->GroomGroupsDesc.ContainsByPredicate([&](const FHairGroupDesc& D) { return D.LODBias != HairTemplate->GroomGroupsDesc[0].LODBias; }));
 		}
 		const int32 Taken = UMOAppearanceSubsystem::ApplyOwnGroomMaterials(Component, Own);
-		TestTrue(FString::Printf(TEXT("%s: its own hair takes its own material instances (%d)"), *Base.Id.ToString(), Taken), Taken >= 2);
+		// One per slot it has its own instance for: strands, and cards / helmet where the groom has them (Zuri's coil buzz cut is strands only).
+		TestTrue(FString::Printf(TEXT("%s: its own hair takes its own material instances (%d)"), *Base.Id.ToString(), Taken), Taken >= 1);
 		const int32 Cards = Own->GetHairGroupsMaterials().IndexOfByPredicate([](const FHairGroupsMaterial& M) { return M.SlotName == TEXT("MI_Hair_Cards"); });
 		if (Cards != INDEX_NONE)
 		{

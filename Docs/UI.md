@@ -208,10 +208,12 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   Appearance row (the one body there is), and "Masc body type -- Coming soon" joins the Coming soon rows. The rows were rebuilt the
   spec's documented way (remove the rows below, `ui build`).
 - **Oct 27: the Base picker and the build sliders** (Wes: "i made a few bases with the new metahumans stuff, see if you can get them all
-  customizable and out into the game"). "Body type" became **Base** ("<  Lillian  >": `UMOSurvivorBaseSettings` in `Config/DefaultGame.ini`,
-  `MOSurvivorBase.h`: Femme (original) -- the survivor Blueprint's MH_F_1 -- then Lillian), with **Bust / Hips and butt / Waist / Thighs** sliders
+  customizable and out into the game"). "Body type" became **Base** ("<  Jalena  >": `UMOSurvivorBaseSettings` in `Config/DefaultGame.ini`,
+  `MOSurvivorBase.h`: Femme (original) -- the survivor Blueprint's MH_F_1 -- then Jalena, Zuri, Harvey and Trey since Oct 27 night, Wes:
+  "drop lillian for now and add the four variants i made, 2 male 2 female"; Lillian's line is commented out in the config), with **Bust / Hips and butt / Waist / Thighs** sliders
   under it (-1..1, 0 = the base as made; the body shapes, `Plugins/MOBodyShape`). A base puts on its body and face, its own grooms (hair,
-  eyebrows, eyelashes; the Hair style row names a base's own hair by its library namesake -- Lillian's own updo reads "Updo (short)" -- and
+  eyebrows, eyelashes, and a man's beard and mustache -- a base without them takes the last one's off; the Hair style row names a base's own
+  hair by its library namesake -- Zuri's reads "Coil buzz cut (short)" -- and
   the arrows step from there; every library style has a binding to every base's face; a swap keeps the Blueprint's strands at every distance,
   `UMOAppearanceSubsystem::KeepGroupSettings`, TRAPS §12) and its body: the
   survivor starts with the body fat and muscle the base was made with (`AMOMetaHumanCharacter::ApplyBaseStartingBody`). Everything rides the

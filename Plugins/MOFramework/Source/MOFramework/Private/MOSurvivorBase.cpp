@@ -7,6 +7,8 @@ void FMOSurvivorBase::ApplyToLook(FMOCharacterAppearance& Look) const
 	Look.HairAssetPath = Hair;
 	Look.EyebrowsAssetPath = Eyebrows;
 	Look.EyelashesAssetPath = Eyelashes;
+	Look.BeardAssetPath = Beard.IsEmpty() ? FMOCharacterAppearance::NoGroom : Beard;
+	Look.MustacheAssetPath = Mustache.IsEmpty() ? FMOCharacterAppearance::NoGroom : Mustache;
 }
 
 const TArray<FMOSurvivorBase>& UMOSurvivorBaseSettings::GetBases()

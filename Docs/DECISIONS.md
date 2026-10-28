@@ -84,6 +84,12 @@
 - **Animation work waits for the Game Animation Sample** (Wes: "quit fucking with the animations until we look at the animations demo
   project and start getting all that linked up"): the crouch's remaining jank (after the Oct 27 pelvis repair) is not chased further;
   the sample's set comes first (F50).
+- **The bases: Lillian out, Jalena, Zuri, Harvey and Trey in** (Wes: "for the characters, drop lillian for now and add the four variants
+  i made, 2 male 2 female"). Built from his Oct 27 Creator builds in MO_Tools, each through the base pipeline (bake, face transfer, copy,
+  virtual bones, 70 library hair bindings, config). Claude's calls, noted: the picker order is Femme, Jalena, Zuri, Harvey, Trey; Lillian's
+  config line is commented out and her folder stays on disk, uncooked; a base can now name a beard and a mustache (`FMOSurvivorBase::Beard` /
+  `Mustache`; none = clean-shaven, so a man's beard comes off on a woman); peach fuzz is left off (no slot); the capsule stays one size for
+  now although the men stand up to 20 cm over it (BACKLOG N-226).
 - **GASP phase 1: the survivor walks with the Game Animation Sample** (Wes: "Yes, start phase 1: plugins, migrate the CMC character and
   its animation set (keep our MetaHumans/Common), and drive our survivor with it"; "i like everything in the animation level"). Built
   (`Docs/Animation_GASP.md`): GASP's UEFN mannequin runs its CMC motion-matching blueprint unchanged as a hidden driver on the body; the

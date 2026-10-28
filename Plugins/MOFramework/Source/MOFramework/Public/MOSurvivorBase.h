@@ -46,6 +46,13 @@ struct MOFRAMEWORK_API FMOSurvivorBase
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
 	FString Eyelashes;
 
+	/** Facial hair (the men Wes made, Oct 27: Harvey, Trey). Empty = clean-shaven: taking a base without one takes the last base's beard off. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
+	FString Beard;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
+	FString Mustache;
+
 	/** The body fat (%) and muscle (kg) the base was made with (MO_Tools bake.py prints them: "NEUTRAL"). */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
 	float BodyFatPercent = 18.0f;

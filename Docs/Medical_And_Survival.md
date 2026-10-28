@@ -110,7 +110,7 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
 - **The body shows its composition** (Oct 27; Wes, Oct 26: "a single character go from skinny to fat and vice versa, starvation etc"). A
   survivor on a base (a Creator MetaHuman: `MOSurvivorBase.h`) carries body shapes (`Plugins/MOBodyShape`, baked in MO_Tools): heavier as body
   fat rises to 40 %, thinner as it falls to 8 %, more muscular toward 40 kg of muscle, wasted toward 20 kg -- from the base's own body, where
-  the shapes are off (Lillian: 12.4 % / 28.5 kg). The weights are continuous, so the body changes as slowly as the metabolism does.
+  the shapes are off (Jalena 14.1 % / 27.0 kg, Zuri 15.8 / 27.5, Harvey 15.8 / 33.5, Trey 10.2 / 30.0). The weights are continuous, so the body changes as slowly as the metabolism does.
   - The metabolism's `BodyComposition` replicates to its owner only, so the server copies body fat and muscle into the pawn
     (`AMOMetaHumanCharacter::ShownBodyFatPercent` / `ShownMuscleMassKg`, replicated to all, re-checked every 2 s, sent on a 0.1 change).
   - A base gives a new survivor its own body (`ApplyBaseStartingBody`, the character creator): `FMOBodyComposition::SetBody` sets the fat %,

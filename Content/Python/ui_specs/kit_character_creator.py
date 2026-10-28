@@ -71,7 +71,7 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
     picker_row("HairStyle", "Hair style", "Updo braids (short)"),
     picker_row("Beard", "Beard", "None"),
     picker_row("Mustache", "Mustache", "None"),
-    K.row("Soon", "Coming soon", K.text("SoonText", "body", "Face, masc body type", "color.text.secondary", slot=VC), label_w=LABEL_W, h=36),
+    K.row("Soon", "Coming soon", K.text("SoonText", "body", "Face", "color.text.secondary", slot=VC), label_w=LABEL_W, h=36),
     {"type": "HorizontalBox", "name": "ButtonRow", "slot": {"padding": [0, 24, 0, 0]}, "children": [
         K.button("RandomizeButton", "Randomize", "Tertiary"),
         {"type": "Spacer", "name": "RowSpacer", "slot": FILL_SIZE},
