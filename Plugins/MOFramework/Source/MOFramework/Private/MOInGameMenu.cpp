@@ -238,6 +238,10 @@ void UMOInGameMenu::HideCurrentWorldInLoadPanel()
 void UMOInGameMenu::ShowOptionsPanel()
 {
 	SwitchToPanel(PanelIndex_Options);
+	if (OptionsPanel)
+	{
+		OptionsPanel->RefreshUIFromSettings();   // the live settings, not the ones from when the menu was built
+	}
 }
 
 void UMOInGameMenu::ShowSavePanel()

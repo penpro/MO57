@@ -37,6 +37,65 @@ void UMOGameSettings::ApplySettings(bool bCheckForCommandLineOverrides)
 	ApplyMOSettings();
 }
 
+EWindowMode::Type UMOGameSettings::WindowModeForFullscreenBox(bool bChecked, EWindowMode::Type Current)
+{
+	if (!bChecked)
+	{
+		return EWindowMode::Windowed;
+	}
+	return Current == EWindowMode::Fullscreen ? EWindowMode::Fullscreen : EWindowMode::WindowedFullscreen;
+}
+
+FIntPoint UMOGameSettings::ResolutionForMode(EWindowMode::Type Mode, FIntPoint Wanted, FIntPoint Desktop)
+{
+	if (Desktop.X <= 0 || Desktop.Y <= 0)
+	{
+		return Wanted;
+	}
+	switch (Mode)
+	{
+	case EWindowMode::WindowedFullscreen:
+		return Desktop;
+	case EWindowMode::Windowed:
+	{
+		if (Wanted.X <= 0 || Wanted.Y <= 0)
+		{
+			return FIntPoint(Desktop.X * 3 / 4, Desktop.Y * 3 / 4);
+		}
+		const double Room = 0.9;   // the title bar, its buttons and the taskbar stay on screen
+		const double Scale = FMath::Min(1.0, FMath::Min(Room * Desktop.X / Wanted.X, Room * Desktop.Y / Wanted.Y));
+		return Scale < 1.0 ? FIntPoint(FMath::FloorToInt(Wanted.X * Scale / 2.0) * 2, FMath::FloorToInt(Wanted.Y * Scale / 2.0) * 2) : Wanted;
+	}
+	default:   // exclusive fullscreen: a display mode of its own, never one larger than the screen
+		return (Wanted.X <= 0 || Wanted.Y <= 0 || Wanted.X > Desktop.X || Wanted.Y > Desktop.Y) ? Desktop : Wanted;
+	}
+}
+
+bool UMOGameSettings::DisplayChanged(EWindowMode::Type ShownMode, FIntPoint ShownResolution, EWindowMode::Type NewMode, FIntPoint NewResolution)
+{
+	return ShownMode != NewMode || (NewMode != EWindowMode::WindowedFullscreen && ShownResolution != NewResolution);
+}
+
+FIntPoint UMOGameSettings::GetLiveResolution() const
+{
+	return ResolutionForMode(GetFullscreenMode(), GetScreenResolution(), GetDesktopResolution());
+}
+
+void UMOGameSettings::ValidateSettings()
+{
+	Super::ValidateSettings();
+	const FIntPoint Stored = GetScreenResolution();
+	const FIntPoint Fit = GetLiveResolution();
+	if (Fit != Stored)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameSettings] The stored resolution %dx%d does not fit window mode %d on this %dx%d desktop: %dx%d"),
+			Stored.X, Stored.Y, (int32)GetFullscreenMode(), GetDesktopResolution().X, GetDesktopResolution().Y, Fit.X, Fit.Y);
+		SetScreenResolution(Fit);
+		LastUserConfirmedResolutionSizeX = Fit.X;
+		LastUserConfirmedResolutionSizeY = Fit.Y;
+	}
+}
+
 void UMOGameSettings::SetToDefaults()
 {
 	Super::SetToDefaults();

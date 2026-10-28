@@ -94,4 +94,33 @@ bool FMOGraphics_ScalabilityFile::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOGraphics_ApplyKeepsTheDisplay,
+	"MOFramework.Graphics.ApplyKeepsTheDisplay",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOGraphics_ApplyKeepsTheDisplay::RunTest(const FString& Parameters)
+{
+	// A Steam player, Oct 28 2026: music turned down, Apply -> a 1080p screen in 2560 x 1440, the Apply button off screen. The stored size was
+	// 2560 x 1440 under borderless fullscreen (which never uses it) and the Fullscreen box applied it as EXCLUSIVE fullscreen.
+	const FIntPoint Desktop(1920, 1080), Stale(2560, 1440);
+	TestEqual(TEXT("borderless draws at the desktop's size, whatever is stored"),
+		UMOGameSettings::ResolutionForMode(EWindowMode::WindowedFullscreen, Stale, Desktop), Desktop);
+	TestTrue(TEXT("the ticked Fullscreen box keeps borderless (never turns it exclusive)"),
+		UMOGameSettings::WindowModeForFullscreenBox(true, EWindowMode::WindowedFullscreen) == EWindowMode::WindowedFullscreen);
+	TestFalse(TEXT("so an Apply that changed only the music leaves the display alone"),
+		UMOGameSettings::DisplayChanged(EWindowMode::WindowedFullscreen, Desktop, EWindowMode::WindowedFullscreen,
+			UMOGameSettings::ResolutionForMode(EWindowMode::WindowedFullscreen, Stale, Desktop)));
+	TestTrue(TEXT("a player already in exclusive fullscreen keeps it"),
+		UMOGameSettings::WindowModeForFullscreenBox(true, EWindowMode::Fullscreen) == EWindowMode::Fullscreen);
+	TestEqual(TEXT("exclusive fullscreen never larger than the screen"), UMOGameSettings::ResolutionForMode(EWindowMode::Fullscreen, Stale, Desktop), Desktop);
+	TestEqual(TEXT("a window too big for the screen shrinks to fit, keeping its shape (Apply stays on screen)"),
+		UMOGameSettings::ResolutionForMode(EWindowMode::Windowed, Stale, Desktop), FIntPoint(1728, 972));
+	TestEqual(TEXT("a window that fits keeps its size"), UMOGameSettings::ResolutionForMode(EWindowMode::Windowed, FIntPoint(1280, 720), Desktop), FIntPoint(1280, 720));
+	TestTrue(TEXT("unticking Fullscreen is a display change"),
+		UMOGameSettings::DisplayChanged(EWindowMode::WindowedFullscreen, Desktop, UMOGameSettings::WindowModeForFullscreenBox(false, EWindowMode::WindowedFullscreen), FIntPoint(1280, 720)));
+	TestTrue(TEXT("a new window size is a display change"),
+		UMOGameSettings::DisplayChanged(EWindowMode::Windowed, FIntPoint(1280, 720), EWindowMode::Windowed, FIntPoint(1600, 900)));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

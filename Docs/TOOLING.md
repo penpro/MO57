@@ -59,7 +59,10 @@ the legs check every one.
 A new base (MO_Tools CLAUDE.md "A base"): bake and `Tools/body_shape/transfer_face.py` in the lab, `base_deps.py`, then here
 `python Tools/copy_metahuman_base.py <MH_X_Base>` (backs up what it replaces), `Content/Python/ensure_foot_ik_virtual_bones.py`,
 `make_groom_bindings.py` with `GROOMBIND_FACE` on its face, and its `+Bases` + `DirectoriesToAlwaysCook` lines.
-`MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there).
+`MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there) -- only on a widget laid
+out on screen: one scrolled out of view reads "pointer click at (0, 0)" and changes nothing (the Options panel's audio rows).
+Options and the display (Oct 28): `python Tools/check_options_display.py` (borderless with a stale stored size, Options -> Apply: the display
+unchanged and the saved settings the live display; a saved music volume on the music class after a restart and a garbage collection).
 Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then every other base -- standing, walking and crouched, the feet's spacing and
 height and the pelvis over the capsule's floor, the foot IK's virtual bones; shots from behind and the side in `Saved/Screenshots/legs/`).
 GASP locomotion (Oct 27, `Docs/Animation_GASP.md`): `python Tools/import_gasp.py [--from <GameAnimationSample>]` imports the sample's content

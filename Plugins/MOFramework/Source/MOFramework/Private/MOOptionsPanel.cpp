@@ -73,6 +73,10 @@ void UMOOptionsPanel::NativeDestruct()
 	{
 		ResolutionComboBox->OnSelectionChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
 	}
+	if (FullscreenCheckbox)
+	{
+		FullscreenCheckbox->OnCheckStateChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleFullscreenChanged);
+	}
 	if (ResetAllBindingsButton)
 	{
 		ResetAllBindingsButton->OnClicked().RemoveAll(this);
@@ -141,6 +145,11 @@ void UMOOptionsPanel::NativeConstruct()
 		ResolutionComboBox->OnSelectionChanged.AddDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
 		PopulateResolutionOptions();
 	}
+	if (FullscreenCheckbox)
+	{
+		FullscreenCheckbox->OnCheckStateChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleFullscreenChanged);
+		FullscreenCheckbox->OnCheckStateChanged.AddDynamic(this, &UMOOptionsPanel::HandleFullscreenChanged);
+	}
 	PopulateQualityOptions();
 
 	// Key bindings
@@ -183,12 +192,19 @@ void UMOOptionsPanel::RefreshUIFromSettings()
 		ShowFrameTimeCheckbox->SetIsChecked(Settings->bShowFrameTime);
 	}
 
-	// Graphics options - Resolution and Fullscreen
+	// Graphics options - Resolution and Fullscreen: what the screen is drawing at NOW (borderless: the desktop's size, whatever the stored value
+	// says; Oct 28: a stored 2560 x 1440 on a 1080p screen). Apply compares against these.
+	ShownWindowMode = Settings->GetFullscreenMode();
+	ShownResolution = Settings->GetLiveResolution();
 	if (ResolutionComboBox)
 	{
-		// The exact current resolution (PopulateResolutionOptions makes sure it is in the list): matching to a "closest standard" size would change an ultrawide or 16:10 display on the next Apply.
-		const FIntPoint CurrentRes = Settings->GetScreenResolution();
-		ResolutionComboBox->SetSelectedOption(FString::Printf(TEXT("%d x %d"), CurrentRes.X, CurrentRes.Y));
+		const FString Shown = FString::Printf(TEXT("%d x %d"), ShownResolution.X, ShownResolution.Y);
+		if (ResolutionComboBox->FindOptionIndex(Shown) == INDEX_NONE)
+		{
+			ResolutionComboBox->AddOption(Shown);
+		}
+		ResolutionComboBox->SetSelectedOption(Shown);
+		ResolutionComboBox->SetIsEnabled(ShownWindowMode != EWindowMode::WindowedFullscreen);   // borderless draws at the desktop's size
 	}
 
 	if (QualityComboBox)
@@ -335,21 +351,13 @@ void UMOOptionsPanel::ReadUIToSettings()
 		Settings->bShowFrameTime = ShowFrameTimeCheckbox->IsChecked();
 	}
 
-	// Graphics options - Resolution and Fullscreen
-	if (ResolutionComboBox)
-	{
-		const FString SelectedRes = ResolutionComboBox->GetSelectedOption();
-		const FIntPoint Resolution = GetResolutionFromString(SelectedRes);
-		Settings->SetScreenResolution(Resolution);
-	}
-
-	if (FullscreenCheckbox)
-	{
-		const EWindowMode::Type WindowMode = FullscreenCheckbox->IsChecked()
-			? EWindowMode::Fullscreen
-			: EWindowMode::Windowed;
-		Settings->SetFullscreenMode(WindowMode);
-	}
+	// Graphics options - window mode, then the size that mode can show (UMOGameSettings::ResolutionForMode): "Fullscreen" is borderless at the
+	// desktop's size, a window always fits on the screen.
+	const EWindowMode::Type WindowMode = FullscreenCheckbox
+		? UMOGameSettings::WindowModeForFullscreenBox(FullscreenCheckbox->IsChecked(), ShownWindowMode) : ShownWindowMode;
+	Settings->SetFullscreenMode(WindowMode);
+	const FIntPoint PickedResolution = ResolutionComboBox ? GetResolutionFromString(ResolutionComboBox->GetSelectedOption()) : ShownResolution;
+	Settings->SetScreenResolution(UMOGameSettings::ResolutionForMode(WindowMode, PickedResolution, Settings->GetDesktopResolution()));
 
 	if (QualityComboBox)
 	{
@@ -428,16 +436,21 @@ void UMOOptionsPanel::ApplySettings()
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
 	if (Settings)
 	{
-		// Apply resolution settings separately (this handles fullscreen/windowed and resolution)
-		Settings->ApplyResolutionSettings(false);
+		// The display only when the player changed it (a volume change must never touch the screen: the Oct 28 Steam report).
+		const bool bDisplayChanged = UMOGameSettings::DisplayChanged(ShownWindowMode, ShownResolution, Settings->GetFullscreenMode(), Settings->GetScreenResolution());
+		if (bDisplayChanged)
+		{
+			Settings->ApplyResolutionSettings(false);
+			ShownWindowMode = Settings->GetFullscreenMode();
+			ShownResolution = Settings->GetLiveResolution();
+		}
 
 		// Apply our custom MO settings
 		Settings->ApplySettings(false);
 		Settings->SaveSettings();
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Settings applied and saved - Resolution: %dx%d, Fullscreen: %s"),
-			Settings->GetScreenResolution().X, Settings->GetScreenResolution().Y,
-			Settings->GetFullscreenMode() == EWindowMode::Fullscreen ? TEXT("Yes") : TEXT("No"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Settings applied and saved - display %s: %dx%d, window mode %d"),
+			bDisplayChanged ? TEXT("changed") : TEXT("unchanged"), ShownResolution.X, ShownResolution.Y, (int32)ShownWindowMode);
 	}
 
 	// Refresh FPS counter visibility on UI manager
@@ -569,7 +582,7 @@ void UMOOptionsPanel::PopulateResolutionOptions()
 	Resolutions.RemoveAll([](const FIntPoint& R) { return R.X < 1024 || R.Y < 576; });
 	if (const UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
 	{
-		Resolutions.AddUnique(Settings->GetScreenResolution());
+		Resolutions.AddUnique(Settings->GetLiveResolution());   // what the screen shows is always on the list
 	}
 	if (Resolutions.Num() == 0)
 	{
@@ -622,6 +635,15 @@ FIntPoint UMOOptionsPanel::ParseResolution(const FString& ResString)
 		return FIntPoint(Numbers[Numbers.Num() - 2], Numbers.Last());
 	}
 	return FIntPoint(1920, 1080);
+}
+
+void UMOOptionsPanel::HandleFullscreenChanged(bool bIsChecked)
+{
+	// Borderless draws at the desktop's size: the list only sizes a window.
+	if (ResolutionComboBox)
+	{
+		ResolutionComboBox->SetIsEnabled(!bIsChecked);
+	}
 }
 
 void UMOOptionsPanel::HandleResolutionChanged(FString SelectedItem, ESelectInfo::Type SelectionType)

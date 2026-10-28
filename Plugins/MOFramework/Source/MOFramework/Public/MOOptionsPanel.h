@@ -65,6 +65,7 @@
 #include "CoreMinimal.h"
 #include "MOActivatableWidget.h"
 #include "MOKeyBindingTypes.h"
+#include "GenericPlatform/GenericWindowDefinition.h"
 #include "MOOptionsPanel.generated.h"
 
 class UCommonButtonBase;
@@ -98,6 +99,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Options")
 	FMOOptionsPanelRequestCloseSignature OnRequestClose;
 
+	/** Read the live settings into the controls -- every time the panel is shown (the menus build it once, with themselves: shown later it held
+	 *  what the settings were then, and Apply saved that back; Oct 28). */
+	void RefreshUIFromSettings();
+
 	/** "1920 x 1080" (or any text whose last two integers are the size, e.g. the old "1080p (1920x1080)") -> the resolution; 1920 x 1080 when the text holds no plausible size. */
 	static FIntPoint ParseResolution(const FString& ResString);
 
@@ -109,9 +114,6 @@ protected:
 	/** Called when settings should be refreshed from current values. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|UI|Options")
 	void OnRefreshSettings();
-
-	/** Refresh all UI controls to match current settings values. */
-	void RefreshUIFromSettings();
 
 	/** Read values from UI controls and store in pending settings. */
 	void ReadUIToSettings();
@@ -131,6 +133,11 @@ private:
 
 	// Resolution/display handlers
 	UFUNCTION() void HandleResolutionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+	UFUNCTION() void HandleFullscreenChanged(bool bIsChecked);
+
+	/** The display as the panel last read it from the screen: Apply touches the display only when the choice differs (UMOGameSettings::DisplayChanged). */
+	EWindowMode::Type ShownWindowMode = EWindowMode::WindowedFullscreen;
+	FIntPoint ShownResolution = FIntPoint::ZeroValue;
 
 	void UpdateVolumeLabel(UTextBlock* Label, float Value);
 	void PopulateResolutionOptions();

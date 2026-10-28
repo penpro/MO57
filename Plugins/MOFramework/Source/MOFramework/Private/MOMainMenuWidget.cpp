@@ -237,6 +237,10 @@ void UMOMainMenuWidget::ShowNewGamePanel()
 void UMOMainMenuWidget::ShowOptionsPanel()
 {
 	SwitchToPanel(ResolvePanelIndex(OptionsPanel, PanelIndex_Options));
+	if (OptionsPanel)
+	{
+		OptionsPanel->RefreshUIFromSettings();   // the live settings, not the ones from when the menu was built
+	}
 }
 
 void UMOMainMenuWidget::ShowLoadPanel()

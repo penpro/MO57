@@ -282,6 +282,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	void ApplyMOSettings();
 
+	// ----- The display (a Steam player, Oct 28 2026: turning the music down and pressing Apply put a 1080p screen into 2560 x 1440, the Apply
+	// button off screen, no way back). Borderless fullscreen -- the default -- draws at the desktop's own size and never reads the stored
+	// resolution, so that value can be anything; the Options panel turned its "Fullscreen" box into EXCLUSIVE fullscreen at that stored size
+	// on every Apply. Now Apply touches the display only when the player changed it, borderless is what "Fullscreen" means, and a size is
+	// always one the screen can show. -----
+
+	/** The Fullscreen box's mode: borderless at the desktop's size when ticked (exclusive fullscreen stays only if it is already in use), a window
+	 *  when not. */
+	static EWindowMode::Type WindowModeForFullscreenBox(bool bChecked, EWindowMode::Type Current);
+
+	/** The size a mode draws at: borderless, the desktop's; a window, Wanted shrunk (keeping its shape) to fit within 90 % of the desktop (its
+	 *  title bar and buttons on screen); exclusive fullscreen, Wanted unless larger than the desktop. Wanted when the desktop is unknown. */
+	static FIntPoint ResolutionForMode(EWindowMode::Type Mode, FIntPoint Wanted, FIntPoint Desktop);
+
+	/** Apply must touch the display: the mode, or (outside borderless) the size, differs from what is showing. */
+	static bool DisplayChanged(EWindowMode::Type ShownMode, FIntPoint ShownResolution, EWindowMode::Type NewMode, FIntPoint NewResolution);
+
+	/** The size the screen draws at now: ResolutionForMode of the stored mode and size. */
+	FIntPoint GetLiveResolution() const;
+
+	/** On load, a stored size the mode cannot show is put right (borderless: the desktop's; too big a window: fitted). */
+	virtual void ValidateSettings() override;
+
 	/** Reset the intro playback flag so the intro plays again on next launch. */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	void ResetIntroPlayback();

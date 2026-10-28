@@ -197,6 +197,21 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
 - **The lists are built when a panel is SHOWN** (Oct 22), never in `NativeConstruct`: every listing reads each save's metadata (a whole
   world save the first time; `UMOPersistenceSubsystem` keeps it per slot while the file is unchanged), and the main menu constructs its
   hidden Load panel at boot (it read every save twice before the title screen). A new show path must call `RefreshSaveList`.
+### Options: Apply never changes the display unasked (Oct 28)
+- A Steam player (Draklamar): turned the music down, pressed Apply -> the 1080p screen went to 2560 x 1440 with the Apply button off screen and
+  no way back; the Options list showed 2560 x 1440 from the start. Cause: the engine's default is BORDERLESS fullscreen, which draws at the
+  desktop's size and never reads the stored resolution (so it can hold anything), and the Fullscreen box applied EXCLUSIVE fullscreen at that
+  stored size on every Apply. Fix (`UMOGameSettings::WindowModeForFullscreenBox / ResolutionForMode / DisplayChanged`, test
+  `MOFramework.Graphics.ApplyKeepsTheDisplay`): "Fullscreen" is borderless at the desktop's size (exclusive stays only if already in use);
+  the panel shows what the screen draws at now and Apply touches the display only when the mode or a window's size changed; a window never
+  exceeds 90 % of the desktop; exclusive never exceeds the desktop; `ValidateSettings` puts a bad stored size right on load. The resolution
+  list is greyed in borderless (it only sizes a window).
+- The panel is built once with its menu: it now reads the live settings every time it is shown (`ShowOptionsPanel` in the main and in-game
+  menus), or Apply saved back what the settings were when the menu was built.
+- The same player's music came back loud after a restart: fixed Oct 25 (629327e1, "slider classes held": a reloaded sound class reset to full
+  volume) but not in the Oct 16 Steam build. Check: `python Tools/check_options_display.py` (the player's state reproduced, Apply, the display
+  and the saved settings read back; music saved at 10 % then a restart: on the music class at boot and after a garbage collection).
+
 ### Main menu: New Game creates a world (Oct 22)
 - `WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards, the World and Pace knobs, Defaults / Back / Start. The rows
   and cards are made at run time from the knob table and DT_Biomes (`Docs/World_Creation.md`); spec `Content/Python/ui_specs/world_creation.py`.
