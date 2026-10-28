@@ -198,8 +198,67 @@ public:
 	/** Pure decision: the feet are more than MarginCm below the ground, i.e. inside the terrain, not in open water. */
 	static bool IsBuriedInTerrain(float FeetZ, float GroundZ, float MarginCm) { return FeetZ < GroundZ - MarginCm; }
 
+	// ---- the movement the animation set was made for (Wes, Oct 28 2026: "match the animation project settings"; Docs/Animation_GASP.md) ----
+	// GASP's character (SandboxCharacter_CMC: CalculateMaxAcceleration / CalculateGroundFriction / CalculateBrakingDeceleration,
+	// UpdateRotation_PreCMC) sets these every frame from its gait; here they follow from the gait each move carries and the velocity, so the
+	// server simulates a joiner exactly as the joiner predicts. The gait speeds are the character's (the survivor's: walk 200 / jog 500 / sprint
+	// 700, crouched 225: GASP's walk / run / sprint / crouch). Swimming, climbing and the glider keep their own (MaxAcceleration, RotationRate).
+
+	/** This pawn moves as the animation set expects (the survivor, AMOMetaHumanCharacter: it runs the GASP driver). Off, the engine's own
+	 *  acceleration, braking, friction and turn rate: the creatures (AMOCreature) share this component and have no GASP animation -- a wolf
+	 *  turning at once and reaching speed at 800 cm/s/s was the survivor's model leaking into them (Oct 28). Set on both machines by the class. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Movement|Locomotion")
+	bool bAnimationSetMovement = false;
+
+	/** Acceleration walking or jogging, on the ground and in the air (air control scales it): GASP's 800. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="1.0"))
+	float GaitAcceleration = 800.0f;
+
+	/** Sprinting, the acceleration falls from GaitAcceleration to this as the speed rises through SprintAccelerationSpeedRange (GASP: 300 over
+	 *  300-700 cm/s): a sprint builds up. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="1.0"))
+	float SprintTopAcceleration = 300.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion")
+	FVector2D SprintAccelerationSpeedRange = FVector2D(300.0, 700.0);
+
+	/** Ground friction walking or jogging (GASP 5); sprinting it falls to SprintTopGroundFriction by SprintFrictionTopSpeed (GASP 3 at 500 cm/s):
+	 *  wider turns at a sprint. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="0.0"))
+	float GaitGroundFriction = 5.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="0.0"))
+	float SprintTopGroundFriction = 3.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="1.0"))
+	float SprintFrictionTopSpeed = 500.0f;
+
+	/** Braking on the ground while the input is held -- slowing to a lower gait (GASP 500); with no input, BrakingDecelerationWalking (2000). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="0.0"))
+	float BrakingDecelerationWithInput = 500.0f;
+
+	/** Turn rate in the air (GASP 200 deg/s). On the ground the capsule turns at once and the animation's root offset turns the body (GASP). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Movement|Locomotion", meta=(ClampMin="0.0"))
+	float FallingYawRate = 200.0f;
+
+	/** Pure: GASP's acceleration for a gait at a ground speed. */
+	static float GaitAccelerationFor(bool bSprint, float Speed2D, float Gait, float SprintTop, const FVector2D& SprintSpeedRange)
+	{
+		return bSprint ? FMath::GetMappedRangeValueClamped(SprintSpeedRange, FVector2D(Gait, SprintTop), Speed2D) : Gait;
+	}
+
+	/** Pure: GASP's ground friction for a gait at a ground speed. */
+	static float GaitFrictionFor(bool bSprint, float Speed2D, float Gait, float SprintTop, float SprintTopSpeed)
+	{
+		return bSprint ? FMath::GetMappedRangeValueClamped(FVector2D(0.0, SprintTopSpeed), FVector2D(Gait, SprintTop), Speed2D) : Gait;
+	}
+
 	//~ Begin UCharacterMovementComponent interface
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
+	virtual float GetMaxAcceleration() const override;
+	virtual float GetMaxBrakingDeceleration() const override;
+	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
+	virtual FRotator GetDeltaRotation(float DeltaTime) const override;
 	virtual float ImmersionDepth() const override { return Immersion; }
 	/** The ENGINE reads this as "swimmable water here": SetPostLandedPhysics, OnTeleported and SetDefaultMovementMode switch to swimming whenever it is true. So it is
 	 *  the swim decision (deep enough, see SwimEnterDepthCm), never "any water over the feet" -- that made every landing in the shallows swim again, so a swimmer

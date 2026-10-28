@@ -298,6 +298,53 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 }
 
+float UMOCharacterMovementComponent::GetMaxAcceleration() const
+{
+	// GASP sets its acceleration on the ground and in the air alike (air control scales it there); the other modes keep MaxAcceleration, and so does
+	// the dev glider (its input is the move's acceleration over this: a value that moved with the speed gave the joiner 8 corrections a flight, Oct 28).
+	if (bAnimationSetMovement && (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking || (MovementMode == MOVE_Falling && !IsGliding())))
+	{
+		return GaitAccelerationFor(bWantsToSprint && !IsCrouching(), Velocity.Size2D(), GaitAcceleration, SprintTopAcceleration, SprintAccelerationSpeedRange);
+	}
+	return Super::GetMaxAcceleration();
+}
+
+float UMOCharacterMovementComponent::GetMaxBrakingDeceleration() const
+{
+	if (bAnimationSetMovement && (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking))
+	{
+		return Acceleration.IsNearlyZero() ? BrakingDecelerationWalking : BrakingDecelerationWithInput;
+	}
+	return Super::GetMaxBrakingDeceleration();
+}
+
+void UMOCharacterMovementComponent::CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration)
+{
+	// PhysWalking hands in GroundFriction: the gait's (GASP) instead. Water, air and the custom modes pass their own through.
+	if (bAnimationSetMovement && !bFluid && (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking))
+	{
+		Friction = GaitFrictionFor(bWantsToSprint && !IsCrouching(), Velocity.Size2D(), GaitGroundFriction, SprintTopGroundFriction, SprintFrictionTopSpeed);
+	}
+	Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
+}
+
+FRotator UMOCharacterMovementComponent::GetDeltaRotation(float DeltaTime) const
+{
+	if (!bAnimationSetMovement)
+	{
+		return Super::GetDeltaRotation(DeltaTime);
+	}
+	if (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking)
+	{
+		return FRotator(0.0f, 360.0f, 0.0f);   // at once (GASP's -1): the animation's root offset turns the body
+	}
+	if (MovementMode == MOVE_Falling && !IsGliding())   // the glider keeps its own turn rate (RotationRate)
+	{
+		return FRotator(0.0f, FMath::Min(FallingYawRate * DeltaTime, 360.0f), 0.0f);
+	}
+	return Super::GetDeltaRotation(DeltaTime);
+}
+
 float UMOCharacterMovementComponent::GetMaxSpeed() const
 {
 	float Base = Super::GetMaxSpeed();

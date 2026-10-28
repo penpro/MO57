@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOAppearanceSubsystem.h"
 #include "MOBodyShapeComponent.h"
+#include "MOCharacterMovementComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOSurvivorBase.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -24,6 +25,24 @@ AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectIni
 	// MetaHuman uses different socket naming convention
 	LeftHandSocketName = TEXT("hand_l");
 	RightHandSocketName = TEXT("hand_r");
+
+	// The movement the animation set was made for (GASP's SandboxCharacter_CMC; Wes, Oct 28: "match the animation project settings";
+	// Docs/Animation_GASP.md section 3): its motion matching picks frames by these speeds. The gait's acceleration, braking, friction and turn
+	// rate follow in UMOCharacterMovementComponent (bAnimationSetMovement); the creatures keep AMOCharacter's.
+	WalkSpeed = 200.0f;
+	JogSpeed = 500.0f;
+	SprintSpeed = 700.0f;
+	CrouchedWalkSpeed = 225.0f;
+	if (UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
+	{
+		Move->bAnimationSetMovement = true;
+		Move->JumpZVelocity = 500.0f;
+		Move->AirControl = 0.25f;
+		Move->MaxWalkSpeed = WalkSpeed;
+		Move->MaxWalkSpeedCrouched = CrouchedWalkSpeed;
+		Move->BrakingDecelerationFalling = 0.0f;   // no braking in the air
+		Move->GroundFriction = 5.0f;
+	}
 }
 
 void AMOMetaHumanCharacter::BeginPlay()
@@ -114,6 +133,12 @@ void AMOMetaHumanCharacter::SetAppearanceLook(const FMOCharacterAppearance& Look
 	ApplyGrooms(CurrentAppearance);
 	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
 	ApplyBodyShape();
+}
+
+EMOBodySex AMOMetaHumanCharacter::GetBodySex() const
+{
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(CurrentAppearance.BaseId);
+	return Base && Base->Sex != EMOBodySex::Unspecified ? Base->Sex : Super::GetBodySex();
 }
 
 bool AMOMetaHumanCharacter::ApplyBaseMeshes()

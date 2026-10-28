@@ -1,4 +1,5 @@
 #include "MOFireActions.h"
+#include "MOBodySex.h"
 #include "HAL/IConsoleManager.h"
 #include "MOCarriedLightComponent.h"
 #include "MOLightSourceSettings.h"
@@ -227,10 +228,11 @@ void FMOFireActions::GetBearerActions(const APawn* Pawn, const APawn* Bearer, TA
 	}
 	FMOItemActionOption& Option = Out.AddDefaulted_GetRef();
 	Option.Id = LightFromBearer;
-	Option.Label = FText::Format(LOCTEXT("LightFromBearer", "Light your {0} from their {1}"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId),
-		UMOItemDatabaseSettings::GetItemDisplayName(Theirs->GetLitItemId()));
+	const FText TheirWord = FMOPronouns::Possessive(FMOPronouns::SexOf(Bearer));   // her / his (their when unknown)
+	Option.Label = FText::Format(LOCTEXT("LightFromBearer", "Light your {0} from {1} {2}"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId),
+		TheirWord, UMOItemDatabaseSettings::GetItemDisplayName(Theirs->GetLitItemId()));
 	Option.bEnabled = FVector::DistSquared(Pawn->GetActorLocation(), Bearer->GetActorLocation()) <= FMath::Square(LightFromBearerReachCm);
-	Option.DisabledReason = LOCTEXT("BearerTooFar", "Get closer to their flame.");
+	Option.DisabledReason = FText::Format(LOCTEXT("BearerTooFar", "Get closer to {0} flame."), TheirWord);
 }
 
 bool FMOFireActions::PerformBearerAction(APawn* Pawn, APawn* Bearer, FName ActionId)
@@ -255,7 +257,8 @@ bool FMOFireActions::PerformBearerAction(APawn* Pawn, APawn* Bearer, FName Actio
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
 	TWeakObjectPtr<APawn> WeakBearer(Bearer);
 	TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Carried);
-	return Timed->Begin(LightFromBearer, FText::Format(LOCTEXT("LightingFromBearer", "Holding the {0} to their flame"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId)),
+	return Timed->Begin(LightFromBearer, FText::Format(LOCTEXT("LightingFromBearer", "Holding the {0} to {1} flame"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId),
+		FMOPronouns::Possessive(FMOPronouns::SexOf(Bearer))),
 		Profile->LightSeconds,
 		[WeakPawn, WeakBearer, WeakCarried]()
 		{

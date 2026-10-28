@@ -7,6 +7,7 @@ namespace
 		TEXT("Melee aim assist angle (deg) for every player's swing: -1 = each pawn's own MeleeAimAssistDegrees, 0 = off (the bare camera aim)."), ECVF_Default);
 }
 #include "MOFramework.h"
+#include "MOCharacter.h"
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
@@ -1204,6 +1205,10 @@ void UMOCombatComponent::BeginFacingSwing(const FVector& Direction, float Second
 	}
 	FacingSwingYaw = Direction.Rotation().Yaw;
 	FacingSwingUntil = World->GetTimeSeconds() + FMath::Max(0.4f, Seconds);
+	if (AMOCharacter* Character = Cast<AMOCharacter>(GetOwner()))
+	{
+		Character->HoldBodyToCapsule(FMath::Max(0.4f, Seconds));   // under GASP a standing body keeps its facing unless told (Oct 28)
+	}
 }
 
 void UMOCombatComponent::UpdateFacingSwing(float DeltaTime)

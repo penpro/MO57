@@ -7,6 +7,7 @@
 #include "MOCreature.h"
 #include "MOCreatureController.h"
 #include "MOMedicalDatabaseSettings.h"
+#include "MOMetaHumanCharacter.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/DataTable.h"
 #include "Engine/SCS_Node.h"
@@ -216,13 +217,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCharacterFootfallLoudness, "MOFramework.Crea
 
 bool FMOCharacterFootfallLoudness::RunTest(const FString& Parameters)
 {
-	// The heard loudness follows the actual speed through the pawn's gaits (walk 400 / jog 550 / sprint 700 by default): a player's
+	// The heard loudness follows the actual speed through the pawn's gaits (the survivor's walk 200 / jog 500 / sprint 700: GASP's, Oct 28): a player's
 	// gaits keep their old values, an AI pawn running is loud (its player-only gait state used to leave it at the walk's 0.3).
-	const AMOCharacter* Pawn = GetDefault<AMOCharacter>();
+	const AMOCharacter* Pawn = GetDefault<AMOMetaHumanCharacter>();   // the player's survivor
 	TestEqual(TEXT("standing still"), Pawn->GetMovementNoiseLoudness(0.0f), 0.0f);
-	TestEqual(TEXT("half a walk is half as loud"), Pawn->GetMovementNoiseLoudness(200.0f), 0.15f, 0.001f);
-	TestEqual(TEXT("walk"), Pawn->GetMovementNoiseLoudness(400.0f), 0.3f, 0.001f);
-	TestEqual(TEXT("jog"), Pawn->GetMovementNoiseLoudness(550.0f), 0.6f, 0.001f);
+	TestEqual(TEXT("half a walk is half as loud"), Pawn->GetMovementNoiseLoudness(100.0f), 0.15f, 0.001f);
+	TestEqual(TEXT("walk"), Pawn->GetMovementNoiseLoudness(200.0f), 0.3f, 0.001f);
+	TestEqual(TEXT("jog"), Pawn->GetMovementNoiseLoudness(500.0f), 0.6f, 0.001f);
 	TestEqual(TEXT("sprint"), Pawn->GetMovementNoiseLoudness(700.0f), 1.0f, 0.001f);
 	TestEqual(TEXT("faster than a sprint is no louder"), Pawn->GetMovementNoiseLoudness(900.0f), 1.0f, 0.001f);
 	return true;

@@ -7,6 +7,8 @@
 #include "GameFramework/Actor.h"
 #include "MOBreathMeterWidget.h"
 #include "MOCharacterMovementComponent.h"
+#include "MOCreature.h"
+#include "MOMetaHumanCharacter.h"
 #include "MORespirationComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOWorldGen.h"
@@ -92,6 +94,36 @@ bool FMOMovement_GaitTravelsInMoves::RunTest(const FString& Parameters)
 	TestTrue(TEXT("server: no gait flag -> walk"), !Move->WantsToSprint() && !Move->WantsToJog());
 	Move->SetWantedGait(true, false);
 	TestTrue(TEXT("the owning machine sets the wanted gait directly"), Move->WantsToJog() && !Move->WantsToSprint());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMovement_AnimationSetMovement,
+	"MOFramework.Movement.AnimationSetMovement",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOMovement_AnimationSetMovement::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 28 2026: "match the animation project settings" -- GASP's SandboxCharacter_CMC (CalculateMaxAcceleration / GroundFriction).
+	const UMOCharacterMovementComponent* D = GetDefault<UMOCharacterMovementComponent>();
+	auto Accel = [D](bool bSprint, float Speed) { return UMOCharacterMovementComponent::GaitAccelerationFor(bSprint, Speed, D->GaitAcceleration, D->SprintTopAcceleration, D->SprintAccelerationSpeedRange); };
+	auto Friction = [D](bool bSprint, float Speed) { return UMOCharacterMovementComponent::GaitFrictionFor(bSprint, Speed, D->GaitGroundFriction, D->SprintTopGroundFriction, D->SprintFrictionTopSpeed); };
+	TestEqual(TEXT("walking or jogging: 800 at any speed"), Accel(false, 450.0f), 800.0f);
+	TestEqual(TEXT("a sprint starts at 800 (to 300 cm/s)"), Accel(true, 200.0f), 800.0f);
+	TestEqual(TEXT("... builds up: 550 at 500 cm/s"), Accel(true, 500.0f), 550.0f);
+	TestEqual(TEXT("... 300 at its 700 cm/s"), Accel(true, 700.0f), 300.0f);
+	TestEqual(TEXT("ground friction walking or jogging: 5"), Friction(false, 450.0f), 5.0f);
+	TestEqual(TEXT("sprinting it eases: 4 at 250 cm/s"), Friction(true, 250.0f), 4.0f);
+	TestEqual(TEXT("... 3 from 500 cm/s"), Friction(true, 700.0f), 3.0f);
+	TestEqual(TEXT("braking with the input held (slowing to a lower gait): 500"), D->BrakingDecelerationWithInput, 500.0f);
+	TestEqual(TEXT("turning in the air: 200 deg/s"), D->FallingYawRate, 200.0f);
+	// Only the survivor moves this way (it runs the GASP driver): the creatures share the component and keep the engine's movement.
+	const AMOMetaHumanCharacter* Survivor = GetDefault<AMOMetaHumanCharacter>();
+	const UMOCharacterMovementComponent* SurvivorMove = Cast<UMOCharacterMovementComponent>(Survivor->GetCharacterMovement());
+	TestTrue(TEXT("the survivor moves as the animation set expects"), SurvivorMove && SurvivorMove->bAnimationSetMovement);
+	TestTrue(TEXT("... walk / jog / sprint / crouch 200 / 500 / 700 / 225, jump 500"), Survivor->WalkSpeed == 200.0f && Survivor->JogSpeed == 500.0f
+		&& Survivor->SprintSpeed == 700.0f && Survivor->CrouchedWalkSpeed == 225.0f && SurvivorMove && SurvivorMove->JumpZVelocity == 500.0f);
+	const UMOCharacterMovementComponent* CreatureMove = Cast<UMOCharacterMovementComponent>(GetDefault<AMOCreature>()->GetCharacterMovement());
+	TestTrue(TEXT("a creature does not (CONTROL: the same component, the engine's acceleration and turning)"), CreatureMove && !CreatureMove->bAnimationSetMovement);
 	return true;
 }
 

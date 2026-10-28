@@ -34,6 +34,7 @@
 - **"Unable to build while Live Coding is active" with MO57's editor closed** -> another editor on the same engine is open (the MO_Tools
   lab, Oct 27): Live Coding is engine-wide, so UBT refuses every project's build while any editor of that install runs -> close it
   (`MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py editor stop`, after checking it holds nothing unsaved), then build. (Oct 27)
+  A `-game` instance counts too: the lab would not build while a nettest's host and joiner ran (Oct 28).
 - **The package build fails on a test that the editor build compiled** -> the GAME target compiles the automation tests too
   (`WITH_DEV_AUTOMATION_TESTS`), without `WITH_EDITOR`; `ue.py build` builds only the editor -> a test that calls editor-only code
   (an `#if WITH_EDITOR` function: `FMOWorldFeatureCook::CollectCookPackages`) goes inside `#if WITH_EDITOR` itself. (Oct 25)
@@ -451,6 +452,10 @@
   lake planes are world-axis-aligned quad trees (never rotate, never scale big); Oceanology actors replicate by default (SetReplicates(false)
   for per-machine lakes); runtime-spawned lakes never register their wave solver (register + activate); presets overwrite the distortion cap
   every load (re-enforce on a tick); absorption = how far light CARRIES (bigger = clearer).
+- **A joiner crashed "Cannot generate unique name for 'MOSwimVolume'"** -> the swim volume was spawned lazily from the movement
+  component's `GetPhysicsVolume`, which GASP's thread-safe animation update reaches on worker threads (PoseSearch's trajectory calls
+  `GetGravityZ`): two swimming survivors spawned it at once, the second on the fixed name (spawn names default to Required_Fatal) -> spawn
+  on the game thread when the world begins play; a getter the animation can reach never spawns or loads. (Oct 28)
 - **A lake setting changed after `FinishSpawning` never reaches the water** -> `AOceanologyLake::Init` runs from OnConstruction AND
   BeginPlay, both inside FinishSpawning, and pushes the waves / surface to the material there -> set things before FinishSpawning, or push
   again after (`UpdateWaves()` for the Gerstner waves). Measure the MATERIAL (its MID's Amplitude_N), not the solver. (Oct 25)
@@ -596,6 +601,13 @@
 - **Survivor behaviour trees don't exist** -> survivors are `AMOSurvivorController`'s C++ state machine. (dev_status)
 - **Ore mined with no pick** -> the tool gate lived only in the menu -> `HasToolForAction` in `BeginHarvest` (one gate). (progression-pass1)
 - **A "stuck" craft queue** -> craft time = base / average tool effectiveness (a hammerstone makes 300 s into 1000 s). (progression-pass1)
+
+- **A change to `UMOCharacterMovementComponent` or `AMOCharacter`'s defaults reaches every creature** (`AMOCreature` derives from
+  `AMOCharacter`) -> survivor-only movement goes behind the component's `bAnimationSetMovement`, set by `AMOMetaHumanCharacter`'s
+  constructor: GASP's model first leaked into the wolves and bears (instant turns, slower to speed; the bear stopped catching the host). (Oct 28)
+- **A Blueprint value hidden by runtime code**: the survivor Blueprint's root carried a 0.9425 scale that the look's height overwrote in
+  game; removing that overwrite showed it (a 174 cm "185 cm" capsule) -> read the CDO (`unreal.get_default_object`) when a runtime value
+  has no setter in code. In editor Python `get_editor_property` hands back the component's own struct: copy its numbers before a set. (Oct 28)
 
 ## 17. Verification habits (the lessons behind many lines above)
 

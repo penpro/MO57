@@ -729,8 +729,10 @@ bool UMOAppearanceSubsystem::ApplyBodyParameters(AMOMetaHumanCharacter* Characte
 	// (AMOMetaHumanCharacter::ApplyBodyShape) -- not BodyFat / MuscleMass here, which no survivor sets (the metabolism owns its body).
 	Character->ApplyBodyShape();
 
-	// Height can be applied via actor scale as a simple fallback
-	Character->SetActorScale3D(FVector(1.0f, 1.0f, Height));
+	// Height is the base's body (Harvey 194 cm, Jalena 168): the look's Height no longer scales the actor (Oct 28). A vertical-only actor scale
+	// squashed the body, the face and the grooms, and resized the capsule fitted to the bases (185 cm; a 0.94 look put it at 174). The field
+	// stays for old saves.
+	(void)Height;
 
 	return true;
 }

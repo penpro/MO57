@@ -105,6 +105,16 @@ bool FMOAppearance_SurvivorBases::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a base names itself on the look"), Look.BaseId, Bases.Last().Id);
 		TestEqual(TEXT("and puts its own hair on"), Look.HairAssetPath, Bases.Last().Hair);
 	}
+	// The body's sex (Wes, Oct 28: "add it"): every base says it, and the words follow it (they when it is not known).
+	for (const FMOSurvivorBase& Base : Bases)
+	{
+		TestTrue(FString::Printf(TEXT("%s: the base names its body's sex"), *Base.Id.ToString()), Base.Sex != EMOBodySex::Unspecified);
+	}
+	TestEqual(TEXT("she"), FMOPronouns::Subject(EMOBodySex::Female).ToString(), FString(TEXT("she")));
+	TestEqual(TEXT("his"), FMOPronouns::Possessive(EMOBodySex::Male).ToString(), FString(TEXT("his")));
+	TestEqual(TEXT("them when unknown"), FMOPronouns::Object(EMOBodySex::Unspecified).ToString(), FString(TEXT("them")));
+	TestEqual(TEXT("no sex name when unknown"), FMOPronouns::SexName(EMOBodySex::Unspecified).ToString(), FString());
+
 	// Facial hair: a base names its own, and one without takes the last base's off (a bearded base, then a woman: clean-shaven).
 	{
 		FMOSurvivorBase Bearded;

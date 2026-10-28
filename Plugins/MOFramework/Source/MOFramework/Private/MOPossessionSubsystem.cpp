@@ -1,4 +1,5 @@
 #include "MOPossessionSubsystem.h"
+#include "MOBodySex.h"
 #include "MOFramework.h"
 #include "MOViewpointUtils.h"
 #include "MOCharacter.h"
@@ -164,7 +165,7 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 		WorldPawnRecord.CharacterName = Identity->DisplayName.IsEmpty()
 			? FString::Printf(TEXT("Survivor_%s"), *Guid.ToString().Right(4))
 			: Identity->DisplayName.ToString();
-		WorldPawnRecord.Gender = Identity->Gender;
+		WorldPawnRecord.Gender = FMOPronouns::GenderLabel(Pawn);   // the player's words, else the body's sex
 		WorldPawnRecord.AgeInDays = FMOPersistedPawnRecord::DefaultAgeInDays(Guid);
 		WorldPawnRecord.StatusText = TEXT("Recruited");
 		WorldPawnRecord.LastPlayedTime = FDateTime::Now();

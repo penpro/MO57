@@ -98,7 +98,7 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	// Default to right shoulder view - toggled via ToggleCameraShoulder()
 	FollowCamera->SetRelativeLocation(FVector(0.0f, 80.0f, 0.0f));
 
-	// Movement defaults (same as ThirdPerson template)
+	// Movement defaults (same as ThirdPerson template). The survivor moves as its animation set expects (AMOMetaHumanCharacter's constructor).
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 	GetCharacterMovement()->JumpZVelocity = 700.f;
@@ -321,6 +321,7 @@ void AMOCharacter::BeginPlay()
 	if (UMOCharacterMovementComponent* MOMove = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
 	{
 		MOMove->SetGaitSpeeds(WalkSpeed, JogSpeed, SprintSpeed);
+		MOMove->MaxWalkSpeedCrouched = CrouchedWalkSpeed;   // the character owns its speeds (the constructor's copy misses a Blueprint's value)
 	}
 	else if (GetCharacterMovement())
 	{
@@ -560,6 +561,7 @@ void AMOCharacter::Tick(float DeltaTime)
 
 	TickWater(DeltaTime);
 	UpdateLandingForAnimation();
+	UpdateDriverHold();
 
 	// Check for falling through the world
 	if (bEnableFallThroughSafety)
@@ -1105,6 +1107,42 @@ void AMOCharacter::UpdateLandingForAnimation()
 		AnimLandedAtSeconds = GetWorld()->GetTimeSeconds();
 	}
 	bWasFallingForAnim = bFalling;
+}
+
+void AMOCharacter::HoldBodyToCapsule(float Seconds)
+{
+	if (const UWorld* World = GetWorld())
+	{
+		HoldBodyUntilSeconds = FMath::Max(HoldBodyUntilSeconds, World->GetTimeSeconds() + Seconds);
+	}
+}
+
+void AMOCharacter::UpdateDriverHold()
+{
+	UAnimInstance* Driver = LocomotionDriver ? LocomotionDriver->GetAnimInstance() : nullptr;
+	UAnimInstance* Body = Driver && GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!Body)
+	{
+		return;
+	}
+	// Montage_IsPlaying(nullptr): any montage still blending in or playing (a blend-out has let go), so the two blend out together. Or a turn
+	// asked for while she stands (HoldBodyToCapsule).
+	const UWorld* World = GetWorld();
+	const bool bTurningStanding = World && World->GetTimeSeconds() < HoldBodyUntilSeconds && GetVelocity().Size2D() < 50.0f;
+	const bool bAction = Body->Montage_IsPlaying(nullptr) || bTurningStanding;
+	const bool bHolding = DriverHoldMontage && Driver->Montage_IsPlaying(DriverHoldMontage);
+	if (bAction && !bHolding)
+	{
+		if (UAnimSequence* Hold = LocomotionDriverHoldAnim.LoadSynchronous())
+		{
+			DriverHoldMontage = Driver->PlaySlotAnimationAsDynamicMontage(Hold, UMOBodyRetargetAnimInstance::MontageSlot, 0.2f, 0.2f, 1.0f, 100000);
+		}
+	}
+	else if (!bAction && bHolding)
+	{
+		Driver->Montage_Stop(0.2f, DriverHoldMontage);
+		DriverHoldMontage = nullptr;
+	}
 }
 
 int32 AMOCharacter::GetAnimGait() const

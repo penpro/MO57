@@ -18,6 +18,7 @@ DRIVER_MESH = "/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin.SKM_UEF
 DRIVER_ABP = "/Game/Blueprints/SandboxCharacter_CMC_ABP.SandboxCharacter_CMC_ABP_C"
 RETARGETER = "/Game/MetaHumans/Common/Common/Rigs/RTG_UEFN_to_Metahuman_nrw.RTG_UEFN_to_Metahuman_nrw"
 PAWN_INTERFACE = "/Game/Blueprints/BPI_SandboxCharacter_Pawn.BPI_SandboxCharacter_Pawn_C"
+HOLD_ANIM = "/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop.M_Neutral_Stand_Idle_Loop"   # the driver under a body montage
 
 # S_CharacterPropertiesForAnimation / S_PlayerInputState pin names (user-defined struct members carry their GUIDs). Enum values are GASP's:
 # E_MovementMode OnGround NewEnumerator4 / InAir NewEnumerator5 (falling and swimming, as the sample maps them); E_Stance stand 0 / crouch 1;
@@ -79,6 +80,11 @@ def main():
     cdo.set_editor_property("locomotion_driver_mesh", mesh)
     cdo.set_editor_property("locomotion_driver_anim_class", abp)
     cdo.set_editor_property("body_retargeter", rtg)
+    hold = unreal.load_asset(HOLD_ANIM)
+    if hold:
+        cdo.set_editor_property("locomotion_driver_hold_anim", hold)
+    else:
+        say(False, "no hold anim " + HOLD_ANIM)
     say(True, "locomotion assets: " + str(cdo.get_editor_property("locomotion_driver_mesh")) + " / " + str(cdo.get_editor_property("locomotion_driver_anim_class"))
         + " / " + str(cdo.get_editor_property("body_retargeter")))
 

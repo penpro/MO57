@@ -170,6 +170,7 @@
 #include "MOBodyPartTypes.h"
 #include "MOInterruptTypes.h"
 #include "MOVitalsComponent.h"   // EMOSystemicFailure (HandleSystemicDeath)
+#include "MOBodySex.h"
 #include "MOCharacter.generated.h"
 
 /**
@@ -481,6 +482,14 @@ public:
 	/** Set animation blueprint at runtime. */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void SetAnimationBlueprint(TSubclassOf<UAnimInstance> NewAnimClass);
+
+	/** The body's sex (MOBodySex.h): the class default here; a MetaHuman survivor on a base says its base's. Pronouns: FMOPronouns. */
+	UFUNCTION(BlueprintPure, Category="MO|Appearance")
+	virtual EMOBodySex GetBodySex() const { return DefaultBodySex; }
+
+	/** The sex of this class's own body (the one a pawn without a base shows). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Appearance")
+	EMOBodySex DefaultBodySex = EMOBodySex::Unspecified;
 
 	// ============================================================================
 	// IMOControllableInterface IMPLEMENTATION
@@ -953,11 +962,11 @@ public:
 	/** Push SkinRoughnessOffset / SkinSpecularMultiply into every material of every skeletal mesh that has the MetaHuman post-bake parameters. */
 	virtual void ApplySkinLook();
 
-	/** Walking speed (default movement). */
+	/** Walking speed (default movement; the survivor's is GASP's walk, 200: AMOMetaHumanCharacter). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement")
 	float WalkSpeed = 400.0f;
 
-	/** Jogging speed (toggle with hustle). */
+	/** Jogging speed (toggle with hustle; the survivor's is GASP's run, 500). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement")
 	float JogSpeed = 550.0f;
 
@@ -1383,6 +1392,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Animation")
 	bool IsAnimGaitWalk() const { return GetAnimGait() == 0; }
 
+	/** Line the body up with the capsule for a while when she stands (an attack turning her to its target): GASP otherwise holds a standing
+	 *  body's facing (its root offset), so the swing would go the old way. Moving, GASP's own turning animations follow the capsule. */
+	void HoldBodyToCapsule(float Seconds);
+
 	/** Landed within the last 0.3 s (GASP's landing window). Every machine sees the landing in the replicated movement. */
 	UFUNCTION(BlueprintPure, Category="MO|Animation")
 	bool HasJustLanded() const;
@@ -1417,6 +1430,22 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UIKRetargeter> LoadedBodyRetargeter;
 
+	/** The driver's pose while the body plays a montage (an attack, a swim stroke): a mannequin idle (GASP's M_Neutral_Stand_Idle_Loop). GASP
+	 *  lines the body up with the capsule only while a montage plays in its own slot (its root offset otherwise holds the body's facing while
+	 *  she stands: an attack that turns her to the target would swing the old way), and our action montages play on the body, not the driver --
+	 *  so the driver's slot plays this whenever the body's does (UpdateDriverHold). Its pose shows only under the montage's blends. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Locomotion", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> LocomotionDriverHoldAnim;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> DriverHoldMontage;
+
+	/** HoldBodyToCapsule's end (world seconds). */
+	double HoldBodyUntilSeconds = -1.0;
+
+	/** Mirror the body's montages onto the driver's slot (every tick, every machine: cosmetic, from the montages each machine plays). */
+	void UpdateDriverHold();
+
 	/** Make the driver and hand the body to the retarget (BeginPlay; once). */
 	void SetUpLocomotionDriver();
 
@@ -1434,11 +1463,11 @@ private:
 	// crouch set retargeted to the MetaHuman skeleton (Content/Characters/Crouch/). Soft paths: a pawn without them crouches with its standing pose (shorter capsule, slower).
 
 public:
-	/** Crouched capsule half height (cm; the standing half height is 96). */
+	/** Crouched capsule half height (cm; the survivor stands at 92.5: 185 cm, Oct 28). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Movement|Crouch", meta=(ClampMin="30.0"))
 	float CrouchedHalfHeightCm = 60.0f;
 
-	/** Walk speed while crouched (cm/s; the standing walk is 400). */
+	/** Walk speed while crouched (cm/s; the survivor's is GASP's crouch, 225). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Movement|Crouch", meta=(ClampMin="0.0"))
 	float CrouchedWalkSpeed = 200.0f;
 

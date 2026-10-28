@@ -2,7 +2,8 @@
 
 > **Covers:** how a pawn gets over and up things on foot: the vault, the hop up, the pull-up and climbing (cliffs, rocks, tree trunks); how
 > they ride co-op prediction; what they cost the body. Swimming: `Docs/Water.md`. Gaits (walk / jog / sprint) and the dev glider are in
-> `UMOCharacterMovementComponent` beside these (its header).
+> `UMOCharacterMovementComponent` beside these (its header); since Oct 28 the gaits, acceleration, braking, turning and the plain jump are the
+> animation set's (walk 200 / jog 500 / sprint 700, jump 500 cm/s: `Docs/Animation_GASP.md` §3).
 > **Current state (2026-10-26):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
 > need a vault mechanic to hop / pull up on things"). No climbing / vaulting animations yet: the body moves on the right path in a stand-in
 > pose (BACKLOG).
@@ -69,7 +70,9 @@ landed standing; a 3.2 m climbable block with W held: climbed and pulled over th
 **A joiner (Oct 26, `python Tools/ue.py nettest traversal`: host + joiner processes, real input actions on the joiner):** hops up onto a
 90 cm block and is on it on both machines (0.0 cm apart); jumping at a 4 m climbable face while pushing at it grabs it on both; W climbs
 120 cm in 4 s on both (0.0 cm apart); crouch lets go on both. The blocks are `AMOTestLedge`s (replicated with their size and climbable
-flag: an `AStaticMeshActor`'s scale and tags do not replicate, so a joiner saw a 1 m plain cube where the host had a 4 m climbable face);
+flag: an `AStaticMeshActor`'s scale and tags do not replicate, so a joiner saw a 1 m plain cube where the host had a 4 m climbable face;
+since Oct 28 the climb uses a 5 m face: the grab climbs ~70 cm while the first push is held, so 4 s of W more brought a 4 m edge within arm's
+reach and the climber pulled over the top inside the window);
 `MO.Test.SpawnLedge ... [PlayerIndex]` on the host puts one in front of the joiner's pawn. The host logs why it refused a joiner's jump
 (`[MOTraversal] server: ... has no traversal: <why>`). Not yet checked: a real cliff and tree in the world (the classification is
 unit-tested), how it looks.

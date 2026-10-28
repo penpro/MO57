@@ -69,23 +69,53 @@ hard + soft package dependencies) in the sample's editor and write `packages` to
 Plugins enabled for it (`MO57.uproject`): PoseSearch, Chooser, AnimationWarping, MotionWarping, BlendStack, CurveExpression, DrawDebugLibrary,
 Mover, NetworkPrediction, MovieSceneAnimMixer, AnimationLocomotionLibrary; MOFramework depends on IKRig (+ AnimGraphRuntime).
 
-## 3. Known gaps (phase 1)
+## 3. The movement the set was made for (Oct 28)
+
+Wes: "match the animation project settings". GASP's SandboxCharacter_CMC sets its movement every frame from its gait; ours follows from the gait
+each move carries and the velocity (`UMOCharacterMovementComponent`: `GetMaxAcceleration`, `GetMaxBrakingDeceleration`, `CalcVelocity`,
+`GetDeltaRotation`), so co-op prediction stays exact. Read from the sample's graphs (test `MOFramework.Movement.AnimationSetMovement`):
+
+| | GASP / ours now | before |
+|---|---|---|
+| walk / jog (GASP's run) / sprint | 200 / 500 / 700 cm/s | 250 / 450 / 700 |
+| crouched walk | 225 | 200 |
+| acceleration (ground and air) | 800; sprinting it falls to 300 as the speed rises 300 -> 700 | 2048 |
+| braking on the ground | 500 with the input held (slowing to a lower gait), 2000 with none | 2000 |
+| ground friction | 5; sprinting it falls to 3 by 500 cm/s | 8 |
+| turning | at once on the ground (the animation's root offset turns the body), 200 deg/s in the air | 500 deg/s |
+| jump / air control / air braking | 500 cm/s (a 1.27 m rise) / 0.25 / 0 | 700 (2.5 m) / 0.35 / 1500 |
+
+Swimming, climbing and the glider keep MaxAcceleration and RotationRate. Only the survivor moves this way: `AMOMetaHumanCharacter`'s
+constructor sets the speeds and the component's `bAnimationSetMovement`; the creatures share `UMOCharacterMovementComponent` and
+`AMOCharacter`'s defaults and keep the engine's acceleration and turning (the first build of this put GASP's model on every wolf and bear
+too: instant turns, 800 cm/s/s; test `AnimationSetMovement` has the creature CONTROL). The survivor Blueprint's values are set by
+`Content/Python/setup_survivor_body.py` (the capsule and the body at scale 1: they carried 0.9425 / 1.05). Footstep loudness follows the
+gait speeds (test `FootfallLoudness`).
+
+**A standing body keeps its facing.** GASP's root offset accumulates a capsule turn while she stands and lets go only while a montage plays in
+its own slot (`Get_OffsetRootRotationMode`: Release then, else Accumulate), or turns her on the spot when she stops with the body more than 50
+degrees off. So when the GAME turns a standing survivor (an attack facing its target, `UMOCombatComponent::BeginFacingSwing`), the body would
+keep pointing the old way. Two mirrors of GASP's rule (`AMOCharacter::UpdateDriverHold`): whenever a montage plays on the body (our attacks,
+swim strokes) the driver plays a hold idle (`LocomotionDriverHoldAnim`, GASP's M_Neutral_Stand_Idle_Loop) in its slot, and an attack's turn
+asks for the same while she stands (`HoldBodyToCapsule`) -- the body lines up with the capsule. Measured (`python Tools/check_gasp_movement.py`):
+the capsule turned 90 degrees with no action, the body stays; an attack, it follows.
+
+## 4. Known gaps (phase 1)
 
 - **Traversal**: GASP's vault / mantle / hurdle live in its character Blueprint (not taken) and need its `Traversable` trace channel; ours
   still slide in a stand-in pose. Montages GASP plays on the driver have no root motion effect on our capsule (only `GetMesh()` feeds the CMC).
-- **Speeds**: our gaits (walk 250 / jog 450 / sprint 700 cm/s, crouch 200) against the set's (walk 200 / run 500 / sprint 700, crouch 225);
-  our acceleration 2048 / braking 2000 against GASP's 800 / 500-2000. Motion matching picks the nearest frames, so a mismatch shows as a
-  little foot slide or a clipped start. Tuning is a separate call (feel vs. the simulation's numbers).
-- **Rotation**: we turn the capsule at 500 deg/s; GASP turns it instantly on the ground and lets the ABP's root offset smooth the mesh.
-  The same root offset holds the body's facing while she stands: an actor turned without movement (a teleport, `set_actor_rotation` in a
-  check) leaves the body as it was until she moves (TRAPS §5).
+- **Turned without moving**: an actor turned by anything other than movement or an action (a teleport, `set_actor_rotation` in a check)
+  keeps the body's facing until she moves (§3; TRAPS §5).
+- **The driver's graph reads the movement component on the animation worker threads** (PoseSearch's trajectory: `GetMaxSpeed`,
+  `GetMaxBrakingDeceleration`, `GetGravityZ` -> `GetPhysicsVolume`): whatever those reach must be safe there and never spawn or load. The
+  swim volume was spawned lazily from `GetPhysicsVolume`; two swimming survivors spawned it at once and the joiner crashed (Oct 28, TRAPS §11).
 - **Cost**: the driver poses even off screen (it must, to feed the body). Fine for a handful of survivors; a colony may want the driver's
   tick tied to the body being rendered.
 - **Swim**: the strokes play in the body's slot over the retargeted pose (blended now; before, the override swapped blueprints).
 - **ABP_GenericRetarget's per-chain curve blending** (its `ChainCurveMap`, blend-to-source by curve) is not in the native retarget.
 
-## 4. Verifying
+## 5. Verifying
 
-`python Tools/check_legs.py` (femme and Lillian: standing, walking, crouched; feet and pelvis heights, screenshots in
-`Saved/Screenshots/legs/`). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
+`python Tools/check_legs.py` (the femme and every base: standing, walking, crouched; feet and pelvis heights, screenshots in
+`Saved/Screenshots/legs/`); `python Tools/check_gasp_movement.py` (the capsule, the gait speeds, the jump, the facing hold, the body's sex). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
 SandboxCharacter_CMC_ABP_C, retargeted by RTG_UEFN_to_Metahuman_nrw)` per survivor.

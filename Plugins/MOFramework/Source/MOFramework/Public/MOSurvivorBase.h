@@ -13,6 +13,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "MOBodySex.h"
 #include "MOSurvivorBase.generated.h"
 
 struct FMOCharacterAppearance;
@@ -52,6 +53,10 @@ struct MOFRAMEWORK_API FMOSurvivorBase
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
 	FString Mustache;
+
+	/** The body's sex (MOBodySex.h; Wes, Oct 28: "add it"): the survivor's pronouns, and a voice once there are voices. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
+	EMOBodySex Sex = EMOBodySex::Unspecified;
 
 	/** The body fat (%) and muscle (kg) the base was made with (MO_Tools bake.py prints them: "NEUTRAL"). */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")

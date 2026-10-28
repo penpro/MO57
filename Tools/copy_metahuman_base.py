@@ -4,10 +4,12 @@ Both projects' Content/MetaHumans are local and gitignored. Copies the base's fo
 MO_Tools' Tools/body_shape/base_deps.py (Saved/base_deps_<name>.json). A file MO57 already has that differs is backed up first to
 D:/UEProjects/MO57_Backups/<date>_<name>/Content/<same path>, then replaced; a manifest sits next to the backup.
 
-    python Tools/copy_metahuman_base.py MH_Jalena_Base [--dry-run]
+    python Tools/copy_metahuman_base.py MH_Jalena_Base [--dry-run] [--replace-common]
 
-Close MO57's editor first. After a copy that replaced anything in /Game/MetaHumans/Common, run Content/Python/ensure_foot_ik_virtual_bones.py
-in MO57's editor: the Creator's skeleton lacks the foot IK's virtual bones (TRAPS).
+Close MO57's editor first. A file MO57 already has in /Game/MetaHumans/Common is kept by default even when the lab's differs: MO57's carries
+its own edits (the foot IK's virtual bones on the skeleton), and a base refresh -- a rebaked face, Oct 28 -- needs none of the lab's. With
+--replace-common those are replaced too; then run Content/Python/ensure_foot_ik_virtual_bones.py in MO57's editor: the Creator's skeleton
+lacks the foot IK's virtual bones (TRAPS). The dry run lists every file it would replace.
 """
 import argparse
 import datetime
@@ -33,13 +35,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("name")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--replace-common", action="store_true", help="also replace MO57's existing /Game/MetaHumans/Common files that differ")
     a = ap.parse_args()
     deps = "D:/UEProjects/MO_Tools/Saved/base_deps_%s.json" % a.name
     if not os.path.exists(deps):
         sys.exit("no %s: run MO_Tools' Tools/body_shape/base_deps.py with BASE_FOLDER=/Game/MetaHumans/%s first" % (deps, a.name))
     rows = json.load(open(deps))
     backup = "D:/UEProjects/MO57_Backups/%s_%s/Content/" % (datetime.date.today().isoformat(), a.name)
-    counts = {"new": 0, "replaced (backed up)": 0, "identical": 0, "no file": 0}
+    counts = {"new": 0, "replaced (backed up)": 0, "identical": 0, "no file": 0, "Common kept (MO57's own)": 0}
     common_replaced = 0
     manifest = []
     for row in rows:
@@ -51,6 +54,10 @@ def main():
         if os.path.exists(dst):
             if digest(src) == digest(dst):
                 counts["identical"] += 1
+                continue
+            if rel.startswith("MetaHumans/Common/") and not a.replace_common:
+                counts["Common kept (MO57's own)"] += 1
+                print("kept MO57's " + rel)
                 continue
             counts["replaced (backed up)"] += 1
             common_replaced += rel.startswith("MetaHumans/Common/")
@@ -70,6 +77,9 @@ def main():
         with open(root + "/MANIFEST.txt", "w") as f:
             f.write("Copied %s from MO_Tools into MO57 (%s). Restore a replaced file from Content/ here.\n" % (a.name, datetime.datetime.now().isoformat(" ", "minutes")))
             f.write("\n".join(manifest) + "\n")
+    if a.dry_run:
+        for line in manifest:
+            print("would: " + line)
     print(("would copy " if a.dry_run else "copied ") + a.name, counts, "backup:", backup if counts["replaced (backed up)"] else "-")
     if common_replaced:
         print("%d file(s) in /Game/MetaHumans/Common replaced: run Content/Python/ensure_foot_ik_virtual_bones.py in MO57's editor" % common_replaced)

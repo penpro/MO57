@@ -222,6 +222,10 @@ protected:
 	 *  MetaHuman component has rebuilt its face materials, so the look survives that rebuild. */
 	virtual void ApplySkinLook() override;
 
+public:
+	/** Its base's sex (the base replicates and saves with the look); the class default without a base. */
+	virtual EMOBodySex GetBodySex() const override;
+
 private:
 	FTimerHandle GroomRetryTimer;
 	FTimerHandle HairSimulationTimer;

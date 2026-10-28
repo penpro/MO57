@@ -28,6 +28,7 @@ def bases():
         rows.append({"id": get("Id"), "name": name.group(1) if name else get("Id"), "body": _asset(get("Body")), "face": _asset(get("Face")),
                      "hair": _asset(get("Hair")), "eyebrows": _asset(get("Eyebrows")), "eyelashes": _asset(get("Eyelashes")),
                      "beard": _asset(get("Beard")), "mustache": _asset(get("Mustache")),
+                     "sex": (re.search(r"\bSex=(\w+)", line) or [None, "Unspecified"])[1],
                      "fat": num("BodyFatPercent", 18.0), "muscle": num("MuscleMassKg", 30.0)})
     return rows
 

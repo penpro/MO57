@@ -84,6 +84,16 @@
 - **Animation work waits for the Game Animation Sample** (Wes: "quit fucking with the animations until we look at the animations demo
   project and start getting all that linked up"): the crouch's remaining jank (after the Oct 27 pelvis repair) is not chased further;
   the sample's set comes first (F50).
+- **The survivor's capsule, movement and sex** (Wes, Oct 28, on the list of what was still open): "fit the capsule to somewhere in that
+  range" -> 185 cm (half height 92.5; the bases run 168-194 cm), the mesh lowered with it; "that's fine i think it gets cut out by the creator
+  when it's not cinematic quality" -> no peach fuzz slot; "add it" (the body's sex) -> `EMOBodySex` on each base (Femme, Jalena, Zuri female;
+  Harvey, Trey male) and the Blueprint's own body, pronouns from it (`FMOPronouns`: "Light your torch from her torch"), the Gender shown falls
+  back to it when the player gave none; there are no voice sounds in the game yet, so a voice keys on it when they come; "match the animation
+  project settings" -> GASP's movement (`Docs/Animation_GASP.md` §3). Claude's calls, noted: the look's Height no longer scales the actor (it
+  overwrote the root's scale with a vertical-only one, squashing the body and resizing the capsule; height is the base's body now), and the
+  survivor Blueprint's capsule and mesh are at scale 1 (they carried 0.9425 and 1.05 from the early setup: a 174 cm capsule and the body at 99 %,
+  which that overwrite had hidden; `setup_survivor_body.py`);
+  an attack turning a standing survivor lines her body up with the capsule (the driver's hold, GASP's own rule for actions).
 - **The bases: Lillian out, Jalena, Zuri, Harvey and Trey in** (Wes: "for the characters, drop lillian for now and add the four variants
   i made, 2 male 2 female"). Built from his Oct 27 Creator builds in MO_Tools, each through the base pipeline (bake, face transfer, copy,
   virtual bones, 70 library hair bindings, config). Claude's calls, noted: the picker order is Femme, Jalena, Zuri, Harvey, Trey; Lillian's

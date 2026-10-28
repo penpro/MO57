@@ -1,4 +1,5 @@
 #include "MOStatusPanel.h"
+#include "MOBodySex.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "TimerManager.h"
 #include "MOMedicalSubsystem.h"
@@ -1110,9 +1111,11 @@ void UMOStatusPanel::PopulateInfoTab()
 	{
 		Record.CharacterName = IdentityComp->DisplayName.ToString();
 	}
-	if (!IdentityComp->Gender.IsEmpty())
+	// Gender: the player's words when given, else the body's sex (MOBodySex.h: the base's), else what the last save had.
+	const FString GenderLabel = FMOPronouns::GenderLabel(CurrentPawn);
+	if (!GenderLabel.IsEmpty())
 	{
-		Record.Gender = IdentityComp->Gender;
+		Record.Gender = GenderLabel;
 	}
 
 	UVerticalBox* Container = GetCategoryContainer(EMOStatusCategory::Info);

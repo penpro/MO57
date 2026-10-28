@@ -1,4 +1,5 @@
 #include "MOGameMode.h"
+#include "MOBodySex.h"
 #include "MOPlayerController.h"
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
@@ -1547,7 +1548,11 @@ void AMOGameMode::RegisterPawnWithPersistence(APawn* NewPawn)
 		Record.Transform = NewPawn->GetActorTransform();
 		Record.PawnClassPath = FSoftClassPath(NewPawn->GetClass());
 		Record.CharacterName = Identity->DisplayName.ToString();
-		Record.Gender = TEXT("Unknown");
+		Record.Gender = FMOPronouns::GenderLabel(NewPawn);   // the body's sex until the player gives words for it
+		if (Record.Gender.IsEmpty())
+		{
+			Record.Gender = TEXT("Unknown");
+		}
 		Record.AgeInDays = FMOPersistedPawnRecord::DefaultAgeInDays(Record.PawnGuid);
 		Record.bIsDeceased = false;
 		Record.HealthPercent = 1.0f;

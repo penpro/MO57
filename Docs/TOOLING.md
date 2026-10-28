@@ -56,7 +56,7 @@ and the face; GASP on the joiner's copy of the host) and `python Tools/ue.py net
 game: a new base's meshes and its own groom were cooked, the heavy shape draws). The checks take their bases from the config
 (`Tools/survivor_bases.py`): the creator check walks to the first new base whose hair is not the femme's, the nettests use the first new one,
 the legs check every one.
-A new base (MO_Tools CLAUDE.md "A base"): bake and `Tools/body_shape/transfer_face.py` in the lab, `base_deps.py`, then here
+A new base (MO_Tools CLAUDE.md "A base"): `bake.py` and `bake_face.py` (Oct 28: the face's neck from the Creator's fit, its fullness) in the lab, `base_deps.py`, then here
 `python Tools/copy_metahuman_base.py <MH_X_Base>` (backs up what it replaces), `Content/Python/ensure_foot_ik_virtual_bones.py`,
 `make_groom_bindings.py` with `GROOMBIND_FACE` on its face, and its `+Bases` + `DirectoriesToAlwaysCook` lines.
 `MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there) -- only on a widget laid
@@ -65,6 +65,9 @@ Options and the display (Oct 28): `python Tools/check_options_display.py` (borde
 unchanged and the saved settings the live display; a saved music volume on the music class after a restart and a garbage collection).
 Legs (Oct 27): `python Tools/check_legs.py` (one instance: the femme, then every other base -- standing, walking and crouched, the feet's spacing and
 height and the pelvis over the capsule's floor, the foot IK's virtual bones; shots from behind and the side in `Saved/Screenshots/legs/`).
+GASP movement (Oct 28): `python Tools/check_gasp_movement.py` (the 185 cm capsule at scale 1, walk / jog / sprint 200 / 500 / 700, the jump,
+a standing body held vs. an attack lining it up, the body's sex per base); `Content/Python/setup_survivor_body.py` sets the survivor
+Blueprint's capsule, speeds, jump and sex.
 GASP locomotion (Oct 27, `Docs/Animation_GASP.md`): `python Tools/import_gasp.py [--from <GameAnimationSample>]` imports the sample's content
 (gitignored, never overwrites), then `python Tools/ue.py py --file Content/Python/setup_gasp_survivor.py` (editor open) points the survivor
 Blueprint at it and writes its `Get_PropertiesForAnimation`. An instance logs `GASP drives the locomotion` per survivor.
