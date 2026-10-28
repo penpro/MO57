@@ -2181,6 +2181,14 @@ def _client_glide(rep, host, client):
         console(client, f"MO.Dev.Glider {1 if glide else 0}")
         _probe(host, lift)
         time.sleep(0.5)
+        # The flight starts when the joiner's own machine has the pawn up there: until then its moves still come from the ground and the
+        # host corrects each one (the lift is a server teleport; a host hitch as it lands stretched that to 4 corrections, Oct 28).
+        for _ in range(20):
+            up = re.search(r"CZ (-?\d+)", _probe(client, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('CZ %.0f' % p.get_actor_location().z)"))
+            if up and float(up.group(1)) > gz + 6000.0:
+                break
+            time.sleep(0.5)
+        time.sleep(0.5)
         hoff = log_size(host)
         console(client, "MO.Footstep.Walk 8")
         time.sleep(4.0)
@@ -2264,7 +2272,7 @@ def _client_footstep_surface(rep, host, client):
         if len({s_ for _b, s_, w in heard if s_ and w.startswith("biome")}) >= 2:   # a spot on a log / rock ("structure") says nothing about biomes
             break
     rep.step("client: its own ground's footstep set comes from the world on every spot -- the biome, or the log / rock it stands on (not the fallback)",
-             all(w.startswith(("biome", "structure", "underground", "actor")) for _b, _s, w in heard), str(heard))   # the host CONTROL's reasons
+             all(w.startswith(("biome", "structure", "underground", "actor", "prop")) for _b, _s, w in heard), str(heard))   # the host CONTROL's reasons (prop: a PCG rock / log under the foot)
     rep.step("client: two biomes sound different on the joiner's own machine", len({s_ for _b, s_, w in heard if s_ and w.startswith("biome")}) >= 2, str(heard))
     _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_F_HOME', None); "
                  "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('F_HOME')")
@@ -2547,6 +2555,13 @@ def _client_build(rep, host, client):
         time.sleep(3)   # replicates to the client
         return base, _count_buildables(host)
 
+    # Clear what earlier cases built round the joiner first: every step below reads "the building nearest" a pawn, and the stick floor the
+    # unbuilt-look case leaves (N-227) was nearer than the new campfire in one run of two (Oct 28; _host_beside_joiner_building, Oct 24, only
+    # covered the host's side).
+    _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "old = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor) if (a.get_actor_location() - j.get_actor_location()).length() < 2000.0]; "
+                 "[a.destroy_actor() for a in old]; out('CLEARED %d' % len(old))")
+    time.sleep(2.0)   # the removals replicate to the joiner
     base, after = place(300)
     if not rep.step("client build: a campfire ghost the joiner placed exists on the host", after == (base or 0) + 1, f"buildings {base} -> {after}"):
         return
@@ -2611,11 +2626,15 @@ def _client_build(rep, host, client):
     before = cobbles()
     hoff = log_size(host)
     console(client, "MO.Test.Build cancel")
-    canc = wait_log(host, r"\[MOBuildProgressComponent\] CancelAndRemove [^\n]*", since=hoff, timeout=15)
+    canc = wait_log(host, r"\[MOBuildProgressComponent\] CancelAndRemove (\S+):[^\n]*", since=hoff, timeout=15)
     time.sleep(3)
+    # Gone = that building no longer exists on the host. The world's total once stayed level across the removal (3 -> 3, Oct 28): world
+    # features spawn round the players while the test runs (_trust_placement counts at the spot for the same reason).
+    gone = canc and "GONE=True" in _probe(host, "out('GONE=%s' % (not [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor) "
+                                                f"if a.get_name() == '{canc.group(1)}']))")
     rep.step("client build: Cancel ran ON THE HOST: the 10 deposited cobbles came back to the joiner and the building is gone",
-             bool(canc) and cobbles() - before == 10 and _count_buildables(host) == base,
-             f"{canc.group(0)[:120] if canc else 'no CancelAndRemove line on the host'} | buildings {after} -> {_count_buildables(host)}")
+             bool(canc) and cobbles() - before == 10 and bool(gone),
+             f"{canc.group(0)[:120] if canc else 'no CancelAndRemove line on the host'} | gone {bool(gone)} | buildings {after} -> {_count_buildables(host)}")
 
 
 def _client_attack(rep, host, client):
@@ -3265,8 +3284,9 @@ def _client_treats_host(rep, host, client):
 
 def _client_lights_from_host(rep, host, client):
     """A joiner lights its torch from the HOST's burning one (N-056 torch from torch, Oct 20 2026): a right-click on a pawn carrying a flame
-    offers "Light your Torch from their Torch" when you hold an unlit one (AMOCharacter's world actions, FMOFireActions::GetBearerActions,
-    built on the joiner from the replicated flame); the pick runs on the host as the joiner's timed action, and the joiner's torch burns."""
+    offers "Light your Torch from her Torch" when you hold an unlit one (AMOCharacter's world actions, FMOFireActions::GetBearerActions,
+    built on the joiner from the replicated flame; the pronoun is the host body's sex, FMOPronouns: the host plays the femme); the pick runs on
+    the host as the joiner's timed action, and the joiner's torch burns."""
     hp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
     jp = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + p.get_name())")) or [None, "?"])[1]
     _clear_around_host(host)
@@ -3295,7 +3315,7 @@ def _client_lights_from_host(rep, host, client):
     rep.step("client: right-clicking the torch-bearing host opens its menu on the joiner", bool(shown), shown.group(0) if shown else "no world action menu line | " + aim + " | " + (aimed or "no targeting lines"))
     if shown:
         hoff = log_size(host)
-        m = _motest(client, "MO.Test.ClickWidget text=Light your Torch from their Torch", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
+        m = _motest(client, "MO.Test.ClickWidget text=Light your Torch from her Torch", r"\[MOTEST\] (PASS|FAIL) ClickWidget[^\r\n]*")
         caught = wait_log(host, rf"\[MOFire\] {re.escape(jp)} lit its Torch01 from {re.escape(hp)}'s flame", since=hoff, timeout=20)
         rep.step("client: its pick runs on the HOST, and the joiner's torch catches from the host's flame", bool(caught),
                  (m.group(0) if m else "no click") + " | " + (caught.group(0) if caught else "no lit-from line on the host"))
@@ -3325,8 +3345,12 @@ def _host_treats_survivor(rep, host, client):
     sv = f"sv = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]; "
     bleed = sv + ("ws = [w for w in sv.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_RIGHT]; "
                   "out('SBLEED %.3f' % (ws[0].bleed_rate if ws else -1))")
+    # In front of the VIEW (the control yaw), not the pawn's facing: the camera trails the view, and a survivor put along a pawn that faced its
+    # camera stood between the two -- the aim from there missed it (Oct 28, the first run after the survivor's turning became GASP's).
     _probe(host, sv + "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
-                 "sv.set_actor_location(h.get_actor_location() + h.get_actor_forward_vector() * 150.0 + unreal.Vector(0.0, 0.0, 30.0), False, True); "
+                 "yaw = unreal.GameplayStatics.get_player_controller(world, 0).get_control_rotation().yaw; "
+                 "fwd = unreal.MathLibrary.get_forward_vector(unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw)); "
+                 "sv.set_actor_location(h.get_actor_location() + fwd * 150.0 + unreal.Vector(0.0, 0.0, 30.0), False, True); "
                  "sv.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.FOREARM_RIGHT, 15.0, unreal.MOWoundType.LACERATION, h); "
                  "h.get_component_by_class(unreal.MOInventoryComponent).add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Bandage01', 1); "
                  "l = sv.get_actor_location(); out('SVAT x=%.0f y=%.0f z=%.0f' % (l.x, l.y, l.z + 40.0))")
@@ -3336,8 +3360,11 @@ def _host_treats_survivor(rep, host, client):
                     (before.group(0) if before else "no wound") + (f" at {at.group(0)}" if at else "")):
         return
     time.sleep(2.0)
-    console(host, f"MO.Player.Face {at.group(1)} {at.group(2)} {at.group(3)}")
-    time.sleep(0.8)
+    # MO.Player.Face aims from the camera where it is; the spring arm then swings the camera to the new view, so aim again once it has
+    # (a fixed-point step: the second aim starts from where the first one put the camera).
+    for _ in range(2):
+        console(host, f"MO.Player.Face {at.group(1)} {at.group(2)} {at.group(3)}")
+        time.sleep(0.8)
     hoff = log_size(host)
     console(host, "MO.Test.Input RightClick")   # the controller's right-click: the survivor menu is chosen there (SecondaryInteract skips it)
     menu = wait_log(host, rf"\[MOSurvivorContextMenu\] Initialized for survivor {re.escape(name)}[^\r\n]*", since=hoff, timeout=10)
@@ -3393,12 +3420,15 @@ def _host_colony_medic(rep, host, client):
                     before.group(0) if before else "no wound"):
         return
     sent = wait_log(host, rf"\[MOColony\] Medic {re.escape(name)} goes to treat {re.escape(me)}\b[^\r\n]*", since=off, timeout=25)
+    joboff = log_size(host)   # the host's job from here: the medic runs one job at a time, and may have tried another bleeding colonist first
     rep.step("the colony's upkeep sends the villager with the bandage to the bleeding host", bool(sent), sent.group(0) if sent else "no Medic line for " + name)
     if not sent:
         return
     told = wait_log(host, r"\[MONotification\] Queued: [^\r\n]*is coming to dress your wound[^\r\n]*", since=off, timeout=5)
     rep.step("... and the bleeding host is told help is coming", bool(told), told.group(0) if told else "no notification line")
-    done = wait_log(host, r"\[MOSurvivorController\] Treat job (?:done|FAILED|refused|WEDGED)[^\r\n]*", since=off, timeout=90)
+    # Its outcome, not an earlier job's: one run, the medic first went to another bleeding colonist (the joiner), could not reach it and only
+    # then came to the host; the first outcome line was that failure, read before the host's treatment had begun (Oct 28).
+    done = wait_log(host, r"\[MOSurvivorController\] Treat job (?:done|FAILED|refused|WEDGED)[^\r\n]*", since=joboff, timeout=90)
     nav = ""
     if not (done and " done:" in done.group(0)):   # a path that failed: the navmesh round them, or the medic (Oct 24: "can't reach", 610 cm off)
         nav = " | " + _nav_between(host, f"[a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]",
@@ -3412,7 +3442,8 @@ def _host_colony_medic(rep, host, client):
 def _client_gait(rep, host, client):
     """CLIENT jog / sprint (Steam playtest Oct 16 2026: "the second person can't jog or sprint"). The gait is movement input carried by the saved moves
     (UMOCharacterMovementComponent, FLAG_Custom_0 / _1), so the HOST must see the joiner's pawn move at the gait's speed. It used to be set on the
-    pressing machine only: the server simulated a walk and corrected every faster step. Control: the walk first (walk 400 / jog 550 / sprint 700 cm/s)."""
+    pressing machine only: the server simulated a walk and corrected every faster step. Control: the walk first (walk 200 / jog 500 / sprint 700 cm/s,
+    GASP's speeds since Oct 28)."""
     def host_speed():
         out = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); v = p.get_velocity(); out('HSPEED %.0f' % ((v.x * v.x + v.y * v.y) ** 0.5))")
         m = re.search(r"HSPEED (\d+)", out)
@@ -3445,7 +3476,7 @@ def _client_gait(rep, host, client):
         time.sleep(1.5)
     time.sleep(2.0)
     walk, ws = run_and_measure([])
-    rep.step("CONTROL: the HOST sees the joiner walk at about the walk speed (400)", 250 <= walk <= 460, f"host samples {ws}")
+    rep.step("CONTROL: the HOST sees the joiner walk at about the walk speed (200)", 150 <= walk <= 260, f"host samples {ws}")
     jog, js = run_and_measure(["MO.Test.Input ToggleJog"])
     rep.step("client jog: the HOST sees the joiner jogging (well above the walk)", jog >= walk + 90, f"host samples {js} (walk max {walk})")
     sprint, ss = run_and_measure(["MO.Test.Input SprintStart"])
@@ -5239,7 +5270,9 @@ def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
                  bool(h and c and top) and abs(h[2] - (top + 88)) < 25 and abs(c[2] - (top + 88)) < 25, f"host {h} client {c} top {top}")
         rep.step("... host and joiner agree where it is (< 20 cm)", 0 <= _trav_gap(h, c) < 20, f"gap {_trav_gap(h, c):.1f} cm")
 
-        _trav_ledge(host, client, 400, 150, 1)
+        # 5 m: the grab climbs ~70 cm while the first push is still held, and 4 s of W adds 120 -- a 4 m edge then comes within arm's reach
+        # (FMOTraversal::PullUpMaxCm, 220 cm above the feet) and the climber pulls over the top inside the window (Oct 28).
+        _trav_ledge(host, client, 500, 150, 1)
         console(client, "MO.Test.InjectInput IA_MOMove 0 1 3.0")
         time.sleep(0.3)
         console(client, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
