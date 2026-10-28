@@ -143,6 +143,14 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   person attacked, or whose pack they attacked, while its anger lasts (`WoundedPanicSeconds`, the bear's 30 s; `AMOCreatureController::IsProvokedBy`) fights on through the fire
   (until Oct 27 a wolf hit once still held off). Proof: `nettest actions` `_host_predator_fire_rules` (a hunting bear holds off a torch;
   hit, it bites through the fire; control: the torch out, a fresh bear bites).
+- **Aggro range** (Oct 27): a predator goes for someone it was not attacked by only within its species' `AggroRange` (Wolf01 20 m --
+  in practice its 15 m sight -- Bear01 6 m: F46, Wes: a bear is a predator "just a smaller agro range"); prey flee whatever they see.
+  Until Oct 27 no code read `AggroRange`: whatever a predator saw was quarry. Perception reports only CHANGES in what is seen, so a
+  pursuer with no threat also looks at what it sees five times a second (`AMOCreatureController::ScanForQuarry`): someone seen far off
+  and walking in is taken at the range, and a quarry forgotten in plain sight can be taken again. One gate for both:
+  `MayTakeAsQuarry` (another kind of pawn, in the world, not given up, outside the start area, within the aggro range unless attacked).
+  Proof: `Tools/check_creator_bases.py` (a bear spawned 10 m off, which sees the survivor, takes it only once within 6 m -- Oct 27 it
+  wandered in and took it at 596 cm; every new quarry is logged: "[MOCreatureController] X takes Y as its quarry at N cm (aggro range M cm)").
 - **The start area** (Wes, Oct 27: predators "stay away from the starting area, like 200m"): no predator spawns (both spawn paths),
   wanders (`BTTask_CreatureWander` turns it away from the site), takes a quarry, chases (its controller gives the chase up) or bites within
   `UMOStartSiteSettings::PredatorFreeRadiusCm` (200 m) of the start site -- the same "unless attacked" exception

@@ -2960,8 +2960,9 @@ def _host_predator_fire_rules(rep, host, client):
         return
     w0 = host_wounds(0)
     hoff = log_size(host)
-    spawned = _motest(host, "MO.Test.SpawnCreature Bear 700", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
-    rep.step("CONTROL: a bear stands 7 m from the host", bool(spawned) and "Bear" in spawned.group(0), spawned.group(0)[:160] if spawned else "no spawn line")
+    # 5.5 m: inside the bear's aggro range (6 m since Oct 27; it goes for no one farther off it was not attacked by)
+    spawned = _motest(host, "MO.Test.SpawnCreature Bear 550", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
+    rep.step("CONTROL: a bear stands 5.5 m from the host", bool(spawned) and "Bear" in spawned.group(0), spawned.group(0)[:160] if spawned else "no spawn line")
     console(host, "MO.Footstep.LogAll 1")   # the bear's own footfalls too (a creature has no foot bones; it steps by distance)
     time.sleep(30.0)
     console(host, "MO.Footstep.LogAll 0")
@@ -2982,8 +2983,8 @@ def _host_predator_fire_rules(rep, host, client):
     _probe(host, "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) "
                  "for b in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)]; out('BEARS_DOWN')")
     w2 = host_wounds(-1)
-    fresh = _motest(host, "MO.Test.SpawnCreature Bear 700", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
-    rep.step("CONTROL: with no fire, a fresh bear 7 m off hunts the host and bites", bool(fresh) and "Bear" in fresh.group(0) and bitten_within(40, w2),
+    fresh = _motest(host, "MO.Test.SpawnCreature Bear 550", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
+    rep.step("CONTROL: with no fire, a fresh bear 5.5 m off hunts the host and bites", bool(fresh) and "Bear" in fresh.group(0) and bitten_within(40, w2),
              (fresh.group(0)[:120] if fresh else "no spawn line") + " -> a new wound on the host")
     console(host, "MO.Light.Carried out")
     console(host, "MO.AI.PredatorFreeAreaM -1")

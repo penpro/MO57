@@ -1737,3 +1737,7 @@ References: CL-0213
 ### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0215
 Status: RELEASE the MO57 build window and instances (CL-0214) and the files below. Landed: the creator camera (0ba71746); predators keep out of the start area and off fires unless attacked, and a survivor in the character creator is no creature's quarry (this commit: MOCharacter, MOCreature, MOCreatureController, BTTask_ChaseTarget / CreatureAttack / CreatureWander, MOStartSiteSubsystem, MOSpawnManagerSubsystem, MOCharacterCreatorPanel; Tools/ue_inst.py, Tools/check_creator_bases.py). Verified: MOFramework 392/392, check_creator_bases PASS, nettest actions -- the affected cases PASS (MO_ACTIONS_ONLY rerun); N-227 (a stale building-look case since Oct 25) left open. Both editors stay closed (Wes closed them for the build).
 References: CL-0214
+
+### 2026-10-27 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0216
+Status: CLAIM + RELEASE (done) the MO57 editor (rows set only), build window and instances for the bear's aggro range (Wes: "bears should be considered predators in context of the game, just a smaller agro range"): DT_Creatures Bear01 AggroRange 600 (VERIFIED 1/1; patch Docs/RowPatches/2026-10-27-bear-aggro-DT_Creatures.json); MOCreatureController reads AggroRange (it was never read). No editor, build or instance held now.
+References: CL-0215

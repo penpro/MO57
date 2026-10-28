@@ -9,6 +9,7 @@
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISense.h"
 #include "Perception/AISenseConfig_Sight.h"
+#include "Perception/AISense_Sight.h"
 #include "Perception/AISenseConfig_Hearing.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/Blackboard/BlackboardKeyType.h"
@@ -52,6 +53,10 @@ void AMOCreatureController::Tick(float DeltaTime)
 		if (IsOutOfTheWorld(CurrentThreatActor.Get()))
 		{
 			ForgetOutOfTheWorldThreat();   // seen before its creator opened (or a dev reopened it): let it go now
+		}
+		if (bPursuesThreats && !CurrentThreatActor.IsValid() && !IsDead())
+		{
+			ScanForQuarry();   // someone seen far off may have come within its aggro range
 		}
 		UpdatePursuit();   // may give the chase up (and clear the threat)
 		if (CurrentThreatActor.IsValid())
@@ -269,44 +274,21 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		return;
 	}
 
-	// Check if this is a valid threat (another pawn, not same class)
-	APawn* OtherPawn = Cast<APawn>(Actor);
-	if (!OtherPawn)
+	// Check if this is a valid threat (another pawn)
+	if (!Cast<APawn>(Actor))
 	{
 		return;
-	}
-
-	// Don't target other creatures of the same type
-	if (OtherPawn->GetClass() == ControlledPawn->GetClass())
-	{
-		return;
-	}
-
-	// A survivor still in the character creator is not in the world yet: no quarry, nothing to flee (Wes, Oct 27: no bears in the creator).
-	if (IsOutOfTheWorld(OtherPawn))
-	{
-		return;
-	}
-
-	// A predator takes no quarry inside the start area unless it was attacked by it (AMOCreature::KeepsOutOfStartAreaAt).
-	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Stimulus.WasSuccessfullySensed()
-		&& Creature->KeepsOutOfStartAreaAt(OtherPawn->GetActorLocation(), OtherPawn))
-	{
-		return;
-	}
-
-	// A quarry this pursuer gave up on stays ignored for a while (GiveUpChase); a wound from it ends that (NotifyDamaged).
-	if (const double* Until = GivenUpUntil.Find(Actor))
-	{
-		if (GetWorld()->GetTimeSeconds() < *Until)
-		{
-			return;
-		}
-		GivenUpUntil.Remove(Actor);
 	}
 
 	if (Stimulus.WasSuccessfullySensed())
 	{
+		// Another kind of pawn, in the world, not given up, outside the start area for a predator, and within a pursuer's aggro range unless it
+		// attacked it (MayTakeAsQuarry: the same gate ScanForQuarry uses).
+		if (!MayTakeAsQuarry(Actor))
+		{
+			return;
+		}
+
 		// TARGET STICKINESS: Don't switch targets unless we don't have one or current is invalid
 		if (CurrentThreatActor.IsValid() && CurrentThreatActor.Get() != Actor)
 		{
@@ -316,41 +298,12 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 
 			if (NewDistance >= CurrentDistance * 0.5f)
 			{
-				// New target isn't significantly closer - keep current target
-				// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
-				// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Ignoring %s (dist %.1f), keeping current target %s (dist %.1f)"),
-				// 	*Actor->GetName(), NewDistance, *CurrentThreatActor->GetName(), CurrentDistance);
-				return;
+				return;   // new target isn't significantly closer - keep current target
 			}
-
-			// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
-			// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Switching from %s to closer threat %s"),
-			// 	*CurrentThreatActor->GetName(), *Actor->GetName());
 		}
 
 		// New threat detected or switching to closer threat
-		const bool bNewQuarry = CurrentThreatActor.Get() != Actor;
-		CurrentThreatActor = Actor;
-		RememberedThreatActor = Actor;
-		LastKnownThreatLocation = Actor->GetActorLocation();
-
-		// Clear any pending "forget" timer since we can see the threat again
-		GetWorld()->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
-
-		// DEBUG (MOCreatureController, disabled Oct 18): re-enable to trace verbose detail
-		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] THREAT DETECTED: %s at distance %.1f"),
-		// 	*Actor->GetName(), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()));
-
-		// Update blackboard immediately
-		UpdateBlackboardThreatInfo();
-		// A predator that takes a new quarry calls its pack: wolves hunt together (N-096, Oct 20).
-		if (bNewQuarry && bPursuesThreats)
-		{
-			if (AMOPredatorCreature* Predator = Cast<AMOPredatorCreature>(ControlledPawn))
-			{
-				Predator->AlertPack(Actor);
-			}
-		}
+		TakeQuarry(Actor);
 	}
 	else
 	{
@@ -405,15 +358,9 @@ void AMOCreatureController::UpdateThreatAssessment()
 			continue;
 		}
 
-		// Check if this is a valid threat (player character or hostile pawn)
-		APawn* OtherPawn = Cast<APawn>(Actor);
-		if (!OtherPawn)
-		{
-			continue;
-		}
-
-		// Don't target other creatures of the same type (simplified affiliation)
-		if (OtherPawn->GetClass() == ControlledPawn->GetClass())
+		// The one quarry gate (MayTakeAsQuarry: another kind of pawn, in the world, not given up, outside the start area, within the aggro
+		// range unless attacked) -- this older pass had its own looser test (Oct 27; nothing calls it now: ScanForQuarry does its job).
+		if (!MayTakeAsQuarry(Actor))
 		{
 			continue;
 		}
@@ -629,6 +576,7 @@ void AMOCreatureController::ApplyBehaviorSettings(const FMOCreatureDefinitionRow
 	FleeHealthThreshold = Definition.FleeThreshold;
 	AttackRange = Definition.AttackRange;
 	bPursuesThreats = Definition.bIsPredator;
+	AggroRangeCm = Definition.AggroRange;
 	WoundedPanicSeconds = Definition.WoundedPanicSeconds;
 	ChaseLeashRadius = Definition.ChaseLeashRadius;
 	ChaseNoGainSeconds = Definition.ChaseNoGainSeconds;
@@ -774,6 +722,92 @@ void AMOCreatureController::UpdatePursuit()
 		ChaseLeashRadius, ChaseNoGainSeconds, ChaseBestDistance, ChaseLastGainTime))
 	{
 		GiveUpChase(Reason);
+	}
+}
+
+bool AMOCreatureController::MayTakeAsQuarry(const AActor* Actor) const
+{
+	const APawn* ControlledPawn = GetPawn();
+	const APawn* Other = Cast<APawn>(Actor);
+	const UWorld* World = GetWorld();
+	if (!ControlledPawn || !Other || !World || Other == ControlledPawn || Other->GetClass() == ControlledPawn->GetClass())
+	{
+		return false;   // never its own kind
+	}
+	// A survivor still in the character creator is not in the world yet: no quarry, nothing to flee (Wes, Oct 27: no bears in the creator).
+	if (IsOutOfTheWorld(Other))
+	{
+		return false;
+	}
+	// A quarry this pursuer gave up on stays ignored for a while (GiveUpChase); a wound from it ends that (NotifyDamaged).
+	if (const double* Until = GivenUpUntil.Find(Actor); Until && World->GetTimeSeconds() < *Until)
+	{
+		return false;
+	}
+	// A predator takes no quarry inside the start area unless it was attacked by it (AMOCreature::KeepsOutOfStartAreaAt).
+	if (const AMOCreature* Creature = Cast<AMOCreature>(ControlledPawn); Creature && Creature->KeepsOutOfStartAreaAt(Other->GetActorLocation(), Other))
+	{
+		return false;
+	}
+	// A pursuer goes for someone only within its aggro range, unless they attacked it (prey flee whatever they see).
+	return !bPursuesThreats || AggroRangeCm <= 0.0f || IsProvokedBy(Actor)
+		|| FVector::Dist(ControlledPawn->GetActorLocation(), Other->GetActorLocation()) <= AggroRangeCm;
+}
+
+void AMOCreatureController::TakeQuarry(AActor* Actor)
+{
+	APawn* ControlledPawn = GetPawn();
+	UWorld* World = GetWorld();
+	if (!ControlledPawn || !World || !Actor)
+	{
+		return;
+	}
+	const bool bNewQuarry = CurrentThreatActor.Get() != Actor;
+	if (bNewQuarry)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s takes %s as its %s at %.0f cm (aggro range %.0f cm%s)"), *ControlledPawn->GetName(),
+			*Actor->GetName(), bPursuesThreats ? TEXT("quarry") : TEXT("threat"), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()),
+			AggroRangeCm, IsProvokedBy(Actor) ? TEXT(", it attacked") : TEXT(""));
+	}
+	CurrentThreatActor = Actor;
+	RememberedThreatActor = Actor;
+	LastKnownThreatLocation = Actor->GetActorLocation();
+	World->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);   // seen again: no forgetting
+	UpdateBlackboardThreatInfo();
+	// A predator that takes a new quarry calls its pack: wolves hunt together (N-096, Oct 20).
+	if (bNewQuarry && bPursuesThreats)
+	{
+		if (AMOPredatorCreature* Predator = Cast<AMOPredatorCreature>(ControlledPawn))
+		{
+			Predator->AlertPack(Actor);
+		}
+	}
+}
+
+void AMOCreatureController::ScanForQuarry()
+{
+	const APawn* ControlledPawn = GetPawn();
+	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
+	if (!PerceptionComp || !ControlledPawn)
+	{
+		return;
+	}
+	TArray<AActor*> Seen;
+	PerceptionComp->GetCurrentlyPerceivedActors(UAISense_Sight::StaticClass(), Seen);
+	AActor* Nearest = nullptr;
+	double NearestDistSq = TNumericLimits<double>::Max();
+	for (AActor* Candidate : Seen)
+	{
+		const double DistSq = Candidate ? FVector::DistSquared(ControlledPawn->GetActorLocation(), Candidate->GetActorLocation()) : NearestDistSq;
+		if (DistSq < NearestDistSq && MayTakeAsQuarry(Candidate))
+		{
+			Nearest = Candidate;
+			NearestDistSq = DistSq;
+		}
+	}
+	if (Nearest)
+	{
+		TakeQuarry(Nearest);
 	}
 }
 

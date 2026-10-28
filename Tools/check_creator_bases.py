@@ -201,6 +201,28 @@ def main(keep=False):
                        "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) for b in B]; "
                        "out('BEARS %d' % len(B))"], timeout=30)
         rep.step("... hit it and it fights back (attacked: the start area no longer holds it off)", bitten, f"wounds {w1} -> {w2}")
+
+        # Wes, Oct 27: a bear is a predator, "just a smaller agro range" (6 m; the wolf's is 20 m). With the start area off for the step, a bear
+        # spawned 10 m away sees the survivor and takes it only once within 6 m (it wanders: it may come that close by itself), never from
+        # farther; brought to 4 m it goes for it (ScanForQuarry takes someone seen walking in). The take is logged with its distance.
+        ui.console(NAME, "MO.AI.PredatorFreeAreaM 0")
+        aoff = ui.log_size(NAME)
+        bear = query("MO.Test.SpawnCreature Bear 1000", r"\[MOTEST\] SpawnCreature: .*")
+        name = (re.search(r"SpawnCreature: (\S+)", bear) or [None, "?"])[1]
+        time.sleep(12)
+        ui.call(NAME, ["py", "-c", "p = unreal.GameplayStatics.get_player_pawn(world, 0); pl = p.get_actor_location(); "
+                       "b = min([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')], "
+                       "key=lambda a: (a.get_actor_location() - pl).length()); "
+                       "b.set_actor_location(pl + p.get_actor_forward_vector() * 400.0 + unreal.Vector(0.0, 0.0, 120.0), False, True); "
+                       # facing the survivor: a creature goes by what it sees, and 12 s of wandering may have turned it away
+                       "r = unreal.MathLibrary.find_look_at_rotation(b.get_actor_location(), pl); b.set_actor_rotation(unreal.Rotator(0.0, r.yaw, 0.0), False); out('BEAR_IN')"], timeout=30)
+        took = ui.wait_log(NAME, rf"\[MOCreatureController\] {re.escape(name)} takes \S+ as its quarry at (\d+) cm \(aggro range (\d+) cm[^\r\n]*", since=aoff, timeout=20)
+        ui.call(NAME, ["py", "-c", "B = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Pawn) if a.get_class().get_name().startswith('BP_Bear')]; "
+                       "[b.get_component_by_class(unreal.MOAnatomyComponent).inflict_damage(unreal.MOBodyPartType.HEART, 1000.0, unreal.MOWoundType.PUNCTURE, None) for b in B]; "
+                       "out('BEARS %d' % len(B))"], timeout=30)
+        ui.console(NAME, "MO.AI.PredatorFreeAreaM -1")
+        rep.step("a bear spawned 10 m off takes the survivor only from within its 6 m aggro range (by itself, or brought to 4 m)",
+                 bool(took) and int(took.group(2)) == 600 and int(took.group(1)) <= 650, took.group(0)[:200] if took else f"{name} took no quarry")
         time.sleep(6)
         screenshot("6_in_game")
         # Her own updo stays on its strands at the third-person distance: the survivor Blueprint's LOD bias (-7 on each group) carried onto

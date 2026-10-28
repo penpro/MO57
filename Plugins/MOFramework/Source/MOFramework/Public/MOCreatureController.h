@@ -279,6 +279,9 @@ protected:
 
 	/** From the definition (ApplyBehaviorSettings): see FMOCreatureDefinitionRow. */
 	bool bPursuesThreats = false;
+	/** A pursuer goes for someone it was not attacked by only this close (cm; the species row's AggroRange; Wes, Oct 27: a bear is a predator
+	 *  "just a smaller agro range"). It may see them much farther off; it takes them when they come within this (ScanForQuarry). */
+	float AggroRangeCm = 1000.f;
 	float WoundedPanicSeconds = 45.f;
 	float ChaseLeashRadius = 20000.f;
 	float ChaseNoGainSeconds = 20.f;
@@ -395,6 +398,17 @@ private:
 
 	/** A survivor still in the character creator (AMOCharacter::IsInCharacterCreator): not in the world yet, no quarry and nothing to flee. */
 	static bool IsOutOfTheWorld(const AActor* Actor);
+
+	/** May this creature take Actor as its threat now: another kind of pawn, in the world, not given up, outside the start area for a predator,
+	 *  and -- for a pursuer it was not attacked by -- within AggroRangeCm. One gate for perception and ScanForQuarry. */
+	bool MayTakeAsQuarry(const AActor* Actor) const;
+
+	/** Take Actor as the current threat (a sighting): the threat, its memory and the blackboard; a pursuer's new quarry calls its pack. */
+	void TakeQuarry(AActor* Actor);
+
+	/** A pursuer with no threat (5 Hz): the nearest pawn it sees that MayTakeAsQuarry. Perception reports only changes in what is seen, so
+	 *  someone seen far off and walking in, or forgotten in plain sight, was never taken (Oct 27: a bear that held off a torch never came back). */
+	void ScanForQuarry();
 
 	/** Drop a current threat that went out of the world (no give-up cooldown: it is quarry again once it Begins). */
 	void ForgetOutOfTheWorldThreat();
