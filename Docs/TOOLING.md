@@ -100,7 +100,8 @@ Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_0
 held, jumping when off the face and steering across it when stuck, as a player would; one RESULT per side: how high against the top, and
 how it ended -- TOPPED OUT only standing up there, OUT OF STRENGTH when the bar emptied on the face and the climber fell; with
 `--real-stamina` every side starts on a full bar and each climbing sample prints the face's angle and its cost; `--body` / `--climbing-level`
-set the climber, F51). Compare climbers in FRESH runs: `--reuse` places the pawn a few cm off the fresh spot, and SM_Cliff_09 side 3's first
+set the climber, F51; every sample names the clip on the body and the move on the driver, and while climbing each hand's / foot's distance to
+the rock; `--shots DIR` saves up to four behind + side screenshot pairs on the face). Compare climbers in FRESH runs: `--reuse` places the pawn a few cm off the fresh spot, and SM_Cliff_09 side 3's first
 pull-up then walks off its ledge.
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to

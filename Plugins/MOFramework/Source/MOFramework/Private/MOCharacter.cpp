@@ -114,6 +114,11 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchedWalkSpeed;
 	CrouchIdleAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Idle_MH.MM_Unarmed_Crouch_Idle_MH")));
 	CrouchWalkAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Walk_Fwd_MH.MM_Unarmed_Crouch_Walk_Fwd_MH")));
+	ClimbIdleAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Climbing/AS_Climb_Idle_MH.AS_Climb_Idle_MH")));
+	ClimbUpAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Climbing/AS_Climb_Up_MH.AS_Climb_Up_MH")));
+	ClimbDownAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Climbing/AS_Climb_Down_MH.AS_Climb_Down_MH")));
+	ClimbLeftAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Climbing/AS_Climb_Left_MH.AS_Climb_Left_MH")));
+	ClimbRightAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Climbing/AS_Climb_Right_MH.AS_Climb_Right_MH")));
 
 	// MO Components - Core Identity
 	IdentityComponent = CreateDefaultSubobject<UMOIdentityComponent>(TEXT("IdentityComponent"));
@@ -580,6 +585,8 @@ void AMOCharacter::Tick(float DeltaTime)
 	TickWater(DeltaTime);
 	UpdateLandingForAnimation();
 	UpdateDriverHold();
+	UpdateTraversalAnimation(DeltaTime);
+	UpdateClimbAnimation(DeltaTime);
 
 	// Check for falling through the world
 	if (bEnableFallThroughSafety)
@@ -1149,6 +1156,10 @@ void AMOCharacter::UpdateDriverHold()
 	const bool bTurningStanding = World && World->GetTimeSeconds() < HoldBodyUntilSeconds && GetVelocity().Size2D() < 50.0f;
 	const bool bAction = Body->Montage_IsPlaying(nullptr) || bTurningStanding;
 	const bool bHolding = DriverHoldMontage && Driver->Montage_IsPlaying(DriverHoldMontage);
+	if (TraversalMontage && Driver->Montage_IsActive(TraversalMontage))
+	{
+		return;   // a move onto something plays in the driver's slot (UpdateTraversalAnimation): the hold would cut it off
+	}
 	if (bAction && !bHolding)
 	{
 		if (UAnimSequence* Hold = LocomotionDriverHoldAnim.LoadSynchronous())
@@ -1160,6 +1171,140 @@ void AMOCharacter::UpdateDriverHold()
 	{
 		Driver->Montage_Stop(0.2f, DriverHoldMontage);
 		DriverHoldMontage = nullptr;
+	}
+}
+
+void AMOCharacter::PlayTraversalAnim(uint8 Kind, float Duration)
+{
+	UAnimInstance* Driver = LocomotionDriver ? LocomotionDriver->GetAnimInstance() : nullptr;
+	const FMOTraversalAnim* Anim = Kind == static_cast<uint8>(EMOTraversal::HopUp) ? &HopUpAnim
+		: Kind == static_cast<uint8>(EMOTraversal::PullUp) ? &PullUpAnim
+		: Kind == static_cast<uint8>(EMOTraversal::Vault) ? &VaultAnim : nullptr;
+	UAnimSequence* Sequence = Driver && Anim ? Anim->Sequence.LoadSynchronous() : nullptr;
+	if (!Sequence || Duration <= 0.0f)
+	{
+		return;
+	}
+	// The rise (leaving the ground -> up on top) takes the move's duration; the rest of the sequence (the stand) plays out at that rate until the
+	// move ends and locomotion takes the body back.
+	const float Rise = FMath::Max(Anim->RiseEndSeconds - Anim->RiseStartSeconds, 0.1f);
+	const float Rate = FMath::Clamp(Rise / Duration, 0.4f, 3.0f);
+	TraversalMontage = Driver->PlaySlotAnimationAsDynamicMontage(Sequence, UMOBodyRetargetAnimInstance::MontageSlot, 0.1f, 0.25f, Rate, 1, -1.0f,
+		Anim->RiseStartSeconds);
+}
+
+bool AMOCharacter::GetMoveTraversal(EMOTraversal& OutKind, float& OutDuration) const
+{
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	OutKind = EMOTraversal::None;
+	OutDuration = 0.0f;
+	return Move && Move->GetTraversal(OutKind, OutDuration);
+}
+
+void AMOCharacter::OnRep_TraversalCue()
+{
+	PlayTraversalAnim(TraversalCue.Kind, TraversalCue.Duration);   // a machine that sees the move only in the replicated movement
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: the server's cue for move %d (%.2f s) -> %s"), *GetName(), TraversalCue.Kind, TraversalCue.Duration,
+		TraversalMontage ? TEXT("playing") : TEXT("no sequence"));
+}
+
+void AMOCharacter::UpdateTraversalAnimation(float DeltaTime)
+{
+	UAnimInstance* Driver = LocomotionDriver ? LocomotionDriver->GetAnimInstance() : nullptr;
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!Driver || !Move)
+	{
+		return;
+	}
+
+	// A move (hop up, pull-up, vault): the machine running it -- the owner, the server -- knows its kind and duration; the server cues the others
+	// (TraversalCue). Leaving the move hands the body back to locomotion.
+	const bool bTraversing = Move->IsTraversingAsSeen();
+	if (bTraversing && !bTraversalAnimStarted)
+	{
+		bTraversalAnimStarted = true;
+		EMOTraversal Kind = EMOTraversal::None;
+		float Duration = 0.0f;
+		if (GetMoveTraversal(Kind, Duration))
+		{
+			PlayTraversalAnim(static_cast<uint8>(Kind), Duration);
+			if (HasAuthority())
+			{
+				TraversalCue.Kind = static_cast<uint8>(Kind);
+				TraversalCue.Duration = Duration;
+				++TraversalCue.Serial;
+			}
+		}
+	}
+	else if (!bTraversing && bTraversalAnimStarted)
+	{
+		bTraversalAnimStarted = false;
+		if (TraversalMontage && Driver->Montage_IsActive(TraversalMontage))
+		{
+			Driver->Montage_Stop(0.25f, TraversalMontage);
+		}
+		TraversalMontage = nullptr;
+	}
+
+	// The sequences carry root motion; the driver's is never applied (our movement moves the capsule along the move's path), so drop it.
+	Driver->ConsumeExtractedRootMotion(1.0f);
+}
+
+void AMOCharacter::UpdateClimbAnimation(float DeltaTime)
+{
+	UAnimInstance* Body = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!Body || !Move)
+	{
+		return;
+	}
+	if (!Move->IsClimbingAsSeen() || bIsDead)
+	{
+		if (ClimbMontage)
+		{
+			if (Body->Montage_IsActive(ClimbMontage))
+			{
+				Body->Montage_Stop(0.25f, ClimbMontage);   // off the face: a pull-over's own move, a fall, the ground
+			}
+			ClimbMontage = nullptr;
+		}
+		ClimbClip = PendingClimbClip = -1;
+		return;
+	}
+
+	// Which way she climbs along the face: the velocity off the face (the hold toward it) does not count. The body faces the rock. Another
+	// machine's copy takes the server's replicated velocity: its own simulates the climb as a fall (IsClimbingAsSeen), gravity and all.
+	const FVector Facing = GetActorForwardVector();
+	const FVector Velocity = GetLocalRole() == ROLE_SimulatedProxy ? FVector(GetReplicatedMovement().LinearVelocity) : GetVelocity();
+	const FVector Along = Velocity - FVector::DotProduct(Velocity, Facing) * Facing;
+	const float Up = Along.Z;
+	const float Side = FVector::DotProduct(Along, GetActorRightVector());
+	int32 Wanted = 0;
+	if (Along.Size() > 5.0f)
+	{
+		Wanted = FMath::Abs(Up) >= FMath::Abs(Side) ? (Up > 0.0f ? 1 : 2) : (Side < 0.0f ? 3 : 4);
+	}
+	// A clip must be wanted for a moment before it replaces the one playing (a pause between holds flickers the speed through zero).
+	if (Wanted != ClimbClip)
+	{
+		PendingClimbClipSeconds = Wanted == PendingClimbClip ? PendingClimbClipSeconds + DeltaTime : 0.0f;
+		PendingClimbClip = Wanted;
+	}
+	const bool bStart = !ClimbMontage || !Body->Montage_IsActive(ClimbMontage);
+	if (bStart || (Wanted != ClimbClip && PendingClimbClipSeconds >= 0.2f))
+	{
+		const TSoftObjectPtr<UAnimSequence>* Clips[] = {&ClimbIdleAnim, &ClimbUpAnim, &ClimbDownAnim, &ClimbLeftAnim, &ClimbRightAnim};
+		if (UAnimSequence* Clip = Clips[Wanted]->LoadSynchronous())
+		{
+			ClimbMontage = Body->PlaySlotAnimationAsDynamicMontage(Clip, UMOBodyRetargetAnimInstance::MontageSlot, 0.25f, 0.25f, 1.0f, 100000);
+			ClimbClip = Wanted;
+		}
+	}
+	if (ClimbMontage && ClimbClip > 0)
+	{
+		// The hands and feet keep pace with the climb: the clip's own climbing speed at rate 1 (measured) against the climber's along the face.
+		const float ClipSpeed = ClimbClip <= 2 ? ClimbClipVerticalSpeed : ClimbClipSideSpeed;
+		Body->Montage_SetPlayRate(ClimbMontage, FMath::Clamp(Along.Size() / FMath::Max(ClipSpeed, 1.0f), 0.25f, 2.0f));
 	}
 }
 
@@ -2168,6 +2313,7 @@ void AMOCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AMOCharacter, DeathRecord);
+	DOREPLIFETIME_CONDITION(AMOCharacter, TraversalCue, COND_SkipOwner);
 }
 
 void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)

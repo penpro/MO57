@@ -307,6 +307,13 @@
 
 ## 6. Co-op and RPC
 
+- **A host climbing showed as FALLING on the joiner, and resting on a wall dropped to the ground there** -> another machine's copy (a
+  simulated proxy) ran our custom movement mode's physics itself (`PhysClimb`) with climb state it never had (a zero face normal: StartClimbing
+  runs only where the move runs), "lost" the face and let go every tick -> a custom mode's physics returns on a simulated proxy (the server's
+  replicated position moves it), and anything a copy SHOWS reads the server's replicated movement mode / velocity, not its local mode
+  (`IsClimbingAsSeen`, `GetReplicatedMovement().LinearVelocity`). The traversal nettest moves only the joiner, whose host-side copy is the
+  server's own: a "how does it look to the others" check needs the HOST to move and the joiner to watch (N-240, Oct 29).
+
 - **A joiner's own death showed nothing on the joiner** -> the death ran server-side only (anatomy events fire on the server) -> a
   replicated record + one "enter dead state" routine run by the server and by every client's OnRep (`FMODeathRecord`, Oct 18). Any
   state change a player must SEE on their own machine needs a replicated trigger, not a server-side broadcast.
@@ -457,7 +464,9 @@
   PELVIS ON THE FLOOR (-5 cm over the root; standing 85) with the crouch's height carried by its children (spine_01 and both thighs
   translated ~40 cm): the torso and legs land right, the vertices skinned to the pelvis do not. Seen in game as a crouched pelvis at
   -5 cm over the capsule floor -> `Content/Python/repair_crouch_pelvis.py` moved the offset back into the pelvis frame by frame (no other
-  bone moves in the world): crouched pelvis 31-34 cm. A new retarget: read the pelvis height before shipping it.
+  bone moves in the world): crouched pelvis 31-34 cm. A new retarget: read the pelvis height before shipping it. The same retargeter did it
+  again to Titan Climbing's climbing set (Oct 29: pelvis -5 cm, ~90 cm on spine_01 and the thighs): `REPAIR_CLIPS=... repair_crouch_pelvis.py`.
+  `ue.py py` does not pass environment variables into the editor: set them in the code it runs (`os.environ[...] = ...; exec(open(...))`).
 - **A bone key reads back with a constant added** -> `AnimationLibrary.get_bone_pose_for_frame` returns the pose with the skeleton's
   translation retargeting applied (the MetaHuman pelvis: +(0, 0.11, -5.25)), so writing back what you read shifts the bone by it ->
   measure it (write zeros, read) and write target - offset. Writing keys from Python: `AnimationDataController.set_bone_track_keys`

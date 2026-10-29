@@ -741,6 +741,23 @@ bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FStri
 	return true;
 }
 
+bool UMOCharacterMovementComponent::IsInCustomModeAsSeen(uint8 Mode) const
+{
+	if (MovementMode == MOVE_Custom && CustomMovementMode == Mode)
+	{
+		return true;
+	}
+	if (!CharacterOwner || CharacterOwner->GetLocalRole() != ROLE_SimulatedProxy)
+	{
+		return false;
+	}
+	TEnumAsByte<EMovementMode> Replicated = MOVE_None;
+	TEnumAsByte<EMovementMode> Ground = MOVE_None;
+	uint8 Custom = 0;
+	UnpackNetworkMovementMode(CharacterOwner->GetReplicatedMovementMode(), Replicated, Custom, Ground);
+	return Replicated == MOVE_Custom && Custom == Mode;
+}
+
 bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHitResult& OutHit, EMOClimbSurface& OutSurface) const
 {
 	OutSurface = EMOClimbSurface::None;
@@ -824,6 +841,7 @@ bool UMOCharacterMovementComponent::FindClimbableWall(FHitResult& OutHit, EMOCli
 
 void UMOCharacterMovementComponent::StartTraversal(const FTraversalPlan& Plan)
 {
+	Traverse.Kind = Plan.Kind;
 	Traverse.Path = Plan.Path;
 	Traverse.Facing = Plan.Facing;
 	Traverse.Duration = FMath::Max(Plan.Duration, 0.05f);
@@ -933,6 +951,13 @@ void UMOCharacterMovementComponent::PhysicsRotation(float DeltaTime)
 
 void UMOCharacterMovementComponent::PhysCustom(float DeltaTime, int32 Iterations)
 {
+	// Another machine's copy of a climber (a simulated proxy) has no climb or move of its own to run -- the server's replicated position moves it,
+	// and its ClimbNormal was never set (StartClimbing runs where the move runs). Running the climb there traced along a zero normal, found
+	// "nothing in reach" and let go every tick, so a host resting on a wall dropped to the ground on the joiner's screen (Oct 29).
+	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy && (CustomMovementMode == CMOVE_Climb || CustomMovementMode == CMOVE_Traverse))
+	{
+		return;
+	}
 	switch (CustomMovementMode)
 	{
 	case CMOVE_Traverse:
@@ -1006,6 +1031,8 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 		return;
 	}
 	// The body turns to the face over ~0.1 s, not on one tick's bump (the normal rides the saved moves, so a replay turns the same way).
+	const FVector StartNormal = ClimbNormal;   // the face this tick's holds were found along (a held-at-the-lip move goes back to it, below)
+	const EMOClimbSurface StartSurface = ClimbSurface;
 	ClimbNormal = FMath::Lerp(ClimbNormal, Wall.ImpactNormal, 1.0f - FMath::Exp(-DeltaTime / 0.1f)).GetSafeNormal(UE_SMALL_NUMBER, Wall.ImpactNormal);
 	ClimbSurface = Surface;
 
@@ -1057,6 +1084,10 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 				*OldLocation.ToCompactString(), *ClimbNormal.ToCompactString(), *WhyNot);
 		}
 		MoveUpdatedComponent(OldLocation - UpdatedComponent->GetComponentLocation(), OldQuat, /*bSweep=*/false);
+		// ... and back to the face the holds were found along: the turn this tick made toward the lip's slope stays undone too, or the next tick
+		// traces from the old spot in the new direction, misses and lets go (Oct 29: held one frame at a 67 deg lip on SM_Cliff_09, fell 14 m).
+		ClimbNormal = StartNormal;
+		ClimbSurface = StartSurface;
 		Velocity = FVector::ZeroVector;
 		bHeldAtLip = true;
 		HeldAtLipLocation = OldLocation;

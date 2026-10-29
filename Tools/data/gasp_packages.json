@@ -1091,6 +1091,13 @@
   "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Neutral_Transition_Run_to_Sprint_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Neutral_Transition_Walk_to_Sprint_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Neutral_Transition_Walk_to_Sprint_Rfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Catch/Cliff/M_Neutral_Traversal_Catch_Cliff_high_stand",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_run_F_Lfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_run_F_Rfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_stand_F_Lfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_stand_F_Rfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_walk_F_Lfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_walk_F_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Hurdle/M_Neutral_Traversal_Hurdle_1_0_run_F_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Hurdle/M_Neutral_Traversal_Hurdle_1_0_run_F_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Hurdle/M_Neutral_Traversal_Hurdle_1_0_run_F_V2_Lfoot",
@@ -1101,10 +1108,13 @@
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Hurdle/M_Neutral_Traversal_Hurdle_1_0_walk_F_V2_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_run_F_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_run_F_Rfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_stand_F_Lfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_stand_F_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_walk_F_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_walk_F_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Vault/M_Neutral_Traversal_Vault_1_0_run_F_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Vault/M_Neutral_Traversal_Vault_1_0_stand_F_Lfoot",
+  "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Vault/M_Neutral_Traversal_Vault_1_0_walk_F_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Walk/M_Neutral_Transition_Run_to_Walk_Lfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Walk/M_Neutral_Transition_Run_to_Walk_Rfoot",
   "/Game/Characters/UEFN_Mannequin/Animations/Walk/M_Neutral_Transition_Sprint_to_Walk_Lfoot",
@@ -1331,5 +1341,20 @@
   "/Game/MetaHumans/Common/Female/Medium/NormalWeight/Body/metahuman_base_skel",
   "/Game/MetaHumans/Common/Male/Medium/NormalWeight/Bottoms/Cargopants/m_med_nrw_btm_cargopants_High",
   "/Game/Misc/SandboxAnimCurveCompressionSettings"
- ]
+ ],
+ "added": {
+  "2026-10-29 GASP phase 2 (climbing; Wes: \"can we use the hanging/grabbing animation for climbing instead of them just walking up the cliff\")": "the traversal sequences our hop-up / pull-up / vault and the hold on a face play as dynamic montages on the driver (AMOCharacter); their dependencies (foley notifies, SK_UEFN_Mannequin, SandboxAnimCurveCompressionSettings) were already in the list. Not the AM_ montages: they reference PSD_Traversal and GASP's montage blend-out notify state.",
+  "packages": [
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_stand_F_Lfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_stand_F_Rfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_walk_F_Lfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_walk_F_Rfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_run_F_Lfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Climb/M_Neutral_Traversal_Climb_Start_2_5_run_F_Rfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_stand_F_Lfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Mantle/M_Neutral_Traversal_Mantle_1_0_stand_F_Rfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Vault/M_Neutral_Traversal_Vault_1_0_walk_F_Rfoot",
+   "/Game/Characters/UEFN_Mannequin/Animations/Traversal/Catch/Cliff/M_Neutral_Traversal_Catch_Cliff_high_stand"
+  ]
+ }
 }

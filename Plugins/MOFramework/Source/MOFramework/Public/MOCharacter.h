@@ -288,6 +288,43 @@ class UVoxelLODVolumeComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
 
+/** One of GASP's traversal sequences for one of our moves (GASP phase 2, Docs/Animation_GASP.md): played on the locomotion driver, its rise --
+ *  the body leaving the ground to standing up on top, measured from its root curve by Content/Python/setup_gasp_survivor.py -- fitted to the
+ *  move's own duration. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOTraversalAnim
+{
+	GENERATED_BODY()
+
+	/** A sequence on the driver's skeleton (GASP's UEFN mannequin). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Animation")
+	TSoftObjectPtr<UAnimSequence> Sequence;
+
+	/** Where the rise starts and ends in it (seconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Animation")
+	float RiseStartSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Animation")
+	float RiseEndSeconds = 1.0f;
+};
+
+/** The server's word to the other machines that a move started (they see only the movement mode, not the move): its kind (EMOTraversal) and
+ *  duration. Serial makes every move a change. */
+USTRUCT()
+struct MOFRAMEWORK_API FMOTraversalCue
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	uint8 Kind = 0;
+
+	UPROPERTY()
+	uint8 Serial = 0;
+
+	UPROPERTY()
+	float Duration = 0.0f;
+};
+
 /** What the climb in hand costs this body now (AMOCharacter::GetClimbEffort; F51). */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOClimbEffort
@@ -1508,6 +1545,82 @@ private:
 
 	/** HoldBodyToCapsule's end (world seconds). */
 	double HoldBodyUntilSeconds = -1.0;
+
+	// ---- climbing and the moves onto things: GASP phase 2 (Wes, Oct 29: "can we use the hanging/grabbing animation for climbing instead of
+	// them just walking up the cliff") -- the driver's motion matching knows no climbing (our custom modes count as on the ground), so it walked
+	// up the face. GASP's own traversal sequences play on the driver instead, in its slot; the retarget carries them to the body. ----
+
+	/** A hop up (waist high): GASP's mantle. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Traversal", meta=(AllowPrivateAccess="true"))
+	FMOTraversalAnim HopUpAnim;
+
+	/** A pull-up (to arm's reach): GASP's climb-start -- the hands catch the edge, the feet walk the wall, up and over. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Traversal", meta=(AllowPrivateAccess="true"))
+	FMOTraversalAnim PullUpAnim;
+
+	/** A vault over a thin obstacle: GASP's vault. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Traversal", meta=(AllowPrivateAccess="true"))
+	FMOTraversalAnim VaultAnim;
+
+	/** On a face: Titan Climbing's climbing set (free on Fab; Wes, Oct 29: "yeah i just want the animations"), retargeted onto the MetaHuman
+	 *  (/MOFramework/Characters/Climbing, the crouch set's retargeter, pelvis repaired: Content/Python/repair_crouch_pelvis.py) and looped in
+	 *  the BODY's slot like the swim strokes: idle, or the climb up / down / left / right the climber is making along the face. GASP has no
+	 *  free-climbing cycle; its moves onto things (above) still play on the driver. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> ClimbIdleAnim;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> ClimbUpAnim;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> ClimbDownAnim;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> ClimbLeftAnim;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> ClimbRightAnim;
+
+	/** How fast the up / down clips climb at rate 1 (cm/s along the face), for their play rate: measured Oct 29 from a hand while its contact
+	 *  curve holds it on the rock (it slides down the body at the climbing speed): up 68-72, down 60-70. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	float ClimbClipVerticalSpeed = 70.0f;
+
+	/** The same across the face (the side clips carry no contact curves to measure by: an estimate for Wes to judge by eye). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Animation|Climbing", meta=(AllowPrivateAccess="true"))
+	float ClimbClipSideSpeed = 35.0f;
+
+	/** A move's kind and duration, for the machines that do not run it (see FMOTraversalCue). Server-written, not to the owner. */
+	UPROPERTY(ReplicatedUsing=OnRep_TraversalCue)
+	FMOTraversalCue TraversalCue;
+
+	UFUNCTION()
+	void OnRep_TraversalCue();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> TraversalMontage;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ClimbMontage;
+
+	/** The clip ClimbMontage plays (0 idle, 1 up, 2 down, 3 left, 4 right); the one wanted next, and for how long it has been wanted. */
+	int32 ClimbClip = -1;
+	int32 PendingClimbClip = -1;
+	float PendingClimbClipSeconds = 0.0f;
+
+	bool bTraversalAnimStarted = false;
+
+	/** The moves onto things, on the driver (every tick, every machine: cosmetic, from what each machine sees). */
+	void UpdateTraversalAnimation(float DeltaTime);
+
+	/** The climbing set on the body while on a face (every tick, every machine: the climbing mode and the velocity replicate). */
+	void UpdateClimbAnimation(float DeltaTime);
+
+	/** A move's sequence on the driver, its rise fitted to the move's duration. */
+	void PlayTraversalAnim(uint8 Kind, float Duration);
+
+	/** The move under way on this machine (the owner, the server): its kind and duration. */
+	bool GetMoveTraversal(EMOTraversal& OutKind, float& OutDuration) const;
 
 	/** Mirror the body's montages onto the driver's slot (every tick, every machine: cosmetic, from the montages each machine plays). */
 	void UpdateDriverHold();

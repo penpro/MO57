@@ -102,8 +102,9 @@ the capsule turned 90 degrees with no action, the body stays; an attack, it foll
 
 ## 4. Known gaps (phase 1)
 
-- **Traversal**: GASP's vault / mantle / hurdle live in its character Blueprint (not taken) and need its `Traversable` trace channel; ours
-  still slide in a stand-in pose. Montages GASP plays on the driver have no root motion effect on our capsule (only `GetMesh()` feeds the CMC).
+- **Traversal**: done in phase 2 (section 5) with GASP's sequences on the driver, played by our own moves (its character Blueprint's
+  traversal logic and `Traversable` channel are still not taken). Montages on the driver have no root motion effect on our capsule (only
+  `GetMesh()` feeds the CMC; `UpdateTraversalAnimation` also drops the driver's extracted root motion each tick).
 - **Turned without moving**: an actor turned by anything other than movement or an action (a teleport, `set_actor_rotation` in a check)
   keeps the body's facing until she moves (§3; TRAPS §5).
 - **The driver's graph reads the movement component on the animation worker threads** (PoseSearch's trajectory: `GetMaxSpeed`,
@@ -114,8 +115,41 @@ the capsule turned 90 degrees with no action, the body stays; an attack, it foll
 - **Swim**: the strokes play in the body's slot over the retargeted pose (blended now; before, the override swapped blueprints).
 - **ABP_GenericRetarget's per-chain curve blending** (its `ChainCurveMap`, blend-to-source by curve) is not in the native retarget.
 
-## 5. Verifying
+## 5. Phase 2 (Oct 29): the moves onto things, and climbing
+
+Wes: "can we use the hanging/grabbing animation for climbing instead of them just walking up the cliff", then of Titan Climbing (free on
+Fab, Team Rewind, Fab Standard License, installed to the 5.8 engine): "yeah i just want the animations, we can probably reuse the hand/foot
+IK rigging to follow the cliff". Before this the driver's motion matching, which counts our custom modes as on the ground, walked her up
+the face.
+
+- **Hop up / pull-up / vault** (`AMOCharacter::UpdateTraversalAnimation`): GASP's own sequences -- `M_Neutral_Traversal_Mantle_1_0_stand`,
+  `..._Climb_Start_2_5_stand` (the hands catch the edge, the feet walk the wall), `..._Vault_1_0_stand` -- as dynamic montages on the
+  DRIVER (its slot; the retarget carries them to the body; the driver's hold yields to them). Each one's span (leaving the ground -> up on
+  top, by the root's whole travel; a vault, -> landed) is fitted to our move's duration: measured from the root curve and set on the survivor
+  Blueprint by `Content/Python/setup_gasp_traversal.py` (`FMOTraversalAnim`: mantle 0.48-1.17 s, climb-start 0.56-1.87 s, vault 0.29-0.87 s:
+  rates ~1.0 / 0.8-1.2 / ~1.05). Imported by `Tools/import_gasp.py` (10 sequences added to its list Oct 29; the `AM_` montages are not:
+  they reference GASP's traversal pose database). Other machines learn the move from the server (`TraversalCue`, replicated skip-owner: kind
+  + duration; `[MOTraversal] ...: the server's cue for move N (D s) -> playing`): they see only the movement mode.
+- **On a face** (`AMOCharacter::UpdateClimbAnimation`): Titan Climbing's climbing set (`AS_Climb_Idle / Up / Down / Left / Right`, UE5
+  mannequin, in place) retargeted onto the MetaHuman (`/MOFramework/Characters/Climbing/*_MH`, the crouch set's `RTG_MoverMannyToMetaHuman`,
+  plugin content mounted not enabled: `MOEditorContentUtils.mount_content_path`), its pelvis repaired (the same retargeter put it on the
+  floor again: `Content/Python/repair_crouch_pelvis.py` with `REPAIR_CLIPS`, pelvis -5 -> 61-71 cm), looped in the BODY's slot like the
+  swim strokes: idle, or up / down / left / right by the climber's motion along the face (debounced 0.2 s), at the rate that matches the climb
+  (`ClimbClipVerticalSpeed` 70 cm/s, measured from a planted hand; side 35, an estimate): at 30 cm/s up rock the up clip plays at ~0.42.
+- **Hands and feet on the rock** (`UMOBodyRetargetAnimInstance`, `FMOClimbLimbIK`): Titan's approach, our code. The clips carry contact
+  curves (`c_lefthand / c_righthand / c_leftfoot / c_rightfoot`; idle and up all four, down the hands, the side clips none); past 0.6 a limb
+  sweeps for the rock from where the clip puts it, past 0.95 it stays on that hold (kept in the touched component's space); after the slot
+  each chain (upperarm-lowerarm-hand, thigh-calf-foot) bends to its hold by two-bone IK, keeping the clip's elbow / knee direction. Per
+  machine and presentation only. Measured on SM_Cliff_09: hands on holds sit 4 cm off the rock, feet 8 (the offsets).
+- **Other machines' copies** read the server's replicated movement mode and velocity (`IsClimbingAsSeen` / `IsTraversingAsSeen`, the
+  replicated `LinearVelocity`), and never run the climb themselves (`PhysCustom` returns on a simulated proxy) -- until then a copy ran
+  `PhysClimb` with a zero face normal, "lost" the face and let go every tick: a host resting on a wall dropped to the ground on the joiner's
+  screen (TRAPS).
+- No free-climbing cycle in GASP; Titan's jumps, cling, mantle (another skeleton asset) and exit are not taken.
+
+## 6. Verifying
 
 `python Tools/check_legs.py` (the femme and every base: standing, walking, crouched; feet and pelvis heights, screenshots in
-`Saved/Screenshots/legs/`); `python Tools/check_gasp_movement.py` (the capsule, the gait speeds, the jump, the facing hold, the body's sex). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
+`Saved/Screenshots/legs/`); `python Tools/check_cliff_climb.py --side 3 [--shots DIR]` (each climbing sample names the clip on the body and
+the move on the driver with their rates, and each hand's / foot's distance to the rock; `--shots` saves behind + side pairs); `python Tools/check_gasp_movement.py` (the capsule, the gait speeds, the jump, the facing hold, the body's sex). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
 SandboxCharacter_CMC_ABP_C, retargeted by RTG_UEFN_to_Metahuman_nrw)` per survivor.

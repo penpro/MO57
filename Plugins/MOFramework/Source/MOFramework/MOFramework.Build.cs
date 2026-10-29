@@ -97,7 +97,8 @@ public class MOFramework : ModuleRules
 				"VoxelPCG",                 // Voxel plugin - PCG point nodes
 				"ProceduralMeshComponent",  // Water mesh generation
 				"HairStrandsCore",          // MetaHuman groom/hair components
-				"IKRig"                     // GASP locomotion: the body retargets the driver's pose (MOBodyRetargetAnimInstance)
+				"IKRig",                    // GASP locomotion: the body retargets the driver's pose (MOBodyRetargetAnimInstance)
+				"AnimationCore"             // the climber's hands and feet on the rock: two-bone IK (MOBodyRetargetAnimInstance)
 			}
 			);
 			

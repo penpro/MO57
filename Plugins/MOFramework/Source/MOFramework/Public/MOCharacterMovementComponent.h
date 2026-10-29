@@ -96,6 +96,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Traversal")
 	bool IsTraversing() const { return MovementMode == MOVE_Custom && CustomMovementMode == CMOVE_Traverse; }
 
+	/** Climbing / on a move as THIS machine sees the pawn, for what it shows (animation, IK). The owner and the server run the mode; another
+	 *  machine's copy (a simulated proxy) cannot -- its own simulation turns a custom mode into falling (Oct 29: a host climbing a block read
+	 *  MOVE_Falling on the joiner the whole way up) -- so there the server's replicated movement mode says. */
+	bool IsClimbingAsSeen() const { return IsInCustomModeAsSeen(CMOVE_Climb); }
+	bool IsTraversingAsSeen() const { return IsInCustomModeAsSeen(CMOVE_Traverse); }
+
 	/** What the climber holds (the speed depends on it). */
 	EMOClimbSurface GetClimbSurface() const { return ClimbSurface; }
 
@@ -128,6 +134,16 @@ public:
 	 *  second on the server and the owning client alike (both have the skill and the body), so a predicted climb matches the server's. */
 	UPROPERTY(BlueprintReadWrite, Category="MO|Traversal")
 	float ClimbSpeedScale = 1.0f;
+
+	bool IsInCustomModeAsSeen(uint8 Mode) const;
+
+	/** The move under way (Traverse): its kind and duration; false when not traversing. Known where the move runs (the owner, the server). */
+	bool GetTraversal(EMOTraversal& OutKind, float& OutDuration) const
+	{
+		OutKind = IsTraversing() ? Traverse.Kind : EMOTraversal::None;
+		OutDuration = IsTraversing() ? Traverse.Duration : 0.0f;
+		return IsTraversing() && Traverse.Kind != EMOTraversal::None;
+	}
 
 	/** The face being climbed: its outward normal, smoothed over the holds (zero off a face). */
 	FVector GetClimbNormal() const { return IsClimbing() ? ClimbNormal : FVector::ZeroVector; }
@@ -336,6 +352,7 @@ private:
 
 	struct FTraverseState
 	{
+		EMOTraversal Kind = EMOTraversal::None;   // what the move is (the animation plays the matching sequence: AMOCharacter)
 		FMOTraversal::FPath Path;
 		FVector Facing = FVector::ForwardVector;
 		float Duration = 0.0f;

@@ -7,7 +7,8 @@
 > **Current state (2026-10-29):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
 > need a vault mechanic to hop / pull up on things"), and since Oct 29 on the world's own rocks (Wes: "i can't vault or climb rocks and
 > such"): section 5; since Oct 29 up the Electric Dreams cliffs (a 28.7 m top-out on one bar; roofs and undercuts stop a line, as on real
-> rock). No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Since Oct 29 stamina limits a
+> rock). Animated since Oct 29: GASP's mantle / climb-start / vault for the moves, Titan Climbing's climbing set with hand / foot IK on a
+> face (`Docs/Animation_GASP.md` section 5). Since Oct 29 stamina limits a
 > climb, by the face's angle, the climber's Climbing skill and muscle share (F51, F52 B; section 3): a slab rests, a sheer face ~100 s a bar.
 > **Entry points:** `MOTraversal.h` (the pure decisions), `UMOCharacterMovementComponent` (custom modes `CMOVE_Traverse`, `CMOVE_Climb`;
 > `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`GetClimbEffort`, `ClimbingMET`,
@@ -87,6 +88,10 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
 - Two custom movement modes on `UMOCharacterMovementComponent`. **Traverse** follows a path worked out at the jump
   (`FMOTraversal::FPath`: rise straight up beside the face to clear the edge, over it at that height, settle) for the move's duration;
   **Climb** holds the capsule `ClimbWallGapCm` from the face and moves it along the face with the input.
+- Only the owner and the server run them. Another machine's copy (a simulated proxy) is moved by the server's replicated position: its
+  `PhysCustom` returns for these modes (Oct 29: a copy ran the climb with a face normal it never had, let go every tick and dropped to the
+  ground), and what it shows reads the replicated mode (`IsClimbingAsSeen` / `IsTraversingAsSeen`). Held at a lip (N-236), the undone move
+  also goes back to the tick's starting face normal (Oct 29: kept, the next tick traced in the new direction from the old spot and let go).
 - They start in `DoJump`, which the movement component runs from the jump input on the joiner AND, from the same input in the moves, on the
   server: both machines trace the same world and start the same move. The traversal's state (path, duration, elapsed) and the face held
   ride in the saved moves (`FSavedMove_MO`), so a replay after a correction runs them the same way. **The jump press must ride the move

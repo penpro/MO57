@@ -70,6 +70,15 @@
 ## Decisions, newest first
 
 ### 2026-10-29
+- **Climbing is animated with Titan Climbing's animations, our own movement** (Wes: "can we use the hanging/grabbing animation for climbing
+  instead of them just walking up the cliff"; of the free Titan Climbing plugin: "yeah i just want the animations, we can probably reuse the
+  hand/foot IK rigging to follow the cliff? that doesn't really need a server state, just the character's actual location needs to be server
+  authoritative right?" -- yes). Not its climbing system: it moves the character itself and trusts each player's own machine with the
+  climb (its "Movement State Send Rate"); ours stays the server's and predicted. Built: its climbing set retargeted onto the MetaHuman and
+  played on a face; hand / foot IK from its clips' contact curves, per machine; GASP's grab / pull-up / mantle / vault for the moves onto
+  things (`Docs/Animation_GASP.md` section 5). Claude's calls, noted: its clips copied into MO57 (they no longer need the plugin); the IK is
+  our own two-bone solve in the body's native animation (Titan's is a Full Body IK Control Rig tied to its component); the side clips' pace is
+  an estimate (no contact curves to measure); its jumps, cling and exit not taken.
 - **A climb's cost follows the face, the climber's skill and the climber's build** (F51, A; Wes: "yes make it angle dependent, but also
   tie some skill or physical attribute to it / the more muscle mass percentage of the body the better at climbing and the more skill the
   better"). Built (`AMOCharacter::GetClimbEffort`, `FMOTraversal::FaceAngleDeg` / `ClimbAbility`): the face's angle from level ground (its

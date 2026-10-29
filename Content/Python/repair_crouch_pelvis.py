@@ -11,6 +11,10 @@ world except the pelvis itself (and what is skinned to it). Usage, in the editor
 
     REPAIR_DRY_RUN=1 python Tools/ue.py py --file Content/Python/repair_crouch_pelvis.py     # measure only
     python Tools/ue.py py --file Content/Python/repair_crouch_pelvis.py                      # repair + save
+    REPAIR_CLIPS=/MOFramework/Characters/Climbing/AS_Climb_Up_MH,... python Tools/ue.py py --file ...   # other clips from the same retargeter
+
+The same retargeter (RTG_MoverMannyToMetaHuman) did it again to Titan Climbing's climbing set (Oct 29, /MOFramework/Characters/Climbing):
+any clip it makes gets this repair.
 
 Prints "CROUCH <clip>: d=(...) pelvis z <before> -> <after>, children fixed [...]" per clip. Idempotent: a clip whose spine_01 already sits at
 its reference is left alone. Applied Oct 27 to all four (crouch idle pelvis -5.2 -> 34.7 cm over the root; in game crouched 31-34 cm over the
@@ -22,6 +26,9 @@ import unreal
 
 CLIPS = ["/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Idle_MH", "/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Walk_Fwd_MH",
          "/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Entry_MH", "/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Exit_MH"]
+_OTHER = os.environ.pop("REPAIR_CLIPS", "")   # popped, like REPAIR_DRY_RUN
+if _OTHER:
+    CLIPS = [c.strip() for c in _OTHER.split(",") if c.strip()]
 # A standing clip on the same skeleton: its spine_01 / thigh translations are the skeleton's reference ones (checked Oct 27: MM_Idle 2.0,-0.1,0.0).
 REFERENCE_CLIP = "/MOFramework/Characters/MetaHumans/Female/Animations/Animations/MM_Idle"
 BODY = "/Game/MetaHumans/MH_F_1/Body/SKM_MH_F_1_BodyMesh"

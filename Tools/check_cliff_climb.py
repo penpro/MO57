@@ -17,7 +17,10 @@ higher for 30 s still on the face: a roof the steering did not get round; off th
 every side with a face; --reuse runs in a --keep instance already in the world.
 """
 import argparse
+import glob
+import os
 import re
+import shutil
 import sys
 import time
 
@@ -93,8 +96,28 @@ cap = p.get_editor_property("capsule_component")
 l = p.get_actor_location()
 ss = p.get_component_by_class(unreal.MOSurvivalStatsComponent)
 e = p.get_climb_effort() if p.is_climbing() else None   # the face's angle and what it costs this climber (F51)
-out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s stamina=%.0f%s" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing(), ss.get_stat_current("Stamina") if ss else -1.0,
-    " face=%.0fdeg cost=%.2f/s" % (e.face_angle_deg, e.stamina_per_second) if e else ""))
+def clip(mesh):   # the animation a mesh's montage plays, and its rate: the climbing set on the body, GASP's moves on the driver
+    try:
+        ai = mesh.get_anim_instance() if mesh else None
+        mo = ai.get_current_active_montage() if ai else None
+        if not mo:
+            return "-"
+        seg = mo.get_editor_property("slot_anim_tracks")[0].get_editor_property("anim_track").get_editor_property("anim_segments")[0]
+        return "%s x%.2f" % (seg.get_editor_property("anim_reference").get_name(), ai.montage_get_play_rate(mo))
+    except Exception as ex:
+        return "? (%s)" % type(ex).__name__
+drv = [c for c in p.get_components_by_class(unreal.SkeletalMeshComponent) if "LocomotionDriver" in c.get_name()]
+def limbs(mesh):   # each hand's and foot's distance to the rock in front (cm; '-' nothing within 60): on a hold, the body's IK puts it ~4 / ~8 cm off
+    fwd = p.get_actor_forward_vector()
+    res = []
+    for b in ("hand_l", "hand_r", "foot_l", "foot_r"):
+        at = mesh.get_socket_location(b)
+        h = unreal.SystemLibrary.line_trace_single(world, at - fwd * 20.0, at + fwd * 60.0, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [p], unreal.DrawDebugTrace.NONE, True)
+        res.append("%.0f" % ((h.to_tuple()[4] - at).length()) if h else "-")
+    return "/".join(res)
+out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s stamina=%.0f%s body=%s driver=%s%s" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing(), ss.get_stat_current("Stamina") if ss else -1.0,
+    " face=%.0fdeg cost=%.2f/s" % (e.face_angle_deg, e.stamina_per_second) if e else "", clip(p.get_editor_property("mesh")), clip(drv[0] if drv else None),
+    " limbs(cm)=" + limbs(p.get_editor_property("mesh")) if p.is_climbing() else ""))
 if p.is_climbing():
     # A player keeps the camera on the face: W is camera-relative, and a face that turned 50 degrees off the camera splits W into up and across.
     unreal.GameplayStatics.get_player_controller(world, 0).set_control_rotation(unreal.Rotator(0.0, 0.0, p.get_actor_rotation().yaw))
@@ -105,6 +128,35 @@ def q(code, key, timeout=120):
     _, out = ui.call(NAME, ["py", "-c", code], timeout=timeout)
     m = re.search(key + r" ([^\r\n]*)", out)
     return m.group(1) if m else ""
+
+
+def shot(folder, label):
+    """One screenshot of the game view (the console's shot), moved to <folder>/<label>.png."""
+    shots = os.path.join(ue.ROOT, "Saved", "Screenshots")
+    before = set(glob.glob(os.path.join(shots, "**", "*.png"), recursive=True))
+    ui.console(NAME, "shot")
+    deadline, new = time.time() + 20, []
+    while time.time() < deadline and not new:
+        new = sorted(set(glob.glob(os.path.join(shots, "**", "*.png"), recursive=True)) - before)
+        time.sleep(0.3)
+    if new:
+        time.sleep(0.5)
+        os.makedirs(folder, exist_ok=True)
+        shutil.move(new[-1], os.path.join(folder, label + ".png"))
+
+
+def climber_shots(folder, label):
+    """The climber from behind (the player's own camera) and from the side (2.6 m to her right, 1.2 m off the face, at her height)."""
+    shot(folder, label + "_behind")
+    pose = q("p = unreal.GameplayStatics.get_player_pawn(world, 0); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
+             "r = p.get_actor_right_vector(); out('POSE %f %f %f %f %f %f %f %f %f' % (l.x, l.y, l.z, f.x, f.y, f.z, r.x, r.y, r.z))", "POSE")
+    v = [float(x) for x in pose.split()] if pose else []
+    if len(v) == 9:
+        c = [v[i] + v[6 + i] * 260.0 - v[3 + i] * 120.0 for i in range(3)]
+        ui.console(NAME, "MO.Cam.LookAt %.0f %.0f %.0f %.0f %.0f %.0f 70" % (c[0], c[1], c[2] + 40.0, v[0], v[1], v[2] + 20.0))
+        time.sleep(0.3)
+        shot(folder, label + "_side")
+        ui.console(NAME, "MO.Cam.Reset")
 
 
 def climb_one(a, side):
@@ -127,9 +179,13 @@ def climb_one(a, side):
     ui.console(NAME, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
     best, last_rise_at, t0, end, s = -1e9, time.time(), time.time(), "time up", ""
     steer, steer_len, steered_at, steers, topped = 1, 3.0, 0.0, 0, False
+    shot_at, shots_taken = -1e9, 0
     while time.time() - t0 < a.seconds:
         time.sleep(2.0)
         s = q(SAMPLE, "SAMPLE")
+        if a.shots and "climbing=True" in s and shots_taken < 4 and time.time() - shot_at > 10.0:
+            shots_taken, shot_at = shots_taken + 1, time.time()   # Wes's eye on the climbing animation: up to four pairs, 10 s apart
+            climber_shots(a.shots, "side%d_%02d_%.0fm" % (side, shots_taken, (int(re.search(r"feet=(-?\d+)", s).group(1)) - start_feet) / 100.0))
         feet = re.search(r"feet=(-?\d+)", s)
         if feet:
             f = int(feet.group(1))
@@ -186,6 +242,7 @@ def main():
     ap.add_argument("--real-stamina", action="store_true", help="keep the climbing stamina cost (F51): does a body last the climb?")
     ap.add_argument("--body", metavar="FAT,MUSCLE", help="the climber's body: body fat %% and kg of muscle (MO.Test.BodyComposition), e.g. 35,25")
     ap.add_argument("--climbing-level", type=int, help="the climber's Climbing skill level")
+    ap.add_argument("--shots", metavar="DIR", help="screenshots of the climber on the face (behind and side, up to four pairs) into DIR")
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args()
     try:
