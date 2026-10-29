@@ -1804,3 +1804,7 @@ References: CL-0225
 ### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0229
 Status: RELEASE the MO57 editor (closed) and CL-0228's assets: ABP_MO_Body_PP made and wired (Tools/abp_body_jiggle.py), the four bases' body meshes set to it (Content/Python/ensure_body_jiggle.py; the femme keeps ABP_MH_F_PP), measured in a blank map (check_body_jiggle.py: springs 5.16 cm, control 0.00). Committed with the scripts, TOOLING / TRAPS / BACKLOG lines and copy_metahuman_base.py's reminder. Docs/STEAM_RELEASES.md and D:/CurrentMO57SteamPackage stay CLAIMED (CL-0225) until Wes's upload is recorded.
 References: CL-0228, CL-0225
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0230
+Status: CLAIM + RELEASE Docs/BACKLOG.md for two rows from Wes's crash tarball (mo-crashes-2026-10-29): N-230 a Steam player's GPU hang on the Oct 17 build (watch), N-231 GetMaxSpeed's game-thread CVar read from PoseSearch workers (next build batch). Committed with this entry.
+References: CL-0229
