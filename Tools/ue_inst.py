@@ -5355,15 +5355,25 @@ def _trav_gap(h, c):
     return ((h[2] - c[2]) ** 2 + (h[3] - c[3]) ** 2 + (h[4] - c[4]) ** 2) ** 0.5 if h and c else -1.0
 
 
-def _trav_ledge(host, client, height, depth, climbable):
-    """A replicated AMOTestLedge in front of the joiner's pawn (made on the host), the joiner's own client turned to it. Returns its top z."""
-    console(host, "MO.Test.ClearLedges")
-    time.sleep(2.5)
+def _trav_ledge(host, client, height, depth, climbable, distance=60, clear=True):
+    """A replicated AMOTestLedge in front of the joiner's pawn (made on the host), the joiner's own client turned to it. Returns its top z.
+    clear=False keeps the blocks already there (a second block lines up behind the first: both face along the pawn)."""
+    if clear:
+        console(host, "MO.Test.ClearLedges")
+        time.sleep(2.5)
     off = log_size(host)
-    console(host, f"MO.Test.SpawnLedge {height} {depth} {climbable} 60 1")
+    console(host, f"MO.Test.SpawnLedge {height} {depth} {climbable} {distance} 1")
     m = wait_log(host, r"SpawnLedge: [^\r\n]*feet z (-?[\d.]+), top z (-?[\d.]+)", since=off, timeout=10)
     time.sleep(1.5)
-    _probe(client, _TRAV_FACE)
+    # The block reaches the joiner's machine by replication; turn the joiner to it only once it is there, and print what it faced. Oct 29: in
+    # 4 runs every block was there at the first try, so late replication is not why some runs' first jump does nothing (N-238).
+    faced = ""
+    for tries in range(1, 11):
+        faced = (re.search(r"FACED [^\r\n]*", _probe(client, _TRAV_FACE)) or [""])[0]
+        if faced and faced != "FACED none":
+            break
+        time.sleep(0.75)
+    print(f"      joiner {faced or 'no answer'} (try {tries})", flush=True)
     time.sleep(0.8)
     return float(m.group(2)) if m else None
 
@@ -5410,6 +5420,23 @@ def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
         time.sleep(3.0)
         h2, c2 = _trav_view(host, 1), _trav_view(client, 0)
         rep.step("... crouch lets go: walking again on both", bool(h2 and c2) and h2[0] == 1 and c2[0] == 1, f"host {h2} client {c2}")
+
+        # A lip (N-236, Oct 29): a 4 m climbable wall 10 cm deep with a 7 m plain wall flush behind it -- nothing to grab above, no room on top.
+        # The climber holds on there (the step past the last hold is undone) on both machines; until then it let go and fell to the ground.
+        # Standalone it held with the feet ~56 cm under the top: the capsule's centre ~40 cm over it.
+        top = _trav_ledge(host, client, 400, 10, 1)
+        _trav_ledge(host, client, 700, 100, 0, distance=70, clear=False)
+        console(client, "MO.Test.InjectInput IA_MOMove 0 1 16.0")
+        time.sleep(0.3)
+        console(client, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
+        time.sleep(15.0)
+        h3, c3 = _trav_view(host, 1), _trav_view(client, 0)
+        rep.step("a joiner climbing to a lip with no room on top holds on there: climbing on both, at the top (centre within 60 cm of top + 40)",
+                 bool(h3 and c3 and top) and h3[0] == 6 and h3[1] == 2 and c3[0] == 6 and c3[1] == 2
+                 and abs(h3[2] - (top + 40)) < 60 and abs(c3[2] - (top + 40)) < 60, f"host {h3} client {c3} top {top}")
+        rep.step("... and they agree where it holds (< 25 cm)", 0 <= _trav_gap(h3, c3) < 25, f"gap {_trav_gap(h3, c3):.1f} cm")
+        console(client, "MO.Test.InjectInput IA_Crouch 1 0 0.3")
+        time.sleep(3.0)
         return rep.ok
     finally:
         print(f"[nettest] traversal: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)

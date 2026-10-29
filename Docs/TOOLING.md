@@ -89,7 +89,9 @@ running" only counts that project's processes. Voxel shader hooks: `ue.py` re-ap
 before the editor, a -game instance or a package whenever a launcher action has wiped them (TRAPS).
 The World look lab (Oct 28): `MO_PROJECT=D:/UEProjects/MO_WorldLab` drives `D:/UEProjects/MO_WorldLab` the same way (its CLAUDE.md: terrain surfaces, vegetation and wind with sliders); its "Export for MO57" goes in with `python Tools/apply_worldlab_patch.py
 D:/UEProjects/MO_WorldLab/Saved/WorldLabExport/worldlab_patch_latest.json [--dry-run]` (MO57's editor open; DT_Biomes rows, `Content/Python/terrain_surface_overrides.json`, the wind collection).
-Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go; host and joiner must agree; ~6 min).
+Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go, and holds on at a lip with no room on
+top (N-236); host and joiner must agree; each block is faced only once the joiner's machine has it; ~6 min; an occasional run fails
+from its first jump for reasons outside the moves: N-238 -- rerun once).
 Traversal on the world (Oct 29): `python Tools/check_traversal_world.py [--execute] [--seed N] [--keep]` (one instance, a new world: the
 pawn set in front of the world's own rocks, cliffs and trees round the start, MO.Test.Traversal per obstacle, with `--execute` the jump
 for real and where the feet ended; it also opens the creator and reports whether plants lie between the camera and the face; ~15 min).

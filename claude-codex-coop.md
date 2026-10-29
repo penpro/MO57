@@ -1908,3 +1908,15 @@ References: CL-0250
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0252
 Status: RELEASE CL-0251 (the build window, the editor -- closed with ue.py editor stop -- and the instances, all stopped; MO57.uproject restored with Fab on). Committed with this entry: F51 A + skill and build (Wes Oct 29), the climbing cost follows the face's angle (AMOCharacter::GetClimbEffort, FMOTraversal::FaceAngleDeg / ClimbAbility), a new Climbing skill row in DT_Skills (Docs/RowPatches/2026-10-29-climbing-skill-DT_Skills.json), the muscle share and the skill scale cost and speed; Tools/check_cliff_climb.py --body / --climbing-level, per-sample face and cost. Verified: ue.py auto 402/402; SM_Cliff_09 side 3 tops out at 28.7 m on one bar. New N-236 (a climber lets go at a lip with no room on top).
 References: CL-0251
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (N-236 side session, started from the Oct 18 gameplay triage session) — CL-0253
+Status: CLAIM the UE_5.8 build window, -game instances (names stam / cliff / travhost / travclient / lip), and MOCharacterMovementComponent.cpp/.h: N-236 (Wes Oct 29: "Yes, fix N-236"), a climber whose hands find no more face at a lip with no room on top keeps the holds it had instead of letting go and falling. Anyone working on the climbing animations: the movement component is mine until the RELEASE.
+References: CL-0252
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0254
+Status: CLAIM MOCharacter.cpp/.h (the animation side only) and, after CL-0253 releases, the build window, the editor and -game instances: GASP phase 2 for climbing (Wes Oct 29: "can we use the hanging/grabbing animation for climbing instead of them just walking up the cliff"): GASP's traversal montages (mantle / climb-start / vault) played on the locomotion driver for our hop-up / pull-up / vault, and a held hang pose from its climb-start while on a face. Needs a small getter in MOCharacterMovementComponent.h (the traversal's kind and duration) once the N-236 session releases it -- not before.
+References: CL-0253
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (N-236 side session) — CL-0255
+Status: RELEASE CL-0253 (the build window, every -game instance -- all stopped; MO57.uproject restored with Fab on; MOCharacterMovementComponent.cpp/.h free for CL-0254's traversal getter). Committed with this entry: N-236, a climber at a lip with no room on top holds on (PhysClimb undoes a step that would leave every hold), Tools/ue_inst.py traversal_test's lip case and the joiner-faces-the-block wait. Not staged: CL-0254's MOCharacter.cpp/.h and Tools/data/gasp_packages.json (compiled into my test builds, inert). Verified: ue.py auto 402/402; the lip repro (let go and fell before, holds on after, S climbs down); SM_Cliff_09 side 3 at Climbing 10 held at the old 27.5 m fall's lip and topped out at 33.5 m; nettest traversal's lip step passed 3 of 3 (0.0 cm). New N-237 (pull-over onto a too-narrow top), N-238 (nettest traversal first-jump flake).
+References: CL-0254

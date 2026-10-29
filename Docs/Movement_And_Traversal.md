@@ -28,6 +28,9 @@
 | while climbing | **pull up** if the edge is in reach, else **push off** the face | |
 
 Crouch while climbing lets go -- and is used up by it (crouch is a toggle here: a climber who let go lands standing and can grab again).
+At a lip -- the hands find no more rock above and there is no room to pull over (a top under an overhang, a plain wall above) -- the climber
+**holds on** (N-236, Wes Oct 29: "Yes, fix N-236"): W does nothing, A / D move along the lip to a place to pull over, S climbs down; only a
+crouch, exhaustion or a lost grip lets go. Until then it let go there and fell.
 A grab from the ground needs the input pushing at the face (a jump beside a tree trunk stays a jump); in the air it does not (catch a face
 mid-fall). Heights are a 1.75 m adult's.
 
@@ -74,7 +77,10 @@ SM_Cliff_09, the femme base, Climbing 0): the 75 deg first pitch at 0.62/s to a 
 0.84-1.63/s from 100 to 13 stamina, and over the crest at 28.7 m. (Before F51, at 3/s everywhere: out of strength 7.9 m up the second face,
 a fall from 15 m.) Other climbers on the same line, fresh runs (`--body`, `--climbing-level`): 35 % fat with 25 kg of muscle (x1.34, speed
 x0.87) 24 cm/s up the second face, 100 -> 24 by 18 m above the foot; the femme at Climbing 10 (x0.71, speed x1.20) 33 cm/s, 100 -> 71 by
-18 m -- both then reached a lip with no room to stand at ~27.5 m and let go (N-236), with a quarter and two thirds of a bar left.
+18 m -- both then reached a lip with no room to stand at ~27.5 m and let go (N-236), with a quarter and two thirds of a bar left. Since the
+climber holds on at a lip (N-236, same day, fresh runs): at Climbing 10 it held at that lip (hands 27.5 m; the holds there feel a 24 deg
+slab, so the bar came back 72 -> 100), the check's steering moved it along, and it topped out at 33.5 m; the heavy body held at the same lip
+(24 -> 42), then stuck higher after four steers and ended 25 m up, still on the face -- no fall either way.
 
 ## 4. How it works (co-op)
 
@@ -98,7 +104,11 @@ x0.87) 24 cm/s up the second face, 100 -> 24 by 18 m above the foot; the femme a
   contact is not a ceiling) and a capsule overlap for room on top, standing 2 cm above the top or, on uneven rock, 20 cm (it lands at the
   move's end); for a vault the ground just behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
 - Climbing, the face lost at the hands while pushing up (the top come level with the chest: a rounded edge, a boulder's crest) pulls over
-  the top if one is in reach, before letting go (Oct 29: a rock grabbed and let go 0.24 s later).
+  the top if one is in reach (Oct 29: a rock grabbed and let go 0.24 s later). **A climbing step that would leave every hold is not made**
+  (`PhysClimb`, N-236): after each step the holds are felt again; none, and no pull-over from there, and the step is undone -- the body keeps
+  the holds it had (`[MOTraversal] ... holds on at the lip at ..., no pull-over: <why>`, once per lip). Decided by the position, the face
+  normal (which rides the saved moves) and the rock, so a joiner's replay holds where the server does. The face lost at the start of a
+  step (no step took it there: right after a grab, a correction) still lets go.
 - **The face is felt at six holds** (`TraceClimbFace`: the chest, above the head, the waist, the thighs, either side of the chest), for the
   grab and for every climbing step: the climber holds the gap to the nearest and steers by their mean normal, which the body turns to over
   ~0.1 s. Until Oct 29 one ray at the chest did both, and on an Electric Dreams cliff its normal swings up to 70 degrees between facets 25 cm
@@ -120,7 +130,10 @@ landed standing; a 3.2 m climbable block with W held: climbed and pulled over th
 120 cm in 4 s on both (0.0 cm apart); crouch lets go on both. The blocks are `AMOTestLedge`s (replicated with their size and climbable
 flag: an `AStaticMeshActor`'s scale and tags do not replicate, so a joiner saw a 1 m plain cube where the host had a 4 m climbable face;
 since Oct 28 the climb uses a 5 m face: the grab climbs ~70 cm while the first push is held, so 4 s of W more brought a 4 m edge within arm's
-reach and the climber pulled over the top inside the window);
+reach and the climber pulled over the top inside the window); since Oct 29 (N-236) a lip -- a 4 m climbable wall 10 cm deep with a 7 m
+plain wall flush behind it: the joiner climbs to it and holds on on both machines (the host and the joiner logged the hold at the same
+spot, 0.0 cm apart; 3 of 3 runs that reached it). The test turns the joiner to each block only once the joiner's machine has it and
+prints what it faced. Some runs fail from the first step (N-238): the joiner's jump never reaches the server's traversal;
 `MO.Test.SpawnLedge ... [PlayerIndex]` on the host puts one in front of the joiner's pawn. The host logs why it refused a joiner's jump
 (`[MOTraversal] server: ... has no traversal: <why>`).
 

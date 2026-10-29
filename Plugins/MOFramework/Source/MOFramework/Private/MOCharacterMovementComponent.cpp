@@ -855,6 +855,7 @@ void UMOCharacterMovementComponent::StartClimbing(const FHitResult& Wall, EMOCli
 	ClimbNormal = Wall.ImpactNormal;
 	ClimbSurface = Surface;
 	Velocity = FVector::ZeroVector;
+	bHeldAtLip = false;
 	EnterCustomModeFromJump(CMOVE_Climb);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: climbing %s at %s"), *GetNameSafe(CharacterOwner),
 		Surface == EMOClimbSurface::Tree ? TEXT("a tree") : TEXT("rock"), *Wall.ImpactPoint.ToCompactString());
@@ -1023,11 +1024,47 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 	Move += Into * FMath::Clamp((Gap - ClimbWallGapCm) * 6.0f, -40.0f, 40.0f);
 	Velocity = Move;
 
+	const FVector OldLocation = UpdatedComponent->GetComponentLocation();
+	const FQuat OldQuat = UpdatedComponent->GetComponentQuat();
 	FHitResult Hit;
 	SafeMoveUpdatedComponent(Velocity * DeltaTime, Into.ToOrientationQuat(), /*bSweep=*/true, Hit);
 	if (Hit.IsValidBlockingHit())
 	{
 		SlideAlongSurface(Velocity * DeltaTime, 1.0f - Hit.Time, Hit.Normal, Hit, true);
+	}
+
+	// A move that takes the body off every hold is not made (N-236, Wes Oct 29: "Yes, fix N-236"): a climber whose hands find no more rock keeps
+	// the holds it has -- W does nothing, A / D move along the lip, S climbs down; only a crouch, exhaustion or a lost grip lets go. Until then the
+	// move was made and the next tick let go: on SM_Cliff_09 climbers reached a lip with no room on top at ~27.5 m and fell 12 m with stamina
+	// left. Past a top with room the body still pulls over, from where the move reached. Decided by the position, ClimbNormal and the rock alone,
+	// so a joiner's replayed move holds on where the server's does.
+	bool bHeldThisTick = false;
+	FHitResult Held;
+	EMOClimbSurface HeldSurface = EMOClimbSurface::None;
+	if (!TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Held, HeldSurface))
+	{
+		FTraversalPlan Plan;
+		FString WhyNot = TEXT("not pushing up");
+		if (InputUp > 0.5f && FindTraversal(Plan, &WhyNot))
+		{
+			bHeldAtLip = false;
+			StartTraversal(Plan);   // over the top
+			return;
+		}
+		if (!bHeldAtLip)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s holds on at the lip at %s, the face held %s; no pull-over: %s"), *GetNameSafe(CharacterOwner),
+				*OldLocation.ToCompactString(), *ClimbNormal.ToCompactString(), *WhyNot);
+		}
+		MoveUpdatedComponent(OldLocation - UpdatedComponent->GetComponentLocation(), OldQuat, /*bSweep=*/false);
+		Velocity = FVector::ZeroVector;
+		bHeldAtLip = true;
+		HeldAtLipLocation = OldLocation;
+		bHeldThisTick = true;
+	}
+	else if (bHeldAtLip && FVector::DistSquared(UpdatedComponent->GetComponentLocation(), HeldAtLipLocation) > FMath::Square(20.0f))
+	{
+		bHeldAtLip = false;   // moved on from that lip (a settle of a few mm at the face is the same hold)
 	}
 
 	if (InputUp < -0.1f)
@@ -1040,7 +1077,7 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 			return;
 		}
 	}
-	if (InputUp > 0.5f)
+	if (InputUp > 0.5f && !bHeldThisTick)   // held: this spot found no pull-over last tick, and nothing about it has changed
 	{
 		FTraversalPlan Plan;
 		if (FindTraversal(Plan))

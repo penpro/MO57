@@ -344,4 +344,8 @@ private:
 	FTraverseState Traverse;
 	FVector ClimbNormal = FVector::ZeroVector;
 	EMOClimbSurface ClimbSurface = EMOClimbSurface::None;
+	/** The climber is holding on at a lip with nowhere to go up (N-236): logs the hold once, not every tick -- until the body moves 20 cm on
+	 *  from HeldAtLipLocation or a new climb starts. Logging only, not replicated. */
+	bool bHeldAtLip = false;
+	FVector HeldAtLipLocation = FVector::ZeroVector;
 };
