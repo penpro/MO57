@@ -567,7 +567,7 @@ namespace
 		const UPrimitiveComponent* Component = Hit.GetComponent();
 		const AActor* Owner = Hit.GetActor();
 		const bool bTree = Component && Component->ComponentHasTag(TEXT("MOTreeTrunk"));
-		const bool bRock = Component && Component->ComponentHasTag(TEXT("MOLandmark"));
+		const bool bRock = Component && Component->ComponentTags.ContainsByPredicate([](const FName Tag) { return FMOTraversal::IsRockTag(Tag); });
 		const bool bClimbable = (Component && Component->ComponentHasTag(TEXT("MOClimbable"))) || (Owner && Owner->ActorHasTag(TEXT("MOClimbable")));
 		const bool bVoxel = Component && Component->GetClass()->GetName().Contains(TEXT("Voxel"));
 		const bool bBuilt = Owner && Owner->IsA<AMOBuildableActor>();
@@ -625,36 +625,89 @@ bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FStri
 		return WhyNot(TEXT("nothing in front within reach"));
 	}
 
-	// 2. Its top: a small sphere dropped onto it just past the face, from above arm's reach.
+	// 2. Its top: small spheres dropped onto it from above arm's reach, from just past the face across a body's depth; the highest walkable one
+	// before it rises out of reach or ends (FMOTraversal::PickTop). One probe just past the face read a rock's steep shoulder as its top (Oct 29).
 	constexpr float Probe = 12.0f;
-	const FVector TopXY = Center + Facing * (WallDist + Probe + 8.0f);
-	FHitResult Top;
-	const FVector TopStart(TopXY.X, TopXY.Y, FeetZ + FMOTraversal::PullUpMaxCm + Probe + 10.0f);
-	const FVector TopEnd(TopXY.X, TopXY.Y, FeetZ + FMOTraversal::HopMinCm - 5.0f);
-	if (!World->SweepSingleByChannel(Top, TopStart, TopEnd, FQuat::Identity, Channel, FCollisionShape::MakeSphere(Probe), Params, Response)
-		|| Top.bStartPenetrating || !IsWalkable(Top))
+	static constexpr float Alongs[] = { 8.0f, 25.0f, 45.0f, 70.0f, 100.0f };
+	FMOTraversal::FTopSample Samples[UE_ARRAY_COUNT(Alongs)];
+	FHitResult Hits[UE_ARRAY_COUNT(Alongs)];
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Alongs); ++i)
+	{
+		const FVector XY = Center + Facing * (WallDist + Probe + Alongs[i]);
+		const FVector Start(XY.X, XY.Y, FeetZ + FMOTraversal::PullUpMaxCm + Probe + 10.0f);
+		const FVector End(XY.X, XY.Y, FeetZ + FMOTraversal::HopMinCm - 5.0f);
+		Samples[i].AlongCm = Alongs[i];
+		if (World->SweepSingleByChannel(Hits[i], Start, End, FQuat::Identity, Channel, FCollisionShape::MakeSphere(Probe), Params, Response))
+		{
+			Samples[i].Kind = Hits[i].bStartPenetrating ? FMOTraversal::FTopSample::EKind::AboveReach : FMOTraversal::FTopSample::EKind::Surface;
+			Samples[i].Z = Hits[i].ImpactPoint.Z;
+			Samples[i].bWalkable = !Hits[i].bStartPenetrating && IsWalkable(Hits[i]);
+		}
+	}
+	bool bAboveReach = false;
+	TArray<int32> Tops;
+	FMOTraversal::RankTops(MakeArrayView(Samples), Tops, bAboveReach);
+	if (Tops.Num() == 0)
 	{
 		// taller than arm's reach (a climb, if it is climbable), or no surface to stand on
-		return WhyNot(Top.bStartPenetrating ? TEXT("taller than arm's reach") : TEXT("no top to stand on within reach"));
+		return WhyNot(bAboveReach ? TEXT("taller than arm's reach") : TEXT("no top to stand on within reach"));
 	}
-	const float TopZ = Top.ImpactPoint.Z;
-	const float HeightCm = TopZ - FeetZ;
 
-	// 3. Room to rise straight up beside the face to clear the edge (no overhang, no ceiling).
+	// 3-4. For each top, best first (FMOTraversal::RankTops): room to rise straight up beside the face to clear the edge (no overhang, no
+	// ceiling), and room for the body standing on it -- over the top found, never hanging over the edge. A lumpy top's highest spot may have no
+	// room where a lower one does; the body may also come down a hand's breadth onto uneven rock (it lands at the move's end).
 	constexpr float Clearance = 8.0f;
-	const FVector Rise(Center.X, Center.Y, FMath::Max(Center.Z, TopZ + Half + Clearance));
-	// (Swept from a few cm up with a slightly smaller capsule: the body stands touching its floor, and a start in contact is not a ceiling.)
-	FHitResult Ceiling;
-	if (Rise.Z > Center.Z + 1.0 && World->SweepSingleByChannel(Ceiling, Center + FVector(0.0, 0.0, 5.0), Rise, FQuat::Identity, Channel,
-		FCollisionShape::MakeCapsule(Radius * 0.9f, Half - 5.0f), Params, Response) && !Ceiling.bStartPenetrating)
+	constexpr float Lifts[] = { 2.0f, 20.0f };
+	int32 TopIndex = Tops[0];
+	FVector Rise = FVector::ZeroVector;
+	FVector OnTop = FVector::ZeroVector;
+	bool bRoomOnTop = false;
+	FString RiseBlockedBy;
+	for (const int32 Candidate : Tops)
 	{
-		return WhyNot(FString::Printf(TEXT("no room to rise (blocked by %s)"), *GetNameSafe(Ceiling.GetActor())));
+		const float CandidateZ = Hits[Candidate].ImpactPoint.Z;
+		const FVector OnTopXY = Center + Facing * (WallDist + FMath::Max(Radius + 15.0f, Probe + Samples[Candidate].AlongCm));
+		for (const float Lift : Lifts)
+		{
+			// The rise clears the edge by Clearance (a 2 cm stand: the path the test ledges were verified on), or the lifted stand.
+			const FVector CandidateRise(Center.X, Center.Y, FMath::Max(Center.Z, CandidateZ + Half + FMath::Max(Clearance, Lift + 6.0f)));
+			// (Swept from a few cm up with a slightly smaller capsule: the body stands touching its floor, and a start in contact is not a ceiling.)
+			FHitResult Ceiling;
+			if (CandidateRise.Z > Center.Z + 1.0 && World->SweepSingleByChannel(Ceiling, Center + FVector(0.0, 0.0, 5.0), CandidateRise, FQuat::Identity, Channel,
+				FCollisionShape::MakeCapsule(Radius * 0.9f, Half - 5.0f), Params, Response) && !Ceiling.bStartPenetrating)
+			{
+				RiseBlockedBy = GetNameSafe(Ceiling.GetActor());
+				break;   // a higher lift cannot rise either
+			}
+			const FVector Stand(OnTopXY.X, OnTopXY.Y, CandidateZ + Half + Lift);
+			if (!World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response))
+			{
+				TopIndex = Candidate;
+				Rise = CandidateRise;
+				OnTop = Stand;
+				bRoomOnTop = true;
+				break;
+			}
+		}
+		if (bRoomOnTop)
+		{
+			break;
+		}
 	}
-
-	// 4. Room for the body on top, and (a waist-high obstacle) on the ground just behind it.
-	const FVector OnTopXY = Center + Facing * (WallDist + Radius + 15.0f);
-	const FVector OnTop(OnTopXY.X, OnTopXY.Y, TopZ + Half + 2.0f);
-	const bool bRoomOnTop = !World->OverlapBlockingTestByChannel(OnTop, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response);
+	if (!bRoomOnTop)
+	{
+		// None has room on top: the best is still the ledge's height (a vault over it, or nothing).
+		const float BestZ = Hits[TopIndex].ImpactPoint.Z;
+		Rise = FVector(Center.X, Center.Y, FMath::Max(Center.Z, BestZ + Half + Clearance));
+		const FVector OnTopXY = Center + Facing * (WallDist + FMath::Max(Radius + 15.0f, Probe + Samples[TopIndex].AlongCm));
+		OnTop = FVector(OnTopXY.X, OnTopXY.Y, BestZ + Half + 2.0f);
+		if (!RiseBlockedBy.IsEmpty())
+		{
+			return WhyNot(FString::Printf(TEXT("no room to rise (blocked by %s)"), *RiseBlockedBy));
+		}
+	}
+	const float TopZ = Hits[TopIndex].ImpactPoint.Z;
+	const float HeightCm = TopZ - FeetZ;
 	bool bRoomBehind = false;
 	FVector Behind = FVector::ZeroVector;
 	if (HeightCm <= FMOTraversal::HopMaxCm)
@@ -891,7 +944,15 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 	EMOClimbSurface Surface = EMOClimbSurface::None;
 	if (!TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Wall, Surface))
 	{
-		StopClimbing();   // the face ended (round a corner, past the top without room to pull up) or turned unclimbable
+		// The face ended at the hands. Climbing up, that is usually the top coming level with the chest (a rounded edge, a boulder's crest): pull over
+		// it if there is a top in reach (Oct 29: a rock grabbed and let go 0.24 s later, the top still at the climber's waist).
+		FTraversalPlan Plan;
+		if (FVector::DotProduct(Acceleration.GetSafeNormal2D(), -ClimbNormal.GetSafeNormal2D()) > 0.5f && FindTraversal(Plan))
+		{
+			StartTraversal(Plan);
+			return;
+		}
+		StopClimbing();   // round a corner, past the top without room to pull up, or turned unclimbable
 		StartNewPhysics(DeltaTime, Iterations);
 		return;
 	}

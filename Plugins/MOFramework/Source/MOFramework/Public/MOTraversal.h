@@ -55,11 +55,35 @@ struct MOFRAMEWORK_API FMOTraversal
 	/** Where the body is a Fraction (0..1) of the way along the path, at an even speed along its length. */
 	static FVector Evaluate(const FPath& Path, float Fraction);
 
-	/** Climbable? (a pure classification of what the hands found): a tree trunk (the MOTreeTrunk tag), rock (MOLandmark, MOClimbable, or a rock / cliff /
+	/** Climbable? (a pure classification of what the hands found): a tree trunk (the MOTreeTrunk tag), rock (a rock tag: IsRockTag; MOClimbable; or a rock / cliff /
 	 *  boulder / crag mesh), or natural ground steeper than MinCliffSlopeDeg (the voxel terrain). Built things are not: their walls are smooth. */
 	static EMOClimbSurface ClassifyClimbSurface(bool bTreeTrunkTag, bool bRockTag, bool bClimbableTag, bool bVoxelTerrain, bool bBuilt, const FString& MeshPath,
 		float NormalZ);
 
 	/** Climbing speed on a surface (cm/s): a scramble on rock 30, a trunk 22 -- hands and feet, a hold at a time. */
 	static float ClimbSpeedCm(EMOClimbSurface Surface);
+
+	/** A tag the world puts on rock (Oct 29: the PCG rocks whose meshes are named by an id, not "Rock"): the landmark tier (MOLandmark), the harvestable
+	 *  rocks (MOResource_Rock), the biomes' rock cover (MOBiomeCover_Rock). */
+	static bool IsRockTag(FName Tag);
+
+	/** One probe dropped onto an obstacle from above arm's reach, at AlongCm past its face. */
+	struct FTopSample
+	{
+		enum class EKind : uint8 { Miss, AboveReach, Surface };
+		EKind Kind = EKind::Miss;   // Miss: nothing between a hop's height and arm's reach (past the obstacle); AboveReach: it rises higher here
+		float AlongCm = 0.0f;
+		float Z = 0.0f;             // Surface: its height
+		bool bWalkable = false;     // Surface: a body could stand on it
+	};
+	/**
+	 * Where a body stands on an obstacle, from probes ordered from its face outward (Oct 29, the world's own rocks: a dome's surface just past the
+	 * face is its shoulder, too steep to stand on and below its crest, so one probe there read a 135 cm boulder as a 77 cm ledge with no room on
+	 * top). The highest walkable surface (the nearest of equals within 2 cm: a block's top is its edge) before the obstacle rises out of reach or
+	 * ends (a miss after a surface). INDEX_NONE if there is none; bOutAboveReach then says whether it rose out of reach (a climb, not a ledge).
+	 */
+	static int32 PickTop(TConstArrayView<FTopSample> Samples, bool& bOutAboveReach);
+	/** Every walkable top PickTop would consider, best first (the highest; the nearer of two within 2 cm): a lumpy top's highest spot may have no
+	 *  room for the body where a lower one does (Oct 29, the Nordic beach rock clusters). PickTop is its first. */
+	static void RankTops(TConstArrayView<FTopSample> Samples, TArray<int32>& OutBestFirst, bool& bOutAboveReach);
 };

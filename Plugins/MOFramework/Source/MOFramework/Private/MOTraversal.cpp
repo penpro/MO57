@@ -92,6 +92,69 @@ EMOClimbSurface FMOTraversal::ClassifyClimbSurface(bool bTreeTrunkTag, bool bRoc
 	return EMOClimbSurface::None;
 }
 
+bool FMOTraversal::IsRockTag(FName Tag)
+{
+	static const FName RockTags[] = { TEXT("MOLandmark"), TEXT("MOResource_Rock"), TEXT("MOBiomeCover_Rock") };
+	for (const FName& Rock : RockTags)
+	{
+		if (Tag == Rock)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int32 FMOTraversal::PickTop(TConstArrayView<FTopSample> Samples, bool& bOutAboveReach)
+{
+	TArray<int32> Ranked;
+	RankTops(Samples, Ranked, bOutAboveReach);
+	return Ranked.Num() > 0 ? Ranked[0] : INDEX_NONE;
+}
+
+void FMOTraversal::RankTops(TConstArrayView<FTopSample> Samples, TArray<int32>& OutBestFirst, bool& bOutAboveReach)
+{
+	OutBestFirst.Reset();
+	bOutAboveReach = false;
+	bool bSurfaceSeen = false;
+	for (int32 i = 0; i < Samples.Num(); ++i)
+	{
+		const FTopSample& Sample = Samples[i];
+		if (Sample.Kind == FTopSample::EKind::AboveReach)
+		{
+			bOutAboveReach = OutBestFirst.Num() == 0;   // nothing to stand on before it: the obstacle is taller than the reach
+			break;                                       // it rises out of reach here: nothing past it can be got to
+		}
+		if (Sample.Kind == FTopSample::EKind::Miss)
+		{
+			if (bSurfaceSeen)
+			{
+				break;   // past the obstacle's far side
+			}
+			continue;
+		}
+		bSurfaceSeen = true;
+		if (Sample.bWalkable)
+		{
+			OutBestFirst.Add(i);
+		}
+	}
+	if (OutBestFirst.Num() < 2)
+	{
+		return;
+	}
+	// First the nearest within 2 cm of the highest (a block's top is its edge), then the rest from the highest down.
+	float Highest = -UE_BIG_NUMBER;
+	for (const int32 i : OutBestFirst)
+	{
+		Highest = FMath::Max(Highest, Samples[i].Z);
+	}
+	const int32 First = *OutBestFirst.FindByPredicate([&](int32 i) { return Samples[i].Z >= Highest - 2.0f; });   // OutBestFirst is near to far
+	OutBestFirst.Remove(First);
+	OutBestFirst.Sort([&Samples](int32 A, int32 B) { return Samples[A].Z > Samples[B].Z || (Samples[A].Z == Samples[B].Z && A < B); });
+	OutBestFirst.Insert(First, 0);
+}
+
 float FMOTraversal::ClimbSpeedCm(EMOClimbSurface Surface)
 {
 	switch (Surface)

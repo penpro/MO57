@@ -4,19 +4,21 @@
 > they ride co-op prediction; what they cost the body. Swimming: `Docs/Water.md`. Gaits (walk / jog / sprint) and the dev glider are in
 > `UMOCharacterMovementComponent` beside these (its header); since Oct 28 the gaits, acceleration, braking, turning and the plain jump are the
 > animation set's (walk 200 / jog 500 / sprint 700, jump 500 cm/s: `Docs/Animation_GASP.md` §3).
-> **Current state (2026-10-26):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
-> need a vault mechanic to hop / pull up on things"). No climbing / vaulting animations yet: the body moves on the right path in a stand-in
-> pose (BACKLOG).
+> **Current state (2026-10-29):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
+> need a vault mechanic to hop / pull up on things"), and since Oct 29 on the world's own rocks (Wes: "i can't vault or climb rocks and
+> such"): section 5. No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Climbing a cliff
+> taller than ~10 m waits on F51 (stamina, section 3).
 > **Entry points:** `MOTraversal.h` (the pure decisions), `UMOCharacterMovementComponent` (custom modes `CMOVE_Traverse`, `CMOVE_Climb`;
 > `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`ClimbingMET` / `ClimbingExertion` /
 > `ClimbingStaminaCostPerSecond`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
-> `MO.Test.Traversal` (what a jump would do here, and why not). **Tests:** `MOFramework.Traversal.*` (ClassifyLedges, PathShape, Climbable).
+> `MO.Test.Traversal` (what a jump would do here, and why not). **Tests:** `MOFramework.Traversal.*` (ClassifyLedges, PathShape, Climbable,
+> PickTop); `python Tools/check_traversal_world.py [--execute]` (the world's rocks, cliffs and trees round a new world's start).
 
 ## 1. Jump is the one verb
 
 | In front of the body | Jump does | Time |
 |---|---|---|
-| under 50 cm | a step (the movement component walks up 45 cm) or a plain jump | |
+| under 50 cm | a step or a plain jump (the survivor's movement component steps up 75 cm and walks 60 degree slopes: below, section 5) | |
 | 50-120 cm, thin, ground just behind (a fence, a log: at most 70 cm deep) | **vault** over it to the ground behind | 0.55 s |
 | 50-120 cm with room on top | **hop up** onto it | 0.6-0.8 s |
 | 120-220 cm (arm's reach with a jump) with room on top | **pull up** onto it | 1.1-1.6 s |
@@ -29,9 +31,11 @@ mid-fall). Heights are a 1.75 m adult's.
 
 ## 2. What is climbable (`FMOTraversal::ClassifyClimbSurface`)
 
-- Rock: a component tagged `MOLandmark` (the crags, cliffs, xlarge boulders of the landmark tier), `MOClimbable` (component or actor tag:
-  anything a designer marks), a mesh whose path says Rock / Cliff / Boulder / Crag / Stone / Shelf, or the voxel terrain where its face is
-  steeper than 55 degrees (a cliff; gentler ground is walked).
+- Rock: a component with a rock tag (`FMOTraversal::IsRockTag`: `MOLandmark` the crags, cliffs, xlarge boulders of the landmark tier;
+  `MOResource_Rock` the harvestable rocks; `MOBiomeCover_Rock` the biomes' rock cover -- Oct 29: the PCG rocks named by an id, ukopfbks_tier_2,
+  wgosajs_tier_2, were not climbable before), `MOClimbable` (component or actor tag: anything a designer marks), a mesh whose path says Rock /
+  Cliff / Boulder / Crag / Stone / Shelf (the Electric Dreams cliffs: SM_Cliff_*, the sandstone and vine cliffs), or the voxel terrain where
+  its face is steeper than 55 degrees (a cliff; gentler ground is walked).
 - A tree: a component tagged `MOTreeTrunk` (the PCG tree tier) or a mesh whose path says Tree / Trunk.
 - Never a built thing (`AMOBuildableActor`): its walls are smooth.
 - Speed (hands and feet, a hold at a time): rock 30 cm/s, a trunk 22 cm/s; `ClimbSpeedScale` on the movement component (the character can
@@ -40,7 +44,9 @@ mid-fall). Heights are a 1.75 m adult's.
 ## 3. What it costs
 
 Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and 3 stamina a second moving or hanging (a jog is 2, a sprint
-8: a full bar lasts about half a minute). Out of stamina the hands give out and the climber falls -- decided on the server.
+8: a full bar lasts about half a minute). Out of stamina the hands give out and the climber falls -- decided on the server. Stamina tops out
+at 100, so a climb lasts 33 s: about 10 m at 30 cm/s, where the Electric Dreams cliffs are 18-45 m. Open fork F51 (DECISIONS): the cost
+following the face's steepness (a slab mostly feet and restful, an overhang dear) is the recommendation.
 
 ## 4. How it works (co-op)
 
@@ -56,10 +62,15 @@ Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and
   it, so plain jumps always worked). Found by the first two-process run. A root-motion source was considered
   and dropped: its path curve is compared by pointer between machines (`FRootMotionSource_MoveToForce::Matches`), and a delayed second leg
   is not handled under corrections (engine comment).
-- `FindTraversal` probes: rays at knee to reach height for a face (reach = capsule radius + 60 cm; the MetaHuman's radius is 28.9 cm);
-  a sphere dropped onto the top just past the face (none below arm's reach = "taller than arm's reach"); a capsule swept straight up for
-  room to rise (from 5 cm up: the body's floor contact is not a ceiling); a capsule overlap for room on top, and for a vault the ground just
-  behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
+- `FindTraversal` probes: rays at knee to reach height for a face (reach = capsule radius + 60 cm; the survivor's radius is 30.7 cm since
+  the Oct 28 capsule); small spheres dropped onto the top at 8, 25, 45, 70 and 100 cm past the face, and `FMOTraversal::RankTops` orders the
+  walkable ones best first (the highest; the nearest of equals within 2 cm, so a block's top is its edge) up to where the obstacle rises out
+  of reach or ends -- a rock is a dome, and one probe just past the face read its steep shoulder as its top (Oct 29: a 135 cm boulder as a
+  77 cm ledge with no room on top); for each, best first, a capsule swept straight up for room to rise (from 5 cm up: the body's floor
+  contact is not a ceiling) and a capsule overlap for room on top, standing 2 cm above the top or, on uneven rock, 20 cm (it lands at the
+  move's end); for a vault the ground just behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
+- Climbing, the face lost at the hands while pushing up (the top come level with the chest: a rounded edge, a boulder's crest) pulls over
+  the top if one is in reach, before letting go (Oct 29: a rock grabbed and let go 0.24 s later).
 
 ## 5. Verified (Oct 26, one game instance, real input actions through `MO.Test.InjectInput`)
 
@@ -74,5 +85,14 @@ flag: an `AStaticMeshActor`'s scale and tags do not replicate, so a joiner saw a
 since Oct 28 the climb uses a 5 m face: the grab climbs ~70 cm while the first push is held, so 4 s of W more brought a 4 m edge within arm's
 reach and the climber pulled over the top inside the window);
 `MO.Test.SpawnLedge ... [PlayerIndex]` on the host puts one in front of the joiner's pawn. The host logs why it refused a joiner's jump
-(`[MOTraversal] server: ... has no traversal: <why>`). Not yet checked: a real cliff and tree in the world (the classification is
-unit-tested), how it looks.
+(`[MOTraversal] server: ... has no traversal: <why>`).
+
+**The world's own rocks (Oct 29, `python Tools/check_traversal_world.py --execute`, seed 777, the PCG rocks round the start):** before the
+rock tags and the ranked tops, 1 of ~25 rocks offered a move (the rest a plain jump: "a 77 cm ledge with no room on top", "nothing in
+front"); after, of 22 rocks 60 cm or more above the ground 16 offer a vault, hop up or pull-up and 2 taller ones a climb. Done for real
+(W held, a jump): pull-ups onto 126-209 cm and hop-ups onto 73-115 cm, each standing on top after; a grab on wc2hbfr_tier_2 climbed and
+pulled over. Rocks whose sides are walkable are walked over (the survivor steps up 75 cm and walks 60 degree slopes: the Blueprint's
+movement values, which no code or script sets -- a person steps ~50 cm unaided; Wes's call, BACKLOG N-232). Left: one 149 cm beach-rock
+cluster with no room on its lumpy top; two big boulders that read "nothing in front" (the check's placement on their slopes is suspect); a
+jump that found nothing 0.15 s after a check that offered a pull-up. Trees: the trunks are grabbed ("climbable=tree"). The Electric Dreams
+cliffs (600 m from that start) read as rock by their names; a full climb to a top was not run: F51. How it looks: no animations yet.
