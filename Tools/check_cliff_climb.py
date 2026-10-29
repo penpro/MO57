@@ -1,5 +1,5 @@
 """Climb a cliff for real (Wes, Oct 29: "i want to be able to climb on top of the electric dreams cliffs"): what the rock lets a climber do, with
-the stamina cost of climbing set to 0 for the run (F51 decides the cost; this measures the geometry: overhangs, faces lost, the pull-over at
+the stamina cost of climbing set to 0 for the run (--real-stamina keeps it) (F51 decides the cost; this measures the geometry: overhangs, faces lost, the pull-over at
 the top).
 
 One -game instance, a new world (seed 777 by default). The cliff mesh named (default SM_Cliff_09, an Electric Dreams cliff) is found in the
@@ -8,7 +8,7 @@ facing it, W is held and a jump grabs; whenever it is off the face (on a ledge i
 player would; stuck on the face for 4 s (a roof, an overhang) it steers across it (A or D, wider each time) and pushes up again. Every 2 s: the feet's height, the movement mode, climbing or not, and the traversal lines the movement
 component logged. Ends when the feet get no higher for 30 s (6 s with --no-steer), at the top, or after --seconds.
 
-    python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--keep] [--reuse]
+    python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--real-stamina] [--keep] [--reuse]
 
 Prints PLACE (the face found), one SAMPLE line per 2 s, and one RESULT per side climbed: the highest the feet got against the cliff's top,
 and how it ended (TOPPED OUT; no higher for 30 s still on the face: a roof the steering did not get round; off the face). --all climbs
@@ -28,7 +28,7 @@ NAME = "cliff"
 PLACE = r'''
 import math
 p = unreal.GameplayStatics.get_player_pawn(world, 0)
-p.set_editor_property("climbing_stamina_cost_per_second", 0.0)
+__STAMINA__
 cap = p.get_editor_property("capsule_component")
 r, h = cap.get_scaled_capsule_radius(), cap.get_scaled_capsule_half_height()
 comp, t0 = None, None
@@ -89,7 +89,8 @@ p = unreal.GameplayStatics.get_player_pawn(world, 0)
 m = p.get_movement_component()
 cap = p.get_editor_property("capsule_component")
 l = p.get_actor_location()
-out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing()))
+ss = p.get_component_by_class(unreal.MOSurvivalStatsComponent)
+out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s stamina=%.0f" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing(), ss.get_stat_current("Stamina") if ss else -1.0))
 if p.is_climbing():
     # A player keeps the camera on the face: W is camera-relative, and a face that turned 50 degrees off the camera splits W into up and across.
     unreal.GameplayStatics.get_player_controller(world, 0).set_control_rotation(unreal.Rotator(0.0, 0.0, p.get_actor_rotation().yaw))
@@ -104,7 +105,8 @@ def q(code, key, timeout=120):
 
 def climb_one(a, side):
     """Place at the first side >= side with a face of the mesh and climb it with W held; returns (side placed or None, result line)."""
-    placed = q(PLACE.replace("__MESH__", a.mesh).replace("__SIDE__", str(side)), "PLACE")
+    stamina = "pass" if a.real_stamina else 'p.set_editor_property("climbing_stamina_cost_per_second", 0.0)'
+    placed = q(PLACE.replace("__MESH__", a.mesh).replace("__SIDE__", str(side)).replace("__STAMINA__", stamina), "PLACE")
     print("PLACE", placed or "no answer")
     m = re.match(r"placed side (\d+)", placed)
     if not m:
@@ -170,6 +172,7 @@ def main():
     ap.add_argument("--all", action="store_true", help="climb every side that has a face, one after another")
     ap.add_argument("--reuse", action="store_true", help="the instance is already in a world (a --keep run)")
     ap.add_argument("--no-steer", dest="steer", action="store_false", help="W only: no steering across the face when stuck")
+    ap.add_argument("--real-stamina", action="store_true", help="keep the climbing stamina cost (F51): does a body last the climb?")
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args()
     try:

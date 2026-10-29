@@ -7,8 +7,8 @@
 > **Current state (2026-10-29):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
 > need a vault mechanic to hop / pull up on things"), and since Oct 29 on the world's own rocks (Wes: "i can't vault or climb rocks and
 > such"): section 5; since Oct 29 up the Electric Dreams cliffs (a 19 m top-out; roofs and undercuts stop a line, as on real rock).
-> No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Climbing a cliff taller than
-> ~10 m without a ledge to rest on waits on F51 (stamina, section 3).
+> No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Stamina does not limit a climb
+> today (it recovers faster than climbing costs: F52, then F51, section 3).
 > **Entry points:** `MOTraversal.h` (the pure decisions), `UMOCharacterMovementComponent` (custom modes `CMOVE_Traverse`, `CMOVE_Climb`;
 > `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`ClimbingMET` / `ClimbingExertion` /
 > `ClimbingStaminaCostPerSecond`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
@@ -46,9 +46,11 @@ mid-fall). Heights are a 1.75 m adult's.
 ## 3. What it costs
 
 Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and 3 stamina a second moving or hanging (a jog is 2, a sprint
-8: a full bar lasts about half a minute). Out of stamina the hands give out and the climber falls -- decided on the server. Stamina tops out
-at 100, so a climb lasts 33 s: about 10 m at 30 cm/s, where the Electric Dreams cliffs are 18-45 m. Open fork F51 (DECISIONS): the cost
-following the face's steepness (a slab mostly feet and restful, an overhang dear) is the recommendation.
+8). Out of stamina the hands give out and the climber falls -- decided on the server. On paper a full bar (100) lasts 33 s of climbing,
+about 10 m at 30 cm/s, where the Electric Dreams cliffs are 18-45 m. **In play it never runs out** (Oct 29): stamina recovers 10/s at all
+times, faster than every cost, so with the real cost on, SM_Cliff_09 was climbed to its 23 m top with stamina never below 97 (and a 15 s
+sprint never got below 92). Open forks (DECISIONS): F52, whether recovery pauses while the body works hard (recommended), then F51, the
+cost following the face's steepness (a slab mostly feet and restful, an overhang dear).
 
 ## 4. How it works (co-op)
 
@@ -122,4 +124,4 @@ undercut, or no steep face). How high the feet got of the ~11 m to its top:
 Where it stops now is the rock, not the climb: side 4 sits in a roof pocket (a second cliff mesh's flat underside over the head, 6-30 cm
 of room to rise for 3.5 m to one side, rock jutting in on the other); side 0 under another such roof; side 6 is an undercut (the foot
 overhangs, nothing in reach). A player goes round a roof or down and across to another line; the check's steering tries 3.6 m at most.
-Climbing stamina still decides how much of this a body can do (F51): the 8.6 m pitch took 30 s, about a full bar.
+With the real stamina cost on (`--real-stamina`), side 3 topped out at 23 m (the whole stack) with stamina never below 97: it recovers faster than climbing costs (F52). On paper the 8.6 m pitch's 30 s would be about a full bar.
