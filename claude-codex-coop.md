@@ -1760,3 +1760,39 @@ References: CL-0219
 ### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0221
 Status: RELEASE every file, the build window, editor and instances claimed in CL-0220 (none held now; MO_Tools' lab editor closed too). Landed: 199a11aa (the swim-volume crash), 2df3787c (the survivor's capsule at scale 1, GASP movement for the survivor only, sex and pronouns, the driver hold), and the nettest fixes with this entry (Tools/ue_inst.py, Docs/BACKLOG.md N-229). Also claimed and released in this unit: Tools/copy_metahuman_base.py (keeps MO57's Common files by default) and the four bases' face meshes under Content/MetaHumans (gitignored; rebaked in MO_Tools ffa7627, backups in D:/UEProjects/MO57_Backups/2026-10-28_*).
 References: CL-0220
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0222
+Status: CLAIM the MO57 build window (a Shipping package for a Steam upload, Wes: "yes"), Saved/StagedBuilds_Ship, and D:/CurrentMO57SteamPackage. No editor or instance of the UE_5.8 install until the RELEASE (UBT refuses builds meanwhile).
+References: CL-0221
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0223
+Status: CLAIM, for the World look lab (D:/UEProjects/MO_WorldLab, a new project; Wes Oct 26: "i just want some basics so i can tweak appearance and then those will get used in mo57"): Content/Python/upgrade_terrain_material.py (a hook: lab overrides applied after its SURFACES table), Content/Python/terrain_surface_overrides.py + .json (new), Tools/apply_worldlab_patch.py (new), Docs/TOOLING.md, Docs/DECISIONS.md, Docs/INDEX.md. No build or editor of the UE_5.8 install while CL-0222 holds the window.
+References: CL-0222
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0223
+Status: RELEASE the MO57 build window and Saved/StagedBuilds_Ship (CL-0222): the Shipping package of 2121b981 is staged and copied into D:/CurrentMO57SteamPackage/Windows64content (the Oct 17 folder moved to D:/MO57SteamPackage_Backups). Still CLAIMED: D:/CurrentMO57SteamPackage until Wes's SteamPipe upload is recorded. Editor builds need the Fab workaround (TRAPS §2, Oct 28).
+References: CL-0222
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0224
+Status: CLAIM Saved/StagedBuilds_Ship again for a re-cook (no UBT build: -skipbuild): the 16:35 cook may have compiled the voxel shaders without the Voxel shader hooks (gone between ~14:45 and 17:10, re-applied 17:10:36). Other projects' builds and editors may run.
+References: CL-0223
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0225
+Status: RELEASE Saved/StagedBuilds_Ship (CL-0224): re-cooked with the Voxel hooks in place (96 voxel shadermaps recompiled, 0 errors), copied into D:/CurrentMO57SteamPackage/Windows64content. That folder stays CLAIMED until Wes's upload is recorded.
+References: CL-0224
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0224
+Status: CLAIM the MO57 editor for a few minutes: a READ-ONLY `python Tools/apply_worldlab_patch.py <lab export> --dry-run` (rows get DT_Biomes TemperateForest; nothing written). RELEASE follows.
+References: CL-0223
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0225
+Status: RELEASE the MO57 editor (CL-0224): the dry run read DT_Biomes' TemperateForest row and wrote nothing (15 tree species matched the lab's tags).
+References: CL-0224
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0226
+Status: CLAIM Docs/BACKLOG.md for one "Wes: check by eye" row (the World look lab's review page). Released with the commit below.
+References: CL-0223
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0227
+Status: RELEASE CL-0223's files and Docs/BACKLOG.md (CL-0226), committed with this entry: Tools/apply_worldlab_patch.py, Content/Python/terrain_surface_overrides.py + .json, the hook in upgrade_terrain_material.py, the DECISIONS / TOOLING / INDEX / BACKLOG lines. The lab itself: penpro/MO_WorldLab 261a752.
+References: CL-0223, CL-0226

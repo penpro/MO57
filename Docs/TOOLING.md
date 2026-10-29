@@ -79,6 +79,8 @@ Another project (Oct 26): `MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py 
 (`D:/UEProjects/MO_Tools/CLAUDE.md`): its own log, its own bridge folder (%TEMP%/claude/MO_Tools), its own build target; "is the editor
 running" only counts that project's processes. Voxel shader hooks: `ue.py` re-applies them (the plugin's ApplyVoxelShaderHooks commandlet)
 before the editor, a -game instance or a package whenever a launcher action has wiped them (TRAPS).
+The World look lab (Oct 28): `MO_PROJECT=D:/UEProjects/MO_WorldLab` drives `D:/UEProjects/MO_WorldLab` the same way (its CLAUDE.md: terrain surfaces, vegetation and wind with sliders); its "Export for MO57" goes in with `python Tools/apply_worldlab_patch.py
+D:/UEProjects/MO_WorldLab/Saved/WorldLabExport/worldlab_patch_latest.json [--dry-run]` (MO57's editor open; DT_Biomes rows, `Content/Python/terrain_surface_overrides.json`, the wind collection).
 Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go; host and joiner must agree; ~6 min).
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to

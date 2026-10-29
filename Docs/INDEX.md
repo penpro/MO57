@@ -52,6 +52,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 |---|---|---|
 | `Docs/AUTONOMOUS_TOOLING.md` | Deep manual of the build / verify loop (bridge, MCP, ue.py, multi-process tests, packaged probes, hit/miss history) | When TOOLING.md's one line isn't enough |
 | `Docs/UI_TOOLING.md` | Building / checking / exercising Widget Blueprints from spec files (`ue.py ui`) | Any UMG change |
+| `D:/UEProjects/MO_WorldLab/CLAUDE.md` (its own repo) | The World look lab: MO57's terrain surfaces, vegetation and wind on a voxel patch with sliders; its export goes back through `Tools/apply_worldlab_patch.py` | Tuning how the ground and plants look |
 | `Docs/UI_Kit_Implementation.md` | The Field Ledger kit in the game (tokens, 9-slices, fonts, gallery, kit traps) | UI look work |
 | `Docs/UI_Screen_Inventory.md` | Every widget Blueprint: kit spec, native parent, input mode / capture, focus, who uses it (generated: `Tools/ui_inventory.py`) | Planning UI work, retiring widgets |
 | `Docs/Agent_PIE_Testing.md` | The June / July bridge playbook (still the transport under ue.py) | Low-level bridge work |

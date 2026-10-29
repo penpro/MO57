@@ -69,6 +69,18 @@
 
 ## Decisions, newest first
 
+### 2026-10-28
+- **The World look lab is its own project** (Wes, Oct 26: "i just want some basics so i can tweak appearance and then those will get used in mo57, but maybe that should be it's own project???"): `D:/UEProjects/MO_WorldLab` (penpro/MO_WorldLab, its CLAUDE.md), built like MO_Tools (MOLab's
+  slider panel, L_Menu, `ue.py` with `MO_PROJECT`). Claude's calls, noted: one 512 m temperate-forest patch on a voxel heightmap of the lab's own
+  (MO57's generator is MOFramework C++), wearing MO57's own mega material and surfaces (forest floor MuddyLeaves, the meadow MossyGrass, Cliff on
+  steep ground) under MO57's sky; the sliders are what MO57 reads -- a surface material instance's own parameters (TextureSize, NormalStrength,
+  HeightMultiplier, MacroAmount: absolute), per vegetation category a density and a size MULTIPLIER on DT_Biomes' DensityPerHectare and
+  Min/MaxScale for the species of that category's HISMTags (the far stand-ins included, landmarks not), and MPC_GlobalFoliageActor's wind
+  (absolute); the lab plants with its own small spawner that reads the species fields (MO57's spawner is MOFramework C++, and a stock PCG
+  graph would not mean the same numbers); the way back is a patch file MO57 applies itself (`Tools/apply_worldlab_patch.py`: `rows set` for
+  the vegetation, `Content/Python/terrain_surface_overrides.json` -- applied after `upgrade_terrain_material.py`'s SURFACES so a rebuild
+  keeps it -- for the surfaces, the collection's defaults for the wind). The lab never writes into MO57.
+
 ### 2026-10-27
 - **Every predator keeps out of the start area and off fires, unless attacked** (Wes: "we need to have any predators follow the same rules
   as wolves, they stay away from the starting area, like 200m and they stay away from fires unless attacked and brough into range of

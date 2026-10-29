@@ -510,6 +510,10 @@ def apply_surface_overrides():
             MEL.set_material_instance_scalar_parameter_value(mi, "WarpScaleCm", v["warp_scale"])
         EAL.save_loaded_asset(mi)
     log("surface overrides applied to %d material instances" % len(SURFACES))
+    # Then what was tuned in the World look lab (MO_WorldLab, Tools/apply_worldlab_patch.py): last, so a rebuild keeps it over the table above.
+    import importlib
+    import terrain_surface_overrides
+    importlib.reload(terrain_surface_overrides).apply(log)
 
 
 main()
