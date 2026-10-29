@@ -13,7 +13,10 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/GameUserSettings.h"
 #include "MOGameState.h"
+#include "DynamicRHI.h"
+#include "RHIGlobals.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
@@ -230,6 +233,41 @@ void UMOBugReportSubsystem::CollectFields(FMOBugReportFields& OutFields) const
 	}
 }
 
+void UMOBugReportSubsystem::CollectRenderFields(FMOBugReportFields& Out)
+{
+	auto CVar = [](const TCHAR* Name) -> FString
+	{
+		const IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name);
+		return Var ? Var->GetString() : FString(TEXT("n/a"));
+	};
+	static const TCHAR* AntiAliasing[] = { TEXT("none"), TEXT("FXAA"), TEXT("TAA"), TEXT("MSAA"), TEXT("TSR") };
+	const IConsoleVariable* AntiAliasingVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.AntiAliasingMethod"));
+	const int32 Method = AntiAliasingVar ? AntiAliasingVar->GetInt() : -1;
+	Out.Emplace(TEXT("AntiAliasing"), Method >= 0 && Method < UE_ARRAY_COUNT(AntiAliasing) ? FString(AntiAliasing[Method]) : FString::FromInt(Method));
+	Out.Emplace(TEXT("ScreenPercentage"), CVar(TEXT("r.ScreenPercentage")));
+	Out.Emplace(TEXT("MotionBlur"), CVar(TEXT("r.MotionBlurQuality")));
+	Out.Emplace(TEXT("Scalability"), FString::Printf(TEXT("resolution %s, view %s, AA %s, shadow %s, GI %s, reflection %s, post %s, texture %s, effects %s, foliage %s, shading %s"),
+		*CVar(TEXT("sg.ResolutionQuality")), *CVar(TEXT("sg.ViewDistanceQuality")), *CVar(TEXT("sg.AntiAliasingQuality")), *CVar(TEXT("sg.ShadowQuality")),
+		*CVar(TEXT("sg.GlobalIlluminationQuality")), *CVar(TEXT("sg.ReflectionQuality")), *CVar(TEXT("sg.PostProcessQuality")), *CVar(TEXT("sg.TextureQuality")),
+		*CVar(TEXT("sg.EffectsQuality")), *CVar(TEXT("sg.FoliageQuality")), *CVar(TEXT("sg.ShadingQuality"))));
+	Out.Emplace(TEXT("Nanite"), CVar(TEXT("r.Nanite")));
+	Out.Emplace(TEXT("GlobalIllumination"), FString::Printf(TEXT("method %s, Lumen hardware ray tracing %s"), *CVar(TEXT("r.DynamicGlobalIlluminationMethod")),
+		*CVar(TEXT("r.Lumen.HardwareRayTracing"))));
+	Out.Emplace(TEXT("RayTracing"), CVar(TEXT("r.RayTracing")));
+	Out.Emplace(TEXT("HairSimulation"), CVar(TEXT("MO.Hair.Simulation")));
+	if (const UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr)
+	{
+		static const TCHAR* Modes[] = { TEXT("fullscreen"), TEXT("borderless"), TEXT("windowed") };
+		const int32 Mode = static_cast<int32>(Settings->GetFullscreenMode());
+		Out.Emplace(TEXT("WindowMode"), Mode >= 0 && Mode < UE_ARRAY_COUNT(Modes) ? FString(Modes[Mode]) : FString::FromInt(Mode));
+		Out.Emplace(TEXT("VSync"), Settings->IsVSyncEnabled() ? TEXT("on") : TEXT("off"));
+		Out.Emplace(TEXT("FrameRateLimit"), FString::Printf(TEXT("%.0f"), Settings->GetFrameRateLimit()));
+	}
+	Out.Emplace(TEXT("RHI"), GDynamicRHI ? FString(GDynamicRHI->GetName()) : FString(TEXT("none")));
+	Out.Emplace(TEXT("Adapter"), GRHIAdapterName);
+	Out.Emplace(TEXT("Driver"), FString::Printf(TEXT("%s (%s)"), *GRHIAdapterUserDriverVersion, *GRHIAdapterDriverDate));
+}
+
 void UMOBugReportSubsystem::RegisterBuiltInContributors()
 {
 	RegisterContributor(TEXT("Build"), [](const UWorld*, FMOBugReportFields& Out)
@@ -261,6 +299,8 @@ void UMOBugReportSubsystem::RegisterBuiltInContributors()
 		Out.Emplace(TEXT("FrameMs"), FString::Printf(TEXT("%.1f"), FApp::GetDeltaTime() * 1000.0)); // the last frame only: a menu is open while a report is written
 		Out.Emplace(TEXT("SessionUptimeMin"), FString::Printf(TEXT("%.1f"), (FPlatformTime::Seconds() - GStartTime) / 60.0));
 	});
+
+	RegisterContributor(TEXT("Render"), [](const UWorld*, FMOBugReportFields& Out) { CollectRenderFields(Out); });
 
 	RegisterContributor(TEXT("Session"), [](const UWorld* World, FMOBugReportFields& Out)
 	{

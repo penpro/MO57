@@ -127,6 +127,13 @@ public:
 	/** Run every contributor; names get their "<Id>." prefix, values are scrubbed (user/computer name, profile paths) and capped. */
 	void CollectFields(FMOBugReportFields& OutFields) const;
 
+	/**
+	 * The render settings a "looks wrong" report is read against (N-212: BR23-10, a blurry report, needed a full repro to rule them out): anti-aliasing,
+	 * screen percentage, motion blur, the scalability levels, Nanite, the global illumination and ray tracing, window mode, VSync, the frame cap, the RHI
+	 * and the graphics driver (a GPU crash depends on it: N-230). The "Render" contributor; any thread that may read console variables (the game's).
+	 */
+	static void CollectRenderFields(FMOBugReportFields& OutFields);
+
 	// ----- the screenshot -----
 	/** Ask for a picture of the frame being drawn now (arrives at the end of the frame; stored for the next report). No-op without a drawing viewport. */
 	void CaptureScreenshot();

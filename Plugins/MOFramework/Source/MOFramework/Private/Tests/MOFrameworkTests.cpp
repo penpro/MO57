@@ -27,6 +27,7 @@
 #include "MOCommunitySettings.h"
 #include "MOBugReport.h"
 #include "MOBugReportBundle.h"
+#include "HAL/IConsoleManager.h"
 #include "Components/EditableTextBox.h"
 #include "Misc/DataValidation.h"
 #include "MOBuildableActor.h"
@@ -939,6 +940,36 @@ bool FMOCommunity_ConfiguredBugReportUrlLoads::RunTest(const FString& Parameters
 // ============================================================================
 // Bug report form: the bundle, the scrubber, the endpoint rules, the report builder
 // ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_RenderFields,
+	"MOFramework.BugReport.RenderFields",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_RenderFields::RunTest(const FString& Parameters)
+{
+	// N-212: a "looks blurry / wrong" report carries the settings it was drawn with (BR23-10 needed a full repro to rule them out).
+	FMOBugReportFields Fields;
+	UMOBugReportSubsystem::CollectRenderFields(Fields);
+	auto Value = [&Fields](const TCHAR* Name) -> FString
+	{
+		const TPair<FString, FString>* Row = Fields.FindByPredicate([Name](const TPair<FString, FString>& R) { return R.Key == Name; });
+		return Row ? Row->Value : FString(TEXT("(missing)"));
+	};
+	for (const TCHAR* Name : { TEXT("AntiAliasing"), TEXT("ScreenPercentage"), TEXT("MotionBlur"), TEXT("Scalability"), TEXT("Nanite"), TEXT("GlobalIllumination"),
+			 TEXT("RayTracing"), TEXT("HairSimulation"), TEXT("RHI"), TEXT("Adapter"), TEXT("Driver") })
+	{
+		const FString Got = Value(Name);
+		// (the adapter's name is empty under the null RHI a headless test run may use)
+		TestTrue(FString::Printf(TEXT("the report carries %s (got '%s')"), Name, *Got), Got != TEXT("(missing)") && (!Got.IsEmpty() || FCString::Strcmp(Name, TEXT("Adapter")) == 0));
+	}
+	const IConsoleVariable* Method = IConsoleManager::Get().FindConsoleVariable(TEXT("r.AntiAliasingMethod"));
+	if (Method && Method->GetInt() == 4)
+	{
+		TestEqual(TEXT("the anti-aliasing reads by name (TSR, r.AntiAliasingMethod 4)"), Value(TEXT("AntiAliasing")), FString(TEXT("TSR")));
+	}
+	TestFalse(TEXT("CONTROL: the scalability line names real levels, not missing variables"), Value(TEXT("Scalability")).Contains(TEXT("n/a")));
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_BundleRoundTrip,
 	"MOFramework.BugReport.BundleRoundTrip",

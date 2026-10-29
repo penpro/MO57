@@ -119,6 +119,11 @@ the 2560 x 1440 `GameUserSettings.ini` that the Oct 17 depot shipped, TRAPS §17
   user / computer names), `Screenshot.jpg`; query `ReportKind=bugreport`. A failed send keeps the bundle in `Saved/BugReports`.
 - **Extend a report from any system with `UMOBugReportSubsystem::RegisterContributor(Id, lambda)`** -- never edit the collector.
   Diagnostics for Shipping-only problems must go into report fields (Shipping writes no log), e.g. `WorldBuild.*` (readiness), `Audio.*`.
+- **Render rows** (Oct 29, N-212; BR23-10, a "blurry" report, needed a full repro to rule its settings out): `Render.*` --
+  anti-aliasing (by name: TSR / TAA / FXAA ...), screen percentage, motion blur, every scalability level (`sg.*`), Nanite, the global
+  illumination method and Lumen's hardware ray tracing, ray tracing, hair simulation, window mode, VSync, the frame cap, the RHI, the
+  adapter and the graphics driver with its date (a GPU crash depends on it: N-230, a player's RTX 5070 Ti on a January driver).
+  `UMOBugReportSubsystem::CollectRenderFields`; test `MOFramework.BugReport.RenderFields`.
 - **LookAt rows** (Oct 14): every report carries `LookAt.*` captured when the form opens: mesh path, instance, actor + tags (world-feature
   row id), component, collision profile, mesh collision, material, phys material, distance / point / slope, generator biome, view and a
   `Reproduce` line (an `MO.Cam.LookAt` command: run it in PIE to see the player's view).
