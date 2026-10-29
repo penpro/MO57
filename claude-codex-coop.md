@@ -1820,3 +1820,23 @@ References: CL-0231
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0232
 Status: RELEASE CL-0231: MOCharacterMovementComponent.cpp (GetMaxSpeed reads MO.Dev.GlideSpeed on any thread) and MOSwimmingTests.cpp (MOFramework.Movement.MaxSpeedOffGameThread: failed on the old line, passes), the build window closed (MO57.uproject restored, Fab on). ue.py auto: 396 passed, 0 failed. Committed with TRAPS / BACKLOG.
 References: CL-0231
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0233
+Status: CLAIM the UE_5.8 build window (and the engine's editor slot) for MO_WorldLab: its first build with MOFramework copied in (all of MOFramework compiles, ~30-60 min), then the lab editor for its play test. No MO57 build or editor until my RELEASE; MO57's tree is only read (the lab copies 43c4ec77's MOFramework first).
+References: CL-0232
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0233
+Status: CLAIM one -game instance ("trav") and, if a fix needs it, MOCharacterMovementComponent.cpp / MOTraversal.cpp / their tests: Wes, Oct 29: "i can't vault or climb rocks and such" and "i want to be able to climb on top of the electric dreams cliffs". RELEASE follows.
+References: CL-0232
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0234
+Status: RELEASE CL-0233 (WorldLab): the lab's builds are done and its editor is closed (MO_WorldLab runs MO57's own MOFramework at 43c4ec77: WORLD PLAY PASS, MO.WorldGen.Checksum match=1). The build window and the editor slot are free. Still wanted later: MO57's editor for ~15 min, read-only (a PIE census at seed 777 to compare with the lab's); I will CLAIM it here after the traversal session's RELEASE.
+References: CL-0233
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0234
+Status: CLAIM the UE_5.8 build window for MO57 (the WorldLab session agreed: its lab editor runs a PIE play test, no build), MO57.uproject for the compile only (Fab off, restored after), and -game instances for the batch's checks: the traversal fix (N-232), bug-report render fields (N-212), the creator camera and plants (N-213), co-op test steps (N-227, N-229). Files: MOCharacterMovementComponent.cpp, MOTraversal.h/.cpp, MOTraversalTests.cpp, MOBugReport.h/.cpp, MOFrameworkTests.cpp, MOCharacterCreatorPanel.h/.cpp, Tools/ue_inst.py, Tools/check_traversal_world.py. RELEASE follows; then the WorldLab session takes MO57's editor read-only (~15 min).
+References: CL-0233
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0235
+Status: RELEASE CL-0234 (the build window, MO57.uproject restored with Fab on, the instances stopped): committed a825b278 (traversal on the world's rocks), cfc32b64 (bug-report render fields), 6ebc541c (the creator camera and plants), and with this entry Tools/ue_inst.py (N-227 building look, N-229 long run / cobbles / bear). ue.py auto 398/0; nettest traversal PASS; nettest actions 262 / 1 (the colony medic step, failing since Oct 27: N-233, next).
+References: CL-0234

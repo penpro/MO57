@@ -1081,21 +1081,31 @@ def _joiner_long_run(rep, host, client):
     if not rep.step("host: located the joiner", bool(m)):
         return
     jx, jy = float(m.group(1)), float(m.group(2))
-    land = []   # every heading with land 0.3, 0.7 and 1.1 km out
+    # Every heading with land all the way to 1.1 km (the generator's ground every 100 m), and its relief: the steepest 100 m rise or drop on it.
+    # A new world each run puts the joiner anywhere: on a mountain start (Oct 28, 176 m up) the run stalled 60 m out after 13 turns (N-229), so the
+    # run takes the gentlest headings, and the step reports the relief it ran on.
+    land = []   # (relief in m, heading)
     for k in range(8):
         a = k * math.pi / 4.0
-        ok = True
-        for r in (30000.0, 70000.0, 110000.0):
+        heights = []
+        for r in range(10000, 110001, 10000):
             off = log_size(host)
             console(host, f"MO.WorldGen.Sample {jx + r * math.cos(a):.0f} {jy + r * math.sin(a):.0f}")
             s = wait_log(host, r"WORLDGEN Sample x=\S+ y=\S+ seed=\S+ z=(-?[\d.]+)", since=off, timeout=5)
             if not s or not (200.0 < float(s.group(1)) < 80000.0):
-                ok = False
+                heights = None
                 break
-        if ok:
-            land.append(a)
-    if not rep.step("a heading with 1.1 km of land ahead of the joiner", bool(land), f"{len(land)} of 8 headings: " + ", ".join(f"{math.degrees(a):.0f}" for a in land)):
+            heights.append(float(s.group(1)))
+        if heights:
+            land.append((max(abs(b - a2) for a2, b in zip(heights, heights[1:])) / 100.0, a))
+    land.sort()
+    gentle = [a for relief, a in land if relief <= max(land[0][0] * 1.5, 15.0)] if land else []
+    if not rep.step("a heading with 1.1 km of land ahead of the joiner", bool(land),
+                    f"{len(land)} of 8 headings (relief, the steepest 100 m: " + ", ".join(f"{math.degrees(a):.0f} deg {relief:.0f} m" for relief, a in land)
+                    + f"); running the {len(gentle)} gentlest"):
         return
+    relief_run = land[0][0]
+    land = gentle
     pawn_name = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + (p.get_name() if p else 'none'))")) or [None, "none"])[1]
     # Of those, the one whose first 100 m is clearest; a run that stalls (under 10 m in a sample) turns to the clearest again from where it stands,
     # as a player steps round a rock (Oct 24: the run stopped at 49 m against one for all 150 s). Where it runs does not matter: that it gets far.
@@ -1135,7 +1145,7 @@ def _joiner_long_run(rep, host, client):
     rep.step("the joiner sprinted away for 150 s on ground the server has: server and client agree, no fall-through",
              bool(rows) and far > 400.0 and worst <= 500.0 and rest_gap <= 60 and rescued == 0,
              f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}; "
-             f"turned past an obstacle {turns}x")
+             f"turned past an obstacle {turns}x; the gentlest heading's steepest 100 m {relief_run:.0f} m")
 
 
 def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False, seed=None):
@@ -2971,6 +2981,9 @@ def _host_predator_fire_rules(rep, host, client):
         return False
 
     console(host, "MO.AI.PredatorFreeAreaM 0")
+    # Flat open ground for the host and the bears 5.5 m off: on a new world each run, a rock or a slope between them kept the no-fire CONTROL's bear
+    # from biting in 40 s once (Oct 28, N-229).
+    _to_clear_ground(host, 0)
     _probe(host, "import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_W_HOME = j.get_actor_location(); "
                  "j.set_actor_location(j.get_actor_location() + unreal.Vector(6000.0, 6000.0, 300.0), False, True); out('JOINER_AWAY')")
     console(host, "MO.Light.Carried give")
@@ -3005,8 +3018,12 @@ def _host_predator_fire_rules(rep, host, client):
                  "for b in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature)]; out('BEARS_DOWN')")
     w2 = host_wounds(-1)
     fresh = _motest(host, "MO.Test.SpawnCreature Bear 550", r"\[MOTEST\] SpawnCreature: [^\r\n]*")
-    rep.step("CONTROL: with no fire, a fresh bear 5.5 m off hunts the host and bites", bool(fresh) and "Bear" in fresh.group(0) and bitten_within(40, w2),
-             (fresh.group(0)[:120] if fresh else "no spawn line") + " -> a new wound on the host")
+    bit = bool(fresh) and "Bear" in fresh.group(0) and bitten_within(40, w2)
+    nav = "" if bit else " | " + _nav_between(host, "min([x for x in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOPredatorCreature) if x.get_class().get_name().startswith('BP_Bear')], "
+                                                    "key=lambda x: (x.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 0).get_actor_location()).length())",
+                                              "unreal.GameplayStatics.get_player_pawn(world, 0)")
+    rep.step("CONTROL: with no fire, a fresh bear 5.5 m off hunts the host and bites", bit,
+             (fresh.group(0)[:120] if fresh else "no spawn line") + " -> a new wound on the host" + nav)
     console(host, "MO.Light.Carried out")
     console(host, "MO.AI.PredatorFreeAreaM -1")
     # The bear's bites close here: a pawn the host leaves later would stay the worst bleeder in the medic case's settlement (Oct 27: its medic
@@ -3584,37 +3601,57 @@ def _client_carcass(rep, host, client):
 
 def _client_building_look(rep, host, client):
     """Steam playtest Oct 16 2026: a host saw "a big ass green box" over finished roofs, and an unbuilt stick floor looked finished (players fell
-    through it). One look per build state (AMOBuildableActor::RefreshBuildStateVisual): until Complete every mesh wears the planned tint and lets
-    pawns through; once built, the building's own materials and BlockAll -- on the JOINER too (replicated state)."""
+    through it). One look per build state (AMOBuildableActor::RefreshBuildStateVisual), on the JOINER too (replicated state). Since Oct 25-26
+    (BR25-4, the building mode: Docs/Building.md) an unbuilt plan is HIDDEN outside building mode and shows the planned tint in it -- a local view
+    mode, so each machine switches its own -- and pawns pass through it either way (unbuilt collision: query only, BR25-7); once built, the
+    building's own materials and solid. (N-227: this case expected the plan shown in Explore, the design before Oct 25.)"""
     hoff = log_size(host)
     console(host, "MO.Test.PlaceBuildingRPC BuildStickFloor 300")
     placed = wait_log(host, r"ServerPlaceBuilding: spawned (\S+) for recipe BuildStickFloor", since=hoff, timeout=10)
     if not rep.step("host: placed a stick floor", bool(placed), placed.group(0) if placed else "no spawn line"):
         return
-    name = placed.group(1)
     time.sleep(3)
     look = ("b = [x for x in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor) if x.get_class().get_name().startswith('BP_BuildableFloorBase')]; "
             "b = sorted(b, key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 0).get_actor_location()).length() if unreal.GameplayStatics.get_player_pawn(world, 0) else 0)[0] if b else None; "
-            "ms = [c for c in b.get_components_by_class(unreal.StaticMeshComponent) if c.is_visible() and c.static_mesh] if b else []; "
+            "parts = [c for c in b.get_components_by_class(unreal.StaticMeshComponent) if c.static_mesh] if b else []; "
+            "ms = [c for c in parts if c.is_visible()]; "
             "ghost = sum(1 for c in ms if any(m and 'BuildPreview' in m.get_name() for m in c.get_materials())); "
-            "cube = [c for c in b.get_components_by_class(unreal.StaticMeshComponent) if c.get_name() == 'Cube'] if b else []; "
-            "out('LOOK state=%s visible=%d ghosted=%d cube=%s' % (b.get_build_state() if b else None, len(ms), ghost, cube[0].get_collision_profile_name() if cube else '-'))")
-    h, c = _probe(host, look), _probe(client, look)
-    hm, cm = re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", h), re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", c)
-    rep.step("unbuilt: every visible mesh wears the planned look and pawns pass through, on host AND joiner",
-             bool(hm and cm) and hm.group(1) == hm.group(2) != "0" and cm.group(1) == cm.group(2) != "0" and hm.group(3) == cm.group(3) == "IgnoreOnlyPawn",
-             f"host {hm.groups() if hm else h.strip()[-80:]} | client {cm.groups() if cm else c.strip()[-80:]}")
+            "block = sum(1 for c in parts if c.get_collision_enabled() != unreal.CollisionEnabled.NO_COLLISION and c.get_collision_response_to_channel(unreal.CollisionChannel.ECC_PAWN) == unreal.CollisionResponseType.ECR_BLOCK); "
+            "out('LOOK state=%s parts=%d visible=%d ghosted=%d blockpawn=%d' % (b.get_build_state() if b else None, len(parts), len(ms), ghost, block))")
+    mode = "pc = unreal.GameplayStatics.get_player_controller(world, 0); bc = pc.get_component_by_class(unreal.MOBuildingComponent); bc.set_building_mode(%s); out('MODE %%s' %% bc.is_in_building_mode())"
+    rx = r"LOOK state=.*? parts=(\d+) visible=(\d+) ghosted=(\d+) blockpawn=(\d+)"
+
+    def both():
+        h, c = _probe(host, look), _probe(client, look)
+        return re.search(rx, h) or h.strip()[-80:], re.search(rx, c) or c.strip()[-80:]
+
+    def ok(m, check):
+        return hasattr(m, "group") and check(*(int(m.group(i)) for i in (1, 2, 3, 4)))
+
+    def show(m):
+        return m.groups() if hasattr(m, "group") else m
+
+    hm, cm = both()
+    rep.step("unbuilt, outside building mode: hidden, and pawns pass through, on host AND joiner",
+             all(ok(m, lambda parts, vis, gh, blk: parts > 0 and vis == 0 and blk == 0) for m in (hm, cm)),
+             f"host (parts, visible, ghosted, blocking pawns) {show(hm)} | client {show(cm)}")
+    _probe(host, mode % "True"), _probe(client, mode % "True")
+    time.sleep(1)
+    hm, cm = both()
+    rep.step("unbuilt, in building mode: every part shows the planned look, and pawns still pass through, on host AND joiner",
+             all(ok(m, lambda parts, vis, gh, blk: vis > 0 and vis == gh and blk == 0) for m in (hm, cm)),
+             f"host {show(hm)} | client {show(cm)}")
+    _probe(host, mode % "False"), _probe(client, mode % "False")
     _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
                  "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Stick01', 20)")
     console(host, "MO.Test.Build add")
     time.sleep(2)
     console(host, "MO.Test.Build start")
     time.sleep(9)  # 5 s build
-    h, c = _probe(host, look), _probe(client, look)
-    hm, cm = re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", h), re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", c)
-    rep.step("built: its own materials back and solid (BlockAll), on host AND joiner",
-             bool(hm and cm) and hm.group(2) == cm.group(2) == "0" and hm.group(3) == cm.group(3) == "BlockAll",
-             f"host {hm.groups() if hm else h.strip()[-80:]} | client {cm.groups() if cm else c.strip()[-80:]}")
+    hm, cm = both()
+    rep.step("built: shown in Explore with its own materials, and solid, on host AND joiner",
+             all(ok(m, lambda parts, vis, gh, blk: vis > 0 and gh == 0 and blk > 0) for m in (hm, cm)),
+             f"host {show(hm)} | client {show(cm)}")
 
 
 def _client_lake_clock(rep, host, client):
@@ -3951,15 +3988,15 @@ def _client_build_from_ground(rep, host, client):
         _probe(host, inv + "[inv.remove_item_by_definition_id('RiverCobble01', %d)]; out('EMPTIED')" % pocket)
     drop = _probe(host, inv +
         "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), key=lambda a: (a.get_actor_location() - p.get_actor_location()).length())[0]; "
-        # one cobble per drop: an add is capped at the stack size (10 asked, 5 arrived)
+        # one cobble per drop: an add is capped at the stack size (10 asked, 5 arrived); a 40 cm ring (60 cm let one roll out of range, Oct 28: N-229)
         "import math; "
-        "ws = [inv.drop_item_by_guid(g, b.get_actor_location() + unreal.Vector(60.0 * math.cos(i * 0.6283), 60.0 * math.sin(i * 0.6283), 15.0), unreal.Rotator(0.0, 0.0, 0.0)) "
+        "ws = [inv.drop_item_by_guid(g, b.get_actor_location() + unreal.Vector(40.0 * math.cos(i * 0.6283), 40.0 * math.sin(i * 0.6283), 15.0), unreal.Rotator(0.0, 0.0, 0.0)) "
         "for i, g in enumerate([unreal.GuidLibrary.new_guid() for _ in range(10)]) if inv.add_item_by_guid_no_stack(g, 'RiverCobble01', 1)]; "
         "out('GDROP items=%d' % len([w for w in ws if w]))")
     time.sleep(6)   # the drop falls and settles
     seen = _probe(host, ground + "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), "
                                  "key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length())[0]; "
-                                 "near = [w for w in items if (w.get_actor_location() - b.get_actor_location()).length() < 190.0]; "
+                                 "near = [w for w in items if (w.get_actor_location() - b.get_actor_location()).length() < 195.0]; "
                                  "out('GROUND n=%d qty=%d types=%s inrange=%d' % (len(items), sum(w.get_item_component().get_editor_property('quantity') for w in items), "
                                  "sorted(set(str(w.get_item_mesh().get_collision_object_type()) for w in items)), sum(w.get_item_component().get_editor_property('quantity') for w in near)))")
     gm = re.search(r"GROUND n=(\d+) qty=(\d+) types=(.*?) inrange=(\d+)", seen)
