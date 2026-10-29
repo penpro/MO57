@@ -29,7 +29,7 @@ UMOSurvivalStatsComponent::UMOSurvivalStatsComponent()
 
 	Stamina.Current = 100.0f;
 	Stamina.Max = 100.0f;
-	Stamina.RegenRate = 10.0f;  // Fast stamina regen
+	Stamina.RegenRate = 10.0f;  // at rest; the pawn scales it by its work (SetStaminaRecoveryFraction, F52 B)
 	Stamina.DecayRate = 0.0f;
 
 	// Pacing (Wes, Oct 15 2026): a character starts fully fed, watered and rested, and needs only start to bother them after about
@@ -350,7 +350,7 @@ void UMOSurvivalStatsComponent::AdvanceStats(float GameSeconds)
 		return;
 	}
 	ProcessStatTick(Health, FName("Health"), GameSeconds);
-	ProcessStatTick(Stamina, FName("Stamina"), GameSeconds);
+	ProcessStatTick(Stamina, FName("Stamina"), GameSeconds, StaminaRecoveryFraction);
 	ProcessStatTick(Hunger, FName("Hunger"), GameSeconds);
 	ProcessStatTick(Thirst, FName("Thirst"), GameSeconds);
 	ProcessStatTick(Temperature, FName("Temperature"), GameSeconds);
@@ -360,14 +360,14 @@ void UMOSurvivalStatsComponent::AdvanceStats(float GameSeconds)
 	ApplyConditionEffects(GameSeconds);
 }
 
-void UMOSurvivalStatsComponent::ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime)
+void UMOSurvivalStatsComponent::ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime, float RegenFraction)
 {
 	const float OldValue = Stat.Current;
 
 	// Apply regen
-	if (Stat.RegenRate > 0.0f && Stat.Current < Stat.Max)
+	if (Stat.RegenRate > 0.0f && RegenFraction > 0.0f && Stat.Current < Stat.Max)
 	{
-		Stat.Current = FMath::Min(Stat.Current + (Stat.RegenRate * DeltaTime), Stat.Max);
+		Stat.Current = FMath::Min(Stat.Current + (Stat.RegenRate * RegenFraction * DeltaTime), Stat.Max);
 	}
 
 	// Apply decay

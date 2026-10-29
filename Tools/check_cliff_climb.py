@@ -11,7 +11,8 @@ component logged. Ends when the feet get no higher for 30 s (6 s with --no-steer
     python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--real-stamina] [--keep] [--reuse]
 
 Prints PLACE (the face found), one SAMPLE line per 2 s, and one RESULT per side climbed: the highest the feet got against the cliff's top,
-and how it ended (TOPPED OUT; no higher for 30 s still on the face: a roof the steering did not get round; off the face). --all climbs
+and how it ended (TOPPED OUT: standing above; OUT OF STRENGTH with --real-stamina: the bar emptied on the face and the climber fell; no
+higher for 30 s still on the face: a roof the steering did not get round; off the face). --all climbs
 every side with a face; --reuse runs in a --keep instance already in the world.
 """
 import argparse
@@ -129,10 +130,13 @@ def climb_one(a, side):
             f = int(feet.group(1))
             if f > best + 5:
                 best, last_rise_at = f, time.time()
-            if "climbing=False" in s and "custom=0" in s and f > top - 150:
+            if "MOVE_WALKING" in s and f > top - 150:   # standing up there (a fall past the crest's height is not a top-out)
                 topped = True
         print("%5.0fs %s" % (time.time() - t0, s))
         if topped:
+            break
+        if a.real_stamina and "is out of strength" in ui.read_log_from(NAME, off):
+            end = "OUT OF STRENGTH: the hands gave out and the climber fell"
             break
         if "climbing=False" in s and "custom=0" in s:
             ui.console(NAME, "MO.Test.InjectInput IA_MOJump 1 0 0.15")   # off the face (a ledge pulled onto, a corner, let go): jump at it again, as a player would
@@ -154,6 +158,8 @@ def climb_one(a, side):
     how = end
     if topped:
         how = "TOPPED OUT"
+    elif end.startswith("OUT OF STRENGTH"):
+        pass
     elif last and last.group(2) == "True":
         how += ", still on the face"
     elif last:

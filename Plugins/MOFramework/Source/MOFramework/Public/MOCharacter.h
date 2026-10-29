@@ -159,6 +159,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Components/PrimitiveComponent.h"
+#include "Curves/CurveFloat.h"
 #include "MOControllableInterface.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOMaterialSourceInterface.h"
@@ -1078,6 +1079,17 @@ public:
 	/** Minimum stamina required to start sprinting. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Stamina")
 	float MinStaminaToSprint = 10.0f;
+
+	/** How much of the stamina's at-rest recovery (UMOSurvivalStatsComponent Stamina.RegenRate, 10/s) the body gets while it works, by
+	 *  exertion (0-100, GetCurrentExertionLevel; 0 = standing still): recovery follows the work (DECISIONS F52 B, Wes Oct 29). Rest 1, a
+	 *  walk (15) half, a jog (50) a quarter -- 2.5/s against its 2/s cost, so a jog holds up and slowly gets a sprint's breath back -- and
+	 *  nothing from a little above a jog (55) up: a swim (60), a climb (75) and a sprint (90) only spend. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Stamina")
+	FRuntimeFloatCurve StaminaRecoveryByExertion;
+
+	/** StaminaRecoveryByExertion at this exertion, clamped to 0-1. */
+	UFUNCTION(BlueprintPure, Category="MO|Movement|Stamina")
+	float GetStaminaRecoveryFraction(float Exertion) const;
 
 	/** Look sensitivity multiplier. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Input", meta=(ClampMin="0.1", ClampMax="10.0"))

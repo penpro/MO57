@@ -245,6 +245,15 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	WalkSpeed = 400.0f;
 	SprintSpeed = 700.0f;
 
+	// Stamina recovery by exertion (F52 B): rest 1, walk (15) 0.5, jog (50) 0.25, none from 55 (swim 60, climb 75, sprint 90). Linear keys.
+	if (FRichCurve* Recovery = StaminaRecoveryByExertion.GetRichCurve())
+	{
+		for (const FVector2f& Key : {FVector2f(0.0f, 1.0f), FVector2f(15.0f, 0.5f), FVector2f(50.0f, 0.25f), FVector2f(55.0f, 0.0f)})
+		{
+			Recovery->SetKeyInterpMode(Recovery->AddKey(Key.X, Key.Y), RCIM_Linear);
+		}
+	}
+
 	// NOTE: Mesh and animation are intentionally left unset for portability.
 	// Set these in child Blueprints to avoid hard-coded asset paths.
 }
@@ -1370,6 +1379,12 @@ float AMOCharacter::GetCurrentExertionLevel() const
 	}
 }
 
+float AMOCharacter::GetStaminaRecoveryFraction(float Exertion) const
+{
+	const FRichCurve* Recovery = StaminaRecoveryByExertion.GetRichCurveConst();
+	return Recovery && Recovery->GetNumKeys() > 0 ? FMath::Clamp(Recovery->Eval(Exertion), 0.0f, 1.0f) : 1.0f;
+}
+
 float AMOCharacter::GetCurrentTempRiseRate() const
 {
 	switch (CurrentMovementMode)
@@ -1412,7 +1427,16 @@ void AMOCharacter::StopMovementPhysiologyTracking()
 void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 {
 	// Only apply effects if we're actually moving (a swimmer treading water is working: it never rests; nor does a climber holding on)
-	if (!GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming() && !IsClimbing()))
+	const bool bResting = !GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming() && !IsClimbing());
+
+	// Stamina recovery follows the work (F52 B): the stats tick on the server pays back only what this effort allows -- until Oct 29 it
+	// paid back 10/s whatever the body did and the bar never emptied.
+	if (SurvivalStatsComponent && HasAuthority())
+	{
+		SurvivalStatsComponent->SetStaminaRecoveryFraction(GetStaminaRecoveryFraction(bResting ? 0.0f : GetCurrentExertionLevel()));
+	}
+
+	if (bResting)
 	{
 		// Not moving - set exertion to resting
 		if (VitalsComponent)

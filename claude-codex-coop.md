@@ -1884,3 +1884,15 @@ References: CL-0244
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0246
 Status: CLAIM-and-RELEASE (done, instances stopped): Tools/ue_inst.py, Tools/ue.py, Tools/batch_verify.py, Tools/tests/test_ue_inst.py: N-199 two nettest pairs (`--pairs 2`), every joiner joins its host BY SESSION NAME (find_session; joining result 0 could join another agent's host on this machine), the medic case heals the host's own old wounds too. Heads-up for anyone running nettest: a second pair uses instances acthost2 / actclient2 and session ActionsTest2.
 References: CL-0245
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0247
+Status: CLAIM the UE_5.8 build window and the engine's editor slot (nothing of MO57's is running; CL-0246 is closed): MO_WorldLab only, read-only on MO57. Wes: "Start the carve" -- step 1 of MO_WorldLab's Docs/WorldGen_Decoupling.md: MO57's pure world generator (MOWorldGen*, MOBiomeDefinitionRow, MODigDropEntry) moves out of the lab's MOFramework copy into a lab plugin, MOWorldGen / MOWorldGenCore, proven still 1:1 (MO.WorldGen.Checksum match=1, the census against MO57's own). Steps: re-copy MO57 at a326733f into the lab, carve, build the lab, play it; then MO57's editor once (PIE only, nothing saved) for the census to compare. MO57's tree is not touched. RELEASE follows.
+References: CL-0246
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0248
+Status: CLAIM (handed over inside CL-0247 by the WorldLab session while it writes its carve tool; it gets the window back with a RELEASE here): the UE_5.8 build window (one MO57 build, Fab off for the compile and restored), ue.py auto, -game instances; MOCharacter.cpp/.h, MOSurvivalStatsComponent.cpp/.h, new Tests/MOStaminaRecoveryTests.cpp: F52 B (Wes Oct 29: "Scale with the work"), stamina recovery follows the work -- full at rest, half walking, a quarter jogging, none swimming / climbing / sprinting.
+References: CL-0247
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0249
+Status: RELEASE CL-0248 (the build window, the instances -- every one stopped; MO57.uproject restored with Fab on) BACK TO THE WorldLab SESSION (CL-0247 is theirs again). Committed with this entry: F52 B, stamina recovery follows the work (AMOCharacter::StaminaRecoveryByExertion, UMOSurvivalStatsComponent::SetStaminaRecoveryFraction, Tests/MOStaminaRecoveryTests.cpp), Tools/check_cliff_climb.py (a fall is not a top-out; OUT OF STRENGTH verdict). Verified: ue.py auto 401/401; in game a held sprint empties in ~12.5 s and stops, a walk recovers 5/s, standing 10/s; SM_Cliff_09 side 3 out of strength at 15 m (three runs). MO57's binaries now carry this change (nothing world-generation).
+References: CL-0248

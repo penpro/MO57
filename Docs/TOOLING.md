@@ -93,9 +93,10 @@ Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs
 Traversal on the world (Oct 29): `python Tools/check_traversal_world.py [--execute] [--seed N] [--keep]` (one instance, a new world: the
 pawn set in front of the world's own rocks, cliffs and trees round the start, MO.Test.Traversal per obstacle, with `--execute` the jump
 for real and where the feet ended; it also opens the creator and reports whether plants lie between the camera and the face; ~15 min).
-Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--all] [--seconds 150] [--no-steer] [--keep] [--reuse]`
-(one instance, a new world, climbing stamina 0: the pawn at the foot of each side of an Electric Dreams cliff, W held, jumping when off the
-face and steering across it when stuck, as a player would; one RESULT per side: how high against the top, and how it ended).
+Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--all] [--seconds 150] [--no-steer] [--real-stamina] [--keep] [--reuse]`
+(one instance, a new world, climbing stamina 0 unless `--real-stamina`: the pawn at the foot of each side of an Electric Dreams cliff, W
+held, jumping when off the face and steering across it when stuck, as a player would; one RESULT per side: how high against the top, and
+how it ended -- TOPPED OUT only standing up there, OUT OF STRENGTH when the bar emptied on the face and the climber fell).
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to
 face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, `MO.Test.Traversal` (what a jump would do, and why not).

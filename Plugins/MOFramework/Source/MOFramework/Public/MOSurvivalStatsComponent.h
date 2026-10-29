@@ -38,6 +38,10 @@
  *   FMOItemNutrition in item definition. Requires valid inventory GUID.
  * [2026-10] PERSISTENCE: Pawn records save current meters/nutrition with an
  *   explicit valid/version marker. Restore never changes class-authored rates.
+ * [2026-10] STAMINA RECOVERY: Stamina.RegenRate is the rate AT REST. Until
+ *   Oct 29 it applied whatever the body did, outran every cost (sprint 8/s)
+ *   and the bar never emptied (F52); now the pawn scales it by its work
+ *   (SetStaminaRecoveryFraction).
  *
  * =============================================================================
  * RELATED FILES: MOVitalsComponent.h, MOMetabolismComponent.h, MOItemDefinitionRow.h
@@ -238,6 +242,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Survival")
 	bool IsStatCritical(FName StatName) const;
 
+	/** How much of Stamina.RegenRate the body gets back now, 0-1: recovery follows the work (DECISIONS F52 B, Wes Oct 29) -- full at rest,
+	 *  half walking, a little jogging, none sprinting / climbing / swimming. The pawn sets it from its exertion every physiology tick
+	 *  (AMOCharacter::GetStaminaRecoveryFraction); a component nothing sets recovers in full. Server (the stats tick there). */
+	UFUNCTION(BlueprintCallable, Category="MO|Survival")
+	void SetStaminaRecoveryFraction(float Fraction) { StaminaRecoveryFraction = FMath::Clamp(Fraction, 0.0f, 1.0f); }
+
+	UFUNCTION(BlueprintPure, Category="MO|Survival")
+	float GetStaminaRecoveryFraction() const { return StaminaRecoveryFraction; }
+
 	/** The needs side of every symptomatic illness (FMOConditionDefinitionRow body effects x severity): fluid loss through IngestWater, energy drain. Server. */
 	void ApplyConditionEffects(float GameSeconds);
 
@@ -255,10 +268,13 @@ protected:
 
 private:
 	void TickStats();
-	void ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime);
+	void ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime, float RegenFraction = 1.0f);
 	void DecayNutrition(float DeltaTime);
 	FMOSurvivalStat* GetStatByName(FName StatName);
 	const FMOSurvivalStat* GetStatByName(FName StatName) const;
 
 	FTimerHandle TickTimerHandle;
+
+	/** See SetStaminaRecoveryFraction. */
+	float StaminaRecoveryFraction = 1.0f;
 };
