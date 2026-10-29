@@ -1868,3 +1868,7 @@ References: CL-0240
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0242
 Status: CLAIM the UE_5.8 build window (one build already ran just now, Fab off for the compile and restored), -game instances, and MOPersistenceSubsystem.cpp/.h, MOCheatSubsystem.cpp (MO.Save.List timing), new MOSaveSlotInfo.h/.cpp + Tests/MOSaveSlotInfoTests.cpp, Tools/ue.py (scrap): N-197, each save gets a small .slotinfo beside it so the Load panel stops reading every world save whole. RELEASE follows.
 References: CL-0241
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0243
+Status: RELEASE CL-0242 (the build window, the instances; MO57.uproject restored with Fab on). Committed 7057082d (N-197 save .slotinfo) and with this entry N-196: MOForagingSubsystem.cpp (the gather search walks the instanced components) and MOPCGInteractionSubsystem.cpp/.h (GetItemIdForMesh remembers each mesh's answer): a survivor's 200 m gather search 27-34 ms -> ~1 ms. Verified: ue.py auto 400/400, the search benched before / after in a fresh -game world.
+References: CL-0242

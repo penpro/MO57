@@ -98,8 +98,15 @@ What was looked at, and what was found, by evidence rather than by grep alone:
   2.8 ms (tolerable); a survivor's 200 m GATHER search (`QueryHISMInstancesInRadius`) walked 4,314 instanced components instance by
   instance, **137 ms on the host's game thread** each time a survivor takes a gather job. First fix (Oct 22, N-196): skip a component
   whose bounds cannot reach the sphere, ask a HISM's cluster tree for the candidates, keep the exact distance test: **46 ms**, the same
-  instances found (900 against 917 in a different world state). The rest is the walk over every actor (~19k): the next step is a
-  physics overlap or a per-cell index of the instanced components.
+  instances found (900 against 917 in a different world state). The rest was NOT mostly the walk over every actor, as assumed here:
+  measured Oct 29 (a fresh world, seed 670711536, the start, 200 m, 5 calls; the log line now splits the instance
+  work out): 27-34 ms, of which 0.18 ms on the instances. A component walk alone measured the same 26-31 ms. The cost was
+  `UMOPCGInteractionSubsystem::GetItemIdForMesh` on a MISS (grass, flowers, branches: most components in range): the mesh's path
+  string, every one of ~130 mapped soft pointers resolved, then ~130 more path strings built, per component, per search. Each mesh's
+  answer (misses too) is now remembered until the mapping is rebuilt: **~1 ms** (2.8-3.3 ms on the first search while the answers are
+  learned), the same ~920 instances. With the memo, the actor walk measured ~3 ms against ~1 ms for walking the instanced components
+  straight from the object list, so that stays too. Every other caller of `GetItemIdForMesh` (aim and interaction lookups) gets the
+  memo as well.
 - **Ticking:** 21 classes tick; all but the per-frame ones (buoyancy, foot plants, AI controllers, water) throttle with a tick interval
   or a timer, and the tickable subsystems carry `MO_TICK_WATCH`. Nothing new to cut there.
 - **The rainforest's wider trees cost nothing measurable** (Oct 22, Wes's x3-wide Black Alders): same spot, same build and instance

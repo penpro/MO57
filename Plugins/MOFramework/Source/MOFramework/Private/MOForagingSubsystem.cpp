@@ -106,31 +106,27 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return Result;
 	}
 
-	const double SearchStart = FPlatformTime::Seconds();   // the walk below visits every actor of the world: its cost is logged (perf sweep, Oct 22)
+	const double SearchStart = FPlatformTime::Seconds();   // its cost is logged (perf sweep, Oct 22)
+	double InstanceSeconds = 0.0;
 	const float RadiusSq = Radius * Radius;
 	int32 TotalISMComponentsFound = 0;
 	int32 TotalISMComponentsWithMesh = 0;
 	int32 TotalHarvestableComponents = 0;
 
-	// Iterate all actors looking for ISM/HISM components
-	// Using UInstancedStaticMeshComponent as base class catches both ISM and HISM
-	for (TActorIterator<AActor> It(World); It; ++It)
+	// Every instanced component (ISM and HISM) of this world straight from the object list, not every actor's component list (~19k actors):
+	// measured Oct 29 at a 200 m search, ~1 ms against ~3 ms. Most of the old 30 ms was the mesh -> item lookup per component, memoized in
+	// UMOPCGInteractionSubsystem::GetItemIdForMesh now (N-196).
 	{
-		AActor* Actor = *It;
-		if (!Actor)
+		for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
 		{
-			continue;
-		}
-
-		// Get all ISM components on this actor (includes HISM which inherits from ISM)
-		TArray<UInstancedStaticMeshComponent*> ISMComponents;
-		Actor->GetComponents<UInstancedStaticMeshComponent>(ISMComponents);
-
-		for (UInstancedStaticMeshComponent* ISM : ISMComponents)
-		{
+			UInstancedStaticMeshComponent* ISM = *It;
+			if (!ISM || ISM->GetWorld() != World || !ISM->IsRegistered() || !IsValid(ISM->GetOwner()))
+			{
+				continue;
+			}
 			TotalISMComponentsFound++;
 
-			if (!ISM || !ISM->GetStaticMesh())
+			if (!ISM->GetStaticMesh())
 			{
 				continue;
 			}
@@ -172,6 +168,7 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 			}
 
 			TotalHarvestableComponents++;
+			const double InstanceStart = FPlatformTime::Seconds();
 
 			// Check each instance: a HISM's cluster tree names the candidates (instances whose bounds touch the sphere); the exact centre
 			// distance below decides, as before. A plain ISM is walked whole.
@@ -210,6 +207,7 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 					Result.Add(Data);
 				}
 			}
+			InstanceSeconds += FPlatformTime::Seconds() - InstanceStart;
 		}
 	}
 
@@ -219,8 +217,8 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return A.Distance < B.Distance;
 	});
 
-	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM query: %d component(s) walked, %d harvestable, %d instance(s) within %.0f cm, %.2f ms"),
-		TotalISMComponentsFound, TotalHarvestableComponents, Result.Num(), Radius, (FPlatformTime::Seconds() - SearchStart) * 1000.0);
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM query: %d component(s) walked, %d harvestable, %d instance(s) within %.0f cm, %.2f ms (%.2f ms of it on the instances)"),
+		TotalISMComponentsFound, TotalHarvestableComponents, Result.Num(), Radius, (FPlatformTime::Seconds() - SearchStart) * 1000.0, InstanceSeconds * 1000.0);
 
 	return Result;
 }

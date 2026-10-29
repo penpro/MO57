@@ -591,6 +591,10 @@
   `Super::ApplySettings` -> `ApplyNonResolutionSettings`. (hitch-hunt, far-trees, playtest-oct14, footsteps)
 - **Periodic code costs a constant hitch** -> it searches the world (`TObjectIterator`, `GetAllActorsOfClass`) or recomputes a pure function each
   tick -> keep a registry; cache; throttle by movement; move pure work to a worker. (TECHNICAL_REFERENCE "Periodic work")
+- **A world search is slow and the walk gets the blame** -> time the parts before changing the walk: a survivor's 200 m gather search
+  spent ~29 of its 30 ms in `GetItemIdForMesh`'s MISS path (a path string plus ~260 soft-pointer resolves and string builds per grass
+  component), not in walking the actors; a component walk alone changed nothing -> memoize a lookup that walks a table per call, misses
+  included. (Oct 29, N-196)
 
 ## 16. AI and gameplay
 

@@ -22,12 +22,14 @@ void UMOPCGInteractionSubsystem::Initialize(FSubsystemCollectionBase& Collection
 void UMOPCGInteractionSubsystem::Deinitialize()
 {
 	MeshToItemCache.Empty();
+	ItemIdByLoadedMesh.Empty();
 	Super::Deinitialize();
 }
 
 void UMOPCGInteractionSubsystem::RebuildMeshLookupCache()
 {
 	MeshToItemCache.Empty();
+	ItemIdByLoadedMesh.Empty();
 
 	// Get the item database settings
 	const UMOItemDatabaseSettings* ItemDatabase = GetDefault<UMOItemDatabaseSettings>();
@@ -82,7 +84,17 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	{
 		return NAME_None;
 	}
+	if (const FName* Known = ItemIdByLoadedMesh.Find(Mesh))
+	{
+		return *Known;
+	}
+	const FName ItemId = ResolveItemIdForMesh(Mesh);
+	ItemIdByLoadedMesh.Add(Mesh, ItemId);
+	return ItemId;
+}
 
+FName UMOPCGInteractionSubsystem::ResolveItemIdForMesh(UStaticMesh* Mesh) const
+{
 	// Create soft pointer for lookup
 	TSoftObjectPtr<UStaticMesh> SoftMesh(Mesh);
 	const FString MeshPath = Mesh->GetPathName();

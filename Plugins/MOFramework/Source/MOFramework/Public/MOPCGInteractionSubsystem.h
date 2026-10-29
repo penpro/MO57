@@ -43,6 +43,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "UObject/ObjectKey.h"
 #include "MOPCGInteractionSubsystem.generated.h"
 
 class UStaticMesh;
@@ -77,6 +78,8 @@ public:
 
 	/**
 	 * Find the item definition ID for a given static mesh.
+	 * Each mesh's answer (an item or none) is remembered until the mapping is rebuilt: working one out walks the whole mapping twice and builds a
+	 * path string per entry, and a survivor's 200 m gather search asked it for hundreds of grass and flower components (N-196, Oct 29).
 	 * @param Mesh The static mesh to look up
 	 * @return The item definition ID, or NAME_None if not found
 	 */
@@ -179,4 +182,10 @@ private:
 	/** Cache mapping static mesh to item definition ID. */
 	UPROPERTY(Transient)
 	TMap<TSoftObjectPtr<UStaticMesh>, FName> MeshToItemCache;
+
+	/** GetItemIdForMesh's answers per loaded mesh, misses (NAME_None) included; emptied with MeshToItemCache. */
+	mutable TMap<TObjectKey<UStaticMesh>, FName> ItemIdByLoadedMesh;
+
+	/** GetItemIdForMesh's work for a mesh not asked about yet. */
+	FName ResolveItemIdForMesh(UStaticMesh* Mesh) const;
 };
