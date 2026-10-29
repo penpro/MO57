@@ -10,7 +10,7 @@
 //   MO.Test.ResourceNodes [radiusCm=3000] [n=5]      resource nodes (ResourceNode_ tags) nearest the local pawn, each with the first action the pawn can do
 //                                                    that keeps the node (its yields, seconds)
 //   MO.Test.Harvest <x> <y> <z> <meshName> <ActionId> the KeepOnHarvest menu's request for that instance: AMOPlayerController::ServerBeginHarvest, next tick
-//   MO.Test.InjectInput <IA_Name> [X Y] [Seconds]  a REAL Enhanced Input action, as if its key were held (the controller's own handlers run)
+//   MO.Test.InjectInput <IA_Name> [X Y] [Seconds]  a REAL Enhanced Input action, as if its key were held (the controller's own handlers run); a newer one of that action replaces it
 //   MO.Test.Inspect <ItemId>                         the inventory's Inspect on the first carried item of that kind (UMOUIManagerComponent::StartItemInspection), next tick
 //   MO.Test.SurvivorCommand <FollowMe|StayHere|SetHome|GoHome|Job <JobType>>  the survivor menus' order to the nearest recruited survivor
 //                                                    (FMOSurvivorCommands::Submit), next tick
@@ -583,16 +583,21 @@ namespace MOCoopInstanceTest   // named, not anonymous: unity builds put this fi
 			const double Y = Args.Num() > 2 ? FCString::Atod(*Args[2]) : 0.0;
 			const double Seconds = Args.Num() > 3 ? FCString::Atod(*Args[3]) : 0.3;
 			Input->StartContinuousInputInjectionForAction(Action, FInputActionValue(Action->ValueType, FVector(X, Y, 0.0)), {}, {});
+			// A newer injection of the same action replaces this one, and only the newest one's timer releases the key: an older hold's timer
+			// cut a newer one short (a climb test steering W, then A, then W again, Oct 29).
+			static TMap<FName, uint32> Generations;
+			const FName Key(*Name);
+			const uint32 Generation = ++Generations.FindOrAdd(Key);
 			TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> WeakInput(Input);
 			TWeakObjectPtr<UInputAction> WeakAction(Action);
 			const double End = FPlatformTime::Seconds() + Seconds;
-			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakInput, WeakAction, End](float)
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakInput, WeakAction, End, Key, Generation](float)
 			{
 				if (FPlatformTime::Seconds() < End)
 				{
 					return true;
 				}
-				if (WeakInput.IsValid() && WeakAction.IsValid())
+				if (WeakInput.IsValid() && WeakAction.IsValid() && Generations.FindRef(Key) == Generation)
 				{
 					WeakInput->StopContinuousInputInjectionForAction(WeakAction.Get());
 				}

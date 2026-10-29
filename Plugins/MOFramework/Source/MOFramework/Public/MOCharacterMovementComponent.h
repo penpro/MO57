@@ -326,7 +326,8 @@ private:
 	void PhysClimb(float DeltaTime, int32 Iterations);
 	/** The body's facing for traversal probes: the face held while climbing, else where the body looks (flat). */
 	FVector TraversalFacing() const;
-	/** A face along Direction from the body's centre within the climbing reach: hit and classification. */
+	/** A climbable face along Direction (flattened) within the climbing reach, felt at six holds (chest, head, waist, thighs, the chest's sides):
+	 *  OutHit is the nearest climbable hold, its normals replaced by the holds' mean; Distance - capsule radius is the gap to the body. */
 	bool TraceClimbFace(const FVector& Direction, FHitResult& OutHit, EMOClimbSurface& OutSurface) const;
 
 	struct FTraverseState

@@ -6,13 +6,15 @@
 > animation set's (walk 200 / jog 500 / sprint 700, jump 500 cm/s: `Docs/Animation_GASP.md` §3).
 > **Current state (2026-10-29):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
 > need a vault mechanic to hop / pull up on things"), and since Oct 29 on the world's own rocks (Wes: "i can't vault or climb rocks and
-> such"): section 5. No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Climbing a cliff
-> taller than ~10 m waits on F51 (stamina, section 3).
+> such"): section 5; since Oct 29 up the Electric Dreams cliffs (a 19 m top-out; roofs and undercuts stop a line, as on real rock).
+> No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Climbing a cliff taller than
+> ~10 m without a ledge to rest on waits on F51 (stamina, section 3).
 > **Entry points:** `MOTraversal.h` (the pure decisions), `UMOCharacterMovementComponent` (custom modes `CMOVE_Traverse`, `CMOVE_Climb`;
 > `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`ClimbingMET` / `ClimbingExertion` /
 > `ClimbingStaminaCostPerSecond`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
 > `MO.Test.Traversal` (what a jump would do here, and why not). **Tests:** `MOFramework.Traversal.*` (ClassifyLedges, PathShape, Climbable,
-> PickTop); `python Tools/check_traversal_world.py [--execute]` (the world's rocks, cliffs and trees round a new world's start).
+> PickTop); `python Tools/check_traversal_world.py [--execute]` (the world's rocks, cliffs and trees round a new world's start);
+> `python Tools/check_cliff_climb.py [--all]` (each side of an Electric Dreams cliff climbed for real).
 
 ## 1. Jump is the one verb
 
@@ -71,6 +73,15 @@ following the face's steepness (a slab mostly feet and restful, an overhang dear
   move's end); for a vault the ground just behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
 - Climbing, the face lost at the hands while pushing up (the top come level with the chest: a rounded edge, a boulder's crest) pulls over
   the top if one is in reach, before letting go (Oct 29: a rock grabbed and let go 0.24 s later).
+- **The face is felt at six holds** (`TraceClimbFace`: the chest, above the head, the waist, the thighs, either side of the chest), for the
+  grab and for every climbing step: the climber holds the gap to the nearest and steers by their mean normal, which the body turns to over
+  ~0.1 s. Until Oct 29 one ray at the chest did both, and on an Electric Dreams cliff its normal swings up to 70 degrees between facets 25 cm
+  apart: the climber turned off the face and let go 1-3 m up every side. The face is lost only when it leaves every hold; the log then
+  says what was there and why there was no pull-over (`[MOTraversal] ... the face ended at the hands (...) ...; no pull-over: <why>`).
+- The stuck-in-the-ground rescue (`AMOCharacter::CheckEmbeddedSafety`) skips a climbing or traversing body: it read a climber against a
+  cliff's bumps as embedded and lifted it off the face 5 s into every climb (Oct 29).
+- W is camera-relative, like every move: a face that turns 50 degrees off the camera splits W into up and across, so a player keeps the
+  camera on the face (as on foot). A face-relative mapping (W always up) is possible: Wes's call.
 
 ## 5. Verified (Oct 26, one game instance, real input actions through `MO.Test.InjectInput`)
 
@@ -96,3 +107,19 @@ movement values, which no code or script sets -- a person steps ~50 cm unaided; 
 cluster with no room on its lumpy top; two big boulders that read "nothing in front" (the check's placement on their slopes is suspect); a
 jump that found nothing 0.15 s after a check that offered a pull-up. Trees: the trunks are grabbed ("climbable=tree"). The Electric Dreams
 cliffs (600 m from that start) read as rock by their names; a full climb to a top was not run: F51. How it looks: no animations yet.
+
+**An Electric Dreams cliff (Oct 29, `python Tools/check_cliff_climb.py --all`, seed 777, SM_Cliff_09 with its neighbours, climbing stamina 0;
+Wes: "i want to be able to climb on top of the electric dreams cliffs"):** five of its eight sides have a face at the foot (the others: an
+undercut, or no steep face). How high the feet got of the ~11 m to its top:
+
+| Run | Side 0 | Side 2 | Side 3 | Side 4 | Side 6 |
+|---|---|---|---|---|---|
+| before (W held, one jump) | 1.4 m, then moved off the face by the stuck-in-the-ground rescue | | | | |
+| rescue fixed, one ray at the chest | 0.9 m | 2.2 m, let go | 3.2 m, let go | 1.5 m, let go | 0.8 m |
+| six holds, mean normal | 3.2 m | 5.7 m | 5.7 m | 3.8 m | 0.8 m |
+| + steering across when stuck, as a player would | 4.8 m | 5.7 m | **topped out: 19 m** (two ledges, then 8.6 m of face in 30 s and over the crest) | 3.8 m | 0.8 m |
+
+Where it stops now is the rock, not the climb: side 4 sits in a roof pocket (a second cliff mesh's flat underside over the head, 6-30 cm
+of room to rise for 3.5 m to one side, rock jutting in on the other); side 0 under another such roof; side 6 is an undercut (the foot
+overhangs, nothing in reach). A player goes round a roof or down and across to another line; the check's steering tries 3.6 m at most.
+Climbing stamina still decides how much of this a body can do (F51): the 8.6 m pitch took 30 s, about a full bar.

@@ -2784,7 +2784,12 @@ void AMOCharacter::CheckEmbeddedSafety(float DeltaTime)
 {
 	// Server decides where a pawn is; only HUMAN-driven pawns (an AI colonist's own path-following copes, and testing every NPC would
 	// cost collision queries for nothing). Not during a load: terrain is still regenerating and the pawns are held in place.
-	if (!HasAuthority() || bSuppressFallThroughDuringLoad || !IsPlayerControlled() || CVarDisableEmbeddedRescue.GetValueOnGameThread())
+	// Nor while climbing or traversing: those moves hold the body against rough rock on purpose and sweep every step themselves. A climber touching a
+	// cliff's bumps read as embedded and was moved off the face 5 s into every real climb (Oct 29, an Electric Dreams cliff); one truly stuck lets go
+	// (crouch), and the rescue applies again on the ground.
+	const UMOCharacterMovementComponent* MoveMode = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!HasAuthority() || bSuppressFallThroughDuringLoad || !IsPlayerControlled() || CVarDisableEmbeddedRescue.GetValueOnGameThread()
+		|| (MoveMode && (MoveMode->IsClimbing() || MoveMode->IsTraversing())))
 	{
 		EmbeddedSeconds = 0.f;
 		return;

@@ -754,14 +754,58 @@ bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHi
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbFace), /*bTraceComplex=*/false, CharacterOwner);
 	FCollisionResponseParams Response;
 	InitCollisionParams(Params, Response);
-	const FVector Start = UpdatedComponent->GetComponentLocation() + FVector(0.0, 0.0, Half * 0.3f);   // the chest: where the hands are
-	if (!GetWorld()->LineTraceSingleByChannel(OutHit, Start, Start + Direction.GetSafeNormal() * (Radius + ClimbReachCm + 10.0f),
-		UpdatedComponent->GetCollisionObjectType(), Params, Response))
+	// The face is felt at several holds, not one: on a lumpy cliff one ray's normal swings up to 70 degrees between facets 25 cm apart, and a
+	// climber steered by it turned off the face and let go 1-3 m up every side of an Electric Dreams cliff (Oct 29). The holds: the chest (where
+	// the hands are), above the head, the waist, the thighs, and either side of the chest. Each starts where "distance - radius" is the gap
+	// between the body and the face (the side holds sit back by what the round body gives up there).
+	const FVector Into = Direction.GetSafeNormal2D(UE_SMALL_NUMBER, Direction.GetSafeNormal());
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, Into).GetSafeNormal();
+	const FVector Centre = UpdatedComponent->GetComponentLocation();
+	const FVector Holds[] = {
+		Centre + FVector(0.0, 0.0, Half * 0.3f),
+		Centre + FVector(0.0, 0.0, Half * 0.7f),
+		Centre,
+		Centre - FVector(0.0, 0.0, Half * 0.4f),
+		Centre + FVector(0.0, 0.0, Half * 0.3f) + Side * (Radius * 0.6f) - Into * (Radius * 0.2f),
+		Centre + FVector(0.0, 0.0, Half * 0.3f) - Side * (Radius * 0.6f) - Into * (Radius * 0.2f),
+	};
+	const float Reach = Radius + ClimbReachCm + 10.0f;
+	FVector NormalSum = FVector::ZeroVector;
+	FHitResult Nearest;
+	FHitResult NearestAny;
+	for (const FVector& Start : Holds)
 	{
+		FHitResult Hit;
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + Into * Reach, UpdatedComponent->GetCollisionObjectType(), Params, Response))
+		{
+			continue;
+		}
+		if (!NearestAny.bBlockingHit || Hit.Distance < NearestAny.Distance)
+		{
+			NearestAny = Hit;
+		}
+		const EMOClimbSurface Kind = ClassifyClimbHit(Hit);
+		if (Kind == EMOClimbSurface::None)
+		{
+			continue;
+		}
+		NormalSum += Hit.ImpactNormal;
+		if (!Nearest.bBlockingHit || Hit.Distance < Nearest.Distance)
+		{
+			Nearest = Hit;
+			OutSurface = Kind;
+		}
+	}
+	if (!Nearest.bBlockingHit)
+	{
+		OutHit = NearestAny;   // nothing climbable in reach: what there was, if anything (the let-go log names it)
 		return false;
 	}
-	OutSurface = ClassifyClimbHit(OutHit);
-	return OutSurface != EMOClimbSurface::None;
+	// The nearest hold (the gap is held to it), carrying the holds' mean normal: the face as the body feels it.
+	OutHit = Nearest;
+	OutHit.ImpactNormal = NormalSum.GetSafeNormal(UE_SMALL_NUMBER, Nearest.ImpactNormal);
+	OutHit.Normal = OutHit.ImpactNormal;
+	return true;
 }
 
 bool UMOCharacterMovementComponent::FindClimbableWall(FHitResult& OutHit, EMOClimbSurface& OutSurface, bool bRequireInputTowardIt) const
@@ -944,19 +988,24 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 	EMOClimbSurface Surface = EMOClimbSurface::None;
 	if (!TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Wall, Surface))
 	{
-		// The face ended at the hands. Climbing up, that is usually the top coming level with the chest (a rounded edge, a boulder's crest): pull over
-		// it if there is a top in reach (Oct 29: a rock grabbed and let go 0.24 s later, the top still at the climber's waist).
+		// The face left every hold. Climbing up, that is usually the top passing the body (a rounded edge, a boulder's crest): pull over it if there
+		// is a top in reach (Oct 29: a rock grabbed and let go 0.24 s later, the top still at the climber's waist).
 		FTraversalPlan Plan;
-		if (FVector::DotProduct(Acceleration.GetSafeNormal2D(), -ClimbNormal.GetSafeNormal2D()) > 0.5f && FindTraversal(Plan))
+		FString WhyNot = TEXT("not pushing up");
+		if (FVector::DotProduct(Acceleration.GetSafeNormal2D(), -ClimbNormal.GetSafeNormal2D()) > 0.5f && FindTraversal(Plan, &WhyNot))
 		{
 			StartTraversal(Plan);
 			return;
 		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: the face ended at the hands (%s) at %s, the face held %s; no pull-over: %s"), *GetNameSafe(CharacterOwner),
+			Wall.bBlockingHit ? *FString::Printf(TEXT("unclimbable %s"), *GetNameSafe(Wall.GetComponent())) : TEXT("nothing in reach"),
+			*UpdatedComponent->GetComponentLocation().ToCompactString(), *ClimbNormal.ToCompactString(), *WhyNot);
 		StopClimbing();   // round a corner, past the top without room to pull up, or turned unclimbable
 		StartNewPhysics(DeltaTime, Iterations);
 		return;
 	}
-	ClimbNormal = Wall.ImpactNormal;
+	// The body turns to the face over ~0.1 s, not on one tick's bump (the normal rides the saved moves, so a replay turns the same way).
+	ClimbNormal = FMath::Lerp(ClimbNormal, Wall.ImpactNormal, 1.0f - FMath::Exp(-DeltaTime / 0.1f)).GetSafeNormal(UE_SMALL_NUMBER, Wall.ImpactNormal);
 	ClimbSurface = Surface;
 
 	float Radius = 0.0f;

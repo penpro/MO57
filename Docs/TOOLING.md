@@ -38,6 +38,8 @@ Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one
 stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|click|drag|key ...` (real input / window capture for instances and packaged windows; `drag -X -Y -X2 -Y2` is a real
 UMG drag and drop). `MO.Test.InjectInput <IA_Name> [X Y] [Seconds]` feeds a REAL Enhanced Input action (from `/MOFramework/Input/`) through the
 controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input` skips (it calls the pawn directly): use it for naive-player passes.
+A newer injection of the same action replaces the held one, and only the newest one's timer releases the key (until Oct 29 an older hold's
+timer cut a newer one short): steer W, then A, then W again without waiting the first one out.
 Crops (Oct 26): `MO.Test.AgeCrops <Days> [RadiusCm=1500]` (plots near player 0 grow that many more days; logs stage and growth), with
 `MO.Test.WorldAction list|Sow:<CropId>|Harvest|ClearPlot` on the plot. A creative world tills a plot at once; `Gathering=0.1` shortens sowing / harvest.
 Creatures (Oct 26): `MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] [SideCm=0]` (on the ground in front of player 0; Species = Pig ->
@@ -91,6 +93,9 @@ Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs
 Traversal on the world (Oct 29): `python Tools/check_traversal_world.py [--execute] [--seed N] [--keep]` (one instance, a new world: the
 pawn set in front of the world's own rocks, cliffs and trees round the start, MO.Test.Traversal per obstacle, with `--execute` the jump
 for real and where the feet ended; it also opens the creator and reports whether plants lie between the camera and the face; ~15 min).
+Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--all] [--seconds 150] [--no-steer] [--keep] [--reuse]`
+(one instance, a new world, climbing stamina 0: the pawn at the foot of each side of an Electric Dreams cliff, W held, jumping when off the
+face and steering across it when stuck, as a player would; one RESULT per side: how high against the top, and how it ended).
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to
 face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, `MO.Test.Traversal` (what a jump would do, and why not).

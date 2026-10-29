@@ -597,6 +597,9 @@
 - **A crouch press "did nothing" / a climber could not grab again** -> crouch is a TOGGLE here (`RequestCrouchToggle`): a press that is
   used for something else (letting go of a climb) must clear `bWantsToCrouch`, or the body lands crouched and a crouched body cannot jump
   or grab. (Oct 26)
+- **A climber was moved off the cliff 5 s into every climb** -> `AMOCharacter::CheckEmbeddedSafety` (the stuck-in-the-ground rescue) read a
+  body held against a cliff's bumps as embedded and lifted it clear -> the rescue skips a climbing or traversing body (those moves sweep
+  every step themselves). A new mode that holds the capsule against geometry on purpose needs the same exemption. (Oct 29)
 - **A traversal test block "not in front"** -> the MetaHuman's capsule radius is 28.9 cm, not the 34 of `MOSpawnClearance::FCapsule`: the
   traversal rays reach radius + 60 = 89 cm from the centre. Put test blocks 60 cm ahead. (Oct 26)
 

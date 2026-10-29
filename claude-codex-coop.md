@@ -1840,3 +1840,27 @@ References: CL-0233
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0235
 Status: RELEASE CL-0234 (the build window, MO57.uproject restored with Fab on, the instances stopped): committed a825b278 (traversal on the world's rocks), cfc32b64 (bug-report render fields), 6ebc541c (the creator camera and plants), and with this entry Tools/ue_inst.py (N-227 building look, N-229 long run / cobbles / bear). ue.py auto 398/0; nettest traversal PASS; nettest actions 262 / 1 (the colony medic step, failing since Oct 27: N-233, next).
 References: CL-0234
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0236
+Status: CLAIM the UE_5.8 build window and the engine's editor slot (handed over in CL-0235): rebuild MO_WorldLab at MO57 9734490e, the lab editor's census + review shots, then MO57's editor READ-ONLY for the same world's census (PIE only, nothing saved). RELEASE follows; I'll message the triage session.
+References: CL-0235
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0237
+Status: RELEASE CL-0236: the build window, the lab editor and MO57's editor are all closed. MO57's editor was used read-only (one PIE world, seed 777 TemperateForest test, nothing saved). Result: MO_WorldLab at MO57 9734490e makes MO57's world 1:1 -- MO57's census round the survivor and the lab's agree on all 32 meshes (8,754 instances, same centre), MO.WorldGen.Checksum match=1 in both.
+References: CL-0236
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0238
+Status: CLAIM -game instances (no build yet): Tools/check_cliff_climb.py on an Electric Dreams cliff (Wes: "climb on top of the electric dreams cliffs"), then nettest actions MO_ACTIONS_ONLY for the colony medic step (N-233: Tools/ue_inst.py heals the earlier cases' bleeders first). A build window may follow for what the climb shows; claimed then.
+References: CL-0237
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0239
+Status: CLAIM the UE_5.8 build window (WorldLab released CL-0237) and Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp: the embedded-pawn rescue moved a climber off an Electric Dreams cliff 5 s into the climb; it skips climbing / traversing pawns now. MO57.uproject Fab off for the compile only. RELEASE follows.
+References: CL-0238
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0240
+Status: CLAIM Plugins/MOFramework/Source/MOFramework/Private/MOCharacterMovementComponent.cpp and Public/MOCharacterMovementComponent.h (inside the CL-0239 build window): the climb steered by one ray, whose normal swings up to 70 degrees between facets of an Electric Dreams cliff, so climbers turned off the face 1-3 m up; the face is now felt at six holds and the held normal is smoothed. A let-go log names why. RELEASE follows with the commit.
+References: CL-0239
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0241
+Status: RELEASE CL-0238, CL-0239, CL-0240 (the build window, MOCharacter.cpp, MOCharacterMovementComponent.cpp/.h, the instances; MO57.uproject restored with Fab on, every instance stopped). Committed: the nettest medic / bear / long-run fixes (N-233, N-229), then climbing on the Electric Dreams cliffs (the rescue skips climbers; the face felt at six holds with a smoothed mean normal; MO.Test.InjectInput newest-wins; Tools/check_cliff_climb.py). Verified: ue.py auto 398/398, nettest actions 264/266 then the two fixed cases PASS on rerun, nettest traversal PASS, check_traversal_world --execute, check_cliff_climb --all (one side topped out at 19 m).
+References: CL-0240
