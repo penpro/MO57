@@ -43,6 +43,12 @@
 - **When the world is saved:** the in-game Save button and every way out (Exit to Main Menu, Exit Game, loading another world, the
   death recap's Return, the window close), all through `UMOSystemMenuUIController::SaveThisWorld` -> `SaveToCurrentSlot`;
   host / standalone only; no confirm. The timed autosave saves the same way (below).
+- **The Load list's facts beside each save (N-197, Oct 29):** `<Slot>.slotinfo` next to `<Slot>.sav` (`FMOSaveSlotInfo`) holds the display
+  name, save time, play time, world name and id, the autosave flag and the thumbnail, and the size and time of the .sav it describes.
+  Every save write goes through `UMOPersistenceSubsystem::WriteSaveSlot` (a save, its thumbnail rewrite, a rename), which writes it;
+  `DeleteSaveSlot` removes it. `GetSaveSlotMetadata` reads it while the .sav still has that size and time, and otherwise reads the save
+  whole (the format has no header) and writes it afresh: a save from before Oct 29, or one copied in from another machine, costs one
+  whole read. `MO.Save.List` prints what the listing took. `ue.py build` scraps the dev `.slotinfo` files with the dev saves.
 - **Timed autosave (N-157, built Oct 18).** A crash or a killed process used to lose everything since the last exit, and killing the
   process was the one save-scum route left.
   * One save step for every caller: `MOWorldSave::SaveThisWorld(UWorld*, Reason)` (`MOWorldSave.h`): host / standalone only (a client

@@ -925,7 +925,7 @@ def editor_start(wait_bridge_s=360):
 
 def scrap_dev_saves():
     """Every build starts clean (Wes, Oct 25 2026: "scrap my saves/autosaves every build, if i want save games i'll play them on steam"):
-    the project's dev saves (Saved/SaveGames/*.sav) and the editor's autosaves and package-restore data (Saved/Autosaves*: after a crash
+    the project's dev saves (Saved/SaveGames/*.sav and their *.slotinfo) and the editor's autosaves and package-restore data (Saved/Autosaves*: after a crash
     they park the next editor start on a restore dialog). Never the packaged / Steam game's saves (%LOCALAPPDATA%\\MO57\\Saved\\SaveGames).
     Called with the editor closed; `--keep-saves` skips it."""
     import glob
@@ -938,6 +938,11 @@ def scrap_dev_saves():
             gone.append(os.path.basename(path))
         except OSError as e:
             print(f"[saves] could not remove {path}: {e}")
+    for path in glob.glob(os.path.join(saved, "SaveGames", "*.slotinfo")):   # each save's list-panel info (FMOSaveSlotInfo): goes with it
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     for path in glob.glob(os.path.join(saved, "Autosaves*")):
         shutil.rmtree(path, ignore_errors=True)
         if not os.path.exists(path):

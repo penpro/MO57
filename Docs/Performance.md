@@ -84,6 +84,9 @@ What was looked at, and what was found, by evidence rather than by grep alone:
   kept per slot while the file's size and time are the same (a rename, a save or a delete changes them). The old-format appearance
   warnings those loads printed (156 per session: `SkinTone` / `EyeColor` changed type) are gone with them; such a save still loads
   its survivors with the default skin tone and eye colour (the data, not a cost).
+  The FIRST listing of a session still read every save whole until Oct 29 (N-197): now each save has a small `.slotinfo` beside it
+  (`Docs/Persistence.md`). Measured (three 468 KB saves, a fresh `-game` session, `MO.Save.List`): 0.2 ms from the info files, 17.7 ms
+  reading the saves whole (~6 ms a save; the info files were written back by that listing). A 38 KB info file is mostly its thumbnail.
 - **Logging.** `UE_LOG` is compiled out of Shipping, so log lines cost only Development / editor runs; there they cost readability more
   than frame time. The biome spawner's per-cell summary was 1,290 Warning lines in one nettest host (it pushed every other line out of
   a log tail the harness read): now Log level behind `mo.PCG.LogCells 1`. The 1 Hz `[MONet]` heartbeat stays (the network diagnosis

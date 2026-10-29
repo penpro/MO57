@@ -1,4 +1,5 @@
 #include "MOPersistenceSubsystem.h"
+#include "MOSaveSlotInfo.h"
 #include "MOMetaHumanCharacter.h"
 #include "MOWorldGen.h"
 #include "MOWorldGenSettings.h"
@@ -467,7 +468,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // register themselves; this call site never changes.
     CaptureRegisteredDomains(SaveObject);
 
-    const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
+    const bool bOk = WriteSaveSlot(SaveObject, SlotName);
 
     if (bOk)
     {
@@ -605,7 +606,7 @@ void UMOPersistenceSubsystem::HandleThumbnailCaptured(int32 Width, int32 Height,
     }
 
     SaveObject->ScreenshotData = Png;
-    const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
+    const bool bOk = WriteSaveSlot(SaveObject, SlotName);
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Save thumbnail for '%s': %dx%d capture -> %d bytes PNG, slot re-written ok=%d"),
         *SlotName, Width, Height, Png.Num(), bOk ? 1 : 0);
 }
@@ -2253,7 +2254,26 @@ FString UMOPersistenceSubsystem::GetCurrentWorldIdentifier() const
 
 bool UMOPersistenceSubsystem::DeleteSaveSlot(const FString& SlotName)
 {
+    FMOSaveSlotInfo::Delete(SlotName);
+    SlotMetadataCache.Remove(SlotName);
     return UGameplayStatics::DeleteGameInSlot(SlotName, 0);
+}
+
+bool UMOPersistenceSubsystem::WriteSaveSlot(UMOWorldSaveGame* Save, const FString& SlotName)
+{
+    // Every save write comes through here (a save, its thumbnail, a rename), so the slot's list-panel info file (FMOSaveSlotInfo) is written
+    // with it: the Load panel reads that instead of the whole world save.
+    if (!Save || !UGameplayStatics::SaveGameToSlot(Save, SlotName, 0))
+    {
+        return false;
+    }
+    FMOSaveMetadata Metadata;
+    FMOSaveSlotInfo::FillFromSave(*Save, SlotName, Metadata);
+    if (!FMOSaveSlotInfo::Write(Metadata, SlotName))
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] could not write the list info beside slot '%s' (the Load panel reads the save whole)"), *SlotName);
+    }
+    return true;
 }
 
 bool UMOPersistenceSubsystem::RenameSaveSlot(const FString& SlotName, const FText& NewDisplayName)
@@ -2279,7 +2299,7 @@ bool UMOPersistenceSubsystem::RenameSaveSlot(const FString& SlotName, const FTex
 
     LoadedTyped->DisplayName = NewDisplayName.ToString();
 
-    const bool bSaved = UGameplayStatics::SaveGameToSlot(LoadedTyped, SlotName, 0);
+    const bool bSaved = WriteSaveSlot(LoadedTyped, SlotName);
     if (!bSaved)
     {
         UE_LOG(LogMOFramework, Warning, TEXT("[MOPersistence] RenameSaveSlot: failed to write back slot '%s'"), *SlotName);
@@ -2313,7 +2333,7 @@ bool UMOPersistenceSubsystem::IsSlotOfCurrentWorld(const FString& SlotName) cons
 bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSaveMetadata& OutMetadata) const
 {
     // The same file as last time: the same answer (a save, a rename, a thumbnail rewrite or a delete all change its size or time).
-    const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
+    const FString SavePath = FMOSaveSlotInfo::SavePath(SlotName);
     IFileManager& FileManager = IFileManager::Get();
     const int64 FileSize = FileManager.FileSize(*SavePath);
     const FDateTime FileTime = FileManager.GetTimeStamp(*SavePath);
@@ -2326,27 +2346,19 @@ bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSa
         }
     }
 
-    // Load the save game to extract metadata
-    USaveGame* LoadedBase = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
-    UMOWorldSaveGame* LoadedTyped = Cast<UMOWorldSaveGame>(LoadedBase);
-    if (!LoadedTyped)
+    // The info file beside the save, while it still describes this .sav; else the whole save, and the info file written for next time
+    // (a save from before Oct 29, or one copied in from elsewhere).
+    if (!FMOSaveSlotInfo::Read(SlotName, OutMetadata))
     {
-        return false;
+        USaveGame* LoadedBase = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
+        UMOWorldSaveGame* LoadedTyped = Cast<UMOWorldSaveGame>(LoadedBase);
+        if (!LoadedTyped)
+        {
+            return false;
+        }
+        FMOSaveSlotInfo::FillFromSave(*LoadedTyped, SlotName, OutMetadata);
+        FMOSaveSlotInfo::Write(OutMetadata, SlotName);
     }
-
-    OutMetadata.SlotName = SlotName;
-    OutMetadata.DisplayName = LoadedTyped->DisplayName.IsEmpty()
-        ? FText::FromString(SlotName)
-        : FText::FromString(LoadedTyped->DisplayName);
-    OutMetadata.Timestamp = LoadedTyped->SaveTimestamp;
-    OutMetadata.PlayTime = FTimespan::FromSeconds(LoadedTyped->TotalPlayTimeSeconds);
-    OutMetadata.WorldName = LoadedTyped->WorldName;
-    OutMetadata.WorldId = LoadedTyped->WorldId;
-    OutMetadata.bIsAutosave = LoadedTyped->bIsAutosave;
-
-    // Screenshot data (inline PNG bytes)
-    OutMetadata.ScreenshotData = LoadedTyped->ScreenshotData;
-    OutMetadata.ScreenshotPath = FString(); // Deprecated
 
     if (FileSize >= 0)
     {

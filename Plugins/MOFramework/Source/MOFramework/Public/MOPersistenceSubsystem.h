@@ -238,7 +238,8 @@ public:
     bool DoesSaveSlotExist(const FString& SlotName) const;
 
     /**
-     * Get metadata for a save slot. The first ask reads the WHOLE save (~0.6-0.9 MB of world: the format has no separate header); the answer is
+     * Get metadata for a save slot: from the small info file beside the save (FMOSaveSlotInfo, N-197) while it still describes the .sav on disk;
+     * else the WHOLE save (~0.6-0.9 MB of world: the format has no separate header), writing the info file for next time. The answer is also
      * kept per slot until the file's size or time changes, so a list panel that opens again reads nothing (Oct 22 2026).
      * @param SlotName The save slot to query
      * @param OutMetadata Filled with metadata if successful
@@ -482,6 +483,9 @@ private:
     double SessionClockStartSeconds = 0.0;
     void RestartSessionClock() { SessionPlayTimeSeconds = 0.0f; SessionClockStartSeconds = FPlatformTime::Seconds(); }
 private:
+    /** Writes a save to its slot and the slot's list-panel info file beside it (FMOSaveSlotInfo): every save write goes through here. */
+    bool WriteSaveSlot(UMOWorldSaveGame* Save, const FString& SlotName);
+
     /** GetSaveSlotMetadata's answers, per slot, while the file on disk is the same (its size and time). */
     struct FSlotMetadataCacheEntry
     {

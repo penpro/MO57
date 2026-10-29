@@ -6506,6 +6506,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				*Sys->GetCurrentSlotName(),
 				*Sys->GetCurrentWorldIdentifier());
 
+			const double ListStart = FPlatformTime::Seconds();
 			for (const FString& Slot : Slots)
 			{
 				FMOSaveMetadata Meta;
@@ -6526,6 +6527,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						TEXT("[MO.Save]   %s  <metadata read failed>"), *Slot);
 				}
 			}
+			// What the Load panel's listing costs (N-197: the info files beside the saves, else every save read whole once per session).
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save.List] listed %d slot(s) in %.1f ms"), Slots.Num(), (FPlatformTime::Seconds() - ListStart) * 1000.0);
 		}),
 		ECVF_Default));
 

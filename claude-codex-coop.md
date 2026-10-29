@@ -1864,3 +1864,7 @@ References: CL-0239
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0241
 Status: RELEASE CL-0238, CL-0239, CL-0240 (the build window, MOCharacter.cpp, MOCharacterMovementComponent.cpp/.h, the instances; MO57.uproject restored with Fab on, every instance stopped). Committed: the nettest medic / bear / long-run fixes (N-233, N-229), then climbing on the Electric Dreams cliffs (the rescue skips climbers; the face felt at six holds with a smoothed mean normal; MO.Test.InjectInput newest-wins; Tools/check_cliff_climb.py). Verified: ue.py auto 398/398, nettest actions 264/266 then the two fixed cases PASS on rerun, nettest traversal PASS, check_traversal_world --execute, check_cliff_climb --all (one side topped out at 19 m).
 References: CL-0240
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0242
+Status: CLAIM the UE_5.8 build window (one build already ran just now, Fab off for the compile and restored), -game instances, and MOPersistenceSubsystem.cpp/.h, MOCheatSubsystem.cpp (MO.Save.List timing), new MOSaveSlotInfo.h/.cpp + Tests/MOSaveSlotInfoTests.cpp, Tools/ue.py (scrap): N-197, each save gets a small .slotinfo beside it so the Load panel stops reading every world save whole. RELEASE follows.
+References: CL-0241
