@@ -352,7 +352,8 @@ float UMOCharacterMovementComponent::GetMaxSpeed() const
 	{
 		// PhysFalling's CalcVelocity brakes any air speed above the max (the walk speed) back down to it, every step: measured on two processes
 		// (Oct 18 2026), the glider settled at 251 cm/s instead of its 1100 trim. A glider's top speed in the air is its trim.
-		return FMath::Max(Base, CVarGlideSpeed.GetValueOnGameThread());
+		// Any thread: GASP's motion matching (PoseSearch) reads the max speed from animation worker threads (N-231, Oct 29).
+		return FMath::Max(Base, CVarGlideSpeed.GetValueOnAnyThread());
 	}
 	if (MovementMode == MOVE_Swimming)
 	{

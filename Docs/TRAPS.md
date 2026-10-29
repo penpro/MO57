@@ -472,6 +472,11 @@
   component's `GetPhysicsVolume`, which GASP's thread-safe animation update reaches on worker threads (PoseSearch's trajectory calls
   `GetGravityZ`): two swimming survivors spawned it at once, the second on the fixed name (spawn names default to Required_Fatal) -> spawn
   on the game thread when the world begins play; a getter the animation can reach never spawns or loads. (Oct 28)
+  The same for console variables: `GetMaxSpeed` read `MO.Dev.GlideSpeed` with `GetValueOnGameThread()` while gliding -> an ensure
+  ("GetShadowIndex() == 0") on every PoseSearch read in Development, a race in Shipping -> `GetValueOnAnyThread()` (N-231, Oct 29; test
+  MOFramework.Movement.MaxSpeedOffGameThread). PoseSearch (5.8) calls from worker threads: `GetMaxSpeed`, `GetMaxBrakingDeceleration`,
+  `GetGravityZ` (-> `GetPhysicsVolume`), `GetGravityDirection`, `GetCurrentAcceleration`, `GetMinAnalogSpeed`, `GetAnalogInputModifier`,
+  `IsFalling`, `IsFlying`: an override of any of them reads members only.
 - **A lake setting changed after `FinishSpawning` never reaches the water** -> `AOceanologyLake::Init` runs from OnConstruction AND
   BeginPlay, both inside FinishSpawning, and pushes the waves / surface to the material there -> set things before FinishSpawning, or push
   again after (`UpdateWaves()` for the Gerstner waves). Measure the MATERIAL (its MID's Amplitude_N), not the solver. (Oct 25)

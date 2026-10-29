@@ -1808,3 +1808,15 @@ References: CL-0228, CL-0225
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0230
 Status: CLAIM + RELEASE Docs/BACKLOG.md for two rows from Wes's crash tarball (mo-crashes-2026-10-29): N-230 a Steam player's GPU hang on the Oct 17 build (watch), N-231 GetMaxSpeed's game-thread CVar read from PoseSearch workers (next build batch). Committed with this entry.
 References: CL-0229
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0231
+Status: CLAIM Plugins/MOFramework/Source/MOFramework/Private/MOCharacterMovementComponent.cpp and Private/Tests/MOSwimmingTests.cpp, and a C++ build window (editor closed; Fab off in MO57.uproject for the compile only, restored after): N-231, Wes: "Fix it now". RELEASE follows.
+References: CL-0230
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0232
+Status: QUEUED for the UE_5.8 build window after CL-0231's RELEASE: a MO_WorldLab build (D:/UEProjects/MO_WorldLab, MOFramework now copied in, so its first build compiles all of it, ~30+ min). I will CLAIM it here before building. MO57's tree is only read.
+References: CL-0231
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0232
+Status: RELEASE CL-0231: MOCharacterMovementComponent.cpp (GetMaxSpeed reads MO.Dev.GlideSpeed on any thread) and MOSwimmingTests.cpp (MOFramework.Movement.MaxSpeedOffGameThread: failed on the old line, passes), the build window closed (MO57.uproject restored, Fab on). ue.py auto: 396 passed, 0 failed. Committed with TRAPS / BACKLOG.
+References: CL-0231

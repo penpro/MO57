@@ -2,7 +2,10 @@
 // (a closed airway drains the reserve, the SpO2 cap follows, the asphyxia timer ends in death, a gasp on the first breath). Headless-safe: no terrain, no pawn.
 
 #include "Misc/AutomationTest.h"
+#include "Async/Async.h"
+#include "Components/SceneComponent.h"
 #include "Engine/Engine.h"
+#include "HAL/IConsoleManager.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "MOBreathMeterWidget.h"
@@ -162,6 +165,31 @@ bool FMOMovement_DevGlider::RunTest(const FString& Parameters)
 	TestTrue(TEXT("server: no glider flag -> does not (and the gait flag still reads)"), !Move->WantsToGlide() && Move->WantsToJog());
 	Move->SetWantsToGlide(true);
 	TestFalse(TEXT("not falling: no glide even when wanted"), Move->IsGliding());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMovement_MaxSpeedOffGameThread,
+	"MOFramework.Movement.MaxSpeedOffGameThread",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOMovement_MaxSpeedOffGameThread::RunTest(const FString& Parameters)
+{
+	// GASP's motion matching (PoseSearch) reads the movement component's max speed from animation worker threads. While gliding it read
+	// MO.Dev.GlideSpeed with GetValueOnGameThread: an ensure on every worker read in our Oct 28 runs (crash uploads 8864e201 ...), a data race in
+	// Shipping (BACKLOG N-231). The same rule as the swim volume (199a11aa): a movement getter GASP reads touches nothing game-thread-only.
+	UMOCharacterMovementComponent* Move = NewObject<UMOCharacterMovementComponent>(GetTransientPackage());
+	Move->UpdatedComponent = NewObject<USceneComponent>(GetTransientPackage());   // IsFalling needs one
+	Move->MovementMode = MOVE_Falling;
+	Move->SetWantsToGlide(true);
+	if (!TestTrue(TEXT("CONTROL: the component glides (falling, wanted, a build in developer mode)"), Move->IsGliding()))
+	{
+		return false;
+	}
+	const IConsoleVariable* GlideSpeed = IConsoleManager::Get().FindConsoleVariable(TEXT("MO.Dev.GlideSpeed"));
+	const float Trim = GlideSpeed ? GlideSpeed->GetFloat() : -1.0f;
+	TestEqual(TEXT("on the game thread a glider's max speed is its trim"), Move->GetMaxSpeed(), FMath::Max(Move->MaxWalkSpeed, Trim));
+	const float OffThread = Async(EAsyncExecution::ThreadPool, [Move]() { return Move->GetMaxSpeed(); }).Get();
+	TestEqual(TEXT("on a worker thread (PoseSearch) the same, with no game-thread-only read (an ensure fails the test)"), OffThread, FMath::Max(Move->MaxWalkSpeed, Trim));
 	return true;
 }
 
