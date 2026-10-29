@@ -167,3 +167,19 @@ float FMOTraversal::ClimbSpeedCm(EMOClimbSurface Surface)
 		return 0.0f;
 	}
 }
+
+float FMOTraversal::FaceAngleDeg(const FVector& FaceNormal)
+{
+	const FVector N = FaceNormal.GetSafeNormal();
+	return N.IsNearlyZero() ? 90.0f : static_cast<float>(FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(N.Z, -1.0, 1.0))));
+}
+
+FMOTraversal::FClimbAbility FMOTraversal::ClimbAbility(int32 ClimbingLevel, float MuscleShare)
+{
+	const float Share = MuscleShare > 0.0f ? MuscleShare : ReferenceMuscleShare;
+	const float Trained = 1.0f - FMath::Exp(-static_cast<float>(FMath::Max(0, ClimbingLevel)) / 10.0f);
+	FClimbAbility Ability;
+	Ability.CostScale = FMath::Clamp(ReferenceMuscleShare / Share, 0.6f, 1.8f) * (1.0f - 0.5f * Trained);
+	Ability.SpeedScale = FMath::Clamp(1.0f + (Share - ReferenceMuscleShare), 0.85f, 1.15f) * (1.0f + 0.35f * Trained);
+	return Ability;
+}

@@ -8,7 +8,8 @@ facing it, W is held and a jump grabs; whenever it is off the face (on a ledge i
 player would; stuck on the face for 4 s (a roof, an overhang) it steers across it (A or D, wider each time) and pushes up again. Every 2 s: the feet's height, the movement mode, climbing or not, and the traversal lines the movement
 component logged. Ends when the feet get no higher for 30 s (6 s with --no-steer), at the top, or after --seconds.
 
-    python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--real-stamina] [--keep] [--reuse]
+    python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--real-stamina]
+        [--body FAT,MUSCLE] [--climbing-level N] [--keep] [--reuse]
 
 Prints PLACE (the face found), one SAMPLE line per 2 s, and one RESULT per side climbed: the highest the feet got against the cliff's top,
 and how it ended (TOPPED OUT: standing above; OUT OF STRENGTH with --real-stamina: the bar emptied on the face and the climber fell; no
@@ -91,7 +92,9 @@ m = p.get_movement_component()
 cap = p.get_editor_property("capsule_component")
 l = p.get_actor_location()
 ss = p.get_component_by_class(unreal.MOSurvivalStatsComponent)
-out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s stamina=%.0f" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing(), ss.get_stat_current("Stamina") if ss else -1.0))
+e = p.get_climb_effort() if p.is_climbing() else None   # the face's angle and what it costs this climber (F51)
+out("SAMPLE feet=%.0f mode=%s custom=%d climbing=%s stamina=%.0f%s" % (l.z - cap.get_scaled_capsule_half_height(), m.movement_mode, m.custom_movement_mode, p.is_climbing(), ss.get_stat_current("Stamina") if ss else -1.0,
+    " face=%.0fdeg cost=%.2f/s" % (e.face_angle_deg, e.stamina_per_second) if e else ""))
 if p.is_climbing():
     # A player keeps the camera on the face: W is camera-relative, and a face that turned 50 degrees off the camera splits W into up and across.
     unreal.GameplayStatics.get_player_controller(world, 0).set_control_rotation(unreal.Rotator(0.0, 0.0, p.get_actor_rotation().yaw))
@@ -106,7 +109,9 @@ def q(code, key, timeout=120):
 
 def climb_one(a, side):
     """Place at the first side >= side with a face of the mesh and climb it with W held; returns (side placed or None, result line)."""
-    stamina = "pass" if a.real_stamina else 'p.set_editor_property("climbing_stamina_cost_per_second", 0.0)'
+    # --real-stamina: every side starts rested (a full bar), so runs compare; otherwise the climb costs nothing.
+    stamina = ('ss0 = p.get_component_by_class(unreal.MOSurvivalStatsComponent)\nif ss0: ss0.set_stat("Stamina", 100.0)' if a.real_stamina
+               else 'p.set_editor_property("climbing_stamina_cost_per_second", 0.0)')
     placed = q(PLACE.replace("__MESH__", a.mesh).replace("__SIDE__", str(side)).replace("__STAMINA__", stamina), "PLACE")
     print("PLACE", placed or "no answer")
     m = re.match(r"placed side (\d+)", placed)
@@ -179,6 +184,8 @@ def main():
     ap.add_argument("--reuse", action="store_true", help="the instance is already in a world (a --keep run)")
     ap.add_argument("--no-steer", dest="steer", action="store_false", help="W only: no steering across the face when stuck")
     ap.add_argument("--real-stamina", action="store_true", help="keep the climbing stamina cost (F51): does a body last the climb?")
+    ap.add_argument("--body", metavar="FAT,MUSCLE", help="the climber's body: body fat %% and kg of muscle (MO.Test.BodyComposition), e.g. 35,25")
+    ap.add_argument("--climbing-level", type=int, help="the climber's Climbing skill level")
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args()
     try:
@@ -196,6 +203,13 @@ def main():
             time.sleep(5)
             ui.console(NAME, "MO.Test.ClickWidget BeginButton")
             time.sleep(40)
+        # The climber (F51: the muscle share of the body and the Climbing level change what a climb costs and how fast it goes).
+        if a.body:
+            fat, muscle = (float(v) for v in a.body.split(","))
+            ui.console(NAME, "MO.Test.BodyComposition %.1f %.1f" % (fat, muscle))
+        if a.climbing_level is not None:
+            q("p = unreal.GameplayStatics.get_player_pawn(world, 0)\nsk = p.get_component_by_class(unreal.MOSkillsComponent)\n"
+              "sk.set_skill_level('Climbing', %d)\nout('CLIMBER Climbing %%d' %% sk.get_skill_level('Climbing'))" % a.climbing_level, "CLIMBER")
         results, side = [], a.side
         while side < 8:
             placed, line = climb_one(a, side)

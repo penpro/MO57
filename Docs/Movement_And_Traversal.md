@@ -6,12 +6,12 @@
 > animation set's (walk 200 / jog 500 / sprint 700, jump 500 cm/s: `Docs/Animation_GASP.md` §3).
 > **Current state (2026-10-29):** built and verified in a running game (Wes, Oct 26: "we need to implement climbing of cliffs / trees and we
 > need a vault mechanic to hop / pull up on things"), and since Oct 29 on the world's own rocks (Wes: "i can't vault or climb rocks and
-> such"): section 5; since Oct 29 up the Electric Dreams cliffs (a 19 m top-out; roofs and undercuts stop a line, as on real rock).
-> No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Since Oct 29 (F52 B) stamina
-> limits a climb: a full bar is ~33 s of face, ~8 m; a ledge is where it comes back. Whether a tall cliff's top is in reach is F51 (section 3).
+> such"): section 5; since Oct 29 up the Electric Dreams cliffs (a 28.7 m top-out on one bar; roofs and undercuts stop a line, as on real
+> rock). No climbing / vaulting animations yet: the body moves on the right path in a stand-in pose (BACKLOG). Since Oct 29 stamina limits a
+> climb, by the face's angle, the climber's Climbing skill and muscle share (F51, F52 B; section 3): a slab rests, a sheer face ~100 s a bar.
 > **Entry points:** `MOTraversal.h` (the pure decisions), `UMOCharacterMovementComponent` (custom modes `CMOVE_Traverse`, `CMOVE_Climb`;
-> `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`ClimbingMET` / `ClimbingExertion` /
-> `ClimbingStaminaCostPerSecond`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
+> `DoJump`, `FindTraversal`, `FindClimbableWall`, `PhysTraverse`, `PhysClimb`), `AMOCharacter` (`GetClimbEffort`, `ClimbingMET`,
+> `ClimbingStaminaCostPerSecond`, `ClimbingCostByFaceAngle`, `ClimbingExertionByFaceAngle`, `ClimbingSkillId`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
 > `MO.Test.Traversal` (what a jump would do here, and why not). **Tests:** `MOFramework.Traversal.*` (ClassifyLedges, PathShape, Climbable,
 > PickTop); `python Tools/check_traversal_world.py [--execute]` (the world's rocks, cliffs and trees round a new world's start);
 > `python Tools/check_cliff_climb.py [--all]` (each side of an Electric Dreams cliff climbed for real).
@@ -40,20 +40,41 @@ mid-fall). Heights are a 1.75 m adult's.
   its face is steeper than 55 degrees (a cliff; gentler ground is walked).
 - A tree: a component tagged `MOTreeTrunk` (the PCG tree tier) or a mesh whose path says Tree / Trunk.
 - Never a built thing (`AMOBuildableActor`): its walls are smooth.
-- Speed (hands and feet, a hold at a time): rock 30 cm/s, a trunk 22 cm/s; `ClimbSpeedScale` on the movement component (the character can
-  lower it when tired). W climbs up the face, S down (reaching the ground stands), A / D across it; pushing up at the top pulls over the edge.
+- Speed (hands and feet, a hold at a time): rock 30 cm/s, a trunk 22 cm/s, times the climber's own `ClimbSpeedScale` (0.85-1.55: the
+  Climbing skill and the muscle share, section 3; the character sets it on the server and the owning client alike). W climbs up the face, S down (reaching the ground stands), A / D across it; pushing up at the top pulls over the edge.
 
 ## 3. What it costs
 
-Climbing is 8 METs (rock scrambling and tree climbing run 7-9), exertion 75, and 3 stamina a second moving or hanging (a jog is 2, a sprint
-8). Out of stamina the hands give out and the climber falls -- decided on the server. Stamina recovers 10/s at rest and nothing while
-climbing (F52 B, Wes Oct 29: recovery follows the work; until then it recovered 10/s whatever the body did and a climb never ran out), so a
-full bar (100) is ~33 s of climbing, about 8 m at the ~26 cm/s a climber makes up a face; standing on a ledge it comes back in ~10 s.
-Measured Oct 29 (`check_cliff_climb.py --side 3 --real-stamina`, three runs): SM_Cliff_09 side 3's first 5 m pitch to a ledge (84 left,
-full again ~2 s after standing), then 7.9 m of the next face in 30 s, then out of strength and a fall from 15 m above the foot (14.8 /
-15.1 / 15.2 m); with the cost off the same line tops out at 23-28 m. The Electric Dreams cliffs are 18-45 m. Open fork F51 (DECISIONS): the
-cost following the face's steepness (a slab mostly feet and restful, an overhang dear) -- with F52 B a slab's lower exertion would bring
-its own recovery from the same curve (`StaminaRecoveryByExertion`).
+Climbing is 8 METs (rock scrambling and tree climbing run 7-9). What a climb costs follows three things (F51, Wes Oct 29: "make it angle
+dependent, but also tie some skill or physical attribute to it ... the more muscle mass percentage of the body the better at climbing and
+the more skill the better"), worked out in one place, `AMOCharacter::GetClimbEffort` (`FMOClimbEffort`, Blueprint-readable):
+
+- **The face's angle** from level ground (`FMOTraversal::FaceAngleDeg` of the smoothed normal the six holds give): a slab leaning back is
+  mostly feet, an overhang hangs off the arms. Share of a sheer face's cost (`ClimbingCostByFaceAngle`) and exertion
+  (`ClimbingExertionByFaceAngle`):
+
+  | Face | 45 deg | 60 deg | 75 deg | 90 deg (sheer) | 100 deg | 110 deg | 125 deg | 140 deg on |
+  |---|---|---|---|---|---|---|---|---|
+  | Cost share | 0.2 | 0.3 | 0.6 | 1 | 1.3 | 2 | 3 | 4 |
+  | Exertion | 30 | 40 | 55 | 70 | ~78 | 85 | 90 | 90 |
+
+  Stamina recovers by exertion (F52 B: none from 55 up), so a slab under ~70 deg recovers more than it costs -- it rests as it climbs --
+  and steeper rock only spends.
+- **The climber** (`FMOTraversal::ClimbAbility`): strength against weight -- the cost scales with 0.5 / (muscle mass / total weight),
+  clamped 0.6-1.8 (the femme base 0.48 -> x1.03; 35 % fat with 25 kg of muscle 0.37 -> x1.34; 10 % fat with 40 kg 0.62 -> x0.81) and the
+  speed gently (0.85-1.15); and the **Climbing** skill (DT_Skills; 0.5 XP a second on a sheer face, times the face's cost share: steeper
+  rock teaches more) -- 1 - e^(-level/10) of its effect (level 5 ~40 %, 10 ~63 %, 20 ~86 %): up to half the cost off, up to 35 % speed.
+- **The base**: `ClimbingStaminaCostPerSecond` 1 a second on a sheer face for an untrained climber of average build (was 3 on every face
+  until Oct 29): a full bar is ~100 s, ~26 m at ~26 cm/s.
+
+Out of stamina the hands give out and the climber falls -- decided on the server (the log line names the face and both scales). Each
+climb logs what it costs (`[MOTraversal] ... climbs a 87 deg face: 0.94 stamina/s (face x0.91, climber x1.03: Climbing 0, muscle 48 % of
+62 kg), speed x0.98`). Standing on a ledge the bar comes back at 10/s. Measured Oct 29 (`check_cliff_climb.py --side 3 --real-stamina`,
+SM_Cliff_09, the femme base, Climbing 0): the 75 deg first pitch at 0.62/s to a ledge, full again on it, then 21 m of 83-104 deg face at
+0.84-1.63/s from 100 to 13 stamina, and over the crest at 28.7 m. (Before F51, at 3/s everywhere: out of strength 7.9 m up the second face,
+a fall from 15 m.) Other climbers on the same line, fresh runs (`--body`, `--climbing-level`): 35 % fat with 25 kg of muscle (x1.34, speed
+x0.87) 24 cm/s up the second face, 100 -> 24 by 18 m above the foot; the femme at Climbing 10 (x0.71, speed x1.20) 33 cm/s, 100 -> 71 by
+18 m -- both then reached a lip with no room to stand at ~27.5 m and let go (N-236), with a quarter and two thirds of a bar left.
 
 ## 4. How it works (co-op)
 
@@ -127,4 +148,4 @@ undercut, or no steep face). How high the feet got of the ~11 m to its top:
 Where it stops now is the rock, not the climb: side 4 sits in a roof pocket (a second cliff mesh's flat underside over the head, 6-30 cm
 of room to rise for 3.5 m to one side, rock jutting in on the other); side 0 under another such roof; side 6 is an undercut (the foot
 overhangs, nothing in reach). A player goes round a roof or down and across to another line; the check's steering tries 3.6 m at most.
-With the real stamina cost on (`--real-stamina`), side 3 topped out at 23 m (the whole stack) with stamina never below 97 while recovery ran whatever the body did; since F52 B (Oct 29) the same run is out of strength 7.9 m up the second pitch and falls from 15 m (section 3). After a top-out W is still held: the climber walks on across the crest and the feet's last reading can be lower than the pull-over.
+With the real stamina cost on (`--real-stamina`), side 3 topped out at 23 m (the whole stack) with stamina never below 97 while recovery ran whatever the body did; since F52 B (Oct 29) at 3/s the same run was out of strength 7.9 m up the second pitch and fell from 15 m; since F51 (Oct 29) the face sets the cost and it tops out at 28.7 m on one bar (section 3). After a top-out W is still held: the climber walks on across the crest and the feet's last reading can be lower than the pull-over.

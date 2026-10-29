@@ -93,7 +93,8 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
   status widget and the sprint gate. **Pacing (Wes, Oct 15):** start fully fed / watered / rested; needs become bothersome after
   ~30 min: warning moodles at 30 / 45 / 60 game-min (thirst / hunger / energy), decay on the WORLD clock (`AdvanceStats`, 2d31e0c2).
   Pacing changes go through the `DecayRate` defaults (+ `MOFramework.Survival.Pacing`). (Before Oct 15: 0.5 / 0.8 / 0.2 per REAL
-  second, critical thirst in ~2 min.) **Stamina** is spent by the gait in `AMOCharacter` (jog 2, swim 1.6, climb 3, sprint 8 a second)
+  second, critical thirst in ~2 min.) **Stamina** is spent by the gait in `AMOCharacter` (jog 2, swim 1.6, sprint 8 a second; a climb ~1 on a sheer face, by the face's
+  angle and the climber's skill and muscle share: F51, `Docs/Movement_And_Traversal.md` section 3)
   and recovers 10/s at rest, scaled by the work (F52 B, Oct 29): `StaminaRecoveryByExertion` gives a walk half, a jog a quarter and a
   swim / climb / sprint nothing (`MOFramework.Survival.StaminaRecovery`). Combat spends the vitals' own stamina instead (F1).
 - **The realistic model** `UMOMetabolismComponent` (glycogen 500 g, hydration, digestion ~1 h per meal, ~2.5 L water/day) feeds

@@ -63,6 +63,25 @@ struct MOFRAMEWORK_API FMOTraversal
 	/** Climbing speed on a surface (cm/s): a scramble on rock 30, a trunk 22 -- hands and feet, a hold at a time. */
 	static float ClimbSpeedCm(EMOClimbSurface Surface);
 
+	/** A face's angle from level ground (degrees) from its outward normal: 90 a sheer face, less a slab leaning back, more an overhang (180 a roof). A zero
+	 *  normal (no face known) reads as sheer. */
+	static float FaceAngleDeg(const FVector& FaceNormal);
+
+	/** How the climber's own body and training change a climb (F51, Wes Oct 29: "the more muscle mass percentage of the body the better at climbing and the
+	 *  more skill the better"). Strength against weight: the arms and legs haul the whole body on the muscle it has, so a move's stamina scales with
+	 *  ReferenceMuscleShare / MuscleShare (muscle mass over total weight; the default survivor, 30 kg of muscle at 18 % fat, is 0.51; Lillian 0.53; 25 kg at
+	 *  35 % fat 0.37), clamped 0.6-1.8, and the speed with the share more gently (0.85-1.15). Technique: the climbing level saturates -- 1 - e^(-level/10):
+	 *  level 5 ~40 %, 10 ~63 %, 20 ~86 % of what training gives (each level costs exponentially more XP, so ~20 is years of climbing) -- and takes up to
+	 *  half the cost off (footwork puts the weight on the legs, a trained climber rests on straight arms) and adds up to 35 % speed. A share of 0 or less (no
+	 *  body known) counts as the reference. */
+	struct FClimbAbility
+	{
+		float CostScale = 1.0f;
+		float SpeedScale = 1.0f;
+	};
+	static constexpr float ReferenceMuscleShare = 0.5f;
+	static FClimbAbility ClimbAbility(int32 ClimbingLevel, float MuscleShare);
+
 	/** A tag the world puts on rock (Oct 29: the PCG rocks whose meshes are named by an id, not "Rock"): the landmark tier (MOLandmark), the harvestable
 	 *  rocks (MOResource_Rock), the biomes' rock cover (MOBiomeCover_Rock). */
 	static bool IsRockTag(FName Tag);

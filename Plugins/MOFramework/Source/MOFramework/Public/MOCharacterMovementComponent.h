@@ -124,9 +124,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="5"))
 	float ClimbReachCm = 30.0f;
 
-	/** Effort scale on the climbing speed (the character lowers it when tired). */
+	/** The climber's own scale on the climbing speed: training and strength against weight (FMOTraversal::ClimbAbility). AMOCharacter sets it every half
+	 *  second on the server and the owning client alike (both have the skill and the body), so a predicted climb matches the server's. */
 	UPROPERTY(BlueprintReadWrite, Category="MO|Traversal")
 	float ClimbSpeedScale = 1.0f;
+
+	/** The face being climbed: its outward normal, smoothed over the holds (zero off a face). */
+	FVector GetClimbNormal() const { return IsClimbing() ? ClimbNormal : FVector::ZeroVector; }
 
 	/** A jump off the face: away from it and up (cm/s). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal")

@@ -245,14 +245,23 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	WalkSpeed = 400.0f;
 	SprintSpeed = 700.0f;
 
-	// Stamina recovery by exertion (F52 B): rest 1, walk (15) 0.5, jog (50) 0.25, none from 55 (swim 60, climb 75, sprint 90). Linear keys.
-	if (FRichCurve* Recovery = StaminaRecoveryByExertion.GetRichCurve())
+	// The body's tuning curves, linear between keys (the header says what each key means).
+	const auto SetLinearKeys = [](FRuntimeFloatCurve& Curve, std::initializer_list<FVector2f> Keys)
 	{
-		for (const FVector2f& Key : {FVector2f(0.0f, 1.0f), FVector2f(15.0f, 0.5f), FVector2f(50.0f, 0.25f), FVector2f(55.0f, 0.0f)})
+		if (FRichCurve* Rich = Curve.GetRichCurve())
 		{
-			Recovery->SetKeyInterpMode(Recovery->AddKey(Key.X, Key.Y), RCIM_Linear);
+			for (const FVector2f& Key : Keys)
+			{
+				Rich->SetKeyInterpMode(Rich->AddKey(Key.X, Key.Y), RCIM_Linear);
+			}
 		}
-	}
+	};
+	// Stamina recovery by exertion (F52 B): rest 1, walk (15) 0.5, jog (50) 0.25, none from 55 (swim 60, a sheer climb 70, sprint 90).
+	SetLinearKeys(StaminaRecoveryByExertion, {{0.0f, 1.0f}, {15.0f, 0.5f}, {50.0f, 0.25f}, {55.0f, 0.0f}});
+	// Climbing by the face's angle from level ground (F51): a slab is mostly feet, a sheer face the reference, an overhang hangs off the arms.
+	SetLinearKeys(ClimbingExertionByFaceAngle, {{45.0f, 30.0f}, {60.0f, 40.0f}, {75.0f, 55.0f}, {90.0f, 70.0f}, {110.0f, 85.0f}, {125.0f, 90.0f}});
+	SetLinearKeys(ClimbingCostByFaceAngle, {{45.0f, 0.2f}, {60.0f, 0.3f}, {75.0f, 0.6f}, {90.0f, 1.0f}, {100.0f, 1.3f}, {110.0f, 2.0f}, {125.0f, 3.0f},
+		{140.0f, 4.0f}});
 
 	// NOTE: Mesh and animation are intentionally left unset for portability.
 	// Set these in child Blueprints to avoid hard-coded asset paths.
@@ -1361,7 +1370,7 @@ float AMOCharacter::GetCurrentExertionLevel() const
 {
 	if (IsClimbing())
 	{
-		return ClimbingExertion;
+		return GetClimbEffort().Exertion;
 	}
 	if (IsSwimming())
 	{
@@ -1379,10 +1388,40 @@ float AMOCharacter::GetCurrentExertionLevel() const
 	}
 }
 
+namespace MOCharacterCurves
+{
+	/** A tuning curve at X, or Fallback when it has no keys (a Blueprint that cleared it). */
+	float Eval(const FRuntimeFloatCurve& Curve, float X, float Fallback)
+	{
+		const FRichCurve* Rich = Curve.GetRichCurveConst();
+		return Rich && Rich->GetNumKeys() > 0 ? Rich->Eval(X) : Fallback;
+	}
+}
+
 float AMOCharacter::GetStaminaRecoveryFraction(float Exertion) const
 {
-	const FRichCurve* Recovery = StaminaRecoveryByExertion.GetRichCurveConst();
-	return Recovery && Recovery->GetNumKeys() > 0 ? FMath::Clamp(Recovery->Eval(Exertion), 0.0f, 1.0f) : 1.0f;
+	return FMath::Clamp(MOCharacterCurves::Eval(StaminaRecoveryByExertion, Exertion, 1.0f), 0.0f, 1.0f);
+}
+
+FMOTraversal::FClimbAbility AMOCharacter::GetClimbAbility() const
+{
+	const int32 Level = SkillsComponent && !ClimbingSkillId.IsNone() ? SkillsComponent->GetSkillLevel(ClimbingSkillId) : 0;
+	const FMOBodyComposition* Body = MetabolismComponent ? &MetabolismComponent->BodyComposition : nullptr;
+	return FMOTraversal::ClimbAbility(Level, Body && Body->TotalWeight > 0.0f ? Body->MuscleMass / Body->TotalWeight : 0.0f);
+}
+
+FMOClimbEffort AMOCharacter::GetClimbEffort() const
+{
+	FMOClimbEffort Effort;
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	Effort.FaceAngleDeg = FMOTraversal::FaceAngleDeg(Move ? Move->GetClimbNormal() : FVector::ZeroVector);
+	Effort.CostShare = FMath::Max(0.0f, MOCharacterCurves::Eval(ClimbingCostByFaceAngle, Effort.FaceAngleDeg, 1.0f));
+	Effort.Exertion = FMath::Clamp(MOCharacterCurves::Eval(ClimbingExertionByFaceAngle, Effort.FaceAngleDeg, 70.0f), 0.0f, 100.0f);
+	const FMOTraversal::FClimbAbility Ability = GetClimbAbility();
+	Effort.CostScale = Ability.CostScale;
+	Effort.SpeedScale = Ability.SpeedScale;
+	Effort.StaminaPerSecond = ClimbingStaminaCostPerSecond * Effort.CostShare * Effort.CostScale;
+	return Effort;
 }
 
 float AMOCharacter::GetCurrentTempRiseRate() const
@@ -1426,6 +1465,17 @@ void AMOCharacter::StopMovementPhysiologyTracking()
 
 void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 {
+	// The climber's own speed (training, strength against weight) -- set on the server and the owning client alike: both have the skill and the body, so
+	// the predicted climb matches the server's.
+	if (UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
+	{
+		Move->ClimbSpeedScale = GetClimbAbility().SpeedScale;
+	}
+	if (!IsClimbing())
+	{
+		bClimbEffortLogged = false;   // the next climb logs its cost again
+	}
+
 	// Only apply effects if we're actually moving (a swimmer treading water is working: it never rests; nor does a climber holding on)
 	const bool bResting = !GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming() && !IsClimbing());
 
@@ -1521,7 +1571,17 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 		}
 		if (IsClimbing())
 		{
-			StaminaCost = ClimbingStaminaCostPerSecond * DeltaTime;
+			const FMOClimbEffort Effort = GetClimbEffort();   // the face's angle, the climber's skill and build (F51)
+			StaminaCost = Effort.StaminaPerSecond * DeltaTime;
+			if (HasAuthority() && !bClimbEffortLogged)
+			{
+				const FMOBodyComposition* Body = MetabolismComponent ? &MetabolismComponent->BodyComposition : nullptr;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s climbs a %.0f deg face: %.2f stamina/s (face x%.2f, climber x%.2f: Climbing %d, muscle %.0f %% of %.0f kg), speed x%.2f"),
+					*GetName(), Effort.FaceAngleDeg, Effort.StaminaPerSecond, Effort.CostShare, Effort.CostScale,
+					SkillsComponent ? SkillsComponent->GetSkillLevel(ClimbingSkillId) : 0, Body && Body->TotalWeight > 0.0f ? 100.0f * Body->MuscleMass / Body->TotalWeight : 0.0f,
+					Body ? Body->TotalWeight : 0.0f, Effort.SpeedScale);
+				bClimbEffortLogged = true;
+			}
 		}
 
 		if (StaminaCost > 0.0f)
@@ -1538,7 +1598,9 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 			{
 				if (UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
 				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOTraversal] %s is out of strength and falls from the climb"), *GetName());
+					const FMOClimbEffort Effort = GetClimbEffort();
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTraversal] %s is out of strength and falls from the climb (face %.0f deg, %.2f stamina/s: face x%.2f, climber x%.2f)"),
+						*GetName(), Effort.FaceAngleDeg, Effort.StaminaPerSecond, Effort.CostShare, Effort.CostScale);
 					Move->StopClimbing();
 				}
 			}
@@ -1546,9 +1608,13 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 	}
 
 	// ============================================================================
-	// ATHLETICS SKILL XP
+	// ATHLETICS AND CLIMBING SKILL XP (the server's: the skills replicate to the owner -- a client's own copy only doubled the level-up events)
 	// ============================================================================
-	if (SkillsComponent && !AthleticsSkillId.IsNone())
+	if (HasAuthority() && SkillsComponent && !ClimbingSkillId.IsNone() && IsClimbing())
+	{
+		SkillsComponent->AddExperience(ClimbingSkillId, ClimbingXPPerSecond * GetClimbEffort().CostShare * DeltaTime);
+	}
+	if (HasAuthority() && SkillsComponent && !AthleticsSkillId.IsNone())
 	{
 		float XPGained = IsSwimming() ? JoggingXPPerSecond * DeltaTime : 0.0f;
 		switch (CurrentMovementMode)

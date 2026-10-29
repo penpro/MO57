@@ -1,0 +1,13 @@
+{
+  "Climbing": {
+    "skillId": "Climbing",
+    "displayName": "NSLOCTEXT(\"DT_Skills [2DAD1E690B1BC1EB4F3DCC3CB54D4FA5]\", \"Climbing_DisplayName\", \"Climbing\")",
+    "description": "NSLOCTEXT(\"DT_Skills [2DAD1E690B1BC1EB4F3DCC3CB54D4FA5]\", \"Climbing_Description\", \"Climbing is older than walking upright: the apes we descend from lived in the trees, and the curved finger bones of Australopithecus kept their grip. Later peoples climbed rock for honey, eggs and a lookout - a painting in the Cuevas de la Arana in Spain, about 8,000 years old, shows a honey hunter climbing to a wild bees' nest. A practised climber reads the rock, trusts the feet and hangs on straight arms instead of pulling on bent ones.\")",
+    "howToIncrease": "NSLOCTEXT(\"DT_Skills [2DAD1E690B1BC1EB4F3DCC3CB54D4FA5]\", \"Climbing_HowToIncrease\", \"Climb rock faces and tree trunks. Steep rock teaches more than a slab, and an overhang the most. Skill and a strong, lean body both make a climb cost less stamina and go faster.\")",
+    "category": "Survival",
+    "maxLevel": 100,
+    "baseXPPerLevel": 100,
+    "xPExponent": 1.35,
+    "icon": "None"
+  }
+}

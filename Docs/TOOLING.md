@@ -93,10 +93,13 @@ Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs
 Traversal on the world (Oct 29): `python Tools/check_traversal_world.py [--execute] [--seed N] [--keep]` (one instance, a new world: the
 pawn set in front of the world's own rocks, cliffs and trees round the start, MO.Test.Traversal per obstacle, with `--execute` the jump
 for real and where the feet ended; it also opens the creator and reports whether plants lie between the camera and the face; ~15 min).
-Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--all] [--seconds 150] [--no-steer] [--real-stamina] [--keep] [--reuse]`
+Climbing a cliff (Oct 29): `python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--all] [--seconds 150] [--no-steer] [--real-stamina] [--body FAT,MUSCLE] [--climbing-level N] [--keep] [--reuse]`
 (one instance, a new world, climbing stamina 0 unless `--real-stamina`: the pawn at the foot of each side of an Electric Dreams cliff, W
 held, jumping when off the face and steering across it when stuck, as a player would; one RESULT per side: how high against the top, and
-how it ended -- TOPPED OUT only standing up there, OUT OF STRENGTH when the bar emptied on the face and the climber fell).
+how it ended -- TOPPED OUT only standing up there, OUT OF STRENGTH when the bar emptied on the face and the climber fell; with
+`--real-stamina` every side starts on a full bar and each climbing sample prints the face's angle and its cost; `--body` / `--climbing-level`
+set the climber, F51). Compare climbers in FRESH runs: `--reuse` places the pawn a few cm off the fresh spot, and SM_Cliff_09 side 3's first
+pull-up then walks off its ledge.
 Traversal (Oct 26): `MO.Test.SpawnLedge <HeightCm> [DepthCm=150] [Climbable=0] [DistanceCm=90] [PlayerIndex=0]` (a replicated `AMOTestLedge` in front of
 that player's pawn -- run it on the host for a joiner, whose own client must then turn to it -- the pawn turns to
 face it; use 60 cm: the rays reach capsule radius + 60), `MO.Test.ClearLedges`, `MO.Test.Traversal` (what a jump would do, and why not).
@@ -230,8 +233,10 @@ review shots ~1.5 min a spot (a 75 s settle each).
 - The `*_JSON.json` / CSV mirrors in `Plugins/MOFramework/Content/Data` have NOT tracked the live tables since early checkpoints (Items.csv is
   in `Data/archive/`). The `.claude/skills/ue-datatable-json` skill edits those JSON mirrors: use it only for a table whose JSON is known current.
 - Progression content follows `Docs/PROGRESSION_ROADMAP.md` (the design authority; Wes N6). Verify with `MO.Test.ValidateData` + `MO.Test.ProgressionMap`.
-- The CSV + sqlite utility (still valid for tables with a live CSV, e.g. Skills.csv; **Quests.csv went stale Oct 18**: DT_Quests is edited with
-  `rows set` since (the Tutorial_BuildControls PlaceGhost objective, the Stick / Bark targets), so never reimport it from the CSV); verbatim from
+- The CSV + sqlite utility (still valid for tables with a live CSV; **Quests.csv went stale Oct 18**: DT_Quests is edited with
+  `rows set` since (the Tutorial_BuildControls PlaceGhost objective, the Stick / Bark targets), so never reimport it from the CSV; **Skills.csv
+  is stale too** (checked Oct 29): it lacks the live Construction and Climbing rows -- DT_Skills is edited with `rows set`, Climbing from
+  `Docs/RowPatches/2026-10-29-climbing-skill-DT_Skills.json`); verbatim from
   CLAUDE.md, with the stale paths marked:
 
 

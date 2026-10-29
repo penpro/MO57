@@ -18,17 +18,15 @@ bool FMOStaminaRecoveryFollowsWork::RunTest(const FString&)
 	TestEqual(TEXT("a walk recovers half"), Body->GetStaminaRecoveryFraction(Body->WalkingExertion), 0.5f, 1e-4f);
 	TestEqual(TEXT("a jog recovers a quarter"), Body->GetStaminaRecoveryFraction(Body->JoggingExertion), 0.25f, 1e-4f);
 	TestEqual(TEXT("a swim recovers nothing"), Body->GetStaminaRecoveryFraction(Body->SwimmingExertion), 0.0f, 1e-4f);
-	TestEqual(TEXT("a climb recovers nothing"), Body->GetStaminaRecoveryFraction(Body->ClimbingExertion), 0.0f, 1e-4f);
+	TestEqual(TEXT("a climb up a sheer face recovers nothing"), Body->GetStaminaRecoveryFraction(70.0f), 0.0f, 1e-4f);
 	TestEqual(TEXT("a sprint recovers nothing"), Body->GetStaminaRecoveryFraction(Body->SprintingExertion), 0.0f, 1e-4f);
 	TestEqual(TEXT("past the last key it stays at nothing"), Body->GetStaminaRecoveryFraction(150.0f), 0.0f, 1e-4f);
 
-	// What the numbers mean together: a jog holds up (it recovers a little more than it costs); a sprint and a climb only spend.
+	// What the numbers mean together: a jog holds up (it recovers a little more than it costs); a sprint only spends (a climb: MOFramework.Traversal.ClimbEffort).
 	const float JogNet = AtRest * Body->GetStaminaRecoveryFraction(Body->JoggingExertion) - Body->JoggingStaminaCostPerSecond;
 	TestTrue(FString::Printf(TEXT("a jog nets %+.2f/s: it holds up"), JogNet), JogNet > 0.0f && JogNet < 1.0f);
 	const float SprintSeconds = StatsDefaults->Stamina.Max / Body->SprintingStaminaCostPerSecond;
-	const float ClimbSeconds = StatsDefaults->Stamina.Max / Body->ClimbingStaminaCostPerSecond;
 	TestTrue(FString::Printf(TEXT("a full bar lasts %.1f s of sprinting"), SprintSeconds), FMath::IsNearlyEqual(SprintSeconds, 12.5f, 0.5f));
-	TestTrue(FString::Printf(TEXT("a full bar lasts %.1f s of climbing"), ClimbSeconds), FMath::IsNearlyEqual(ClimbSeconds, 33.3f, 0.5f));
 
 	// The stats tick: the same 2 s recover 20 at rest, 10 walking, 0 sprinting; nothing set = full (a component no pawn drives).
 	UMOSurvivalStatsComponent* Stats = NewObject<UMOSurvivalStatsComponent>();

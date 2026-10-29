@@ -160,6 +160,7 @@
 #include "GameFramework/Character.h"
 #include "Components/PrimitiveComponent.h"
 #include "Curves/CurveFloat.h"
+#include "MOTraversal.h"
 #include "MOControllableInterface.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOMaterialSourceInterface.h"
@@ -286,6 +287,36 @@ class UVoxelCollisionInvokerComponent;
 class UVoxelLODVolumeComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
+
+/** What the climb in hand costs this body now (AMOCharacter::GetClimbEffort; F51). */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOClimbEffort
+{
+	GENERATED_BODY()
+
+	/** The face's angle from level ground (FMOTraversal::FaceAngleDeg): 90 sheer, less a slab, more an overhang. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float FaceAngleDeg = 90.0f;
+
+	/** The face's share of a sheer face's cost (ClimbingCostByFaceAngle). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float CostShare = 1.0f;
+
+	/** What the climb spends: ClimbingStaminaCostPerSecond x CostShare x CostScale. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float StaminaPerSecond = 0.0f;
+
+	/** ClimbingExertionByFaceAngle: drives the vitals and stamina recovery (none from 55 up). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float Exertion = 70.0f;
+
+	/** The climber's own scales (FMOTraversal::ClimbAbility: the Climbing level, the muscle share). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float CostScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Traversal")
+	float SpeedScale = 1.0f;
+};
 
 /**
  * Base character class for the MO Framework.
@@ -1023,14 +1054,37 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
 	float ClimbingMET = 8.0f;
 
-	/** Exertion level while climbing (0-100): hard, sustained work for arms and legs, holding on included. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology", meta=(ClampMin="0", ClampMax="100"))
-	float ClimbingExertion = 75.0f;
-
-	/** Stamina cost per second on a climb, moving or hanging (between a jog's 2 and a sprint's 8: a full bar lasts about half a minute). Out of
-	 *  stamina, the hands give out and the climber falls (decided on the server). */
+	/** Exertion while climbing (0-100) by the face's angle from level ground (F51, Wes Oct 29: "make it angle dependent"): a slab leaning back is mostly
+	 *  feet (45 deg 30, 60 deg 40: under the 55 where stamina stops coming back, StaminaRecoveryByExertion -- a slab rests as it climbs), 75 deg 55, a
+	 *  sheer face 70, an overhang hangs off the arms (110 deg 85, 125 deg on 90). Until Oct 29 75 on every face. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
-	float ClimbingStaminaCostPerSecond = 3.0f;
+	FRuntimeFloatCurve ClimbingExertionByFaceAngle;
+
+	/** Stamina a second on a SHEER face (90 deg) for an untrained climber of average build: a full bar lasts ~100 s, ~26 m of rock (F51; until Oct 29 3/s
+	 *  on every face, which with F52 B made a bar ~8 m). ClimbingCostByFaceAngle scales it by the face, FMOTraversal::ClimbAbility by the climber. Out of
+	 *  stamina the hands give out and the climber falls (decided on the server). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	float ClimbingStaminaCostPerSecond = 1.0f;
+
+	/** A face's share of ClimbingStaminaCostPerSecond by its angle from level ground: a slab 45 deg 0.2, 60 deg 0.3, 75 deg 0.6, sheer 1, overhanging
+	 *  100 deg 1.3, 110 deg 2, 125 deg 3, 140 deg on 4 (a roof is hung from the arms). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	FRuntimeFloatCurve ClimbingCostByFaceAngle;
+
+	/** The skill climbing trains and draws on (the DT_Skills row): technique, FMOTraversal::ClimbAbility. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	FName ClimbingSkillId = TEXT("Climbing");
+
+	/** Climbing XP a second on a sheer face; the face's cost share scales it (harder rock teaches more). Server. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	float ClimbingXPPerSecond = 0.5f;
+
+	/** What the climb in hand costs this body now: the face's angle, this climber's skill and muscle share (F51). Meaningful while climbing. */
+	UFUNCTION(BlueprintPure, Category="MO|Traversal")
+	FMOClimbEffort GetClimbEffort() const;
+
+	/** This climber's FMOTraversal::ClimbAbility: the Climbing level and the muscle share of the body (UMOMetabolismComponent's body composition). */
+	FMOTraversal::FClimbAbility GetClimbAbility() const;
 
 	/** Swim speed multiplier when the stamina is gone (an exhausted swimmer can barely keep afloat). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="0.1", ClampMax="1"))
@@ -1554,6 +1608,9 @@ protected:
 
 	/** Timer handle for movement physiology tick. */
 	FTimerHandle MovementPhysiologyTimerHandle;
+
+	/** A climb's first physiology tick has logged what it costs this climber (once per climb). */
+	bool bClimbEffortLogged = false;
 
 	/** Start physiology tracking. */
 	void StartMovementPhysiologyTracking();
