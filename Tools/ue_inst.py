@@ -4000,6 +4000,17 @@ def _client_build_from_ground(rep, host, client):
         "for i, g in enumerate([unreal.GuidLibrary.new_guid() for _ in range(10)]) if inv.add_item_by_guid_no_stack(g, 'RiverCobble01', 1)]; "
         "out('GDROP items=%d' % len([w for w in ws if w]))")
     time.sleep(6)   # the drop falls and settles
+    # A cobble that bounced out past 150 cm goes back beside the plan and settles again: the drops scatter up to ~1 m on flat ground (Oct 29,
+    # three drops on an idle instance: 95 cm at most), further under load (two nettest pairs: 2 of 10 past 195 cm) -- the drop's physics
+    # (N-209), not what this case is about: Add materials taking loose items in range off the ground.
+    moved = re.search(r"REPLACED (\d+)", _probe(host, ground +
+        "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), "
+        "key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length())[0]; bl = b.get_actor_location(); "
+        "far = [w for w in items if ((w.get_actor_location().x - bl.x) ** 2 + (w.get_actor_location().y - bl.y) ** 2) ** 0.5 > 150.0]; "
+        "[w.set_actor_location(bl + unreal.Vector(30.0 * (i - len(far) / 2.0), -50.0, 25.0), False, True) for i, w in enumerate(far)]; "
+        "out('REPLACED %d' % len(far))"))
+    if moved and int(moved.group(1)):
+        time.sleep(4)
     seen = _probe(host, ground + "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), "
                                  "key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length())[0]; "
                                  "near = [w for w in items if (w.get_actor_location() - b.get_actor_location()).length() < 195.0]; "
@@ -4010,7 +4021,8 @@ def _client_build_from_ground(rep, host, client):
     # In range = within the campfire's 200 cm build range (BuildCampfire.BuildRange): a cobble that rolled further is the drop's physics, not the gather.
     if not rep.step("ground build: 10 cobbles lie on the ground within the ghost's build range (a dropped item: PhysicsBody mesh) and none are in the joiner's pockets",
                     bool(gm) and int(gm.group(4)) >= 10 and "PHYSICS_BODY" in gm.group(3).upper() and left == 0,
-                    (gm.group(0) if gm else " ".join(re.findall(r"GDROP[^\n]*", drop)) or drop.strip()[-200:]) + f" | pockets {left}"):
+                    (gm.group(0) if gm else " ".join(re.findall(r"GDROP[^\n]*", drop)) or drop.strip()[-200:]) + f" | pockets {left}"
+                    + (f" | {moved.group(1)} put back from past 150 cm" if moved and int(moved.group(1)) else "")):
         return
     hoff = log_size(host)
     console(client, "MO.Test.Build add")
