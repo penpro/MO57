@@ -178,8 +178,17 @@ private:
 	/** The yaw the survivor's face looks along, flat (the body's head bone against its reference pose; the actor's yaw without one). */
 	static float FaceYawDeg(const class AMOMetaHumanCharacter* Survivor);
 	/** The preview camera at the orbit (OrbitYawDeg / OrbitPitchDeg around PreviewFocus, PreviewDistanceCm away), the survivor at PreviewScreenX
-	 *  across the screen, pulled in front of any ground or rock between them. */
+	 *  across the screen, pulled in front of any ground or rock between them, and of any grass or foliage between it and the face. */
 	void PlacePreviewCamera();
+	/**
+	 * Camera brought in front of the first plant instance on the line from the face (PreviewFace) to it (N-213; Wes, Oct 25: "there needs to be a
+	 * 'can see face' check ... and that there isn't shit blocking the face"). Grass and foliage have no collision, so the camera's sweep passes
+	 * through them. Walks out from MinFaceClearanceCm and tests the instanced meshes round the survivor (PreviewPlants, gathered when the face is
+	 * framed) for an instance overlapping the line; Camera itself when the line is clear.
+	 */
+	FVector PullInFrontOfPlants(const FVector& Camera) const;
+	/** The instanced meshes that do not block the camera's sweep and lie within reach of the orbit round PreviewFocus (AimAtFace gathers them). */
+	void GatherPreviewPlants();
 	void ReleaseCamera(float BlendSeconds);
 	/** Start loading the styles either side of a slot's current one (the groom and its bindings), so stepping to them swaps at once. */
 	void PreloadGroomNeighbours(EMOAppearanceCategory GroomSlot);
@@ -278,6 +287,12 @@ private:
 	FTimerHandle AimAtFaceTimer;
 
 	FVector PreviewFocus = FVector::ZeroVector;
+	/** The face (the head bone) when framed: the line the camera keeps clear of plants runs from it. */
+	FVector PreviewFace = FVector::ZeroVector;
+	/** PullInFrontOfPlants' candidates (GatherPreviewPlants). */
+	TArray<TWeakObjectPtr<const class UInstancedStaticMeshComponent>> PreviewPlants;
+	/** Nothing closer to the face than this pulls the camera in: a plant there is in the survivor's own space. */
+	static constexpr float MinFaceClearanceCm = 60.0f;
 	/** Where the survivor stood when framed (KeepFaceFramed: moved out from under it). */
 	FVector FramedAt = FVector::ZeroVector;
 	float PreviewBaseYawDeg = 0.0f;

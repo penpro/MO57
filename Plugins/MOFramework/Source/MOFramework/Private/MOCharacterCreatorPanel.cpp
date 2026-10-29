@@ -15,6 +15,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/EditableTextBox.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/Slider.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
@@ -25,6 +26,7 @@
 #include "GroomComponent.h"
 #include "Misc/PackageName.h"
 #include "TimerManager.h"
+#include "UObject/UObjectIterator.h"
 
 UMOCharacterCreatorPanel::UMOCharacterCreatorPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -273,7 +275,10 @@ void UMOCharacterCreatorPanel::AimAtFace(bool bResetOrbit)
 	const float HalfHeight = Survivor->GetCapsuleComponent() ? Survivor->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
 	FramedAt = Survivor->GetActorLocation();
 	PreviewFocus = FramedAt - FVector(0.0f, 0.0f, HalfHeight) + FVector(0.0f, 0.0f, PreviewFocusHeightCm);
+	const USkeletalMeshComponent* Body = Survivor->GetMesh();
+	PreviewFace = Body && Body->DoesSocketExist(TEXT("head")) ? Body->GetSocketLocation(TEXT("head")) : PreviewFocus + FVector(0.0f, 0.0f, 20.0f);
 	PreviewBaseYawDeg = FaceYawDeg(Survivor);
+	GatherPreviewPlants();
 	if (bResetOrbit)
 	{
 		OrbitYawDeg = 0.0f;
@@ -295,6 +300,15 @@ void UMOCharacterCreatorPanel::KeepFaceFramed()
 	if (Turned > 30.0f || FVector::Dist(Survivor->GetActorLocation(), FramedAt) > 50.0f)
 	{
 		AimAtFace(/*bResetOrbit=*/false);
+		return;
+	}
+	// The grass and foliage round the survivor stream in after the creator opens: gather them again, and place the camera again when they changed
+	// (Oct 29: plants 60 cm from the face, the camera not pulled in -- it was framed before they existed).
+	const int32 Before = PreviewPlants.Num();
+	GatherPreviewPlants();
+	if (PreviewPlants.Num() != Before)
+	{
+		PlacePreviewCamera();
 	}
 }
 
@@ -317,11 +331,73 @@ void UMOCharacterCreatorPanel::PlacePreviewCamera()
 	{
 		Location = Hit.Location;
 	}
+	Location = PullInFrontOfPlants(Location);
 	Camera->SetActorLocationAndRotation(Location, (-Toward + FVector(0.0f, 0.0f, -0.05f)).Rotation());
 	if (bPreviewDepthOfField)
 	{
 		Camera->GetCameraComponent()->PostProcessSettings.DepthOfFieldFocalDistance = FVector::Dist(Location, PreviewFocus);
 	}
+}
+
+void UMOCharacterCreatorPanel::GatherPreviewPlants()
+{
+	PreviewPlants.Reset();
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const float Reach = PreviewZoomMaxCm + 100.0f;
+	const FBox Around = FBox(PreviewFocus - FVector(Reach), PreviewFocus + FVector(Reach));
+	for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+	{
+		const UInstancedStaticMeshComponent* Plant = *It;
+		if (Plant->GetWorld() != World || !Plant->IsRegistered() || !Plant->IsVisible() || Plant->GetInstanceCount() == 0 || !Plant->Bounds.GetBox().Intersect(Around))
+		{
+			continue;
+		}
+		if (Plant->IsCollisionEnabled() && Plant->GetCollisionResponseToChannel(ECC_Camera) == ECR_Block)
+		{
+			continue;   // solid: the camera's sweep stops in front of it already
+		}
+		PreviewPlants.Add(Plant);
+	}
+}
+
+FVector UMOCharacterCreatorPanel::PullInFrontOfPlants(const FVector& Camera) const
+{
+	const float Length = FVector::Dist(PreviewFace, Camera);
+	if (Length <= MinFaceClearanceCm || PreviewPlants.Num() == 0)
+	{
+		return Camera;
+	}
+	const FVector Along = (Camera - PreviewFace) / Length;
+	const FBox Line = FBox(PreviewFace, PreviewFace).ExpandBy(1.0f) + Camera;
+	TArray<const UInstancedStaticMeshComponent*, TInlineAllocator<16>> OnLine;
+	for (const TWeakObjectPtr<const UInstancedStaticMeshComponent>& Plant : PreviewPlants)
+	{
+		if (Plant.IsValid() && Plant->Bounds.GetBox().Intersect(Line.ExpandBy(20.0f)))
+		{
+			OnLine.Add(Plant.Get());
+		}
+	}
+	constexpr float Step = 15.0f;
+	constexpr float Radius = 8.0f;
+	for (float Distance = MinFaceClearanceCm; Distance <= Length; Distance += Step)
+	{
+		const FVector Point = PreviewFace + Along * Distance;
+		for (const UInstancedStaticMeshComponent* Plant : OnLine)
+		{
+			if (Plant->GetInstancesOverlappingSphere(Point, Radius, /*bSphereInWorldSpace=*/true).Num() > 0)
+			{
+				const float Stop = FMath::Max(MinFaceClearanceCm, Distance - Step);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCharacterCreator] camera pulled in to %.0f cm from the face (was %.0f): %s (%s) between"), Stop, Length,
+					*GetNameSafe(Plant->GetStaticMesh()), *GetNameSafe(Plant->GetOwner()));
+				return PreviewFace + Along * Stop;
+			}
+		}
+	}
+	return Camera;
 }
 
 void UMOCharacterCreatorPanel::OrbitPreview(float DeltaYawDeg, float DeltaPitchDeg)

@@ -246,7 +246,12 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   like 5-10 seconds for hair changes to take effect, until it updates they look bald").
 - **The world behind the panel is `OrbitArea`** (a transparent, hit-testable Border first in the canvas): a left or right drag orbits the camera
   round the survivor (yaw free, pitch -15..40 deg, 0.35 deg per pixel), the wheel zooms 110-420 cm, and the camera is swept out of any slope or
-  trunk behind them (`PlacePreviewCamera`). A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
+  trunk behind them (`PlacePreviewCamera`), and pulled in front of any grass or foliage between it and the face (N-213, Oct 29; Wes, Oct 25:
+  "there needs to be a 'can see face' check ... and that there isn't shit blocking the face"): plants have no collision, so the sweep passes
+  through them; `PullInFrontOfPlants` walks out from the head and stops the camera before the first plant instance on the line (never
+  closer than 60 cm). The plants round the survivor are gathered again on the 0.5 s timer (they stream in after the creator opens) and the
+  camera placed again when they change. Checked Oct 29 (`Tools/check_traversal_world.py` opens the creator): a plant 60 cm from the face, the
+  camera pulled in from 264 to 60 cm, the line clear. How close that looks is on Wes's by-eye list. A click there never reaches the world, and the panel has `bClosesOnOutsideClick = false` too (Wes:
   "if you click into the world ... it closes the character builder"; "click drag the world to pivot the camera around the character").
 - **The camera frames the FACE, and finds it again** (Oct 27; Wes: a swap "sometimes pivots the camera to the back of the character ... make
   sure there's a check when swapping that it re-finds face"): the orbit's zero is where the head looks (`UMOCharacterCreatorPanel::FaceYawDeg`:
