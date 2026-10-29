@@ -1136,7 +1136,7 @@ def _joiner_long_run(rep, host, client):
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
                  "j.set_actor_location(h.get_actor_location() + unreal.Vector(300.0, 0.0, 150.0), False, True)")
     time.sleep(5)
-    far = float(rows[-1].split("m:")[0]) if rows else 0.0
+    far = max(float(r.split("m:")[0]) for r in rows) if rows else 0.0   # the farthest it got: a turn round a rock back toward the start (Oct 29: 427 m, ended 321 m) is still a long run
     # The two heights are read ~0.5 s apart: running up a steep slope at 7 m/s they differ by a metre or two without any disagreement. A fall-through
     # is thousands of cm; at rest they must agree closely.
     rest = rows[-1] if rows else ""
@@ -1144,7 +1144,7 @@ def _joiner_long_run(rep, host, client):
     rest_gap = abs(int(rm.group(1)) - int(rm.group(2))) if rm else 9999
     rep.step("the joiner sprinted away for 150 s on ground the server has: server and client agree, no fall-through",
              bool(rows) and far > 400.0 and worst <= 500.0 and rest_gap <= 60 and rescued == 0,
-             f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}; "
+             f"distance/server z/client z: {', '.join(rows)}; farthest {far:.0f} m; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}; "
              f"turned past an obstacle {turns}x; the gentlest heading's steepest 100 m {relief_run:.0f} m")
 
 
@@ -2982,8 +2982,9 @@ def _host_predator_fire_rules(rep, host, client):
 
     console(host, "MO.AI.PredatorFreeAreaM 0")
     # Flat open ground for the host and the bears 5.5 m off: on a new world each run, a rock or a slope between them kept the no-fire CONTROL's bear
-    # from biting in 40 s once (Oct 28, N-229).
-    _to_clear_ground(host, 0)
+    # from biting in 40 s once (Oct 28, N-229). No lit flame within 20 m: the campfire _client_light_fire leaves burning held the CONTROL's bear
+    # off for 40 s (Oct 29), and would pass the torch step for the wrong reason.
+    _to_clear_ground(host, 0, away_from_flames_cm=2000.0)
     _probe(host, "import builtins; j = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_W_HOME = j.get_actor_location(); "
                  "j.set_actor_location(j.get_actor_location() + unreal.Vector(6000.0, 6000.0, 300.0), False, True); out('JOINER_AWAY')")
     console(host, "MO.Light.Carried give")
@@ -3037,13 +3038,15 @@ def _host_predator_fire_rules(rep, host, client):
     time.sleep(2)
 
 
-def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True):
+def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True, away_from_flames_cm=0.0):
     """Move a player pawn (0 the host's, 1 the joiner's) to flat ground near it with nothing solid within `radius_cm` (Oct 24: the larger rock tiers
     put boulders round the test site, and cases that lay things in front of a pawn, aim a click or walk straight ahead hit them: a joiner pinned
     against a rock, a click that opened a Beach Boulder's menu, cobbles rolling off a stone). Rings of 8 spots out to 80 m; a spot passes when the
     ground there is dry, its relief within 2 m under 50 cm, and an overlap at chest height finds only the voxel terrain. Stays put if none does.
     Moving the joiner brings the host along, 3 m to its side (`bring_host`): host-side checks read the building / item nearest the HOST's pawn
-    (MO.Test.Build state), and a joiner moved 15 m away left the host reading an older one."""
+    (MO.Test.Build state), and a joiner moved 15 m away left the host reading an older one. `away_from_flames_cm`: no lit flame (a campfire's
+    visible light, another pawn's torch) that close to the spot -- the predator fire case's CONTROL met the campfire an earlier case left burning
+    3.8 m from the host, and its "no fire" bear held off for 40 s (Oct 29)."""
     out = _probe(host, "import math\n"
                        f"p = unreal.GameplayStatics.get_player_pawn(world, {pawn})\n"
                        "o = p.get_actor_location()\n"
@@ -3053,6 +3056,13 @@ def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True):
                        "    hr = r[1] if isinstance(r, tuple) else r\n"
                        "    t = hr.to_tuple() if hr else None\n"
                        "    return t[5].z if (t and t[0]) else None\n"
+                       "flames = []\n"
+                       f"if {away_from_flames_cm} > 0.0:\n"
+                       "    for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor):\n"
+                       "        if a.get_components_by_class(unreal.MOFlameLightComponent) and any(l.is_visible() and l.get_editor_property('intensity') > 0.0 for l in a.get_components_by_class(unreal.LocalLightComponent)):\n"
+                       "            flames.append(a.get_actor_location())\n"
+                       "        if a != p and any(c.is_lit() for c in a.get_components_by_class(unreal.MOCarriedLightComponent)):\n"
+                       "            flames.append(a.get_actor_location())\n"
                        "found = None\n"
                        "for rad in (0.0, 1500.0, 3000.0, 4500.0, 6000.0, 8000.0):\n"
                        "    for k in range(1 if rad == 0.0 else 8):\n"
@@ -3060,6 +3070,8 @@ def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True):
                        "        x, y = o.x + rad * math.cos(a), o.y + rad * math.sin(a)\n"
                        "        gz = ground(x, y)\n"
                        "        if gz is None or gz < 50.0:\n"
+                       "            continue\n"
+                       f"        if any(((f.x - x) ** 2 + (f.y - y) ** 2) ** 0.5 < {away_from_flames_cm} for f in flames):\n"
                        "            continue\n"
                        "        around = [ground(x + 200.0 * math.cos(b * math.pi / 2.0), y + 200.0 * math.sin(b * math.pi / 2.0)) for b in range(4)]\n"
                        "        if any(g is None for g in around) or max(around + [gz]) - min(around + [gz]) > 50.0:\n"
@@ -3077,7 +3089,7 @@ def _to_clear_ground(host, pawn=0, radius_cm=1200.0, bring_host=True):
                        f"    if {pawn} == 1 and {bring_host}:\n"
                        "        h = unreal.GameplayStatics.get_player_pawn(world, 0)\n"
                        "        h.set_actor_location(unreal.Vector(found[0], found[1] + 300.0, found[2] + 100.0), False, True)\n"
-                       "    out('CLEARGROUND moved %.0f m to x=%.0f y=%.0f z=%.0f' % (((found[0] - o.x) ** 2 + (found[1] - o.y) ** 2) ** 0.5 / 100.0, found[0], found[1], found[2]))\n"
+                       "    out('CLEARGROUND moved %.0f m to x=%.0f y=%.0f z=%.0f (%d lit flame(s) counted)' % (((found[0] - o.x) ** 2 + (found[1] - o.y) ** 2) ** 0.5 / 100.0, found[0], found[1], found[2], len(flames)))\n"
                        "else:\n"
                        "    out('CLEARGROUND none within 80 m: stays')\n")
     m = re.search(r"CLEARGROUND [^\r\n]*", out)
@@ -3428,6 +3440,20 @@ def _host_colony_medic(rep, host, client):
              "ws = [w for w in h.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; "
              "out('HBLEED %.3f' % (max(w.bleed_rate for w in ws) if ws else -1))")
     _clear_around_host(host, keep=name, within=1100)
+    # No one else bleeding in any settlement: the upkeep treats the worst bleeder first, and the earlier cases leave people bleeding inside the
+    # settlements they founded -- on Oct 27-29 the medic's one bandage went to such a pawn (0.45 mL/s) 0.1 s before the host was cut, and the
+    # host was never treated (N-233). Their wounds are healed here; the host's cut below is then the only one.
+    stopped = re.search(r"STOPPED (\d+)", _probe(host,
+        "h = unreal.GameplayStatics.get_player_pawn(world, 0); n = 0\n"
+        "for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter):\n"
+        f"    if a == h or a.get_name() == '{name}' or isinstance(a, unreal.MOCreature):\n"
+        "        continue\n"
+        "    an = a.get_component_by_class(unreal.MOAnatomyComponent)\n"
+        "    for w in (an.get_all_wounds() if an else []):\n"
+        "        if w.bleed_rate > 0.0:\n"
+        "            an.heal_wound(w.wound_id, 1000.0); n += 1\n"
+        "out('STOPPED %d' % n)"))
+    print(f"[nettest] medic case: stopped {stopped.group(1) if stopped else '?'} other bleeding wound(s)", flush=True)
     me = (re.search(r"HOSTPAWN=(\S+)", _probe(host, "out('HOSTPAWN=' + unreal.GameplayStatics.get_player_pawn(world, 0).get_name())")) or [None, "?"])[1]
     off = log_size(host)
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
