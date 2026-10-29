@@ -130,6 +130,11 @@ the 2560 x 1440 `GameUserSettings.ini` that the Oct 17 depot shipped, TRAPS §17
   illumination method and Lumen's hardware ray tracing, ray tracing, hair simulation, window mode, VSync, the frame cap, the RHI, the
   adapter and the graphics driver with its date (a GPU crash depends on it: N-230, a player's RTX 5070 Ti on a January driver).
   `UMOBugReportSubsystem::CollectRenderFields`; test `MOFramework.BugReport.RenderFields`.
+- **WorldGen rows** (Oct 29, N-018): `WorldGen.MatchesPinned` (yes / NO / not worked out yet) and `WorldGen.Probe` (the height, base and
+  cave fingerprints, each ok or differs, and the generator version): this machine's world generator against the values pinned in the
+  build (`FMOWorldGen::SelfCheck`). Co-op worlds are generated on each machine from the seed, so a NO means this player's CPU or build
+  makes different ground than everyone else's. A low-priority background task works it out at launch (~3 s of one core) and logs
+  `[MOWorldGen] this machine makes the pinned world ...` (an Error line if not); a report written before it is done says so.
 - **LookAt rows** (Oct 14): every report carries `LookAt.*` captured when the form opens: mesh path, instance, actor + tags (world-feature
   row id), component, collision profile, mesh collision, material, phys material, distance / point / slope, generator biome, view and a
   `Reproduce` line (an `MO.Cam.LookAt` command: run it in PIE to see the player's view).

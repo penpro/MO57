@@ -3,6 +3,8 @@
 
 #include "MOWorldGen.h"
 
+#include <atomic>
+
 namespace
 {
 	constexpr int32 ProbeSeed = 424242;
@@ -133,4 +135,33 @@ FMOWorldGenProbe FMOWorldGenDomain::RunProbe(bool bWater)
 	}
 	Probe.Cave = C;
 	return Probe;
+}
+
+namespace
+{
+	std::atomic<const FMOWorldGenSelfCheck*> GSelfCheckDone{ nullptr };
+}
+
+const FMOWorldGenSelfCheck* FMOWorldGenDomain::SelfCheckIfDone()
+{
+	return GSelfCheckDone.load(std::memory_order_acquire);
+}
+
+const FMOWorldGenSelfCheck& FMOWorldGenDomain::SelfCheck()
+{
+	// A function-local static: worked out once, by whichever thread asks first; the others wait for it.
+	static const FMOWorldGenSelfCheck Check = []()
+	{
+		FMOWorldGenSelfCheck Result;
+		const double Start = FPlatformTime::Seconds();
+		Result.Probe = RunProbe(true);
+		Result.BaseHeight = RunProbe(false).Height;
+		Result.Seconds = FPlatformTime::Seconds() - Start;
+		Result.bHeightMatch = Result.Probe.Height == PinnedProbeHeight;
+		Result.bBaseMatch = Result.BaseHeight == PinnedProbeHeightNoWater;
+		Result.bCaveMatch = Result.Probe.Cave == PinnedProbeCave;
+		return Result;
+	}();
+	GSelfCheckDone.store(&Check, std::memory_order_release);
+	return Check;
 }

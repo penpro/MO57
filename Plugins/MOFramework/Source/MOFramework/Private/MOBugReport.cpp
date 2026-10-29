@@ -7,6 +7,8 @@
 #include "MOGameSettings.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
+#include "MOWorldGen.h"
+#include "Tasks/Task.h"
 #include "Containers/Ticker.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -301,6 +303,39 @@ void UMOBugReportSubsystem::RegisterBuiltInContributors()
 	});
 
 	RegisterContributor(TEXT("Render"), [](const UWorld*, FMOBugReportFields& Out) { CollectRenderFields(Out); });
+
+	// This machine's world generator against the pinned fingerprint (N-018: co-op worlds are generated on each machine, so every player's CPU and
+	// build must make the same ground). ~3 s of one core, so a low-priority background task works it out now and logs it once; a report written
+	// before it is done says so rather than wait.
+	UE::Tasks::Launch(UE_SOURCE_LOCATION, []()
+	{
+		const FMOWorldGenSelfCheck& Check = FMOWorldGen::SelfCheck();
+		if (Check.Matches())
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOWorldGen] this machine makes the pinned world (height 0x%08X, base 0x%08X, cave 0x%08X; %.0f ms; cpu '%s')"),
+				Check.Probe.Height, Check.BaseHeight, Check.Probe.Cave, Check.Seconds * 1000.0, *FPlatformMisc::GetCPUBrand().TrimStartAndEnd());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOWorldGen] this machine makes a DIFFERENT world than the pinned one (height 0x%08X vs 0x%08X, base 0x%08X vs 0x%08X, cave 0x%08X vs 0x%08X; cpu '%s'): co-op ground will not agree with other machines"),
+				Check.Probe.Height, FMOWorldGen::PinnedProbeHeight, Check.BaseHeight, FMOWorldGen::PinnedProbeHeightNoWater, Check.Probe.Cave, FMOWorldGen::PinnedProbeCave,
+				*FPlatformMisc::GetCPUBrand().TrimStartAndEnd());
+		}
+	}, UE::Tasks::ETaskPriority::BackgroundLow);
+	RegisterContributor(TEXT("WorldGen"), [](const UWorld*, FMOBugReportFields& Out)
+	{
+		const FMOWorldGenSelfCheck* Done = FMOWorldGen::SelfCheckIfDone();
+		if (!Done)
+		{
+			Out.Emplace(TEXT("MatchesPinned"), TEXT("not worked out yet (a background task since launch)"));
+			return;
+		}
+		const FMOWorldGenSelfCheck& Check = *Done;
+		Out.Emplace(TEXT("MatchesPinned"), Check.Matches() ? TEXT("yes") : TEXT("NO"));
+		Out.Emplace(TEXT("Probe"), FString::Printf(TEXT("height 0x%08X (%s), base 0x%08X (%s), cave 0x%08X (%s), version %u"),
+			Check.Probe.Height, Check.bHeightMatch ? TEXT("ok") : TEXT("differs"), Check.BaseHeight, Check.bBaseMatch ? TEXT("ok") : TEXT("differs"),
+			Check.Probe.Cave, Check.bCaveMatch ? TEXT("ok") : TEXT("differs"), Check.Probe.GeneratorVersion));
+	});
 
 	RegisterContributor(TEXT("Session"), [](const UWorld* World, FMOBugReportFields& Out)
 	{

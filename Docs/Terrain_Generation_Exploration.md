@@ -561,7 +561,9 @@ Traps: `ULightComponent::bAffectsWorld` cannot be changed at runtime; `SetVisibi
 Co-op worlds are generated on each machine from the seed, so two machines must produce identical bits. `MO.WorldGen.Checksum` prints the fixed fingerprints (heights, caves) and `match=1` if they equal
 the pinned values (`FMOWorldGen::PinnedProbe*`). Editor / Development / i9-14900K: `height=0xA8159C7B cave=0x2DB9B6B5 version=3 match=1`. The generator uses only IEEE-exact operations and
 integer hashing, so a given binary is deterministic on every CPU; the checks that remain are *different binaries* (packaged client vs editor: run the command in each) and a second physical PC.
-Do the second one by running the packaged build there and typing `MO.WorldGen.Checksum` in the dev console.
+Do the second one by running the packaged build there and typing `MO.WorldGen.Checksum` in the dev console. Since Oct 29 every machine also
+checks itself at launch (`FMOWorldGen::SelfCheck`, a background task, ~3 s of one core: `[MOWorldGen] this machine makes the pinned world ...`)
+and every bug report carries the answer (`WorldGen.MatchesPinned`), so players' own machines report a mismatch (N-018).
 
 ## Implementation status (2026-10-09, later the same day)
 

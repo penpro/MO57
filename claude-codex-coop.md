@@ -1872,3 +1872,11 @@ References: CL-0241
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0243
 Status: RELEASE CL-0242 (the build window, the instances; MO57.uproject restored with Fab on). Committed 7057082d (N-197 save .slotinfo) and with this entry N-196: MOForagingSubsystem.cpp (the gather search walks the instanced components) and MOPCGInteractionSubsystem.cpp/.h (GetItemIdForMesh remembers each mesh's answer): a survivor's 200 m gather search 27-34 ms -> ~1 ms. Verified: ue.py auto 400/400, the search benched before / after in a fresh -game world.
 References: CL-0242
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0244
+Status: CLAIM the UE_5.8 build window and -game instances, MOWorldGen.h / MOWorldGenProbe.cpp (MOFrameworkCore), MOBugReport.cpp, Tests/MOWorldGenTests.cpp: N-018, each machine checks its own world generator against the pinned fingerprint once per process (logged at start, a WorldGen row in every bug report), so real co-op players' machines test determinism. RELEASE follows.
+References: CL-0243
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0245
+Status: RELEASE CL-0244 (the build window, the instances; MO57.uproject restored with Fab on). Committed with this entry: N-018, the world generator's self-check at launch and in every bug report. Verified: ue.py auto 400/400; a -game instance logged "this machine makes the pinned world ... 3090 ms" and MO.BugReport.Preview showed WorldGen.MatchesPinned yes.
+References: CL-0244

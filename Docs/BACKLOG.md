@@ -135,7 +135,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | N-015 | OPEN | Claude | Far-LOD vertex step still shows at biome boundaries at 3 km: a heightmap-based layer blend in the ground material | biome-blend | G20 |
 | N-016 | OPEN | Claude | Distant lake water shards (fade / cap / ellipse mask / deeper freeboard) | Handoff next actions | |
 | N-017 | VERIFY | Claude | Summit notch / far-LOD tear: not reproduced on the current build; the 12 km tear was the cave stamp (fixed Oct 14) | Handoff Verify | G07, P-6 |
-| N-018 | OPEN | Claude | Determinism on a second physical PC (packaged `MO.WorldGen.Checksum`) | caves-and-lighting | |
+| N-018 | OPEN (Oct 29: every machine checks itself at launch and every bug report carries `WorldGen.MatchesPinned`, so players' machines report it; this PC: yes, 3.1 s. Still to run on DARKTOWER: its clone waits for Wes's OK to `git reset --hard origin/master` (inbox note 2026-10-29-mo57-clone-half-pulled), then build and read the launch line) | Claude | Determinism on a second physical PC (packaged `MO.WorldGen.Checksum`) | caves-and-lighting | |
 | N-019 | OPEN | Claude | Main-menu flyby: start point chosen against v4 land; watch the hand-off ring in motion | worldgen v5 open, Handoff | |
 | N-020 | OPEN | Claude | Lakes are static (no flow, no seasons); rivers are sea-level channels only | worldgen v4 open | |
 

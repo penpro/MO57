@@ -917,6 +917,18 @@ struct FMOWorldGenProbe
 	uint32 GeneratorVersion = 0;
 };
 
+/** This machine's generator against the pinned fingerprint (FMOWorldGenDomain::SelfCheck): the probe with and without water, and whether all three match. */
+struct FMOWorldGenSelfCheck
+{
+	FMOWorldGenProbe Probe;
+	uint32 BaseHeight = 0;   // RunProbe(false).Height
+	bool bHeightMatch = false;
+	bool bBaseMatch = false;
+	bool bCaveMatch = false;
+	double Seconds = 0.0;    // what working it out took
+	bool Matches() const { return bHeightMatch && bBaseMatch && bCaveMatch; }
+};
+
 /** One sinkhole: a shaft from the ground down to a chamber. A grid cell holds at most one. */
 /** One point of rock (FMOWorldGen::SampleOre). Grade 0..1: 1 well inside the seam / vein, falling to 0 at its edges. */
 struct FMOOreSample
@@ -992,6 +1004,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 
 	/** Run the fixed probe (see FMOWorldGenProbe). Pure and deterministic: the same binary must print the same numbers on every CPU. */
 	static FMOWorldGenProbe RunProbe(bool bWater = true);
+
+	/**
+	 * This machine against the pinned values below, worked out once per process (the first caller pays ~3 s on one core: run it off the game
+	 * thread; others asking meanwhile wait). Co-op worlds are generated on each machine from the seed, so a player whose CPU or build makes a
+	 * different generator gets different ground than the host (N-018): the game works it out at start on a background task and every bug
+	 * report carries it, so real players' machines check it.
+	 */
+	static const FMOWorldGenSelfCheck& SelfCheck();
+
+	/** The self-check if it is worked out already, else null (never waits: for the game thread). */
+	static const FMOWorldGenSelfCheck* SelfCheckIfDone();
 
 	/**
 	 * The values RunProbe() must produce for this generator version. THE single place they are pinned: the automation tests and MO.WorldGen.Checksum compare against
@@ -1249,6 +1272,8 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	// No position in, no position out.
 	using FMOWorldGenDomain::HashSeed;
 	using FMOWorldGenDomain::RunProbe;
+	using FMOWorldGenDomain::SelfCheck;
+	using FMOWorldGenDomain::SelfCheckIfDone;
 	using FMOWorldGenDomain::PinnedProbeHeight;
 	using FMOWorldGenDomain::PinnedProbeHeightNoWater;
 	using FMOWorldGenDomain::PinnedProbeCave;

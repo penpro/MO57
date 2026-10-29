@@ -327,6 +327,13 @@ bool FMOWorldGen_GoldenChecksum::RunTest(const FString& Parameters)
 	const uint32 NoWater = FMOWorldGen::RunProbe(false).Height;
 	TestTrue(FString::Printf(TEXT("golden checksum with water OFF is the v1 base terrain 0x%08X (got 0x%08X)"), FMOWorldGen::PinnedProbeHeightNoWater, NoWater),
 		NoWater == FMOWorldGen::PinnedProbeHeightNoWater);
+
+	// The once-per-process self-check (logged at start, in every bug report: N-018) says the same as the probe run here.
+	const FMOWorldGenSelfCheck& Check = FMOWorldGen::SelfCheck();
+	TestTrue(TEXT("the self-check reads the same probe"), Check.Probe.Height == H && Check.BaseHeight == NoWater && Check.Probe.Cave == Probe.Cave);
+	TestEqual(TEXT("the self-check's verdict follows the pins"), Check.Matches(),
+		H == FMOWorldGen::PinnedProbeHeight && NoWater == FMOWorldGen::PinnedProbeHeightNoWater && Probe.Cave == FMOWorldGen::PinnedProbeCave);
+	AddInfo(FString::Printf(TEXT("self-check: matches=%d in %.0f ms"), Check.Matches() ? 1 : 0, Check.Seconds * 1000.0));
 	return true;
 }
 
