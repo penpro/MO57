@@ -1554,7 +1554,7 @@ def cmd_nettest(a):
     if a.mode == "bugreport":
         sys.exit(0 if ui.bugreport_test(package=a.package) else 1)
     if a.mode == "actions":
-        sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep, seed=a.seed) else 1)
+        sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep, seed=a.seed, pairs=a.pairs) else 1)
     if a.mode == "traversal":
         sys.exit(0 if ui.traversal_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "bases":
@@ -1874,6 +1874,7 @@ def main():
     s.add_argument("--phases", default="", help="netdiag mode: comma list of phases to run (clean,lag50,loss1,ctl_ratecap,ctl_speedhack); default all")
     s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")
     s.add_argument("--keep", action="store_true", help="leave the instances running afterwards")
+    s.add_argument("--pairs", type=int, default=1, help="actions mode: 2 = two host + joiner pairs at once on two halves of the cases (N-199; each joins its own host by session name)")
     s.add_argument("--seed", type=int, default=None, help="the world seed: game / actions host a known world with it (default: random); packaged-suite / packaged-death default to 1029024224 (the spawn that used to end underground)")
     s.add_argument("--package", action="store_true", help="packaged mode only: re-package the Development build first (~90 s; the editor must be closed)")
     s.add_argument("--withhold-sync", action="store_true",

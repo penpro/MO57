@@ -397,5 +397,45 @@ class ChurnAnalyserTests(unittest.TestCase):
         self.assertEqual(out, {"A: Error: x": 2})
 
 
+
+class PairSplitTests(unittest.TestCase):
+    """nettest actions --pairs 2 (N-199): the cases cut into contiguous halves of about equal time."""
+
+    @staticmethod
+    def _cases(*names):
+        return [type("C", (), {"__name__": n})() for n in names]
+
+    def test_halves_are_contiguous_and_balanced(self):
+        cases = self._cases("a", "b", "c", "d", "e", "f")
+        secs = {"a": 10, "b": 10, "c": 100, "d": 10, "e": 50, "f": 60}
+        parts = ui.split_cases(cases, secs, 2)
+        self.assertEqual([c.__name__ for p in parts for c in p], ["a", "b", "c", "d", "e", "f"])   # the order is kept
+        self.assertEqual([[c.__name__ for c in p] for p in parts], [["a", "b", "c"], ["d", "e", "f"]])
+
+    def test_unknown_cases_count_as_the_median(self):
+        parts = ui.split_cases(self._cases("a", "b", "c", "d"), {}, 2)
+        self.assertEqual([len(p) for p in parts], [2, 2])
+
+    def test_never_an_empty_half(self):
+        self.assertEqual([len(p) for p in ui.split_cases(self._cases("a"), {}, 2)], [1])
+        self.assertEqual([len(p) for p in ui.split_cases(self._cases("a", "b"), {"a": 500, "b": 1}, 2)], [1, 1])
+
+    def test_one_part_is_everything(self):
+        self.assertEqual([len(p) for p in ui.split_cases(self._cases("a", "b", "c"), {}, 1)], [3])
+
+
+class SessionRowTests(unittest.TestCase):
+    def test_find_lists_each_session_by_name(self):
+        log = ("[MOSession] FindSessions complete: 2 result(s)\n"
+               "LogMOFramework: [MOSession]   [0] 'PairB' 1/4 players, 14ms\n"
+               "LogMOFramework: [MOSession]   [1] 'PairA' 1/4 players, 52ms (FULL)\n")
+        self.assertEqual(ui.SESSION_ROW_RE.findall(log), [("0", "PairB"), ("1", "PairA")])
+
+    def test_report_tags_its_lines(self):
+        r = ui.Report(tag="pair 2")
+        with mock.patch("builtins.print") as p:
+            r.step("x", True, "ev")
+        self.assertTrue(p.call_args[0][0].endswith("-- ev [pair 2]"))
+
 if __name__ == "__main__":
     unittest.main()

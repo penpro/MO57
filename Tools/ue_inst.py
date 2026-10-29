@@ -24,6 +24,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,6 +38,29 @@ DEFAULT_MAP = "/Game/Penumbra/Maps/TestMap"
 
 STATE_RE = re.compile(r"\[MOQUERY\] STATE netmode=(\w+) level=(\S+) inGame=(\S+) pawn=(\S+)")
 FOUND_RE = re.compile(r"FindSessions complete: (\d+) result")
+SESSION_ROW_RE = re.compile(r"\[MOSession\]   \[(\d+)\] '([^'\r\n]*)'")
+
+
+def find_session(client, display=None, tries=4, pause=3.0):
+    """MO.Session.Find until it answers, and the result index of the session named `display` (the first result when None). Returns
+    (results, index): index None when no result has that name. Every LAN host on the machine answers a search, in any order (Oct 29, two
+    pairs: 'PairB' came first, then 'PairA'), so joining result 0 can join another pair's host -- a second nettest pair, another agent's."""
+    found, index = None, None
+    for _ in range(tries):
+        off = log_size(client)
+        console(client, "MO.Session.Find")
+        m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
+        found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
+        if found:
+            time.sleep(0.5)   # the per-result lines follow the count line
+            for i, name in SESSION_ROW_RE.findall(read_log_from(client, off)):
+                if display is None or name == display:
+                    index = int(i)
+                    break
+            if index is not None:
+                break
+        time.sleep(pause)
+    return found, index
 
 
 def inst_dir(name):
@@ -294,12 +318,13 @@ def stop(name, grace=20):
 
 
 class Report:
-    def __init__(self):
+    def __init__(self, tag=""):
         self.rows = []
+        self.tag = tag   # which of two parallel pairs a line comes from (nettest actions --pairs 2): "[PASS] label  -- evidence [pair 2]"
 
     def step(self, label, ok, evidence=""):
         self.rows.append((label, ok, evidence))
-        print(f"[{'PASS' if ok else 'FAIL'}] {label}" + (f"  -- {evidence}" if evidence else ""), flush=True)
+        print(f"[{'PASS' if ok else 'FAIL'}] {label}" + (f"  -- {evidence}" if evidence else "") + (f" [{self.tag}]" if self.tag else ""), flush=True)
         return ok
 
     @property
@@ -346,20 +371,12 @@ def lan_test(uproject, editor_exe, keep=False, boot_timeout=240, map_path=DEFAUL
                         in_world(st, "ListenServer", map_path), str(st)):
             return False
 
-        found = None
-        for attempt in range(1, 5):
-            off = log_size(client)
-            console(client, "MO.Session.Find")
-            m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-            found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-            if found:
-                break
-            time.sleep(3)
-        if not rep.step("client: FindSessions discovers the host over LAN", bool(found),
+        found, index = find_session(client, "LanTest")
+        if not rep.step("client: FindSessions discovers the host over LAN", index is not None,
                         f"{found} result(s)" if found is not None else "search never completed"):
             return False
 
-        console(client, "MO.Session.Join 0")
+        console(client, f"MO.Session.Join {index}")
         deadline, cst = time.time() + 180, None
         while time.time() < deadline:
             cst = state(client)
@@ -476,19 +493,11 @@ def _rehost_after_menu(rep, host, client, map_path):
     if not rep.step("host: second session is a ListenServer", reached, str(st)):
         return False
 
-    found = None
-    for _ in range(4):
-        off = log_size(client)
-        console(client, "MO.Session.Find")
-        m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-        found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-        if found:
-            break
-        time.sleep(3)
-    if not rep.step("client: finds the second session (and only it, not a ghost of the first)", found == 1,
+    found, index = find_session(client, "LanTest2")
+    if not rep.step("client: finds the second session (and only it, not a ghost of the first)", found == 1 and index is not None,
                     f"{found} result(s)"):
         return False
-    console(client, "MO.Session.Join 0")
+    console(client, f"MO.Session.Join {index}")
     reached, st = _wait_state(client, "Client", map_path, 180)
     return rep.step("client: joins the second session", reached, str(st))
 
@@ -1208,20 +1217,12 @@ def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=
             console(host, "MO.Clock.SetTime 14 0")
             console(host, "MO.Weather.SetPreset Rain")
             time.sleep(6)  # the host publishes weather every few seconds; be sure it is on the wire before the client arrives
-        found = None
-        for _ in range(4):
-            off = log_size(client)
-            console(client, "MO.Session.Find")
-            m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-            found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-            if found:
-                break
-            time.sleep(3)
-        if not rep.step("client: finds the session", bool(found), f"{found} result(s)"):
+        found, index = find_session(client, "GameTest")
+        if not rep.step("client: finds the session", index is not None, f"{found} result(s)"):
             return False
         join_off = log_size(client)
         host_join_off = log_size(host)
-        console(client, "MO.Session.Join 0")
+        console(client, f"MO.Session.Join {index}")
         reached, cst = _wait_state(client, "Client", "", 300)
         if not rep.step("client: joined the real map and possesses a pawn", reached, str(cst)):
             return False
@@ -1292,15 +1293,9 @@ def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=
                  stayed.group(0) if stayed else "no 'stays in the world' line")
 
         call(client, ["py", "-c", "import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=30)
-        for _ in range(4):
-            off = log_size(client)
-            console(client, "MO.Session.Find")
-            m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-            if m and int(FOUND_RE.search(m.group(0)).group(1)):
-                break
-            time.sleep(3)
+        _, index = find_session(client, "GameTest")
         host_off = log_size(host)
-        console(client, "MO.Session.Join 0")
+        console(client, f"MO.Session.Join {index if index is not None else 0}")
         reached, cst = _wait_state(client, "Client", "", 300)
         rep.step("client: rejoins and possesses a pawn", reached, str(cst))
         time.sleep(4)
@@ -1421,20 +1416,12 @@ def hostsave_test(uproject, editor_exe, keep=False, boot_timeout=300):
         rep.step("host: the recruited colonist from the save is back in the world", "SPARE_BACK=1" in out, out.strip()[-80:])
 
         # ---- phase 3: a client joins the resumed world
-        found = None
-        for _ in range(4):
-            off = log_size(client)
-            console(client, "MO.Session.Find")
-            m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-            found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-            if found:
-                break
-            time.sleep(3)
-        if not rep.step("client: finds the hosted save", bool(found), f"{found} result(s)"):
+        found, index = find_session(client)   # a hosted save's session carries the save's name
+        if not rep.step("client: finds the hosted save", index is not None, f"{found} result(s)"):
             return False
         join_off = log_size(client)
         host_join_off = log_size(host)
-        console(client, "MO.Session.Join 0")
+        console(client, f"MO.Session.Join {index}")
         reached, cst = _wait_state(client, "Client", "", 300)
         if not rep.step("client: joined the resumed world and possesses a pawn", reached, str(cst)):
             return False
@@ -1477,18 +1464,10 @@ def _host_and_join(rep, host, client, display, boot_timeout=300, seed=None):
     reached, st = _wait_state(host, "ListenServer", "", 300)
     if not rep.step("host: real map loaded and the host has a pawn", reached, str(st)):
         return False
-    found = None
-    for _ in range(5):
-        off = log_size(client)
-        console(client, "MO.Session.Find")
-        m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-        found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-        if found:
-            break
-        time.sleep(3)
-    if not rep.step("client: finds the session", bool(found), f"{found} result(s)"):
+    found, index = find_session(client, display, tries=5)
+    if not rep.step("client: finds the session", index is not None, f"{found} result(s), '{display}' at {index}"):
         return False
-    console(client, "MO.Session.Join 0")
+    console(client, f"MO.Session.Join {index}")
     reached, cst = _wait_state(client, "Client", "", 300)
     if not rep.step("client: joined and possesses a pawn", reached, str(cst)):
         return False
@@ -3420,6 +3399,21 @@ def _host_colony_medic(rep, host, client):
     nearest idle villager that has the skill and the supplies -- here a bandage in its own pack -- to the bleeding host; it walks over and runs
     the same server treatment a player would (FMOMedicalTreatmentActions::Begin). Founds a settlement, so it runs last. Host-side."""
     _to_clear_ground(host, 0)   # the medic walks 6 m to the host: no boulder between them (Oct 24)
+    # No one bleeding anywhere BEFORE the settlement and its medic exist: the upkeep treats the worst bleeder in any settlement first, and the
+    # earlier cases leave pawns bleeding -- on Oct 27-29 the medic's one bandage went to such a pawn 0.1 s before the host was cut (N-233); on
+    # Oct 29 (two pairs) to the HOST's own pawn, the joiner's old one it took over two cases earlier, still bleeding 0.56 mL/s from an earlier
+    # case: the medic was sent before the cut, and was busy with that old wound when the cut came. The host's cut below is then the only wound.
+    stopped = re.search(r"STOPPED (\d+)", _probe(host,
+        "n = 0\n"
+        "for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter):\n"
+        "    if isinstance(a, unreal.MOCreature):\n"
+        "        continue\n"
+        "    an = a.get_component_by_class(unreal.MOAnatomyComponent)\n"
+        "    for w in (an.get_all_wounds() if an else []):\n"
+        "        if w.bleed_rate > 0.0:\n"
+        "            an.heal_wound(w.wound_id, 1000.0); n += 1\n"
+        "out('STOPPED %d' % n)"))
+    print(f"[nettest] medic case: stopped {stopped.group(1) if stopped else '?'} bleeding wound(s) before the settlement", flush=True)
     off = log_size(host)
     # A 10 m settlement, everyone else moved out of it below: the medic treats the worst bleeder in the settlement, and an earlier case left
     # the host's previous pawn bleeding from a wolf's bite (Oct 21: the medic went to it, and the host was never treated)
@@ -3440,20 +3434,6 @@ def _host_colony_medic(rep, host, client):
              "ws = [w for w in h.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; "
              "out('HBLEED %.3f' % (max(w.bleed_rate for w in ws) if ws else -1))")
     _clear_around_host(host, keep=name, within=1100)
-    # No one else bleeding in any settlement: the upkeep treats the worst bleeder first, and the earlier cases leave people bleeding inside the
-    # settlements they founded -- on Oct 27-29 the medic's one bandage went to such a pawn (0.45 mL/s) 0.1 s before the host was cut, and the
-    # host was never treated (N-233). Their wounds are healed here; the host's cut below is then the only one.
-    stopped = re.search(r"STOPPED (\d+)", _probe(host,
-        "h = unreal.GameplayStatics.get_player_pawn(world, 0); n = 0\n"
-        "for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter):\n"
-        f"    if a == h or a.get_name() == '{name}' or isinstance(a, unreal.MOCreature):\n"
-        "        continue\n"
-        "    an = a.get_component_by_class(unreal.MOAnatomyComponent)\n"
-        "    for w in (an.get_all_wounds() if an else []):\n"
-        "        if w.bleed_rate > 0.0:\n"
-        "            an.heal_wound(w.wound_id, 1000.0); n += 1\n"
-        "out('STOPPED %d' % n)"))
-    print(f"[nettest] medic case: stopped {stopped.group(1) if stopped else '?'} other bleeding wound(s)", flush=True)
     me = (re.search(r"HOSTPAWN=(\S+)", _probe(host, "out('HOSTPAWN=' + unreal.GameplayStatics.get_player_pawn(world, 0).get_name())")) or [None, "?"])[1]
     off = log_size(host)
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
@@ -4283,46 +4263,126 @@ def _trust_terraform(rep, host, client):
              rejected[0] if rejected else "no rate rejection on the host")
 
 
-def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None):
-    """Gameplay verbs from a real CLIENT process against a real host (the PIE-era MO.Test.* suite never left one editor): pickup
-    identity, crafting, attack. Each one's proof is read on the HOST -- what the authority ended up with -- not from the client's
-    optimistic 'PASS'."""
-    rep = Report()
-    host, client = names = ("acthost", "actclient")
+# The actions cases in the order they run (some lean on the one before: _host_colony_alerts on the settlement _host_colony_medic founds).
+ACTION_CASES = (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_predator_fire_rules, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts)
+# Cases that send REAL OS input (Tools/win_input.ps1: the foreground window and the real cursor). With two pairs, the other pair's windows take
+# the foreground back within a second (Oct 29: the possession click lost every row), so --pairs 2 runs them on pair 1 after both halves,
+# with pair 2's windows closed. Each sets up what it needs itself.
+REAL_INPUT_CASES = ("_host_possession_click",)
+# Each case's seconds in the last run (both modes write it): how --pairs 2 splits the list into halves of equal time.
+ACTION_SECONDS_FILE = os.path.abspath(os.path.join(HERE, "..", "Saved", "nettest_actions_seconds.json"))
+
+
+def split_cases(cases, seconds, parts):
+    """`cases` cut into `parts` CONTIGUOUS runs of about equal time (`seconds`: name -> s of the last run; an unknown case counts as the
+    median), so a case that leans on the one before it stays behind it. Pure (unit-tested offline)."""
+    known = sorted(seconds.get(fn.__name__) for fn in cases if seconds.get(fn.__name__) is not None)
+    median = known[len(known) // 2] if known else 30.0
+    cost = [seconds.get(fn.__name__, median) for fn in cases]
+    total = sum(cost)
+    out, cur, acc = [], [], 0.0
+    for fn, c in zip(cases, cost):
+        boundary = total * (len(out) + 1) / parts
+        if cur and len(out) < parts - 1 and acc + c / 2.0 > boundary:
+            out.append(cur)
+            cur = []
+        cur.append(fn)
+        acc += c
+    out.append(cur)
+    return out
+
+
+def _actions_pair(rep, uproject, editor_exe, names, display, cases, positions, keep, boot_timeout, seed, timings, started=False, stop_after=True):
+    """One host + joiner pair through `cases` (actions_test runs one or two of these). Appends (seconds, case name) to `timings`.
+    `started`: the pair is already up and joined (more cases on it); `stop_after` False leaves it running for that."""
+    host, client = names
     try:
-        print("[nettest] actions: host + client on the REAL gameplay map; verbs run on the CLIENT ...", flush=True)
-        for n, pos in zip(names, ((0, 0), (680, 0))):
-            start(n, uproject, editor_exe, pos=pos, nosteam=True)
-        if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout, seed=seed):
-            return False
+        if not started:
+            for n, pos in zip(names, positions):
+                start(n, uproject, editor_exe, pos=pos, nosteam=True)
+            if not _host_and_join(rep, host, client, display, boot_timeout, seed=seed):
+                return False
         # MO_ACTIONS_CMDS_<NAME>: console commands (";"-separated) for one instance right after the join -- an A/B switch for an
         # investigation, e.g. MO_ACTIONS_CMDS_ACTCLIENT="voxel.MegaMaterial.DisableMaterialSelection 1" (N-185)
         for n in names:
             for cmd in (c.strip() for c in os.environ.get(f"MO_ACTIONS_CMDS_{n.upper()}", "").split(";") if c.strip()):
                 console(n, cmd)
                 print(f"[nettest] actions: {n} ran '{cmd}'", flush=True)
-        only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        case_seconds = []
-        for fn in (_client_pickup, _client_press_e, _client_e_on_ground_item, _client_e_beside_ground_item, _client_drink, _client_glide, _client_footstep_surface, _client_footstep_on_rock, _trust_instance_far, _trust_instance_out_of_sight, _client_harvest, _client_harvest_full_pack, _client_inspect, _client_survivor_command, _host_foliage_reaches_client, _client_gait, _remote_pawn_velocity, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _client_light_fire, _client_treats_own_wound, _client_treats_host, _host_treats_survivor, _host_torch_in_rain, _client_lights_from_host, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _client_sees_creature_flinch, _host_predator_fire_rules, _host_wolf_pack, _host_takes_departed_pawn, _host_possession_click, _host_colony_medic, _host_colony_alerts):
-            if only and fn.__name__ not in only:
-                continue
+        for fn in cases:
             t0 = time.time()
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others
                 rep.step(f"{fn.__name__} ran without a harness error", False, f"{type(e).__name__}: {e}")
-            case_seconds.append((time.time() - t0, fn.__name__))
-            print(f"[nettest] {fn.__name__}: {time.time() - t0:.0f} s", flush=True)
-        slowest = sorted(case_seconds, reverse=True)[:12]
-        print("[nettest] slowest cases: " + ", ".join(f"{n} {t:.0f} s" for t, n in slowest) + f" | all {sum(t for t, _ in case_seconds):.0f} s", flush=True)
+            timings.append((time.time() - t0, fn.__name__))
+            print(f"[nettest] {fn.__name__}: {time.time() - t0:.0f} s" + (f" ({display})" if rep.tag else ""), flush=True)
         return rep.ok
     finally:
-        print(f"[nettest] actions: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
-        if not keep:
+        if not stop_after:
+            pass
+        elif not keep:
             for n in names:
                 stop(n)
         else:
-            print("[nettest] --keep: instances left running (ue.py inst stop acthost / actclient)")
+            print(f"[nettest] --keep: instances left running (ue.py inst stop {host} / {client})")
+
+
+def actions_test(uproject, editor_exe, keep=False, boot_timeout=300, seed=None, pairs=1):
+    """Gameplay verbs from a real CLIENT process against a real host (the PIE-era MO.Test.* suite never left one editor): pickup
+    identity, crafting, attack. Each one's proof is read on the HOST -- what the authority ended up with -- not from the client's
+    optimistic 'PASS'. `pairs` 2 (N-199): two host + joiner pairs at once on two halves of the cases (contiguous, of equal time by the
+    last run's seconds), each joining its own host by session name; one verdict for both."""
+    only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
+    cases = [fn for fn in ACTION_CASES if not only or fn.__name__ in only]
+    try:
+        with open(ACTION_SECONDS_FILE, encoding="utf-8") as f:
+            last = json.load(f)
+    except (OSError, ValueError):
+        last = {}
+    pairs = max(1, min(int(pairs or 1), 2, len(cases) or 1))
+    exclusive = [fn for fn in cases if pairs > 1 and fn.__name__ in REAL_INPUT_CASES]
+    parts = split_cases([fn for fn in cases if fn not in exclusive], last, pairs) if pairs > 1 else [cases]
+    print(f"[nettest] actions: {len(parts)} host + client pair(s) on the REAL gameplay map; verbs run on the CLIENT ..."
+          + ("".join(f" | pair {k + 1}: {len(part)} case(s), ~{sum(last.get(fn.__name__, 0) for fn in part):.0f} s" for k, part in enumerate(parts)) if len(parts) > 1 else "")
+          + (f" | then on pair 1 alone (real OS input): {', '.join(fn.__name__ for fn in exclusive)}" if exclusive else ""),
+          flush=True)
+    reps = [Report(tag=("" if len(parts) == 1 else f"pair {k + 1}")) for k in range(len(parts))]
+    timings, results = [], [False] * len(parts)
+    layout = (((0, 0), (680, 0)), ((0, 420), (680, 420)))
+    names = (("acthost", "actclient"), ("acthost2", "actclient2"))
+    displays = ("ActionsTest", "ActionsTest2")
+    try:
+        if len(parts) == 1:
+            results[0] = _actions_pair(reps[0], uproject, editor_exe, names[0], displays[0], parts[0], layout[0], keep, boot_timeout, seed, timings)
+        else:
+            def run(k):
+                results[k] = _actions_pair(reps[k], uproject, editor_exe, names[k], displays[k], parts[k], layout[k], keep, boot_timeout, seed, timings,
+                                           stop_after=not (k == 0 and exclusive))
+            threads = [threading.Thread(target=run, args=(k,), daemon=True) for k in range(len(parts))]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            if exclusive:
+                # Pair 2's windows are closed by now (its thread stopped them); pair 1 is still up and joined.
+                if all(is_alive(read_pid(n)) for n in names[0]) and any("joined and possesses a pawn" in r[0] and r[1] for r in reps[0].rows):
+                    results[0] = _actions_pair(reps[0], uproject, editor_exe, names[0], displays[0], exclusive, layout[0], keep, boot_timeout, seed,
+                                               timings, started=True) and results[0]
+                elif not keep:
+                    for n in names[0]:
+                        stop(n)   # pair 1 never joined: its instances were left up for the real-input cases
+        slowest = sorted(timings, reverse=True)[:12]
+        print("[nettest] slowest cases: " + ", ".join(f"{n} {t:.0f} s" for t, n in slowest) + f" | all {sum(t for t, _ in timings):.0f} s", flush=True)
+        if timings and not only:
+            try:
+                with open(ACTION_SECONDS_FILE, "w", encoding="utf-8") as f:
+                    json.dump({n: round(t, 1) for t, n in timings}, f, indent=1)
+            except OSError:
+                pass
+        return all(results) and all(r.ok for r in reps)
+    finally:
+        ok = all(results) and all(r.rows and r.ok for r in reps)
+        print(f"[nettest] actions: {'PASS' if ok else 'FAIL'}", flush=True)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -4691,7 +4751,7 @@ def analyse_churn_logs(host_log, client_log):
     return rows
 
 
-def _leave_and_rejoin(rep, host, client, label):
+def _leave_and_rejoin(rep, host, client, label, display=None):
     """The client goes back to the main menu and joins again. The host must keep the leaver's pawn as an idle colonist and hand the SAME pawn back
     (no second pawn for the same player), and end with two players that each have a pawn."""
     leave_off = log_size(host)
@@ -4703,19 +4763,11 @@ def _leave_and_rejoin(rep, host, client, label):
     rep.step(f"{label}: host keeps the leaver's pawn as an idle colonist", bool(stayed), stayed.group(0) if stayed else "no 'stays in the world' line")
 
     call(client, ["py", "-c", "import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=30)
-    found = None
-    for _ in range(5):
-        off = log_size(client)
-        console(client, "MO.Session.Find")
-        m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-        found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-        if found:
-            break
-        time.sleep(3)
-    if not rep.step(f"{label}: client finds the session again", bool(found), f"{found} result(s)"):
+    found, index = find_session(client, display, tries=5)
+    if not rep.step(f"{label}: client finds the session again", index is not None, f"{found} result(s)"):
         return False
     host_off = log_size(host)
-    console(client, "MO.Session.Join 0")
+    console(client, f"MO.Session.Join {index}")
     reached, cst = _wait_state(client, "Client", "", 300)
     if not rep.step(f"{label}: client rejoins and possesses a pawn", reached, str(cst)):
         return False
@@ -4835,7 +4887,7 @@ def churn_test(uproject, editor_exe, rounds=3, keep=False, boot_timeout=300):
             return False
         base_host, base_client = log_size(host), log_size(client)
         for r in range(1, rounds + 1):
-            if not _leave_and_rejoin(rep, host, client, f"round {r}/{rounds}"):
+            if not _leave_and_rejoin(rep, host, client, f"round {r}/{rounds}", "ChurnTest"):
                 break
         _concurrent_pickup(rep, host, client)
         _save_while_connected(rep, host)
@@ -5096,19 +5148,11 @@ def soak_test(uproject, editor_exe, rounds=6, boot_timeout=300):
             reached, st = _wait_state(host, "ListenServer", "", 300)
             if not rep.step(f"round {r}: fresh world loaded", reached, str(st)):
                 return False
-            found = None
-            for _ in range(5):
-                off = log_size(client)
-                console(client, "MO.Session.Find")
-                m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
-                found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
-                if found:
-                    break
-                time.sleep(3)
-            if not rep.step(f"round {r}: client finds the session", bool(found), f"{found} result(s)"):
+            found, index = find_session(client, f"Soak{r}", tries=5)
+            if not rep.step(f"round {r}: client finds the session", index is not None, f"{found} result(s)"):
                 return False
             join_off = log_size(client)
-            console(client, "MO.Session.Join 0")
+            console(client, f"MO.Session.Join {index}")
             reached, cst = _wait_state(client, "Client", "", 300)
             if not rep.step(f"round {r}: client joined", reached, str(cst)):
                 return False

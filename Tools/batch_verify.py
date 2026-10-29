@@ -1,10 +1,12 @@
 """One batch's verification in one command (the loop deep dive, Oct 22 2026): build, then the automation suite and the host + joiner
 nettest AT THE SAME TIME, then one summary.
 
-    python Tools/batch_verify.py [--seed 670711536] [--skip-build] [--only case,case] [--out DIR]
+    python Tools/batch_verify.py [--seed 670711536] [--skip-build] [--only case,case] [--pairs 2] [--out DIR]
 
 Run serially they cost ~5 min + ~28 min after a ~1 min build (Oct 22: build 48 s, suite 313 s, nettest ~28 min); together the suite
-finishes inside the nettest. The editor must be closed (the build and the instances need it: CLAUDE.md). Logs: <out>/build.txt, auto.txt,
+finishes inside the nettest. --pairs 2 (N-199) runs the nettest as two host + joiner pairs on halves of the cases (~18 min) and the suite
+AFTER it, not beside it: four game processes plus the suite's editor slowed a timed test past its limit (CoastalSpawn 2181 ms of 1500)
+and two placement-sensitive cases (Oct 29); ~24 min in all. The editor must be closed (the build and the instances need it: CLAUDE.md). Logs: <out>/build.txt, auto.txt,
 nettest.txt. Exit code 0 only when the build succeeded, the suite has no failure and every nettest row passed.
 """
 import argparse
@@ -23,6 +25,7 @@ def main():
     ap.add_argument("--seed", default="670711536", help="nettest world (a vegetated seed: CONTROL steps need ground items)")
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--only", default="", help="MO_ACTIONS_ONLY: nettest cases to run (default all)")
+    ap.add_argument("--pairs", default="1", help="nettest actions --pairs: 2 runs two host + joiner pairs on halves of the cases (N-199)")
     ap.add_argument("--filter", default="MOFramework", help="automation filter")
     ap.add_argument("--out", default=os.path.join(os.environ.get("TEMP", "."), "claude", "batch_verify"))
     a = ap.parse_args()
@@ -45,12 +48,15 @@ def main():
     t1 = time.time()
     auto_f = open(os.path.join(a.out, "auto.txt"), "w", encoding="utf-8")
     net_f = open(os.path.join(a.out, "nettest.txt"), "w", encoding="utf-8")
-    auto = subprocess.Popen(UE + ["auto", "--filter", a.filter], cwd=ROOT, stdout=auto_f, stderr=subprocess.STDOUT)
-    net = subprocess.Popen(UE + ["nettest", "actions", "--seed", a.seed], cwd=ROOT, stdout=net_f, stderr=subprocess.STDOUT, env=env)
+    serial = a.pairs not in ("", "1")   # two pairs: the suite runs after the nettest (load, see the docstring)
+    net = subprocess.Popen(UE + ["nettest", "actions", "--seed", a.seed, "--pairs", a.pairs], cwd=ROOT, stdout=net_f, stderr=subprocess.STDOUT, env=env)
+    auto = None if serial else subprocess.Popen(UE + ["auto", "--filter", a.filter], cwd=ROOT, stdout=auto_f, stderr=subprocess.STDOUT)
     done = {}
     while len(done) < 2:
+        if serial and auto is None and "nettest" in done:
+            auto = subprocess.Popen(UE + ["auto", "--filter", a.filter], cwd=ROOT, stdout=auto_f, stderr=subprocess.STDOUT)
         for name, p in (("auto", auto), ("nettest", net)):
-            if name not in done and p.poll() is not None:
+            if p is not None and name not in done and p.poll() is not None:
                 done[name] = time.time() - t1
                 print(f"[verify] {name} finished after {done[name]:.0f} s", flush=True)
         time.sleep(5)

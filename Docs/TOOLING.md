@@ -186,6 +186,15 @@ review shots ~1.5 min a spot (a 75 s settle each).
 
 - **`python Tools/batch_verify.py`** does steps 2-4 in one command and runs the suite DURING the nettest (step 3 always allowed it): the
   suite's ~5 min disappear inside the nettest's ~28. Summary: both verdicts, every failing row, the slowest cases.
+- **Two pairs (N-199, Oct 29): `batch_verify.py --pairs 2`** / `ue.py nettest actions --pairs 2`. Two host + joiner pairs run at once on two
+  contiguous halves of the cases, of equal time by the last full run's seconds (`Saved/nettest_actions_seconds.json`, written by every
+  full run). Each joiner joins its own host BY SESSION NAME (`find_session`; the second pair hosts `ActionsTest2` on port 7778, which the
+  engine picks by itself). Lines carry `[pair 1]` / `[pair 2]`. Cases that send real OS input (`REAL_INPUT_CASES`: the possession click)
+  run on pair 1 after both halves, with pair 2's windows closed: the other pair's windows took the foreground back within a second.
+  The suite then runs AFTER the nettest, not beside it: with four game processes beside it a timed test missed its limit
+  (CoastalSpawn 2181 ms of 1500) and two placement-sensitive cases failed. Measured (seed 670711536): the co-op pass 17.2 min against
+  ~30, 270 of 271 rows (the one fail N-229's cobble range, 8 of 10 within reach: a known flake); `nettest lan` and a single-pair subset
+  pass with the join by name.
 - **Per-case wall time:** the actions nettest prints `[nettest] <case>: N s` after each case and `[nettest] slowest cases: ...` at the end.
   The harness holds 213 fixed `time.sleep` calls totalling 702 s (~12 of the 28 minutes): the slowest cases are where to replace a sleep
   by a wait on the thing itself (`wait_log`, a polled probe).

@@ -201,6 +201,12 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **A joiner joined somebody else's host** -> every LAN host on the machine answers `MO.Session.Find`, in any order (Oct 29, two pairs:
+  'PairB' listed first, then 'PairA'), and the harness joined result 0 -> join by session name (`ue_inst.find_session`), never by index.
+- **Two nettest pairs pass alone and fail together** -> real OS input (`win_input.ps1`) needs the foreground, and the other pair's windows
+  take it back within a second; and a suite beside four game processes runs slow enough to miss timed limits -> `--pairs 2` runs the
+  real-input cases on pair 1 alone at the end, and `batch_verify` runs the suite after the nettest. (Oct 29, N-199)
+
 - **A check that spins the survivor with `set_actor_rotation` no longer turns the body** (since GASP, Oct 27) -> GASP's root offset holds
   the body's facing while she stands (orient to movement: she turns as she moves) -> measure the body itself (a bone's world rotation,
   the feet's ground spacing), not the actor's vectors; a test that needs her turned walks her (`MO.Footstep.Walk`). Measured: actor turned 180 degrees, head 24. (check_creator_bases, check_legs)

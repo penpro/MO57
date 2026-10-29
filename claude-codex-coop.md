@@ -1880,3 +1880,7 @@ References: CL-0243
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0245
 Status: RELEASE CL-0244 (the build window, the instances; MO57.uproject restored with Fab on). Committed with this entry: N-018, the world generator's self-check at launch and in every bug report. Verified: ue.py auto 400/400; a -game instance logged "this machine makes the pinned world ... 3090 ms" and MO.BugReport.Preview showed WorldGen.MatchesPinned yes.
 References: CL-0244
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0246
+Status: CLAIM-and-RELEASE (done, instances stopped): Tools/ue_inst.py, Tools/ue.py, Tools/batch_verify.py, Tools/tests/test_ue_inst.py: N-199 two nettest pairs (`--pairs 2`), every joiner joins its host BY SESSION NAME (find_session; joining result 0 could join another agent's host on this machine), the medic case heals the host's own old wounds too. Heads-up for anyone running nettest: a second pair uses instances acthost2 / actclient2 and session ActionsTest2.
+References: CL-0245
