@@ -8,6 +8,8 @@
 
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "EngineUtils.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -130,10 +132,54 @@ static bool AssignGuidToIdentityComponent(UMOIdentityComponent* IdentityComponen
     return IdentityComponent->HasValidGuid() && IdentityComponent->GetGuid() == DesiredGuid;
 }
 
+int32 UMOPersistenceSubsystem::CarryInstallFolderSaves(const FString& FromDir, const FString& ToDir)
+{
+    const FString From = FPaths::ConvertRelativePathToFull(FromDir);
+    const FString To = FPaths::ConvertRelativePathToFull(ToDir);
+    if (FPaths::IsSamePath(From, To))
+    {
+        return 0;   // the editor and a Development build save beside the game: one folder, nothing to carry
+    }
+    IFileManager& FileManager = IFileManager::Get();
+    const FString Marker = To / TEXT("CarriedFromInstallFolder.txt");
+    if (FileManager.FileExists(*Marker) || !FileManager.DirectoryExists(*From))
+    {
+        return 0;
+    }
+    TArray<FString> Found;
+    FileManager.FindFiles(Found, *(From / TEXT("*.sav")), true, false);
+    if (Found.Num() == 0)
+    {
+        return 0;   // no marker: a later build that does leave worlds there still gets them carried
+    }
+    FileManager.MakeDirectory(*To, true);
+    TArray<FString> Copied;
+    for (const FString& Name : Found)
+    {
+        if (FileManager.FileExists(*(To / Name)))
+        {
+            continue;   // a world in both keeps this build's copy
+        }
+        if (FileManager.Copy(*(To / Name), *(From / Name)) == COPY_OK)
+        {
+            Copied.Add(Name);
+        }
+        else
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] could not carry %s from %s to %s"), *Name, *From, *To);
+        }
+    }
+    FFileHelper::SaveStringToFile(FString::Printf(TEXT("Worlds copied from %s on %s:\n%s\n"), *From, *FDateTime::Now().ToString(),
+        *FString::Join(Copied, TEXT("\n"))), *Marker);
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] carried %d world(s) from the install folder (%s) to %s"), Copied.Num(), *From, *To);
+    return Copied.Num();
+}
+
 void UMOPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     RestartSessionClock();   // a world entered without ResetForNewWorld / a load still counts from here, never from 0
+    CarryInstallFolderSaves(FPaths::ProjectDir() / TEXT("Saved") / TEXT("SaveGames"), FPaths::ProjectSavedDir() / TEXT("SaveGames"));
 
     PostWorldInitHandle = FWorldDelegates::OnPostWorldInitialization.AddUObject(
         this,

@@ -67,6 +67,16 @@
   collision, woken mobs stayed throttled, possession spawns skipped component restoration): one shared "enter state X" routine called by
   both live and load paths (`code_health` pattern #1).
 
+## 1b. Where saves live, and the Oct 28 carry-over
+
+A world is one `SaveGames/<slot>.sav` under `FPaths::ProjectSavedDir()`: beside the game for the editor and a packaged Development build
+(`<install>/MO57/Saved`), the user's folder for Shipping (`%LOCALAPPDATA%/MO57/Saved`). The Steam build of Oct 17 was Development, so its
+players' worlds sit in the install folder; the Shipping build after it would not list them. `UMOPersistenceSubsystem::CarryInstallFolderSaves`
+(run in `Initialize`) copies each install-folder `.sav` the user folder lacks, never overwriting, then writes
+`CarriedFromInstallFolder.txt` beside them so it runs once (a world deleted later is not brought back); one folder (editor, Development) does
+nothing. Test `MOFramework.Persistence.CarryInstallFolderSaves`. Settings are not carried: Shipping starts with fresh ones (which also drops
+the 2560 x 1440 `GameUserSettings.ini` that the Oct 17 depot shipped, TRAPS §17).
+
 ## 2. Identity
 
 - `UMOIdentityComponent` generates / stores an FGuid per actor; `UMOIdentityRegistrySubsystem` maintains GUID -> Actor; persistence uses

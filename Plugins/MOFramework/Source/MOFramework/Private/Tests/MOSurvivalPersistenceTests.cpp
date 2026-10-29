@@ -3,6 +3,10 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "MOSurvivalStatsComponent.h"
+#include "MOPersistenceSubsystem.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "MOworldSaveGame.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -138,4 +142,35 @@ bool FMOSurvivalSavePacing::RunTest(const FString&)
 	TestEqual(TEXT("Approved thirst rate remains one full meter per game hour"), Loaded->Thirst.DecayRate, 100.0f / 3600.0f);
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCarryInstallFolderSaves, "MOFramework.Persistence.CarryInstallFolderSaves", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMOCarryInstallFolderSaves::RunTest(const FString& Parameters)
+{
+	// Oct 28: the Oct 17 Steam build was Development (worlds beside the game); the Shipping build after it saves in the user's folder.
+	IFileManager& Files = IFileManager::Get();
+	const FString Root = FPaths::ConvertRelativePathToFull(FPaths::AutomationTransientDir() / TEXT("CarrySaves"));
+	Files.DeleteDirectory(*Root, false, true);
+	const FString From = Root / TEXT("Install/SaveGames"), To = Root / TEXT("User/SaveGames");
+	FFileHelper::SaveStringToFile(TEXT("install A"), *(From / TEXT("World_A.sav")));
+	FFileHelper::SaveStringToFile(TEXT("install B"), *(From / TEXT("World_B.sav")));
+	FFileHelper::SaveStringToFile(TEXT("not a world"), *(From / TEXT("notes.txt")));
+	FFileHelper::SaveStringToFile(TEXT("user B"), *(To / TEXT("World_B.sav")));
+	FFileHelper::SaveStringToFile(TEXT("user C"), *(To / TEXT("World_C.sav")));
+
+	TestEqual(TEXT("CONTROL: the same folder (the editor, a Development build) carries nothing"), UMOPersistenceSubsystem::CarryInstallFolderSaves(From, From + TEXT("/")), 0);
+	TestEqual(TEXT("one world the user folder lacks is carried"), UMOPersistenceSubsystem::CarryInstallFolderSaves(From, To), 1);
+	FString Text;
+	TestTrue(TEXT("... World_A copied byte for byte"), FFileHelper::LoadFileToString(Text, *(To / TEXT("World_A.sav"))) && Text == TEXT("install A"));
+	TestTrue(TEXT("... a world in both keeps the user folder's copy"), FFileHelper::LoadFileToString(Text, *(To / TEXT("World_B.sav"))) && Text == TEXT("user B"));
+	TestTrue(TEXT("... the user folder's own world stays"), Files.FileExists(*(To / TEXT("World_C.sav"))));
+	TestFalse(TEXT("... only worlds (*.sav) are carried"), Files.FileExists(*(To / TEXT("notes.txt"))));
+	TestTrue(TEXT("... the install folder keeps its worlds"), Files.FileExists(*(From / TEXT("World_A.sav"))));
+	Files.Delete(*(To / TEXT("World_A.sav")));
+	FFileHelper::SaveStringToFile(TEXT("install D"), *(From / TEXT("World_D.sav")));
+	TestEqual(TEXT("once only: a world deleted later is not brought back, a new one is not carried"), UMOPersistenceSubsystem::CarryInstallFolderSaves(From, To), 0);
+	TestFalse(TEXT("... World_A stays deleted"), Files.FileExists(*(To / TEXT("World_A.sav"))));
+	Files.DeleteDirectory(*Root, false, true);
+	return true;
+}
+
 #endif

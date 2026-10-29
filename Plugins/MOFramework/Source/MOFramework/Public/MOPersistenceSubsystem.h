@@ -176,6 +176,16 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
+    /**
+     * Copy the worlds a build that saved beside the game left behind into this build's save folder, once (Oct 28). A packaged Development
+     * build saves in <install>/MO57/Saved/SaveGames; a Shipping build saves in the user's folder (%LOCALAPPDATA%/MO57/Saved/SaveGames). The
+     * Steam build of Oct 17 was Development, so its players' worlds are beside the game, and the Shipping build after it would not list them.
+     * Each .sav in FromDir that ToDir lacks is copied (never overwriting: a world in both keeps ToDir's), then a marker in ToDir
+     * (CarriedFromInstallFolder.txt, listing them) stops it running again, so a world deleted later is not brought back. The same folder
+     * (the editor, a Development build) does nothing. Returns the number of worlds copied.
+     */
+    static int32 CarryInstallFolderSaves(const FString& FromDir, const FString& ToDir);
+
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool SaveWorldToSlot(const FString& SlotName);
 

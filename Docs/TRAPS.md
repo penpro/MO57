@@ -31,6 +31,13 @@
 
 ## 2. Engine, build and C++ (UE 5.8.4 since Oct 26 15:33; it was 5.8.3)
 
+- **Every build fails "Expecting to find a type to be declared in a module rules named 'FabToolset' in 'UE5Rules'" (Oct 28)** -> the
+  Epic launcher updated the engine's Fab plugin (0.0.22, 13:11: a new editor module, FabToolset) but not the launcher engine's precompiled
+  rules assembly (`Engine/Intermediate/Build/BuildRules/UE5Rules.dll`, Oct 26, no FabToolset in its manifest), so compiling any EDITOR
+  target fails (MO57, MO_Tools, MO_WorldLab). Disabling Fab in the .uproject compiles, but never cook or run that way: MO57's FabOverrides
+  masters (M_MS_Base, _Fuzz, _Billboard, _Foliage) load `/Fab/MaterialFunctions/QMF_*` from the plugin, and without it they cook broken.
+  Package with the editor already built: `BuildCookRun ... -nocompileeditor` (the Shipping game target has no Fab modules). Until Epic
+  ships matching rules: to compile the editor, disable Fab in the .uproject for the compile only and put it back before any editor or cook.
 - **"Unable to build while Live Coding is active" with MO57's editor closed** -> another editor on the same engine is open (the MO_Tools
   lab, Oct 27): Live Coding is engine-wide, so UBT refuses every project's build while any editor of that install runs -> close it
   (`MO_PROJECT=D:/UEProjects/MO_Tools python Tools/ue.py editor stop`, after checking it holds nothing unsaved), then build. (Oct 27)
@@ -605,6 +612,11 @@
 - **A change to `UMOCharacterMovementComponent` or `AMOCharacter`'s defaults reaches every creature** (`AMOCreature` derives from
   `AMOCharacter`) -> survivor-only movement goes behind the component's `bAnimationSetMovement`, set by `AMOMetaHumanCharacter`'s
   constructor: GASP's model first leaked into the wolves and bears (instant turns, slower to speed; the bear stopped catching the host). (Oct 28)
+- **The Steam depot shipped this machine's Saved folder (Oct 17)** -> that upload was a Development build staged into
+  `D:\CurrentMO57SteamPackage\Windows64content` and run from there before the upload, so players got `MO57\Saved` with this machine's
+  `GameUserSettings.ini` (2560 x 1440 fullscreen: the Oct 28 player report), a save game and a log. A packaged Development build keeps
+  its settings and saves beside the game (Shipping: `%LOCALAPPDATA%/MO57/Saved`) -> stage fresh, never run the game from the upload
+  folder, and read the depot log's Added lines for `Saved\` before calling an upload good. (Oct 28)
 - **A Blueprint value hidden by runtime code**: the survivor Blueprint's root carried a 0.9425 scale that the look's height overwrote in
   game; removing that overwrite showed it (a 174 cm "185 cm" capsule) -> read the CDO (`unreal.get_default_object`) when a runtime value
   has no setter in code. In editor Python `get_editor_property` hands back the component's own struct: copy its numbers before a set. (Oct 28)
