@@ -58,7 +58,13 @@ game: a new base's meshes and its own groom were cooked, the heavy shape draws).
 the legs check every one.
 A new base (MO_Tools CLAUDE.md "A base"): `bake.py` and `bake_face.py` (Oct 28: the face's neck from the Creator's fit, its fullness) in the lab, `base_deps.py`, then here
 `python Tools/copy_metahuman_base.py <MH_X_Base>` (backs up what it replaces), `Content/Python/ensure_foot_ik_virtual_bones.py`,
-`make_groom_bindings.py` with `GROOMBIND_FACE` on its face, and its `+Bases` + `DirectoriesToAlwaysCook` lines.
+`Content/Python/ensure_body_jiggle.py` (the copy brings the Creator's post-process back), `make_groom_bindings.py` with `GROOMBIND_FACE` on
+its face, and its `+Bases` + `DirectoriesToAlwaysCook` lines.
+Body jiggle (Oct 28; Wes: "restore jiggle physics to the new models"): a base body's post-process AnimBP is `ABP_MO_Body_PP` (the Creator's
+`ABP_Body_PostProcess` linked in -- its correctives -- then the femme's four springs: chest and lower glutes). `python Tools/abp_body_jiggle.py
+apply` (MO57 editor up) makes and wires it (re-runnable; it lives in the gitignored MetaHumans content folder); `ensure_body_jiggle.py` puts it
+on every base body still running the Creator's; `check_body_jiggle.py` then `check_body_jiggle_result.py` (a blank map, never saved) measure
+the springs against a control (Oct 28, Jalena: the springs 5.16 cm at most, the collarbone and the control 0.00).
 `MO.Test.ClickWidget <Name> at=<0..1>` presses that far across a non-button widget (a slider takes the value there) -- only on a widget laid
 out on screen: one scrolled out of view reads "pointer click at (0, 0)" and changes nothing (the Options panel's audio rows).
 Options and the display (Oct 28): `python Tools/check_options_display.py` (borderless with a stale stored size, Options -> Apply: the display

@@ -172,6 +172,12 @@
   function in a pawn Blueprint ("self is not a Controller"); and a `find_node_types` suffix match can pick another class's variable of the
   same name (GASP's ABP has `GetLandVelocity` too) -> match the full id (`MO|Animation|...`). A property getter that `read_graph_dsl`
   prints as `(|GetbOrientRotationToMovement ...)` is written as `Class|CharacterMovementComponent|GetOrientRotationtoMovement`. (Oct 27, GASP)
+- **A Linked Anim Graph node runs the linked AnimBP with ITS OWN pin values, not the AnimBP's defaults** -> the node exposes the linked
+  AnimBP's public variables as pins, and an unconnected pin passes the pin's value (false / 0 when placed): the Creator's
+  ABP_Body_PostProcess linked into ABP_MO_Body_PP ran with Enable Body Correctives false and RigLogic LOD Threshold 0, against its CDO's
+  true / -1 -> after placing one, read the linked AnimBP's CDO and `set_pin_value` each pin to it (`Tools/abp_body_jiggle.py`). Also: a
+  placed node's `type_id` drops the palette entry's suffix (`...|ABP_Body_PostProcess-LinkedAnimGraph` places as
+  `...|ABP_Body_PostProcess`): a re-runnable script that looks for the palette id adds another node every run. (Oct 28, body jiggle)
 - **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
   cancels nothing -> read the first run's output (or MO57.log), never re-send. (Oct 25: a harmless double substrate-pin pass)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
@@ -204,6 +210,9 @@
   restores those files: applied Jun 30, Sep 22, Oct 5, Oct 15 (the 5.8.3 update), Oct 22; wiped again Oct 26 15:01 by the MetaHuman Core
   Data install. `ue.py` now re-applies them with the plugin's commandlet before the editor, a -game instance or a package
   (`ensure_voxel_shader_hooks`; packaging refuses without them: a cook would ship unhooked shaders). By hand: the popup's Settings. (Oct 26)
+  A `BuildCookRun` called directly skips that check: on Oct 28 the hooks went missing again between ~14:45 and 17:10 (cause not
+  found; present at 14:00), and a Shipping cook at 16:35 ran unchecked; re-cooked after the 17:10 re-apply. Before any direct cook:
+  `cd Tools; python -c "import ue; print(ue.voxel_hooks_missing())"` must print []. (Oct 28)
 
 - **A joiner's move that starts on a jump was pulled back** -> a movement-mode change to anything but falling clears the jump press
   (`ACharacter::OnMovementModeChanged` -> `ResetJumpState`). Done inside `DoJump` it happens BEFORE the client records the move, so the

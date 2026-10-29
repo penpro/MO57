@@ -83,6 +83,8 @@ def main():
     print(("would copy " if a.dry_run else "copied ") + a.name, counts, "backup:", backup if counts["replaced (backed up)"] else "-")
     if common_replaced:
         print("%d file(s) in /Game/MetaHumans/Common replaced: run Content/Python/ensure_foot_ik_virtual_bones.py in MO57's editor" % common_replaced)
+    if not a.dry_run:
+        print("then run Content/Python/ensure_body_jiggle.py in MO57's editor: the lab's body mesh runs the Creator's post-process, without the springs")
 
 
 if __name__ == "__main__":

@@ -1796,3 +1796,11 @@ References: CL-0223
 ### 2026-10-28 Pacific Daylight Time — CLAUDE (WorldLab side session) — CL-0227
 Status: RELEASE CL-0223's files and Docs/BACKLOG.md (CL-0226), committed with this entry: Tools/apply_worldlab_patch.py, Content/Python/terrain_surface_overrides.py + .json, the hook in upgrade_terrain_material.py, the DECISIONS / TOOLING / INDEX / BACKLOG lines. The lab itself: penpro/MO_WorldLab 261a752.
 References: CL-0223, CL-0226
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0228
+Status: CLAIM the MO57 editor, a new AnimBP /MOFramework/Characters/MetaHumans/Body/ABP_MO_Body_PP (a copy of ABP_MH_F_PP with the Creator's ABP_Body_PostProcess linked in front of its springs), and the four bases' body meshes' post-process AnimBP (Content/MetaHumans, not in git): Wes, Oct 28: "restore jiggle physics to the new models". No C++ build. RELEASE follows.
+References: CL-0225
+
+### 2026-10-28 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0229
+Status: RELEASE the MO57 editor (closed) and CL-0228's assets: ABP_MO_Body_PP made and wired (Tools/abp_body_jiggle.py), the four bases' body meshes set to it (Content/Python/ensure_body_jiggle.py; the femme keeps ABP_MH_F_PP), measured in a blank map (check_body_jiggle.py: springs 5.16 cm, control 0.00). Committed with the scripts, TOOLING / TRAPS / BACKLOG lines and copy_metahuman_base.py's reminder. Docs/STEAM_RELEASES.md and D:/CurrentMO57SteamPackage stay CLAIMED (CL-0225) until Wes's upload is recorded.
+References: CL-0228, CL-0225
