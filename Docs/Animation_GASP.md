@@ -147,7 +147,21 @@ the face.
   screen (TRAPS).
 - No free-climbing cycle in GASP; Titan's jumps, cling, mantle (another skeleton asset) and exit are not taken.
 
-## 6. Verifying
+## 6. AnimGen (5.8, experimental): not a source of new motion (checked Oct 29)
+
+Wes: "check out the new animgen example to see if we can build some animations for us to use for stuff like the bows and spears and sling
+and all the things we're currently missing". The AnimGen Example (Fab, installed Oct 29 into `Engine/Plugins/Marketplace/AnimGenExample`,
+1.9 GB) runs the experimental `AnimGen` plugin (`Engine/Plugins/Experimental/Animation/AnimGen`): a neural controller (an autoencoder plus a
+12-layer denoiser, `train_autoencoder.py` / `train_controller.py`, PyTorch through PythonMLPackages, trained in the editor) LEARNED from an
+animation database. Its controls are numbers -- a trajectory or a velocity to follow, a target to move to, a bone reaching a point
+(Trajectory Interaction), style tags over frame ranges -- with no text or prompt input. It recombines motion it was trained on; it cannot
+make a movement nobody recorded. The example's training data is four long mocap takes on the UEFN mannequin: walk and strafe, neutral and
+holding a pistol (`Civ_Loc_*`, 0.4-0.56 GB each) and one pistol shot; its trained networks (`AGC_` / `AGAE_` AnimGenCharacter / NPC) know
+exactly that. So it makes no bow draw, spear throw or sling swing. Where it could help later: a learned locomotion controller in place of
+motion matching (40-50 MB of network instead of the GASP pose database), or carry styles ("walking with a spear") once we HAVE clips of
+them. Where the missing action animations should come from is F53's sibling, F54 (DECISIONS).
+
+## 7. Verifying
 
 `python Tools/check_legs.py` (the femme and every base: standing, walking, crouched; feet and pelvis heights, screenshots in
 `Saved/Screenshots/legs/`); `python Tools/check_cliff_climb.py --side 3 [--shots DIR]` (each climbing sample names the clip on the body and

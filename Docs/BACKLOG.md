@@ -112,7 +112,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth · F53 ranged attacks (throwing, bows) with the closing circle.
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth · F53 ranged attacks (throwing, bows) with the closing circle · F54 where the action animations come from (AnimGen cannot make them).
 
 ## Collaboration dependencies and recent handoffs
 
