@@ -1952,3 +1952,7 @@ References: CL-0261
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0263
 Status: CLAIM then RELEASE (the build window, MO57's editor, -game instances -- all stopped). Committed with this entry: the early-access notice (UMOUIManagerComponent::ShowEarlyAccessNotice from the creator's Begin; UMOConfirmationBase: an empty cancel label hides the cancel button), a tutorial step per menu (ReportMenuOpened; DT_Quests rows), the fire drill first (DT Recipes MakeFireDrill: no Firemaking level, knife optional; FMOFireActions reports FuelLaid / FireLit; Tutorial_FireDrill / Tutorial_LightFire), the bow / spear hands fixed (metacarpal chains unmapped, 34 clips redone), Tools/check_onboarding.py, Tools/ue_inst.py (-NoEarlyAccessNotice for harness instances). Verified: ue.py auto 406/406; check_onboarding (notice, every menu step with its key, the drill made from nothing and the fire lit); hand close-ups.
 References: CL-0262
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0264
+Status: CLAIM then RELEASE (docs only; no editor, build or instance). Committed with this entry: DECISIONS F55 (where the crop plants come from: nothing local is a crop plant; Fab searched -- Megascans barley / wheat are atlases only, the cheap crop packs are AI-generated; recommended CropCraft Ultimate Farming, Wes's purchase) and BACKLOG N-224 pointing at it.
+References: CL-0263
