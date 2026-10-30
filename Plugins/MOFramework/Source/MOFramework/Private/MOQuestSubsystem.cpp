@@ -76,6 +76,53 @@ void UMOQuestSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Init
 // QUEST MANAGEMENT
 // ============================================================================
 
+FString UMOQuestSubsystem::StartQuestLine(FName QuestId)
+{
+	TSet<FName> Seen;
+	TFunction<FString(FName)> Line = [&](FName Id) -> FString
+	{
+		if (Seen.Contains(Id))
+		{
+			return FString();   // a prerequisite cycle in the data: walk it once
+		}
+		Seen.Add(Id);
+		if (CompletedQuests.Contains(Id))
+		{
+			return Id.ToString() + TEXT(" (done)");
+		}
+		if (ActiveQuests.Contains(Id))
+		{
+			SetQuestTracked(Id, true);
+			return Id.ToString() + TEXT(" (running)");
+		}
+		const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(Id);
+		if (!Definition)
+		{
+			return Id.ToString() + TEXT(" (no such quest)");
+		}
+		if (ArePrerequisitesMet(*Definition))
+		{
+			const bool bStarted = StartQuest(Id);
+			if (bStarted)
+			{
+				SetQuestTracked(Id, true);
+			}
+			return Id.ToString() + (bStarted ? TEXT(" (started)") : TEXT(" (could not start)"));
+		}
+		TArray<FString> Steps;
+		for (const FName& Prerequisite : Definition->Prerequisites)
+		{
+			const FString Step = Line(Prerequisite);
+			if (!Step.IsEmpty())
+			{
+				Steps.Add(Step);
+			}
+		}
+		return FString::Printf(TEXT("%s waits on: %s"), *Id.ToString(), *FString::Join(Steps, TEXT(", ")));
+	};
+	return Line(QuestId);
+}
+
 bool UMOQuestSubsystem::StartQuest(FName QuestId)
 {
 	// Check if already active

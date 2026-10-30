@@ -118,6 +118,13 @@ void AMOBuildableActor::BeginPlay()
 	{
 		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOBuildableActor::HandleInteract);
 		InteractableComponent->OnHandleSecondaryInteract.BindUObject(this, &AMOBuildableActor::HandleSecondaryInteract);
+		// An unfinished building takes its materials through its right-click menu: the reticle shows it blue (Wes, Oct 29 2026: "add materials by
+		// right clicking on a buildable while the circle is blue"). A finished one is used with the interact key (green).
+		InteractableComponent->OnQueryInteractionInput.BindWeakLambda(this, [this](const AController*)
+		{
+			const EMOBuildState State = GetBuildState();
+			return (State == EMOBuildState::Ghost || State == EMOBuildState::Paused) ? EMOInteractionInput::Secondary : EMOInteractionInput::Primary;
+		});
 	}
 
 	// ==========================================================================

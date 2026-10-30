@@ -201,6 +201,10 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **A HUD screenshot shows no reticle / no popup** -> the console's `shot` leaves the UI out: `shot showui` (Oct 29).
+- **A game-side Python probe "returned nothing"** -> it threw: `AMOCharacter`'s `bIsDead` is a PROPERTY in Python (`a.is_dead`, not
+  `a.is_dead()`); `MO.Test.SpawnCreature Wolf` finds no class (the wolf is `/MOFramework/MOBS/Wolf/Wolf.Wolf_C`, no `BP_`): pass the
+  path (Oct 29).
 - **A joiner joined somebody else's host** -> every LAN host on the machine answers `MO.Session.Find`, in any order (Oct 29, two pairs:
   'PairB' listed first, then 'PairA'), and the harness joined result 0 -> join by session name (`ue_inst.find_session`), never by index.
 - **Two nettest pairs pass alone and fail together** -> real OS input (`win_input.ps1`) needs the foreground, and the other pair's windows
@@ -613,6 +617,10 @@
 
 ## 16. AI and gameplay
 
+- **Nobody met a survivor; then none near a new camp** -> the spawn categories the game uses are the MAP's spawn settings actor
+  (`BP_SpawnController`), not `Config/DefaultGame.ini`: survivors 1800-3600 s, cap 3, 100-500 m out, 200 m from any finished building --
+  and a survivor's own campfire is a finished building. Read the live actor (`get_editor_property("survivor_config")`) before reasoning from
+  the ini. The near-player rule keeps its own 20 m (`UMOSpawnSettings::NearbySurvivorMinFromBuildingsM`). (Oct 29)
 - **A crouch press "did nothing" / a climber could not grab again** -> crouch is a TOGGLE here (`RequestCrouchToggle`): a press that is
   used for something else (letting go of a climb) must clear `bWantsToCrouch`, or the body lands crouched and a crouched body cannot jump
   or grab. (Oct 26)

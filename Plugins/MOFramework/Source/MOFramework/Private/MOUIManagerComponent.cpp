@@ -17,6 +17,11 @@
 #include "MOReticleWidget.h"
 #include "MOFPSCounterWidget.h"
 #include "MOBreathMeterWidget.h"
+#include "MOSurvivorDialogueWidget.h"
+#include "MOCreature.h"
+#include "MOCreatureDefinitionRow.h"
+#include "MOPredatorCreature.h"
+#include "MOQuestSubsystem.h"
 #include "MOStatusEffectStripWidget.h"
 #include "MOWaterSourceSettings.h"
 #include "MOWindDirectionWidget.h"
@@ -171,6 +176,12 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Meter->RemoveFromParent();
 	}
 	BreathMeterWidget.Reset();
+
+	if (UMOSurvivorDialogueWidget* Dialogue = SurvivorDialogueWidget.Get())
+	{
+		Dialogue->RemoveFromParent();
+	}
+	SurvivorDialogueWidget.Reset();
 
 	// Clean up FPS counter widget
 	if (UMOFPSCounterWidget* FPSCounter = FPSCounterWidget.Get())
@@ -2278,6 +2289,7 @@ void UMOUIManagerComponent::UpdateFocusHint()
 		{
 			CurrentFocusHintText = FText::GetEmpty();
 		}
+		UpdateReticleIntent(FMOInteractionTarget(), false, false);
 		return;
 	}
 
@@ -2352,6 +2364,7 @@ void UMOUIManagerComponent::UpdateFocusHint()
 	}
 
 	// Water before forage (the same order E uses): what the crosshair meets first is the lake, not the grass on its bed.
+	bool bWaterInReach = false;
 	if (!bFoundTarget || Target.bIsForageTarget)
 	{
 		FVector WaterPoint;
@@ -2362,8 +2375,11 @@ void UMOUIManagerComponent::UpdateFocusHint()
 		{
 			const FText Name = UMOWaterSourceSettings::GetProfile(WaterKind).DisplayName;
 			NewHintText = bWithinReach ? FText::Format(NSLOCTEXT("MO", "FocusDrink", "Drink: {0}"), Name) : Name;
+			bWaterInReach = bWithinReach;
 		}
 	}
+
+	UpdateReticleIntent(Target, bFoundTarget, bWaterInReach);
 
 	// Update the tool hint widget with what we're looking at.
 	//
@@ -2387,4 +2403,142 @@ void UMOUIManagerComponent::UpdateFocusHint()
 	{
 		EndTransientToolHint();
 	}
+}
+
+// =============================================================================
+// Reticle intent (Wes, Oct 29 2026: "green to interact or red to attack or blue when it wants a right click")
+// =============================================================================
+
+EMOReticleIntent UMOUIManagerComponent::ReticleIntentFor(bool bThreat, bool bHasTarget, bool bForageCover, bool bActorTarget, EMOInteractionInput ActorInput,
+	bool bWaterInReach)
+{
+	if (bThreat)
+	{
+		return EMOReticleIntent::Threat;
+	}
+	if (bHasTarget && !bForageCover)
+	{
+		if (!bActorTarget)
+		{
+			return EMOReticleIntent::Interact;   // an instance: a tree, a boulder, a stick or a stone to pick up
+		}
+		switch (ActorInput)
+		{
+		case EMOInteractionInput::Primary:   return EMOReticleIntent::Interact;
+		case EMOInteractionInput::Secondary: return EMOReticleIntent::Secondary;
+		default:                             return EMOReticleIntent::None;
+		}
+	}
+	// world cover forages wherever you stand: no colour for the ground, or every patch of grass would light up
+	return bWaterInReach ? EMOReticleIntent::Interact : EMOReticleIntent::None;
+}
+
+bool UMOUIManagerComponent::FindThreatUnderReticle() const
+{
+	const APlayerController* PC = ResolveOwningPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UWorld* World = GetWorld();
+	if (!Pawn || !World)
+	{
+		return false;
+	}
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	PC->GetPlayerViewPoint(ViewLocation, ViewRotation);
+
+	// The first pawn along the view (the shoulder camera sits behind the pawn: its distance is added to the reach) ...
+	const float Reach = FMath::Max(ReticleThreatRangeCm, ReticleStrikeRangeCm) + FVector::Dist(ViewLocation, Pawn->GetActorLocation());
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOReticleThreat), false, Pawn);
+	FHitResult PawnHit;
+	if (!World->SweepSingleByObjectType(PawnHit, ViewLocation, ViewLocation + ViewRotation.Vector() * Reach, FQuat::Identity,
+		FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(20.0f), Params))
+	{
+		return false;
+	}
+	const AMOCreature* Creature = Cast<AMOCreature>(PawnHit.GetActor());
+	if (!Creature || Creature->IsDead())
+	{
+		return false;
+	}
+	// ... that the player actually sees (not behind a hill or a trunk) ...
+	FHitResult Block;
+	if (World->LineTraceSingleByChannel(Block, ViewLocation, PawnHit.ImpactPoint, ECC_Visibility, Params) && Block.GetActor() != Creature
+		&& Block.Distance < PawnHit.Distance - 50.0f)
+	{
+		return false;
+	}
+	// ... a predator in range, or anything within reach of a swing.
+	const float Cm = FVector::Dist(Pawn->GetActorLocation(), Creature->GetActorLocation());
+	const FMOCreatureDefinitionRow* Row = Creature->GetCreatureDefinitionRow();
+	const bool bPredator = (Row && Row->bIsPredator) || Creature->IsA<AMOPredatorCreature>();
+	return (bPredator && Cm <= ReticleThreatRangeCm) || Cm <= ReticleStrikeRangeCm;
+}
+
+void UMOUIManagerComponent::UpdateReticleIntent(const FMOInteractionTarget& Target, bool bFoundTarget, bool bWaterInReach)
+{
+	const bool bHasTarget = bFoundTarget && Target.IsValid();
+	const bool bActorTarget = bHasTarget && !Target.bIsInstancedMeshTarget && Target.TargetActor.IsValid();
+	EMOInteractionInput ActorInput = EMOInteractionInput::Primary;
+	if (bActorTarget)
+	{
+		if (const UMOInteractableComponent* Interactable = Target.TargetActor->FindComponentByClass<UMOInteractableComponent>())
+		{
+			ActorInput = Interactable->GetInteractionInput(ResolveOwningPlayerController());
+		}
+	}
+	const EMOReticleIntent Intent = ReticleIntentFor(FindThreatUnderReticle(), bHasTarget, bHasTarget && Target.bIsForageTarget, bActorTarget, ActorInput, bWaterInReach);
+	if (UMOReticleWidget* Reticle = ReticleWidget.Get())
+	{
+		Reticle->SetReticleIntent(Intent);
+	}
+
+	// The tutorial's threat warning (Wes: "watch out! if the circle is red it means it's a threat"): ReticleThreat when the circle turns red,
+	// ReticleThreatPassed once it has not been red for 8 s. Local events on this player's quests (the circle is theirs alone).
+	UMOQuestSubsystem* Quests = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	auto Fire = [Quests](const TCHAR* EventName)
+	{
+		if (Quests && Quests->IsAnyQuestListeningForEvent(FName(EventName)))
+		{
+			Quests->FireGameEvent(FName(EventName));
+		}
+	};
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (Intent == EMOReticleIntent::Threat)
+	{
+		if (LastReticleIntent != EMOReticleIntent::Threat)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] the reticle turned red: a threat under it"));
+			Fire(TEXT("ReticleThreat"));
+		}
+		LastThreatSeconds = Now;
+		bThreatPassedPending = true;
+	}
+	else if (bThreatPassedPending && Now - LastThreatSeconds > 8.0)   // long enough to read the warning, even after a glance
+	{
+		bThreatPassedPending = false;
+		Fire(TEXT("ReticleThreatPassed"));
+	}
+	LastReticleIntent = Intent;
+}
+
+void UMOUIManagerComponent::ShowSurvivorDialogue(const FText& SpeakerName, const FText& Lines)
+{
+	UMOSurvivorDialogueWidget* Dialogue = SurvivorDialogueWidget.Get();
+	if (!Dialogue)
+	{
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (!IsValid(PlayerController) || !PlayerController->IsLocalController())
+		{
+			return;
+		}
+		Dialogue = CreateWidget<UMOSurvivorDialogueWidget>(PlayerController, UMOSurvivorDialogueWidget::StaticClass());
+		if (!Dialogue)
+		{
+			return;
+		}
+		Dialogue->AddToViewport(ReticleZOrder + 1);
+		RegisterHUDElement(Dialogue, EMOHUDElementKind::Feedback);
+		SurvivorDialogueWidget = Dialogue;
+	}
+	Dialogue->ShowLines(SpeakerName, Lines);
 }

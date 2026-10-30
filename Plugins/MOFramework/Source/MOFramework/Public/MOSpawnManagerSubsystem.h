@@ -47,6 +47,10 @@
  *   Previously used ClearEntityPersistence() which only cleared the flag,
  *   leaving recruited pawns eligible for FIFO despawn - this was a bug.
  *
+ * [2026-10-29] NOBODY MET A SURVIVOR: the survivor category alone placed one ~180 m off in the first seconds, then one per ~11 min up to
+ *   its cap, and never despawned any, so a player who left the start never came near another (Wes and a Steam player: "never seen one").
+ *   EnsureSurvivorNearEachPlayer keeps a wandering survivor with a lit fire within 200 m of every player, on each spawn check.
+ *
  * =============================================================================
  * RELATED FILES
  * =============================================================================
@@ -315,6 +319,35 @@ protected:
 	 */
 	void DestroyBeaconForRecord(FMOSpawnedEntityRecord& Record);
 
+	/**
+	 * Every player has a wandering survivor with a lit campfire within UMOSpawnSettings::NearbySurvivorRadiusM (Wes, Oct 29 2026: "always one
+	 * within 200m with the campfire going"). A survivor near the player whose fire went out gets it back (she tends it); none near -> one is
+	 * spawned for that player. Runs on each spawn check, past the category's cooldown and cap (the cap still makes room by despawning the oldest
+	 * survivor far from everyone). See MOSpawnSettings.h for why.
+	 */
+	void EnsureSurvivorNearEachPlayer();
+
+	/** A survivor for Player, NearbySurvivorSpawnMin..MaxM away (behind its view when a spot there works), on open ground, with her lit fire. */
+	APawn* SpawnSurvivorNear(APawn* Player, const FMOSpawnCategoryConfig& Config);
+
+	/** Her campfire (the record's beacon): placed if she has none (a restored survivor), lit again if it went out. Best effort: a survivor near a
+	 *  player counts whether or not this works, so a failed fire never turns into a stream of new survivors. */
+	void KeepSurvivorFireLit(int32 RecordIndex);
+
+	/** Spawn checks in a row in which a player needed a survivor and none could be placed (the log line names it once, then every 12th). */
+	int32 NearbySurvivorFailures = 0;
+
+public:
+	/** The tag on a survivor's own campfire (her beacon): it is hers, not the players' (UMORecruitmentComponent::IsBuildingStanding skips it). */
+	static const FName SurvivorBeaconTag;
+
+	/** A wandering survivor: a tracked survivor-category pawn not recruited and not dead (a quest still open counts: she is still out there). */
+	static bool IsWanderingSurvivor(const FMOSpawnedEntityRecord& Record);
+
+	/** True when Candidate lies behind a viewer at ViewLocation looking along ViewYawDeg (more than MinOffAngleDeg off the line of sight). */
+	static bool IsBehindView(const FVector& ViewLocation, float ViewYawDeg, const FVector& Candidate, float MinOffAngleDeg = 100.0f);
+
+protected:
 	float RollNewCooldown(const FMOSpawnCategoryConfig& Config) const;
 
 	/**
@@ -399,6 +432,9 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|AI|Debug")
 	void DumpFreezeState() const;
+
+	/** Log every tracked survivor ("[MOQUERY] SURVIVOR name dist=..m state=.. fire=lit|out|none") and the nearest wandering one (MO.Spawn.Survivors). */
+	void DumpSurvivors() const;
 
 	/**
 	 * Force-freeze every Prey/Predator/Ambient entity right now, ignoring

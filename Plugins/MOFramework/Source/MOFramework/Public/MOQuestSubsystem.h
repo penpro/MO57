@@ -137,6 +137,13 @@ public:
 	bool StartQuest(FName QuestId);
 
 	/**
+	 * A quest LINE: QuestId, or -- while its prerequisites are not met -- the steps it waits on, back to the first (a survivor's campfire ask:
+	 * Tutorial_BuildCampfire waits on gathering sticks and bark). Everything of the line that runs is tracked; done steps are left alone.
+	 * Returns what it did, for the log ("Tutorial_BuildCampfire waits on: Tutorial_GatherSticks (running), Tutorial_GatherBark (started)").
+	 */
+	FString StartQuestLine(FName QuestId);
+
+	/**
 	 * Abandon a quest. Removes from active list.
 	 * @param QuestId The quest to abandon
 	 * @return True if abandoned successfully

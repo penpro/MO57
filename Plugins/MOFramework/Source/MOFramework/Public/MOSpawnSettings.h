@@ -136,6 +136,40 @@ public:
 	bool bSnapBeaconToGround = true;
 
 	// ============================================================================
+	// A SURVIVOR NEAR EVERY PLAYER (Wes, Oct 29 2026: "let's make it so there's always one within 200m with the campfire going")
+	// ============================================================================
+	//
+	// The survivor category alone spawned one survivor in the first minute (~180 m off, a random direction), then one per ~11 min up to its
+	// cap, never moved them and never despawned them: a player who walked away from the start never met another ("i haven't seen one in
+	// ages", and a co-op player had never seen one). Every spawn check now makes sure each player has a wandering survivor within
+	// NearbySurvivorRadiusM whose campfire burns; if not, one is spawned NearbySurvivorSpawnMinM..MaxM away (behind the player's view when
+	// it can be), with her lit fire. UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer.
+
+	/** Keep a wandering survivor with a lit campfire near every player. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Near Players")
+	bool bKeepSurvivorNearPlayers = true;
+
+	/** The survivor counts as near within this distance of a player (meters). */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Near Players", meta = (ClampMin = "10", Units = "m"))
+	float NearbySurvivorRadiusM = 200.0f;
+
+	/** A new one is placed at least this far from every player (meters): out of the way, not popping up beside anyone. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Near Players", meta = (ClampMin = "0", Units = "m"))
+	float NearbySurvivorSpawnMinM = 80.0f;
+
+	/** ... and at most this far from the player it is for (meters; below NearbySurvivorRadiusM so she counts as near). */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Near Players", meta = (ClampMin = "10", Units = "m"))
+	float NearbySurvivorSpawnMaxM = 180.0f;
+
+	/**
+	 * ... and at least this far from any finished building (meters): not inside a camp. NOT the survivor category's MinDistanceFromStructure
+	 * (the map's spawn settings actor: 200 m, a wilderness rule): with it, a campfire the player built ruled out every spot near them, and
+	 * every survivor's own fire ruled out the ground round her (Oct 29: "no spot for one was found" for a minute beside a new campfire).
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Near Players", meta = (ClampMin = "0", Units = "m"))
+	float NearbySurvivorMinFromBuildingsM = 20.0f;
+
+	// ============================================================================
 	// DEBUG / TESTING
 	// ============================================================================
 

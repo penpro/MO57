@@ -700,6 +700,26 @@ void AMOPlayerController::ClientReportQuestEvent_Implementation(uint8 Type, FNam
 	}
 }
 
+void AMOPlayerController::ClientShowSurvivorDialogue_Implementation(const FText& SpeakerName, const FText& Lines)
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[MODialogue] %s: \"%s\""), *SpeakerName.ToString(), *Lines.ToString().Replace(TEXT("\n"), TEXT(" / ")));
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ShowSurvivorDialogue(SpeakerName, Lines);
+	}
+}
+
+void AMOPlayerController::ClientStartQuestLine_Implementation(FName QuestId)
+{
+	UMOQuestSubsystem* Quests = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (!Quests || QuestId.IsNone())
+	{
+		return;
+	}
+	// The line, not just its last step: Tutorial_BuildCampfire waits on gathering sticks and bark (Oct 29: StartQuest alone "could not start").
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOQuestSubsystem] %s asked for by a survivor: %s"), *QuestId.ToString(), *Quests->StartQuestLine(QuestId));
+}
+
 void AMOPlayerController::ClientOpenCharacterCreator_Implementation()
 {
 	if (SystemMenuUIController)
@@ -2688,6 +2708,7 @@ void AMOPlayerController::RequestShowGhostContextMenu_Implementation(AActor* Gho
 		if (AMOBuildableActor* Buildable = Cast<AMOBuildableActor>(GhostActor))
 		{
 			UIManagerComponent->ShowBuildWidget(Buildable);
+			BroadcastTutorialEvent(TEXT("OpenedGhostMenu"));   // Tutorial_BuildComplete's "add materials ... while the circle is blue" step
 		}
 	}
 }

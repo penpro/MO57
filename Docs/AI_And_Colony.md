@@ -12,7 +12,7 @@
 > `UMOSurvivorJobQueueComponent`, `UMORecruitmentComponent`, `UMOColonyManagerSubsystem` (`RunQuotaPass`, `RunHearthPass`,
 > `RunExcavationPass`, `CanRecruitByStanding`), `UMOPersonalityComponent`, `UMOCharacterHistoryComponent`, `UMOPossessionSubsystem`,
 > `UMOSpawnManagerSubsystem`. **Dev verbs:** `MO.Colony.Found|SpawnSurvivor|Recruit|PlaceBuilding|Stock|SetSkill|AssignJob|UI|SendTo|Status`,
-> `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Possess.List|Take`,
+> `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Spawn.Survivors`, `MO.Possess.List|Take`,
 > `MO.Test.SpawnCreature <Species> [DistanceCm] [SideCm]`, `MO.Test.SpawnGroup <Species> [DistanceCm]`.
 > **Tests:** `MOFramework.Colony.*` (incl. `Colony.Recruit.GateMath`, `Colony.Excavation.*`), `MOFramework.Creature.*` (hearing,
 > pursuit, footfalls) and `MOFramework.Combat.Damage.*` (fist vs vital parts, instigator, armor penetration), live gates `Content/Python/test_village_*.py`,
@@ -228,8 +228,33 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   the player's own pawn, recruits and wild survivors read "0 years" in the Characters list. Gender stays "Unknown" until F15.
 - **Recruitment** (Oct 10): `CanRecruitByStanding` judges trust built by shared game time (2 % per hour within 12 m) only for a colony
   of >= `RecruitGateMinRoster` (3); the first survivors just join. `BeginInteractionDetailed` returns an `EMORecruitmentOutcome` with
-  the numbers, and `AMOPlayerController::ClientShowNotification` tells the player why. No quest appears because no survivor has
-  `PossibleQuests` configured (a data task). MO.Colony survivors persist (recruited -> captured).
+  the numbers, and `AMOPlayerController::ClientShowNotification` tells the player why. MO.Colony survivors persist (recruited -> captured).
+- **The campfire ask and the survivor's words** (Oct 29, Wes: "'I got a fire started and that's as far as I could get.' ... 'If you can do
+  better than me I'll join your village.' and prompts the 'build a camp fire' quest line or, if it's already done have the quest complete
+  right away with like 'Ohh you already built one!?'"): every survivor now asks (`QuestChance` 1, the default `PossibleQuests` entry,
+  `EMORecruitmentQuestType::NeedsBuilding`): a campfire must stand built by the players (`IsBuildingStanding`: any complete `BuildCampfire`
+  but a survivor's own, tagged `UMOSpawnManagerSubsystem::SurvivorBeaconTag`; the world is the server's truth, so it works for a joiner
+  too). The first E: her greeting, her camp line (one of each per survivor: `GreetingLines` / `CampLines`, "Oh my god, I thought I was
+  going to be alone forever!" ...), the ask, in the dialogue popup (`Docs/UI.md` § What a survivor says), and the asked player's machine
+  starts the campfire quest LINE (`ClientStartQuestLine` -> `UMOQuestSubsystem::StartQuestLine`: `Tutorial_BuildCampfire`, or while its
+  prerequisites are not met the steps it waits on -- gathering sticks and bark -- each tracked; StartQuest alone "could not start" it).
+  Met already: "Ohh, you already built one!?" and she joins on the spot (`EMORecruitmentOutcome::QuestAlreadyMet`). Back early: the
+  reminder; back with it built: "You built one!" and she joins. The ask is for the first settlers: once the colony has
+  `RecruitGateMinRoster` (3) a stranger drops it and the trust gate decides (V2.3; she greets you and says "I don't know your people yet",
+  the notification gives the numbers). The ask's timeout (10 real hours, then she is lost) is unchanged. Test
+  `MOFramework.Colony.SurvivorDialogue`.
+- **A survivor near every player** (Oct 29, Wes: "i haven't seen one in ages and another player asked about them also saying he's never seen
+  one ... let's make it so there's always one within 200m with the campfire going"). Why none were met: the survivor category spawned one in
+  the first ~20 s (about 180 m off, a random direction: a campfire in the trees there is not seen), then one per ~11 minutes up to its cap,
+  and never moved or despawned any -- a player who walked away from the start never came near another. Now every spawn check
+  (`UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer`) makes sure each player has a wandering survivor within 200 m; one whose fire
+  went out lights it again (she tends it); none -> one is spawned 80-180 m away, behind the player's view and out of every other player's
+  where a spot allows, with her lit campfire. Past the category's cooldown and cap (at the cap the oldest survivor far from everyone goes
+  first), and with its own distance from buildings (20 m): the category's, 200 m on the map's spawn settings actor, ruled out the ground
+  round any camp -- beside a campfire the player had just built "no spot for one was found" for a minute (Oct 29). Settings
+  `UMOSpawnSettings` § Survivor Near Players (`bKeepSurvivorNearPlayers`, `NearbySurvivorRadiusM` 200, `NearbySurvivorSpawnMinM` 80 / `MaxM`
+  180, `NearbySurvivorMinFromBuildingsM` 20). Probe `MO.Spawn.Survivors`; test `MOFramework.Spawn.SurvivorNearPlayers`; in game
+  `python Tools/check_survivor_reticle.py`.
 - **Delegate tedium to pawns** is the killer feature (`Docs/ENGINEERING_PRINCIPLES.md`): every system the player can do should be
   plumbed to be pawn-assignable.
 

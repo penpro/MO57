@@ -81,9 +81,22 @@
 #include "Components/ActorComponent.h"
 #include "MOInteractableComponent.generated.h"
 
+/**
+ * The input an interactable answers to right now, as the viewer sees it: the reticle's colour (green for Primary, blue for Secondary, none
+ * for None). Wes, Oct 29 2026: "green to interact ... blue when it wants a right click".
+ */
+UENUM(BlueprintType)
+enum class EMOInteractionInput : uint8
+{
+	None		UMETA(DisplayName = "None"),			// nothing for this viewer to do here (another player's character)
+	Primary		UMETA(DisplayName = "Interact"),		// {key:InteractAction}
+	Secondary	UMETA(DisplayName = "Right-click")		// its right-click menu is the way in (an unfinished building's materials, a colonist's orders)
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInteractEvent, AActor*, InteractableActor, AController*, InteractorController);
 DECLARE_DELEGATE_RetVal_OneParam(bool, FMOHandleInteractDelegate, AController*);
 DECLARE_DELEGATE_RetVal_OneParam(bool, FMOHandleSecondaryInteractDelegate, AController*);
+DECLARE_DELEGATE_RetVal_OneParam(EMOInteractionInput, FMOQueryInteractionInputDelegate, const AController*);
 
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 
@@ -113,6 +126,19 @@ public:
 	// Event for Blueprints to react to secondary interact.
 	UPROPERTY(BlueprintAssignable, Category="MO|Interactable")
 	FMOInteractEvent OnSecondaryInteracted;
+
+	// C++ delegate for owners to say which input they answer to right now (GetInteractionInput); unbound = Primary.
+	FMOQueryInteractionInputDelegate OnQueryInteractionInput;
+
+	/** Which input this answers to for Viewer right now (the reticle's colour): None while disabled, else the owner's answer, else Primary. */
+	EMOInteractionInput GetInteractionInput(const AController* Viewer) const
+	{
+		if (!bInteractionEnabled)
+		{
+			return EMOInteractionInput::None;
+		}
+		return OnQueryInteractionInput.IsBound() ? OnQueryInteractionInput.Execute(Viewer) : EMOInteractionInput::Primary;
+	}
 
 	// Lightweight validation hook.
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")

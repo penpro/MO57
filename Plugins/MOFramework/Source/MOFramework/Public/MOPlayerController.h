@@ -759,6 +759,14 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientReportQuestEvent(uint8 Type, FName TargetId, int32 Count);
 
+	/** What a survivor says to this player (UMORecruitmentComponent::GetDialogueFor): the dialogue popup (UMOUIManagerComponent::ShowSurvivorDialogue). */
+	UFUNCTION(Client, Reliable)
+	void ClientShowSurvivorDialogue(const FText& SpeakerName, const FText& Lines);
+
+	/** A survivor's ask starts this player's quest line for it (e.g. Tutorial_BuildCampfire), unless it is already running or done on this machine. */
+	UFUNCTION(Client, Reliable)
+	void ClientStartQuestLine(FName QuestId);
+
 protected:
 	/** ServerForage: the farthest the target may be from the pawn (the ground menu traces 20 m from the camera). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Foraging")

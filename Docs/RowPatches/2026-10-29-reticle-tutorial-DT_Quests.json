@@ -1,0 +1,113 @@
+{
+ "Tutorial_InspectTree": {
+  "questId": "Tutorial_InspectTree",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_InspectTree_Name\", \"Study the Forest\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_InspectTree_Desc\", \"Understanding trees reveals their hidden potential. Each species offers different resources - some provide straight wood for tools, others yield flexible fibers or medicinal bark.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [],
+  "objectives": [
+   {
+    "ObjectiveId": "InspectTree",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_InspectTree_Obj1\", \"Inspect a tree to learn about its resources\")",
+    "Type": "Event",
+    "TargetEventOrId": "TreeInspected",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_InspectTree_HintTitle\", \"The Circle Turns Green\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_InspectTree_HintBody\", \"The circle in the middle of the screen shows what you can do. Interact with a tree (or a stick, a stone...) when the circle turns green: press {key:InteractAction} on a tree and choose Inspect.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 20,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_BuildComplete": {
+  "questId": "Tutorial_BuildComplete",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_Name\", \"Finish a Build\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_Desc\", \"Place a ghost, then add materials to start construction.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [],
+  "objectives": [
+   {
+    "ObjectiveId": "WaitForPlace",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_Obj1\", \"Place a building ghost\")",
+    "Type": "Event",
+    "TargetEventOrId": "PlacedGhost",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "",
+    "HintBody": "",
+    "bShowAsTutorialPopup": false
+   },
+   {
+    "ObjectiveId": "ExitBuild",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_Obj2\", \"Leave build mode and interact with the ghost\")",
+    "Type": "Event",
+    "TargetEventOrId": "ExitedBuildMode",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_HintTitle\", \"Add Materials and Build\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_HintBody\", \"Leave build mode with {key:CancelPlacementAction:Building}, then walk up to the ghost to add its materials.\")",
+    "bShowAsTutorialPopup": true
+   },
+   {
+    "ObjectiveId": "AddMaterials",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_Obj3\", \"Right-click the ghost to add materials\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedGhostMenu",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_HintTitle3\", \"The Circle Turns Blue\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildComplete_HintBody3\", \"Add materials by right-clicking ({key:SecondaryAction}) on a buildable while the circle is blue, then start building, or cancel.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 7,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Threat": {
+  "questId": "Tutorial_Threat",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_Name\", \"Watch Out\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_Desc\", \"A red circle means a threat.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [],
+  "objectives": [
+   {
+    "ObjectiveId": "SeeThreat",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_Obj1\", \"See the circle turn red\")",
+    "Type": "Event",
+    "TargetEventOrId": "ReticleThreat",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "",
+    "HintBody": "",
+    "bShowAsTutorialPopup": false
+   },
+   {
+    "ObjectiveId": "ThreatPassed",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_Obj2\", \"Mind the threat\")",
+    "Type": "Event",
+    "TargetEventOrId": "ReticleThreatPassed",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_HintTitle\", \"Watch Out!\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Threat_HintBody\", \"Watch out! If the circle is red, it means it's a threat. It turns red on a predator in sight, and on any animal close enough to hit ({key:PrimaryAction} attacks).\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 6,
+  "category": "Tutorial",
+  "rewards": []
+ }
+}

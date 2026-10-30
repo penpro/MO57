@@ -60,6 +60,9 @@
  *    player's screen through AMOPlayerController::ClientShowNotification. Add a new refusal reason as a new outcome, never as another `return false`.
  * 5. THE GATE AND THE FIRST SURVIVOR: UMOColonyManagerSubsystem::RecruitGateMinRoster (3) -- the standing gate only judges strangers once the colony has that many settlers; before that
  *    the survivors you meet simply join (the founder alone counted as "the colony" and made the first recruit take ~8 real hours on the real-time clock).
+ * 6. EVERY SURVIVOR ASKS (2026-10-29): the default PossibleQuests is the campfire ask (NeedsBuilding, BuildCampfire) with QuestChance 1, so the
+ *    standing gate (which only judges a survivor with no ask) no longer stands between a stranger and the first E. An ask already met at the
+ *    first meeting completes at once (QuestAlreadyMet). What they say is GetDialogueFor's, never a hand-built string at a call site.
  *
  * RELATED FILES:
  * - MOSpawnTypes.h - EMORecruitmentState, FMORecruitmentQuest
@@ -128,7 +131,8 @@ enum class EMORecruitmentOutcome : uint8
 	DeclinedStanding	UMETA(DisplayName = "Declined (standing)"),	// does not know the colony well enough yet: see Standing / StandingNeeded / HoursToPass
 	QuestStarted		UMETA(DisplayName = "Quest started"),		// the survivor asked for something; the quest is now active
 	QuestPending		UMETA(DisplayName = "Quest pending"),		// a quest is active and its requirements are not met yet
-	Recruited			UMETA(DisplayName = "Recruited")
+	Recruited			UMETA(DisplayName = "Recruited"),
+	QuestAlreadyMet		UMETA(DisplayName = "Quest already met")	// the ask was met before it was made (a campfire already built): joined on the spot
 };
 
 USTRUCT(BlueprintType)
@@ -149,8 +153,11 @@ struct MOFRAMEWORK_API FMORecruitmentResult
 	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
 	float HoursToPass = 0.0f;
 
+	/** The survivor joined the colony with this interaction. */
+	bool Joined() const { return Outcome == EMORecruitmentOutcome::Recruited || Outcome == EMORecruitmentOutcome::QuestAlreadyMet; }
+
 	/** The interaction moved the recruitment forward (quest given, or joined). */
-	bool Succeeded() const { return Outcome == EMORecruitmentOutcome::Recruited || Outcome == EMORecruitmentOutcome::QuestStarted; }
+	bool Succeeded() const { return Joined() || Outcome == EMORecruitmentOutcome::QuestStarted; }
 };
 
 /**
@@ -197,13 +204,33 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment")
 	bool bIsRecruitable = true;
 
-	/** Possible quests this survivor can have (random selection on spawn) */
+	/**
+	 * Possible quests this survivor can have (random selection on spawn). Default: build a campfire of your own (Wes, Oct 29 2026: "I got a fire
+	 * started and that's as far as I could get ... If you can do better than me I'll join your village" -- it starts the player's campfire quest
+	 * line, or, already built, she joins on the spot: "Ohh you already built one!?"). Before, no survivor had a quest: they simply joined.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment")
 	TArray<FMORecruitmentQuest> PossibleQuests;
 
 	/** Chance that this survivor requires a quest (0.0 = never, 1.0 = always) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment", meta = (ClampMin = "0", ClampMax = "1"))
-	float QuestChance = 0.5f;
+	float QuestChance = 1.0f;
+
+	/** How a survivor greets the first person they meet (one per survivor, picked at random; Wes: "Omg I thought I was going to be alone forever!"). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment|Dialogue")
+	TArray<FText> GreetingLines;
+
+	/** Where they are at (one per survivor; Wes: "I got a fire started and that's as far as I could get."). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment|Dialogue")
+	TArray<FText> CampLines;
+
+	/** Said by a survivor with no quest as they join. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment|Dialogue")
+	FText JoinLine;
+
+	/** Said by a stranger who does not trust the village yet (the standing gate; the notification gives the numbers). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment|Dialogue")
+	FText WaryLine;
 
 	// ============================================================================
 	// STATE
@@ -301,6 +328,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Recruitment")
 	FText GetQuestProgressText() const;
 
+	/**
+	 * What the survivor says for an interaction's outcome (empty: nothing to say), lines on separate rows. The first meeting: greeting, camp line,
+	 * the ask (+ "already built one" when it was met); later: the reminder or the thanks. The one place the spoken text is put together
+	 * (AMOCharacter::HandleRecruitmentInteraction sends it to the player's dialogue popup).
+	 */
+	FText GetDialogueFor(EMORecruitmentOutcome Outcome) const;
+
+	/** A building of RecipeId stands complete in World, built by players (a survivor's own camp, UMOSpawnManagerSubsystem::SurvivorBeaconTag, does not count). */
+	static bool IsBuildingStanding(UWorld* World, FName RecipeId);
+
 	// ============================================================================
 	// SAVE/LOAD
 	// ============================================================================
@@ -334,4 +371,6 @@ private:
 	bool HasRequiredItem(UMOInventoryComponent* Inventory) const;
 	bool HasRequiredSkill(UMOSkillsComponent* Skills) const;
 
+	/** Which of GreetingLines / CampLines this survivor says (rolled once, so talking twice does not change their story). */
+	int32 DialogueSeed = 0;
 };

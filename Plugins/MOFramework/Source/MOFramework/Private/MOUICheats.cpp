@@ -11,6 +11,9 @@
 //   MO.UI.TokensReload                                                                   re-read DT_UITokens
 //   MO.UI.Accessibility <colorblind 0|1> <highcontrast 0|1> <reducedmotion 0|1> <textscale 1|1.25|1.5>
 //   MO.UI.AuditClasses                                                                   list every widget-class property on the local player controller's components that is NOT assigned (a feature whose class is unset is silently skipped: the death recap was)
+//   MO.UI.Reticle                                                                        print the reticle: its intent (what the thing under it wants), colour and diameter
+//   MO.UI.ReticleAim [seconds | spread <0..1>]                                           play the closing circle over <seconds> (default 1.5), or hold a spread (0 = at rest)
+//   MO.UI.Dialogue [<speaker> <text...>]                                                 print the survivor dialogue popup (showing, speaker, lines); with arguments, show those lines
 
 #include "CoreMinimal.h"
 
@@ -27,6 +30,8 @@
 #include "MOMainMenuPlayerController.h"
 #include "MONotificationComponent.h"
 #include "MOPlayerController.h"
+#include "MOReticleWidget.h"
+#include "MOSurvivorDialogueWidget.h"
 #include "MOUITokens.h"
 
 namespace
@@ -240,6 +245,72 @@ namespace
 			Target->SetFocus();
 			const FGeometry& Geo = Target->GetCachedGeometry();
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UI Focus %s: abs pos %s size %s"), *Target->GetName(), *Geo.GetAbsolutePosition().ToString(), *Geo.GetAbsoluteSize().ToString());
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GUIReticleCmd(
+		TEXT("MO.UI.Reticle"),
+		TEXT("Dev: print the reticle's intent (what the thing under it wants), its colour and diameter."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOUIManagerComponent* UI = LocalUIManager(World);
+			const UMOReticleWidget* Reticle = UI ? UI->GetReticleWidget() : nullptr;
+			if (!Reticle)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RETICLE none (no local UI manager or no reticle)"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RETICLE intent=%s color=%s diameter=%.1f spread=%.2f visible=%d"),
+				*StaticEnum<EMOReticleIntent>()->GetNameStringByValue(static_cast<int64>(Reticle->GetReticleIntent())),
+				*Reticle->GetCurrentColor().ToFColor(true).ToHex(), Reticle->GetCurrentDiameter(), Reticle->GetAimSpread(), UI->IsReticleVisible() ? 1 : 0);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GUIReticleAimCmd(
+		TEXT("MO.UI.ReticleAim"),
+		TEXT("Dev: the closing circle. MO.UI.ReticleAim [seconds=1.5] plays it; MO.UI.ReticleAim spread <0..1> holds a spread (0 = at rest)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOUIManagerComponent* UI = LocalUIManager(World);
+			UMOReticleWidget* Reticle = UI ? UI->GetReticleWidget() : nullptr;
+			if (!Reticle)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RETICLEAIM none (no reticle)"));
+				return;
+			}
+			if (Args.Num() >= 2 && Args[0].Equals(TEXT("spread"), ESearchCase::IgnoreCase))
+			{
+				Reticle->SetAimSpread(FCString::Atof(*Args[1]));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RETICLEAIM spread %.2f diameter %.1f"), Reticle->GetAimSpread(), Reticle->GetCurrentDiameter());
+				return;
+			}
+			const float Seconds = Args.Num() > 0 ? FCString::Atof(*Args[0]) : 1.5f;
+			Reticle->PlayClosingCircle(Seconds > 0.0f ? Seconds : 1.5f);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RETICLEAIM closing over %.2f s from diameter %.1f"), Seconds, Reticle->GetCurrentDiameter());
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GUIDialogueCmd(
+		TEXT("MO.UI.Dialogue"),
+		TEXT("Dev: print the survivor dialogue popup; MO.UI.Dialogue <speaker> <text...> shows those lines (a '|' starts a new line)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOUIManagerComponent* UI = LocalUIManager(World);
+			if (!UI)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] DIALOGUE no local UI manager"));
+				return;
+			}
+			if (Args.Num() >= 2)
+			{
+				FString Text;
+				for (int32 i = 1; i < Args.Num(); ++i)
+				{
+					Text += (i > 1 ? TEXT(" ") : TEXT("")) + Args[i];
+				}
+				UI->ShowSurvivorDialogue(FText::FromString(Args[0]), FText::FromString(Text.Replace(TEXT(" | "), TEXT("\n")).Replace(TEXT("|"), TEXT("\n"))));
+			}
+			const UMOSurvivorDialogueWidget* Dialogue = UI->GetSurvivorDialogueWidget();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] DIALOGUE showing=%d speaker='%s' lines='%s'"), Dialogue && Dialogue->IsShowing() ? 1 : 0,
+				Dialogue ? *Dialogue->GetSpeakerText().ToString() : TEXT(""),
+				Dialogue ? *Dialogue->GetLinesText().ToString().Replace(TEXT("\n"), TEXT(" / ")) : TEXT(""));
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GUINotifyCmd(

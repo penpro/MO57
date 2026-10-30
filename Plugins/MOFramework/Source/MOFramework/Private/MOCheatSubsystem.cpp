@@ -7056,6 +7056,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// MO.Spawn.Survivors -- every survivor the spawn manager tracks: distance to the nearest player, recruitment state, whether her campfire burns
+	// ("[MOQUERY] SURVIVOR ..." lines, then a summary with the nearest wandering one). The check behind "always one within 200 m" (Oct 29).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Spawn.Survivors"),
+		TEXT("List the tracked survivors: distance to the nearest player, state, campfire lit. Usage: MO.Spawn.Survivors"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (const UMOSpawnManagerSubsystem* Sys = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr)
+			{
+				Sys->DumpSurvivors();
+			}
+		}),
+		ECVF_Default));
+
 	// N deer + N wolves in a ring around the player so their BTs all start
 	// ticking at once. Re-runnable — each invocation adds another batch on top.
 	// Spawns are placed via random angle + random radius between [MinR, MaxR];

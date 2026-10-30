@@ -392,6 +392,23 @@ void AMOCharacter::BeginPlay()
 	{
 		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOCharacter::HandleRecruitmentInteraction);
 	}
+	// What the reticle says on this pawn (Wes, Oct 29 2026: green to interact, blue for a right-click): a stranger to talk to is green, a colonist's
+	// orders are a right-click (E does nothing on them), and the dead, animals and other players' characters ask for nothing.
+	if (InteractableComponent && !InteractableComponent->OnQueryInteractionInput.IsBound())
+	{
+		InteractableComponent->OnQueryInteractionInput.BindWeakLambda(this, [this](const AController* Viewer)
+		{
+			if (bIsDead || (Viewer && Viewer->GetPawn() == this) || (IsPlayerControlled() && GetController() != Viewer))
+			{
+				return EMOInteractionInput::None;
+			}
+			if (!RecruitmentComponent || !RecruitmentComponent->IsRecruitable())
+			{
+				return EMOInteractionInput::None;
+			}
+			return RecruitmentComponent->IsPossessable() ? EMOInteractionInput::Secondary : EMOInteractionInput::Primary;
+		});
+	}
 	// A right-click on a pawn (another player, an unrecruited person) opens what can be done to it -- treat its wounds, light a torch from its
 	// flame -- when there is anything (IMOWorldActionProvider below). A recruited survivor's right-click is its command menu first
 	// (AMOPlayerController::HandleSecondaryAction), which lists the same options after its orders.
@@ -2801,29 +2818,46 @@ bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorControlle
 		}
 	}
 
+	// What they SAY goes to the player's dialogue popup (Wes, Oct 29 2026: "when you interact with a survivor have a dialogue pop up"); what the game
+	// tells the player (joined, refused and why) stays a notification.
+	AMOPlayerController* PlayerController = Cast<AMOPlayerController>(InteractorController);
+	const FText Spoken = RecruitmentComponent->GetDialogueFor(Result.Outcome);
+	if (PlayerController && !Spoken.IsEmpty())
+	{
+		PlayerController->ClientShowSurvivorDialogue(Name, Spoken);
+	}
+	// The ask starts the player's own quest line for it (the campfire tutorial), on their machine, unless it is already running or done there.
+	if (PlayerController && Result.Outcome == EMORecruitmentOutcome::QuestStarted && !RecruitmentComponent->ActiveQuest.PlayerQuestId.IsNone())
+	{
+		PlayerController->ClientStartQuestLine(RecruitmentComponent->ActiveQuest.PlayerQuestId);
+	}
+
 	FText Message;
 	EMONotificationType Type = EMONotificationType::Info;
 	float Duration = 5.0f;
 	switch (Result.Outcome)
 	{
 	case EMORecruitmentOutcome::Recruited:
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has been recruited!"), *GetName());
+	case EMORecruitmentOutcome::QuestAlreadyMet:
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has been recruited%s"), *GetName(),
+			Result.Outcome == EMORecruitmentOutcome::QuestAlreadyMet ? TEXT(" (the ask was already met)") : TEXT(""));
 		Message = FText::Format(NSLOCTEXT("MORecruitment", "Recruited", "{0} joins you."), Name);
 		Type = EMONotificationType::Success;
 		break;
 	case EMORecruitmentOutcome::QuestStarted:
-	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has a quest: %s"), *GetName(), *RecruitmentComponent->GetQuestProgressText().ToString());
-		const FText& Dialogue = RecruitmentComponent->ActiveQuest.QuestDialogue;
-		Message = Dialogue.IsEmpty()
-			? FText::Format(NSLOCTEXT("MORecruitment", "QuestStarted", "{0} needs help before joining you: {1}"), Name, RecruitmentComponent->GetQuestProgressText())
-			: FText::Format(NSLOCTEXT("MORecruitment", "QuestStartedDialogue", "{0}: \"{1}\""), Name, Dialogue);
-		Duration = 8.0f;
+		if (Spoken.IsEmpty())
+		{
+			Message = FText::Format(NSLOCTEXT("MORecruitment", "QuestStarted", "{0} needs help before joining you: {1}"), Name, RecruitmentComponent->GetQuestProgressText());
+			Duration = 8.0f;
+		}
 		break;
-	}
 	case EMORecruitmentOutcome::QuestPending:
-		Message = FText::Format(NSLOCTEXT("MORecruitment", "QuestPending", "{0} is still waiting for you: {1}"), Name, RecruitmentComponent->GetQuestProgressText());
-		Type = EMONotificationType::Warning;
+		if (Spoken.IsEmpty())
+		{
+			Message = FText::Format(NSLOCTEXT("MORecruitment", "QuestPending", "{0} is still waiting for you: {1}"), Name, RecruitmentComponent->GetQuestProgressText());
+			Type = EMONotificationType::Warning;
+		}
 		break;
 	case EMORecruitmentOutcome::DeclinedStanding:
 		Message = FText::Format(NSLOCTEXT("MORecruitment", "DeclinedStanding",
@@ -2839,12 +2873,9 @@ bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorControlle
 	default:
 		break;   // an animal, or someone already with you: nothing to say
 	}
-	if (!Message.IsEmpty())
+	if (!Message.IsEmpty() && PlayerController)
 	{
-		if (AMOPlayerController* PlayerController = Cast<AMOPlayerController>(InteractorController))
-		{
-			PlayerController->ClientShowNotification(Message, Duration, Type);
-		}
+		PlayerController->ClientShowNotification(Message, Duration, Type);
 	}
 
 	return Result.Succeeded();

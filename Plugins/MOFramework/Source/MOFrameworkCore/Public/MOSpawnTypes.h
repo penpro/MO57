@@ -105,7 +105,8 @@ enum class EMORecruitmentQuestType : uint8
 	NeedsMedical	UMETA(DisplayName = "Needs Medical Aid"),
 	NeedsWarmth		UMETA(DisplayName = "Needs Warmth"),
 	NeedsProtection	UMETA(DisplayName = "Needs Protection"),
-	Custom			UMETA(DisplayName = "Custom")
+	Custom			UMETA(DisplayName = "Custom"),
+	NeedsBuilding	UMETA(DisplayName = "Needs a Building")	// RequiredRecipeId stands built (Wes, Oct 29 2026: "If you can do better than me I'll join your village")
 };
 
 /**
@@ -151,6 +152,22 @@ struct MOFRAMEWORKCORE_API FMORecruitmentQuest
 	/** Dialogue shown on quest failure */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	FText FailureDialogue;
+
+	/** NeedsBuilding: a building of this recipe must stand complete, built by the players (a survivor's own camp does not count). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FName RequiredRecipeId = NAME_None;
+
+	/** The player's quest line this ask starts on the asked player's machine (unless it is already running or done), e.g. Tutorial_BuildCampfire. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FName PlayerQuestId = NAME_None;
+
+	/** Said when the ask is already met at the first meeting: the survivor joins on the spot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FText AlreadyMetDialogue;
+
+	/** Said when the player comes back before the ask is met. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FText ReminderDialogue;
 };
 
 /**

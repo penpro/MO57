@@ -92,6 +92,12 @@ D:/UEProjects/MO_WorldLab/Saved/WorldLabExport/worldlab_patch_latest.json [--dry
 Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go, and holds on at a lip with no room on
 top (N-236); host and joiner must agree; each block is faced only once the joiner's machine has it; ~6 min; an occasional run fails
 from its first jump for reasons outside the moves: N-238 -- rerun once).
+Survivors, their dialogue and the reticle (Oct 29): `python Tools/check_survivor_reticle.py [--seed 777] [--keep] [--reuse]` (one instance, a
+new world: a wandering survivor with a lit fire within 200 m at the start and again 800 m away; E on her -> the dialogue and the campfire ask,
+a campfire built -> she joins, the next one -> "already built one", the fourth with three settlers -> the trust gate; the reticle green on a
+stranger, blue on a colonist and an unfinished building, red on a wolf, white on the sky; the closing circle closes; screenshots in
+`Saved/Screenshots/reticle/`; ~10 min). Probes: `MO.Spawn.Survivors` (every tracked survivor: distance, state, fire), `MO.UI.Reticle`
+(intent, colour, diameter), `MO.UI.ReticleAim [seconds | spread 0..1]` (the closing circle), `MO.UI.Dialogue [<speaker> <text>]`.
 Traversal on the world (Oct 29): `python Tools/check_traversal_world.py [--execute] [--seed N] [--keep]` (one instance, a new world: the
 pawn set in front of the world's own rocks, cliffs and trees round the start, MO.Test.Traversal per obstacle, with `--execute` the jump
 for real and where the feet ended; it also opens the creator and reports whether plants lie between the camera and the face; ~15 min).

@@ -6,7 +6,9 @@
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOSurvivorController.h"
+#include "MOBuildableActor.h"
 #include "AIController.h"
+#include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 
 UMORecruitmentComponent::UMORecruitmentComponent()
@@ -14,12 +16,41 @@ UMORecruitmentComponent::UMORecruitmentComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickInterval = 1.0f;  // Check every second
 	SetIsReplicatedByDefault(true);
+
+	// Wes, Oct 29 2026: a dialogue when you meet a survivor ("Omg I thought I was going to be alone forever!" and variations; "I got a fire started
+	// and that's as far as I could get."), tied to the recruitment quest ("If you can do better than me I'll join your village" -> the build-a-campfire
+	// quest line, or, already built, "Ohh you already built one!?").
+	GreetingLines = {
+		NSLOCTEXT("MORecruitment", "Greeting1", "Oh my god, I thought I was going to be alone forever!"),
+		NSLOCTEXT("MORecruitment", "Greeting2", "Another person! I was starting to think I was the last one left."),
+		NSLOCTEXT("MORecruitment", "Greeting3", "You're real! I haven't seen a soul in days."),
+		NSLOCTEXT("MORecruitment", "Greeting4", "Thank god, someone else made it out here!"),
+	};
+	CampLines = {
+		NSLOCTEXT("MORecruitment", "Camp1", "I got a fire started and that's as far as I could get."),
+		NSLOCTEXT("MORecruitment", "Camp2", "This fire is all I've managed. I don't really know what I'm doing out here."),
+		NSLOCTEXT("MORecruitment", "Camp3", "I've kept this fire going, but that's about all I know how to do."),
+	};
+	JoinLine = NSLOCTEXT("MORecruitment", "JoinLine", "Mind if I come with you?");
+	WaryLine = NSLOCTEXT("MORecruitment", "WaryLine", "I don't know your people yet. Let me get to know your village before I join it.");
+
+	FMORecruitmentQuest Campfire;
+	Campfire.QuestType = EMORecruitmentQuestType::NeedsBuilding;
+	Campfire.RequiredRecipeId = TEXT("BuildCampfire");
+	Campfire.PlayerQuestId = TEXT("Tutorial_BuildCampfire");
+	Campfire.QuestDialogue = NSLOCTEXT("MORecruitment", "CampfireAsk", "If you can do better than me, I'll join your village. Show me a campfire you built.");
+	Campfire.AlreadyMetDialogue = NSLOCTEXT("MORecruitment", "CampfireAlreadyMet", "Ohh, you already built one!? Then I'm coming with you.");
+	Campfire.ReminderDialogue = NSLOCTEXT("MORecruitment", "CampfireReminder", "Got a campfire of your own going yet? Build one and I'll join your village.");
+	Campfire.SuccessDialogue = NSLOCTEXT("MORecruitment", "CampfireSuccess", "You built one! Alright, I'm coming with you.");
+	PossibleQuests.Add(Campfire);
 }
 
 void UMORecruitmentComponent::BeginPlay()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMORecruitmentComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
+
+	DialogueSeed = FMath::Rand();
 
 	// Roll for quest on spawn if we have possible quests
 	if (PossibleQuests.Num() > 0 && RecruitmentState == EMORecruitmentState::Wandering)
@@ -75,7 +106,7 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 FMORecruitmentResult UMORecruitmentComponent::BeginInteractionDetailed(APawn* InteractingPawn)
 {
 	const FMORecruitmentResult Result = ResolveInteraction(InteractingPawn);
-	if (Result.Outcome == EMORecruitmentOutcome::Recruited)
+	if (Result.Joined())
 	{
 		// The recruiting player's quests: "SurvivorRecruited" is the silent gate of Tutorial_Possession -- the possession menu is
 		// taught when there is a second pawn to possess, not at spawn (it was the first hint a new player saw, Oct 15 2026).
@@ -117,17 +148,24 @@ FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* Interact
 	// (doing someone a favor is HOW you build standing), but the immediate
 	// no-quest recruit path refuses below the threshold. ForceRecruit (dev
 	// verb) bypasses by design.
-	if (RecruitmentState == EMORecruitmentState::Wandering &&
-		ActiveQuest.QuestType == EMORecruitmentQuestType::None)
+	// The campfire ask wins the first villagers (Wes, Oct 29 2026); once the gate is active (RecruitGateMinRoster settlers) a stranger no longer
+	// asks for a fire the village has long had -- "already built one" would let every survivor met join on the spot, and one is always near
+	// (UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer) -- so a NeedsBuilding ask is dropped there and the standing gate decides.
+	if (RecruitmentState == EMORecruitmentState::Wandering)
 	{
 		if (const UWorld* World = GetWorld())
 		{
 			if (UMOColonyManagerSubsystem* Colony = World->GetSubsystem<UMOColonyManagerSubsystem>())
 			{
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
-				if (OwnerPawn)
+				const UMOColonyManagerSubsystem::FStandingGate Gate = OwnerPawn ? Colony->EvaluateRecruitGate(OwnerPawn) : UMOColonyManagerSubsystem::FStandingGate();
+				if (OwnerPawn && Gate.bGateActive && ActiveQuest.QuestType == EMORecruitmentQuestType::NeedsBuilding)
 				{
-					const UMOColonyManagerSubsystem::FStandingGate Gate = Colony->EvaluateRecruitGate(OwnerPawn);
+					UE_LOG(LogMOFramework, Warning, TEXT("[Recruitment] %s: the colony is past its first settlers: no building ask, the standing gate decides"), *GetOwner()->GetName());
+					ActiveQuest = FMORecruitmentQuest();
+				}
+				if (OwnerPawn && ActiveQuest.QuestType == EMORecruitmentQuestType::None)
+				{
 					if (Gate.bGateActive && !Gate.bPasses)
 					{
 						UE_LOG(LogMOFramework, Warning,
@@ -155,8 +193,18 @@ FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* Interact
 			QuestStartTime = FDateTime::Now();
 			NotifySpawnManagerOfInteraction();
 
-			UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] Quest started: %s, timeout: %.1f hours"),
-				*UEnum::GetValueAsString(ActiveQuest.QuestType),
+			// Met before it was asked (a campfire already stands): she joins on the spot (Wes: "if it's already done have the quest complete right
+			// away with like 'Ohh you already built one!?'").
+			if (TryCompleteQuest(InteractingPawn))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[Recruitment] %s: the ask (%s) was already met -> joined"), *GetOwner()->GetName(),
+					*UEnum::GetValueAsString(ActiveQuest.QuestType));
+				Result.Outcome = EMORecruitmentOutcome::QuestAlreadyMet;
+				return Result;
+			}
+
+			UE_LOG(LogMOFramework, Warning, TEXT("[Recruitment] %s: quest started: %s (recipe %s), timeout: %.1f hours"), *GetOwner()->GetName(),
+				*UEnum::GetValueAsString(ActiveQuest.QuestType), *ActiveQuest.RequiredRecipeId.ToString(),
 				ActiveQuest.TimeoutSeconds / 3600.0f);
 
 			Result.Outcome = EMORecruitmentOutcome::QuestStarted;
@@ -315,6 +363,9 @@ FText UMORecruitmentComponent::GetQuestProgressText() const
 	case EMORecruitmentQuestType::NeedsProtection:
 		QuestTypeName = NSLOCTEXT("MORecruitment", "NeedsProtection", "Needs Protection");
 		break;
+	case EMORecruitmentQuestType::NeedsBuilding:
+		QuestTypeName = NSLOCTEXT("MORecruitment", "NeedsBuilding", "Wants to see what you can build");
+		break;
 	default:
 		QuestTypeName = NSLOCTEXT("MORecruitment", "UnknownQuest", "Unknown Quest");
 		break;
@@ -398,6 +449,12 @@ bool UMORecruitmentComponent::CheckQuestRequirements(APawn* InteractingPawn, boo
 	UMOInventoryComponent* Inventory = InteractingPawn->FindComponentByClass<UMOInventoryComponent>();
 	UMOSkillsComponent* Skills = InteractingPawn->FindComponentByClass<UMOSkillsComponent>();
 
+	// Check building requirement (first: nothing is consumed if it fails)
+	if (!ActiveQuest.RequiredRecipeId.IsNone() && !IsBuildingStanding(GetWorld(), ActiveQuest.RequiredRecipeId))
+	{
+		return false;
+	}
+
 	// Check item requirement
 	if (!ActiveQuest.RequiredItemId.IsNone())
 	{
@@ -449,6 +506,73 @@ bool UMORecruitmentComponent::HasRequiredSkill(UMOSkillsComponent* Skills) const
 
 	const int32 CurrentLevel = Skills->GetSkillLevel(ActiveQuest.RequiredSkillId);
 	return CurrentLevel >= ActiveQuest.RequiredSkillLevel;
+}
+
+bool UMORecruitmentComponent::IsBuildingStanding(UWorld* World, FName RecipeId)
+{
+	if (!World || RecipeId.IsNone())
+	{
+		return false;
+	}
+	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+	{
+		if (It->GetRecipeId() == RecipeId && It->IsComplete() && !It->ActorHasTag(UMOSpawnManagerSubsystem::SurvivorBeaconTag))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FText UMORecruitmentComponent::GetDialogueFor(EMORecruitmentOutcome Outcome) const
+{
+	auto Pick = [this](const TArray<FText>& Lines, int32 Salt) -> FText
+	{
+		return Lines.Num() > 0 ? Lines[static_cast<uint32>(DialogueSeed + Salt) % static_cast<uint32>(Lines.Num())] : FText::GetEmpty();
+	};
+	TArray<FText> Said;
+	auto Say = [&Said](const FText& Line)
+	{
+		if (!Line.IsEmpty())
+		{
+			Said.Add(Line);
+		}
+	};
+
+	switch (Outcome)
+	{
+	case EMORecruitmentOutcome::QuestStarted:
+	case EMORecruitmentOutcome::QuestAlreadyMet:
+		Say(Pick(GreetingLines, 0));
+		Say(Pick(CampLines, 7));
+		Say(ActiveQuest.QuestDialogue);
+		if (Outcome == EMORecruitmentOutcome::QuestAlreadyMet)
+		{
+			Say(ActiveQuest.AlreadyMetDialogue);
+		}
+		break;
+	case EMORecruitmentOutcome::QuestPending:
+		Say(ActiveQuest.ReminderDialogue.IsEmpty() ? ActiveQuest.QuestDialogue : ActiveQuest.ReminderDialogue);
+		break;
+	case EMORecruitmentOutcome::Recruited:
+		if (ActiveQuest.QuestType == EMORecruitmentQuestType::None)
+		{
+			Say(Pick(GreetingLines, 0));   // no ask: the first meeting is the joining
+			Say(JoinLine);
+		}
+		else
+		{
+			Say(ActiveQuest.SuccessDialogue);
+		}
+		break;
+	case EMORecruitmentOutcome::DeclinedStanding:
+		Say(Pick(GreetingLines, 0));   // still glad to see someone; the notification gives the numbers
+		Say(WaryLine);
+		break;
+	default:
+		break;   // the rest is the notification's to explain
+	}
+	return FText::Join(FText::FromString(TEXT("\n")), Said);
 }
 
 // ============================================================================

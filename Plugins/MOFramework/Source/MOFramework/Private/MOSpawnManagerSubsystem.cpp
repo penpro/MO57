@@ -28,6 +28,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 
+const FName UMOSpawnManagerSubsystem::SurvivorBeaconTag(TEXT("MO_SurvivorBeacon"));
+
 static TAutoConsoleVariable<float> CVarSpawnFrameBudgetMs(TEXT("mo.Spawn.FrameBudgetMs"), 6.0f,
 	TEXT("Game-thread ms one spawn tick may spend spawning (at least one spawn per tick); the rest of a group finishes on the next ticks. 0 = no budget."), ECVF_Default);
 
@@ -246,6 +248,7 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
 	ProcessAllCategories();
+	EnsureSurvivorNearEachPlayer();
 }
 
 void UMOSpawnManagerSubsystem::RequestSpawnAssetPreload()
@@ -1884,7 +1887,7 @@ void UMOSpawnManagerSubsystem::MaybeSpawnSurvivorBeacon(int32 RecordIndex)
 	}
 
 	// Tag for runtime introspection / debug overlays / late-find cleanup.
-	Beacon->Tags.AddUnique(TEXT("MO_SurvivorBeacon"));
+	Beacon->Tags.AddUnique(SurvivorBeaconTag);
 
 	Record.BeaconActor = Beacon;
 
@@ -1928,4 +1931,213 @@ void UMOSpawnManagerSubsystem::DestroyBeaconForRecord(FMOSpawnedEntityRecord& Re
 		Beacon->Destroy();
 	}
 	Record.BeaconActor.Reset();
+}
+
+// ============================================================================
+// A SURVIVOR NEAR EVERY PLAYER
+// ============================================================================
+
+bool UMOSpawnManagerSubsystem::IsWanderingSurvivor(const FMOSpawnedEntityRecord& Record)
+{
+	if (Record.Category != EMOSpawnCategory::Survivor || !Record.IsValid())
+	{
+		return false;
+	}
+	const APawn* Pawn = Record.SpawnedPawn.Get();
+	if (const AMOCharacter* Character = Cast<AMOCharacter>(Pawn); Character && Character->IsDead())
+	{
+		return false;
+	}
+	const UMORecruitmentComponent* Recruitment = Pawn->FindComponentByClass<UMORecruitmentComponent>();
+	return !Recruitment || (!Recruitment->IsPossessable() && Recruitment->RecruitmentState != EMORecruitmentState::Dead);
+}
+
+bool UMOSpawnManagerSubsystem::IsBehindView(const FVector& ViewLocation, float ViewYawDeg, const FVector& Candidate, float MinOffAngleDeg)
+{
+	const FVector2D ToCandidate = FVector2D(Candidate - ViewLocation).GetSafeNormal();
+	if (ToCandidate.IsNearlyZero())
+	{
+		return false;
+	}
+	const float YawRad = FMath::DegreesToRadians(ViewYawDeg);
+	const FVector2D Forward(FMath::Cos(YawRad), FMath::Sin(YawRad));
+	return FVector2D::DotProduct(Forward, ToCandidate) < FMath::Cos(FMath::DegreesToRadians(MinOffAngleDeg));
+}
+
+void UMOSpawnManagerSubsystem::KeepSurvivorFireLit(int32 RecordIndex)
+{
+	if (!SpawnedEntities.IsValidIndex(RecordIndex))
+	{
+		return;
+	}
+	if (!IsValid(SpawnedEntities[RecordIndex].BeaconActor.Get()))
+	{
+		MaybeSpawnSurvivorBeacon(RecordIndex);   // a survivor restored from a save comes back without one (the beacon is transient)
+		if (IsValid(SpawnedEntities[RecordIndex].BeaconActor.Get()))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] %s had no campfire: she has one again"), *GetNameSafe(SpawnedEntities[RecordIndex].SpawnedPawn.Get()));
+		}
+	}
+	AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(SpawnedEntities[RecordIndex].BeaconActor.Get());
+	if (Station && !Station->IsStationActive())
+	{
+		// Put out by someone: she tends her fire. The same lighting MaybeSpawnSurvivorBeacon does (her fire burns without fuel).
+		Station->bRequiresFuel = false;
+		Station->CurrentFuel = Station->MaxFuel;
+		Station->SetStationActive(true);
+		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] %s's campfire was out: she lit it again"), *GetNameSafe(SpawnedEntities[RecordIndex].SpawnedPawn.Get()));
+	}
+}
+
+APawn* UMOSpawnManagerSubsystem::SpawnSurvivorNear(APawn* Player, const FMOSpawnCategoryConfig& Config)
+{
+	const UMOSpawnSettings* Settings = UMOSpawnSettings::GetSpawnSettings();
+	if (!Player || !Settings)
+	{
+		return nullptr;
+	}
+
+	// Room under the cap: the oldest survivor far from every player goes (DespawnOldest keeps the ones talked to and anyone within the minimum
+	// despawn distance of a player). With none that far she is spawned anyway: this rule stands above the cap.
+	if (GetSpawnedCount(EMOSpawnCategory::Survivor) >= Config.MaxSpawnedCount)
+	{
+		DespawnOldest(EMOSpawnCategory::Survivor);
+	}
+
+	// Its own distance from buildings: the category's (a wilderness rule, 200 m on the map) ruled out the ground round any camp (MOSpawnSettings.h).
+	FMOSpawnCategoryConfig NearConfig = Config;
+	NearConfig.MinDistanceFromStructure = Settings->NearbySurvivorMinFromBuildingsM;
+
+	const float MinCm = Settings->NearbySurvivorSpawnMinM * 100.0f;
+	const float MaxCm = FMath::Max(MinCm + 1000.0f, Settings->NearbySurvivorSpawnMaxM * 100.0f);
+	const FVector From = Player->GetActorLocation();
+	const float ViewYaw = Player->GetViewRotation().Yaw;
+	const TArray<APawn*> Players = GetPlayerPawns();
+	constexpr int32 Attempts = 24;
+	for (int32 Attempt = 0; Attempt < Attempts; ++Attempt)
+	{
+		// Two thirds of the tries behind the player's view and out of every other player's (she should not pop up where someone looks), then anywhere.
+		const bool bOutOfView = Attempt < Attempts * 2 / 3;
+		const float Yaw = bOutOfView ? ViewYaw + 180.0f + FMath::FRandRange(-70.0f, 70.0f) : FMath::FRandRange(0.0f, 360.0f);
+		const FVector Near = From + FRotator(0.0f, Yaw, 0.0f).Vector() * FMath::FRandRange(MinCm, MaxCm);
+
+		float NearestPlayerCm = 0.0f;
+		GetNearestPlayerPawn(Near, NearestPlayerCm);
+		if (NearestPlayerCm < MinCm)
+		{
+			continue;
+		}
+		if (bOutOfView)
+		{
+			bool bSeen = false;
+			for (const APawn* Other : Players)
+			{
+				if (Other != Player && FVector::Dist(Other->GetActorLocation(), Near) < 2.0f * MaxCm
+					&& !IsBehindView(Other->GetActorLocation(), Other->GetViewRotation().Yaw, Near, 70.0f))
+				{
+					bSeen = true;
+					break;
+				}
+			}
+			if (bSeen)
+			{
+				continue;
+			}
+		}
+		// 10 m from any other spawned pawn (the category's own separation is half its spawn distance: hundreds of metres).
+		if (APawn* Survivor = SpawnOnGround(Near, NearConfig, TEXT("near a player"), 1000.0f))
+		{
+			return Survivor;
+		}
+	}
+	return nullptr;
+}
+
+void UMOSpawnManagerSubsystem::DumpSurvivors() const
+{
+	int32 Count = 0;
+	float NearestWanderingM = -1.0f;
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		if (Record.Category != EMOSpawnCategory::Survivor || !Record.IsValid())
+		{
+			continue;
+		}
+		++Count;
+		float Cm = 0.0f;
+		GetNearestPlayerPawn(Record.SpawnedPawn->GetActorLocation(), Cm);
+		const UMORecruitmentComponent* Recruitment = Record.SpawnedPawn->FindComponentByClass<UMORecruitmentComponent>();
+		const AMOCraftingStationActor* Fire = Cast<AMOCraftingStationActor>(Record.BeaconActor.Get());
+		const bool bWandering = IsWanderingSurvivor(Record);
+		if (bWandering && (NearestWanderingM < 0.0f || Cm / 100.0f < NearestWanderingM))
+		{
+			NearestWanderingM = Cm / 100.0f;
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SURVIVOR %s dist=%.0fm state=%s wandering=%d fire=%s"), *Record.SpawnedPawn->GetName(), Cm / 100.0f,
+			Recruitment ? *StaticEnum<EMORecruitmentState>()->GetNameStringByValue(static_cast<int64>(Recruitment->RecruitmentState)) : TEXT("?"),
+			bWandering ? 1 : 0, Fire ? (Fire->IsStationActive() ? TEXT("lit") : TEXT("out")) : TEXT("none"));
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SURVIVORS tracked=%d nearest_wandering=%.0fm"), Count, NearestWanderingM);
+}
+
+void UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer()
+{
+	const UMOSpawnSettings* Settings = UMOSpawnSettings::GetSpawnSettings();
+	if (!Settings || !Settings->bKeepSurvivorNearPlayers || !CanSpawn())
+	{
+		return;
+	}
+	const FMOSpawnCategoryConfig Config = GetCategoryConfig(EMOSpawnCategory::Survivor);
+	if (!Config.bEnabled || Config.SpawnableClasses.Num() == 0)
+	{
+		return;
+	}
+
+	const float RadiusCm = Settings->NearbySurvivorRadiusM * 100.0f;
+	bool bAnyMissing = false;
+	for (APawn* Player : GetPlayerPawns())
+	{
+		int32 NearestIndex = INDEX_NONE;
+		float NearestCm = RadiusCm;
+		for (int32 i = 0; i < SpawnedEntities.Num(); ++i)
+		{
+			if (IsWanderingSurvivor(SpawnedEntities[i]))
+			{
+				const float Cm = FVector::Dist(SpawnedEntities[i].SpawnedPawn->GetActorLocation(), Player->GetActorLocation());
+				if (Cm <= NearestCm)
+				{
+					NearestCm = Cm;
+					NearestIndex = i;
+				}
+			}
+		}
+		if (NearestIndex != INDEX_NONE)
+		{
+			KeepSurvivorFireLit(NearestIndex);
+			continue;
+		}
+		if (IsSpawnBudgetSpent())
+		{
+			return;   // this tick spent its spawn time: the next check places her
+		}
+		if (APawn* Survivor = SpawnSurvivorNear(Player, Config))
+		{
+			++SpawnsThisTick;
+			const AMOCraftingStationActor* Fire = Cast<AMOCraftingStationActor>(SpawnedEntities.Last().BeaconActor.Get());
+			UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] No survivor within %.0f m of %s: %s spawned %.0f m away, her campfire %s"),
+				Settings->NearbySurvivorRadiusM, *Player->GetName(), *Survivor->GetName(),
+				FVector::Dist(Survivor->GetActorLocation(), Player->GetActorLocation()) / 100.0f,
+				Fire ? (Fire->IsStationActive() ? TEXT("lit") : TEXT("NOT lit")) : TEXT("missing"));
+			NearbySurvivorFailures = 0;
+		}
+		else
+		{
+			bAnyMissing = true;
+		}
+	}
+	if (bAnyMissing && NearbySurvivorFailures++ % 12 == 0)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] A player has no survivor within %.0f m and no spot for one was found (check %d in a row): trying again"),
+			Settings->NearbySurvivorRadiusM, NearbySurvivorFailures);
+	}
 }

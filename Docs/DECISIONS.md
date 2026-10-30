@@ -51,6 +51,7 @@
 | F48 | Fat and small pelts from carcasses | Bear, boar and pig fat has no item (`AnimalFat01`: tallow -- lamps, cooking, waterproofing, soap), and the rabbit gives a whole `AnimalHide01`. **A** add `AnimalFat01` and a small pelt item (rabbit, fox) through `PROGRESSION_ROADMAP.md`; **B** leave the yields as they are. **Recommended: A** | `D:\ClaudeMeetClaude\inbox-for-darkside\2026-10-26-animals.md`, `Docs/AI_And_Colony.md` §1, `Docs/PROGRESSION_ROADMAP.md` | Oct 27 |
 | F49 | What a Creator base wears | Lillian (and every base from the 5.8 Creator) wears briefs only: in game she is topless. The femme's grey top and shorts are part of her body asset (MH_F_1), and the starting clothing items are inventory, not drawn. **A** dress each base in the Creator's wardrobe (an outfit built with it) and carry the body shapes onto the outfit (`TransferBodyMorphs`, the neck seam's tool, with a wider reach) so it follows weight; **B** a top painted into the base's body texture, like the femme's; **C** leave it until clothing items draw meshes. **Recommended: A** -- it is the Creator's own path and the shapes already carry over | BACKLOG N-226, `Docs/DECISIONS.md` 2026-10-27 | Oct 27 |
 | F50 | Where the survivor's traversal and locomotion animations come from (N-218; Wes Oct 27: "good ones with climb and vault and all that") | Surveyed Oct 27 (web): **A** Epic's free Game Animation Sample (Fab; updated for 5.7: +400 animations, the Mover plugin, slides, smart objects): motion-matched locomotion, vault / mantle / hurdle traversal, every MetaHuman body type, retargeted to a MetaHuman through its `ABP_GenericRetarget` -- no ledge hang / shimmy / free climb; **B** A plus a paid climbing set on the UE5 mannequin skeleton, retargeted like our crouch and swim sets: Motionbeats' Action Adventure Ledge Climbing (153), Hanging Climbs (119), Ladder Climbing (86), or the Ultimate Adventure Animation Pack (~1,800, traversal and climbing); **C** keep stand-in poses. **Recommended: A now**, then B's ledge set if free climbing should look right. **DECIDED A, Oct 27** (Wes: "the game animation sample looks great"; "im creating the game animation project now"); B stays open (a purchase) | BACKLOG N-218, `Docs/Movement_And_Traversal.md` | Oct 27 |
+| F53 | Ranged attacks: throwing and bows (Wes Oct 29: "we can also use the circle for aiming with projectiles with a 'closing circle' method for aiming before firing etc") | Nothing fires a projectile today: DT_Weapons gives `ThrowingStone01`, the spears and `Atlatl01` a Throw attack and the three bows a Ranged one, but no code throws or shoots, and a right-click with nothing interactable under the reticle opens the forage menu, so there is no aim input either. The closing circle is built and waits for it (`UMOReticleWidget::PlayClosingCircle` / `SetAimSpread`). **A** build it: hold right-click with a throwable or a bow in hand to aim (the circle opens and closes as the aim steadies: faster with the weapon's skill, wider while moving, tiring with a drawn bow), left-click throws / looses where the circle points (the shot lands inside the circle), a real projectile (gravity, drag) that wounds what it hits through the medical system and lands where it can be picked up (arrows, spears, stones); right-click on something interactable in reach still opens its menu; **B** throwing only first (stones, spears), bows later; **C** later. **Recommended: A** | `Docs/UI.md` § the reticle, `Plugins/MOFramework/Content/Data/Weapons_JSON.json` (stale mirror; DT_Weapons is live) | Oct 29 |
 | F23 | Rejected Steam art | `SteamArt/` (~15 MB LFS, pushed): delete only if Wes says so | `SteamArt/README.md` | Oct 13 |
 
 ## Answered 2026-10-17 (knowledge consolidation; Wes's words)
@@ -70,6 +71,30 @@
 ## Decisions, newest first
 
 ### 2026-10-29
+- **A survivor with a lit campfire within 200 m of every player** (Wes: "take a look at the survivor spawning code, i haven't seen one in ages
+  and another player asked about them also saying he's never seen one ... let's make it so there's always one within 200m with the campfire
+  going"). Built: `UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer` (`Docs/AI_And_Colony.md` § A survivor near every player). Claude's
+  calls, noted: per player in co-op; placed 80-180 m away, behind the player's view where a spot allows (she should not pop up in sight);
+  above the survivor category's cap (at the cap the oldest survivor far from everyone, not talked to, goes first); a fire put out is lit
+  again by her; a recruited one no longer counts, so the next one comes.
+- **A survivor speaks, and asks for a campfire** (Wes: "when you interact with a survivor have a dialogue pop up to the effect of 'Omg I
+  thought I was going to be alone forever!' and variations ... 'I got a fire started and that's as far as I could get.' and have some tie ins
+  for the recruitment quests like 'If you can do better than me I'll join your village.' and prompts the 'build a camp fire' quest line or, if
+  it's already done have the quest complete right away with like 'Ohh you already built one!?'"). Built: the dialogue popup
+  (`UMOSurvivorDialogueWidget`), four greetings and three camp lines, the campfire ask (`NeedsBuilding`), `Tutorial_BuildCampfire` started on
+  the asked player's machine, "Ohh, you already built one!?" joins on the spot (`Docs/AI_And_Colony.md` § The campfire ask). Claude's calls,
+  noted: the popup takes no input and fades after the reading time (it never stops play); "already built" = any complete campfire built by
+  the players, the world's truth (a joiner's quest log lives on their machine); the ask is for the first settlers only -- once the colony has
+  three (the V2.3 trust gate's size) a stranger no longer asks for a fire and the trust gate decides, or every survivor met would join at
+  once and one is always near.
+- **The reticle is a small circle coloured by what a click does** (Wes: "change the target reticle out to a small circle centered instead of
+  the goofy crosshairs we currently have and make it so the circle changes colors based on context with what it's looking at, like green to
+  interact or red to attack or blue when it wants a right click"; the tutorial: "interact with a tree (or whatever) when the circle turns
+  green", "add materials by right clicking on a buildable while the circle is blue", "watch out! if the circle is red it means it's a
+  threat"). Built: `Docs/UI.md` § the reticle. Claude's calls, noted: red = a predator within 60 m in sight, or any animal within 4 m (a
+  swing's reach: "red to attack"); blue = an unfinished building or a colonist (E does nothing on a colonist); grass stays white (it
+  forages anywhere); the theme's severity colours (colour-blind mode applies); the threat warning shows the first time the circle turns red
+  and goes once it has been clear 8 s. The closing circle is built; firing it is F53.
 - **Climbing is animated with Titan Climbing's animations, our own movement** (Wes: "can we use the hanging/grabbing animation for climbing
   instead of them just walking up the cliff"; of the free Titan Climbing plugin: "yeah i just want the animations, we can probably reuse the
   hand/foot IK rigging to follow the cliff? that doesn't really need a server state, just the character's actual location needs to be server

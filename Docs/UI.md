@@ -327,6 +327,38 @@ call `SetSelectedItem` (an empty slot clears it).
 grams under a kilogram, else kilograms to a tenth; the panel carries the label) beside the turntable (`WBP_MOItemPreview`), a rule, the description
 wrapping under it. The old grid read "Weight: Weight: 1" and ran the description past the panel (N-180). Test `MOFramework.UI.ItemWeight.ReadsAsAWeight`.
 
+### HUD: the reticle is a circle that says what a click does (Oct 29)
+Wes: "change the target reticle out to a small circle centered instead of the goofy crosshairs ... green to interact or red to attack or blue
+when it wants a right click". `UMOReticleWidget` draws a 12 px ring (an outline-only rounded-box brush rounded at half its height: a circle at
+any size, no texture) over a 1 px darker edge (`color.hud.outline`). Its colour is an `EMOReticleIntent`, decided ONCE per focus update
+(`UMOUIManagerComponent::UpdateFocusHint`, every 0.1 s, was 0.2) by `ReticleIntentFor` from the focus hint's own trace:
+- **red** (`color.severity.critical`): a living predator under it within 60 m of the pawn, or any animal within 4 m (a swing reaches it;
+  `FindThreatUnderReticle`: a pawn sweep along the view, then a sight line, so not through a hill or a trunk);
+- **green** (`color.severity.ok`): an instance (a tree, a boulder, a stick to pick up), water in reach, or an actor whose interactable
+  answers to the interact key;
+- **blue** (`color.severity.info`): an actor whose way in is its right-click menu -- an unfinished building (its materials) or a colonist
+  (its orders: E does nothing on them);
+- **white** (`color.text.primary`): nothing, grass (it forages anywhere: colouring it would light up the whole ground), another player.
+What an actor answers to is the actor's own say: `UMOInteractableComponent::GetInteractionInput(Viewer)` (`EMOInteractionInput`; owners bind
+`OnQueryInteractionInput`: `AMOBuildableActor` Secondary while Ghost / Paused, `AMOCharacter` Primary for a stranger, Secondary for a colonist,
+None for the dead, animals and other players). A new kind of interactable that wants the right-click binds that delegate; nothing in the UI
+changes. Colour and size are Slate attributes read every frame: setting them never rebuilds the widget (the crosshair rebuilt its tree per change).
+The **closing circle** (Wes: "a 'closing circle' method for aiming before firing"): `SetAimSpread(0..1)` widens the ring to 72 px,
+`PlayClosingCircle(Seconds)` opens it and closes it onto the mark (fast, then settling). Nothing fires a projectile yet (F53): `MO.UI.ReticleAim`
+shows it. The tutorial teaches the colours (DT_Quests, `Docs/RowPatches/2026-10-29-reticle-tutorial-DT_Quests.json`): "Study the Forest" is
+now a popup ("Interact with a tree (or a stick, a stone...) when the circle turns green"), "Finish a Build" gained "Add materials by
+right-clicking on a buildable while the circle is blue" (completes on `OpenedGhostMenu`), and the new "Watch Out" (`Tutorial_Threat`) waits
+silently for the circle's first red (`ReticleThreat`) and shows "Watch out! If the circle is red, it means it's a threat" until it has been
+clear for 8 s (`ReticleThreatPassed`: 4 s let a glance hide it before it could be read). Probes: `MO.UI.Reticle` (intent, colour, diameter). Tests `MOFramework.UI.ReticleIntent`,
+`MOFramework.UI.ReticleClosingCircle`; in game `python Tools/check_survivor_reticle.py`.
+
+### HUD: what a survivor says (Oct 29)
+Wes: "when you interact with a survivor have a dialogue pop up". `UMOSurvivorDialogueWidget` (C++-built like the breath meter: the HUD plate,
+the speaker in `body.strong` accent, the lines in `type.body`, 760 px wide, 270 px above the bottom): up at once, held for as long as the
+lines take to read (`ReadSeconds`: 2.5 s + 55 ms a character, 4-16 s), then a slow fade. It takes no input and pauses nothing. The server
+composes the words (`UMORecruitmentComponent::GetDialogueFor`) and sends them with `AMOPlayerController::ClientShowSurvivorDialogue`; what the
+game says about it (joined, refused and why) stays a notification. `MO.UI.Dialogue [<speaker> <text>]` prints or shows it.
+
 ### HUD: breath meter
 `UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state. Since Oct 23 (BR23-17, "breath meter is hard to read"): 56 x 18 segments (were 36 x 10), the label in `body.strong` / primary text; the colours are unchanged (calm blue, warning, critical red: `MOFramework.Water.BreathMeter`).
 

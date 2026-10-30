@@ -1,37 +1,42 @@
 /**
  * =============================================================================
- * MOReticleWidget.h - HUD Crosshair/Reticle Display
+ * MOReticleWidget.h - HUD Reticle: a small centred circle that tells what a click will do
  * =============================================================================
  *
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Simple reticle/crosshair widget for targeting. Uses Slate SConstraintCanvas
- * for custom drawing of crosshair lines and center dot. Can be subclassed in
- * Blueprint for custom designs.
+ * The aim point. Wes, Oct 29 2026: "change the target reticle out to a small circle centered instead of the goofy crosshairs ... make it so the
+ * circle changes colors based on context with what it's looking at, like green to interact or red to attack or blue when it wants a right click".
+ * A thin ring (a rounded-box brush, no texture) with a dark edge so it reads on snow and on sky. Its colour is an EMOReticleIntent, decided ONCE
+ * per focus update by UMOUIManagerComponent::ResolveReticleIntent (the focus hint's own trace); the widget only displays it.
  *
- * CUSTOMIZATION:
- * - ReticleColor: Line and dot color
- * - ReticleSize: Distance from center to line ends
- * - ReticleThickness: Line width in pixels
- * - ReticleGap: Space between center and line start
- * - CenterDotSize: Size of optional center dot
+ * CLOSING CIRCLE: SetAimSpread(0..1) widens the ring (0 = at rest, 1 = AimMaxDiameter), so an aim that steadies can be shown closing in
+ * (Wes: "we can also use the circle for aiming with projectiles with a 'closing circle' method for aiming before firing"). Nothing fires a
+ * projectile yet (Docs/DECISIONS.md, F53): MO.UI.ReticleAim shows it.
+ *
+ * COLOURS (theme tokens, so colour-blind / high-contrast modes apply):
+ * - None      -> color.text.primary  (white)
+ * - Interact  -> color.severity.ok   (green: {key:InteractAction} does something here)
+ * - Secondary -> color.severity.info (blue: a right-click menu is the way in, e.g. adding materials to a building)
+ * - Threat    -> color.severity.critical (red: a predator, or an animal within reach of a swing)
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] SLATE REBUILD: RebuildReticle() is called when properties change.
- *   The widget uses RebuildWidget() override for Slate construction.
+ * [2026-10-29] NO REBUILD PER CHANGE: colour and size are Slate attributes bound to this widget's members, so SetReticleIntent / SetAimSpread
+ *   cost nothing and never flicker. The old crosshair rebuilt its whole Slate tree for every property change.
  *
- * [2024-02] PROPERTY CHANGES: SetReticleX functions modify properties and
- *   call RebuildReticle(). Changes are immediate but may cause flicker if
- *   called frequently.
+ * [2026-10-29] A TINT NEVER COLOURS A RING: a rounded box's outline is drawn in the brush's own outline colour; an SImage's ColorAndOpacity
+ *   reaches only the fill. The first build drew a white ring while MO.UI.Reticle reported green / blue / red (found in screenshots, not by
+ *   the probe). The ring is SMOReticleRing (MOReticleWidget.cpp), which builds its brush in the colour of the moment on each paint.
+ *   MO.UI.Reticle reports what the widget was TOLD; only a screenshot shows what it drew.
  *
  * =============================================================================
- * RELATED FILES: MOPlayerController.h (adds to viewport)
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOUIManagerComponent.h (creates it, resolves the intent), MOPlayerController.h
+ * LAST UPDATED: 2026-10-29
  * =============================================================================
  */
 
@@ -39,74 +44,89 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Styling/SlateBrush.h"
 #include "MOReticleWidget.generated.h"
 
-class SConstraintCanvas;
+/** What the thing under the reticle wants from the player (the ring's colour). */
+UENUM(BlueprintType)
+enum class EMOReticleIntent : uint8
+{
+	None		UMETA(DisplayName = "Nothing"),
+	Interact	UMETA(DisplayName = "Interact"),		// green
+	Secondary	UMETA(DisplayName = "Right-click"),		// blue
+	Threat		UMETA(DisplayName = "Threat")			// red
+};
 
-/**
- * Simple reticle/crosshair widget for targeting.
- * Can be used as-is for a basic crosshair or subclassed in Blueprint for custom designs.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOReticleWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
-	/** Set the reticle color. */
+	/** Colour the ring for what is under it. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
-	void SetReticleColor(FLinearColor InColor);
+	void SetReticleIntent(EMOReticleIntent InIntent) { Intent = InIntent; }
 
-	/** Set the reticle size (width and height of the crosshair). */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
-	void SetReticleSize(float InSize);
+	UFUNCTION(BlueprintPure, Category="MO|UI|Reticle")
+	EMOReticleIntent GetReticleIntent() const { return Intent; }
 
-	/** Set the thickness of the crosshair lines. */
+	/** The closing circle: 0 = the ring at rest, 1 = AimMaxDiameter (an unsteady aim). Stops a PlayClosingCircle. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
-	void SetReticleThickness(float InThickness);
+	void SetAimSpread(float InSpread01) { AimSpread = FMath::Clamp(InSpread01, 0.0f, 1.0f); ClosingSeconds = 0.0f; }
 
-	/** Set the gap in the center of the crosshair. */
+	/** The ring opens wide and closes to rest over Seconds, easing in as it settles: an aim steadying (MO.UI.ReticleAim shows it). */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
-	void SetReticleGap(float InGap);
+	void PlayClosingCircle(float Seconds);
 
-	/** Show or hide the center dot. */
+	/** The spread now (a closing circle's progress, or the spread set). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Reticle")
+	float GetAimSpread() const;
+
+	/** A closing circle's spread Elapsed seconds into a close of Seconds: 1 -> 0, fast at first and settling (pure; tested). */
+	static float ClosingSpread(float Elapsed, float Seconds);
+
+	/** The ring's diameter in pixels right now. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Reticle")
+	float GetCurrentDiameter() const { return FMath::Lerp(ReticleDiameter, AimMaxDiameter, GetAimSpread()); }
+
+	/** Pin one colour (ignores the intent) until ClearReticleColor. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
-	void SetShowCenterDot(bool bShow);
+	void SetReticleColor(FLinearColor InColor) { PinnedColor = InColor; bColorPinned = true; }
+
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
+	void ClearReticleColor() { bColorPinned = false; }
+
+	/** The ring's resting diameter (pixels). */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Reticle")
+	void SetReticleSize(float InDiameter) { ReticleDiameter = FMath::Max(4.0f, InDiameter); }
+
+	/** The colour an intent shows (the theme's token for it). */
+	static FLinearColor ColorForIntent(EMOReticleIntent InIntent);
+
+	/** The colour the ring has now. */
+	FLinearColor GetCurrentColor() const { return bColorPinned ? PinnedColor : ColorForIntent(Intent); }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 
-	/** Color of the reticle. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle")
-	FLinearColor ReticleColor = FLinearColor::White;
+	/** The ring's diameter at rest (pixels). Small: an aim point, not a target box. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="4.0"))
+	float ReticleDiameter = 12.0f;
 
-	/** The reticle takes color.text.primary from the theme tokens; SetReticleColor (or this off) pins ReticleColor instead. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle")
-	bool bUseThemeColor = true;
+	/** The ring's diameter at a full aim spread (pixels): the closing circle starts here. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="4.0"))
+	float AimMaxDiameter = 72.0f;
 
-	/** Total size of the crosshair (distance from center to end of line). */
+	/** The ring's line width (pixels); the dark edge adds one pixel on each side. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="1.0"))
-	float ReticleSize = 10.0f;
-
-	/** Thickness of the crosshair lines. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="1.0"))
-	float ReticleThickness = 2.0f;
-
-	/** Gap in the center (space between center and start of lines). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="0.0"))
-	float ReticleGap = 3.0f;
-
-	/** Whether to show a dot in the center. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle")
-	bool bShowCenterDot = true;
-
-	/** Size of the center dot. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="1.0"))
-	float CenterDotSize = 2.0f;
+	float RingWidth = 2.0f;
 
 private:
-	void RebuildReticle();
-
-	TSharedPtr<SConstraintCanvas> RootCanvas;
+	EMOReticleIntent Intent = EMOReticleIntent::None;
+	float AimSpread = 0.0f;
+	double ClosingStartSeconds = 0.0;   // FPlatformTime::Seconds() at PlayClosingCircle
+	float ClosingSeconds = 0.0f;        // > 0 while a closing circle plays
+	FLinearColor PinnedColor = FLinearColor::White;
+	bool bColorPinned = false;
 };

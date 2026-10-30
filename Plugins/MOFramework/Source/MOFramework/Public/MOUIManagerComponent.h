@@ -34,6 +34,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOInteractorComponent.h"
+#include "MOInteractableComponent.h"
+#include "MOReticleWidget.h"
 #include "MOHUDMode.h"
 #include "MOUIManagerComponent.generated.h"
 
@@ -270,6 +272,23 @@ public:
 	/** Get the reticle widget (may be null if not created yet). */
 	UFUNCTION(BlueprintPure, Category="MO|UI")
 	UMOReticleWidget* GetReticleWidget() const;
+
+	/**
+	 * The reticle's colour for what the focus trace found: the one rule (MOFramework.UI.ReticleIntent). A threat wins; then a target's own input
+	 * (UMOInteractableComponent::GetInteractionInput: an unfinished building or a colonist is a right-click, a stranger or a finished building the
+	 * interact key, another player's character nothing); an instance (a tree, a stick) and water in reach are the interact key; world cover
+	 * (grass, which forages anywhere) and empty air are nothing.
+	 */
+	static EMOReticleIntent ReticleIntentFor(bool bThreat, bool bHasTarget, bool bForageCover, bool bActorTarget, EMOInteractionInput ActorInput, bool bWaterInReach);
+
+	/** A living animal under the reticle that is a threat: a predator within ReticleThreatRangeCm of the pawn, or any animal within ReticleStrikeRangeCm (a swing). */
+	bool FindThreatUnderReticle() const;
+
+	/** What a survivor says (AMOPlayerController::ClientShowSurvivorDialogue): the dialogue popup, on screen for as long as it takes to read. */
+	void ShowSurvivorDialogue(const FText& SpeakerName, const FText& Lines);
+
+	/** The dialogue popup (null until the first survivor speaks). */
+	class UMOSurvivorDialogueWidget* GetSurvivorDialogueWidget() const { return SurvivorDialogueWidget.Get(); }
 
 	// --- HUD mode (F1: Full -> Minimal -> Off; MOHUDMode.h) ---
 
@@ -1005,9 +1024,30 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FocusHint", meta=(AllowPrivateAccess="true"))
 	bool bFocusHintEnabled = true;
 
-	/** Update interval for focus hint line trace (in seconds). */
+	/** Update interval for focus hint line trace (in seconds). The reticle's colour follows it: 0.1 so the circle turns as the view sweeps over things. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FocusHint", meta=(AllowPrivateAccess="true", ClampMin="0.05", ClampMax="1.0"))
-	float FocusHintUpdateInterval = 0.2f;
+	float FocusHintUpdateInterval = 0.1f;
+
+	/** A predator this close to the pawn (cm) under the reticle turns it red: a threat. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(AllowPrivateAccess="true", ClampMin="0"))
+	float ReticleThreatRangeCm = 6000.0f;
+
+	/** Any animal this close to the pawn (cm) under the reticle turns it red: within reach of a swing, a click attacks it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(AllowPrivateAccess="true", ClampMin="0"))
+	float ReticleStrikeRangeCm = 400.0f;
+
+	/** The intent the reticle showed last (the tutorial's threat events fire when it changes). */
+	EMOReticleIntent LastReticleIntent = EMOReticleIntent::None;
+
+	/** When the reticle last showed a threat (game seconds; < 0 never). ReticleThreatPassed fires a few seconds after it ends. */
+	double LastThreatSeconds = -1.0;
+	bool bThreatPassedPending = false;
+
+	/** Set the reticle's colour from this focus update and fire the tutorial's ReticleThreat / ReticleThreatPassed events. */
+	void UpdateReticleIntent(const FMOInteractionTarget& Target, bool bFoundTarget, bool bWaterInReach);
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class UMOSurvivorDialogueWidget> SurvivorDialogueWidget;
 
 	/** Timer handle for focus hint updates. */
 	FTimerHandle FocusHintTimerHandle;
