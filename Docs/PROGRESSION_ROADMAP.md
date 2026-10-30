@@ -59,7 +59,10 @@ world with today's gates).
 ### Era 0: the first hour (BUILT)
 - **Water:** drink from lakes / rivers / the sea (salt dehydrates; untreated water can make you ill), fill a bark container,
   boil with heated stones (20 min) or in a pot over the fire (12 min). `Docs/Water_And_Illness.md`.
-- **Fire:** campfire (BuildCampfire, T1) on deadwood; friction fire (hand drill: a hazel rod + a dry branch; later the bow drill);
+- **Fire:** campfire (BuildCampfire, T1) on deadwood; friction fire: the fire drill (MakeFireDrill: a straight branch + a dry branch,
+  learned by inspecting a dry branch; no Firemaking level since Oct 29 and the knife only halves its notching time -- Wes: "prioritize
+  building a wood drill too so we can actually start the fire": it was Firemaking 2 and a knife, which a new player could not reach), the
+  first thing the tutorial has you make; without it two dry branches twirled by hand; later the bow drill;
   carry fire with a torch (MakeTorch, T2). Fuel: Branch01, Firewood01, Charcoal01, Stick01 (green wood burns once laid, 32a87e46; it is refused only as the drill).
 - **Food:** forage roots / mushrooms / berries / nuts; deer carcass parts (RawMeat01 -> CookMeat).
 - **Shelter:** BuildLeanTo, stick walls / floors / roofs (T1).

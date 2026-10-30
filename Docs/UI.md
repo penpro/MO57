@@ -181,6 +181,20 @@ Test `MOFramework.Input.GamepadLook.StickTurnsTheView`.
   `MOFramework.Quest.TutorialHint.FreshGameStartsWithMovement` reads the live DT_Quests.
 - Its first step, "Open the build menu" (event `OpenedBuildMenu`), fires when the B key OPENS the menu (`AMOPlayerController::HandleBuild`; Oct 19:
   only entering placement fired it, so the tracker sat at 0/1 with the menu open). Entering placement still fires it.
+- **A tutorial step for every menu** (Oct 29, Wes: "add a 'open the game menu by pressing tab' to the tutorial quests ... make sure there's
+  a tutorial quest for every menu"): after the movement steps, in order, each a popup naming its key -- the game menu (Tab / Esc: save, load,
+  options, the bug report), inventory, status, skills, journal, crafting, build (`Tutorial_GameMenu` .. `Tutorial_BuildMenu`, sort 8-14, each
+  the previous one's prerequisite; `Docs/RowPatches/2026-10-29-menus-and-fire-tutorial-DT_Quests.json`). Each completes on its menu's
+  "Opened..." event, fired from the one place each menu opens (`UMOUIManagerComponent::ReportMenuOpened` in its Toggle; `OpenedGameMenu` from
+  `ToggleInGameMenu`). Possession keeps its own step (gated on the first recruit). Then the fire, drill first: Study the Forest (green
+  circle), **A Fire Drill** (inspect a dry branch -> make the drill; `Docs/PROGRESSION_ROADMAP.md`: no Firemaking level since Oct 29), Build a
+  Campfire (now waits on the drill), **Light the Fire** (lay fuel -> `FuelLaid`; light it -> `FireLit`, from `FMOFireActions`). Checked by
+  `python Tools/check_onboarding.py`.
+- **The early-access notice** (Oct 29, Wes: "add a little notice screen at the beginning of every new game ... 'This is an early access game still
+  in development. Please report all bugs via the bug report menu (press tab).'"): `UMOUIManagerComponent::ShowEarlyAccessNotice`, called by
+  the character creator's Begin (a new world's survivor, host or joiner), on the confirmation dialog with one button ("Got it": an empty cancel
+  label now collapses the cancel button, `UMOConfirmationBase::Configure`); the game menu's key is read from the bindings. Test instances
+  pass `-NoEarlyAccessNotice` (`Tools/ue_inst.py`, unless `notice=True`): a modal holds every injected game key.
 - **An item objective may name a kind of item** (Oct 19): `ItemPickup` / `ItemCraft` / `ItemDrop` match the item id OR one of the item
   definition's `Tags` (`UMOQuestSubsystem::ProcessEventForObjectives`). "Collect Fallen Branches" targets `Stick` (Stick01 green branch, Stick02
   stripped branch -- the ground has both; only Stick01 counted before) and "Harvest Bark" targets `Bark` (Bark01, BirchBark01, OakBark01).

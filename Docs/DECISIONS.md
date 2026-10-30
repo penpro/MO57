@@ -72,6 +72,18 @@
 ## Decisions, newest first
 
 ### 2026-10-29
+- **The fire drill comes first** (Wes: "prioritize building a wood drill too so we can actually start the fire"). MakeFireDrill (a straight
+  branch + a dry branch) needed Firemaking 2 and a knife (flint flakes need Stoneworking 3): a new player could not make it, and nothing taught
+  the improvised two-branch hand drill. Now: no Firemaking level, the knife optional (without one, cutting the notch takes twice as long),
+  still learned by inspecting a dry branch; the tutorial has you make it before the campfire, then lay fuel and light it
+  (`Docs/PROGRESSION_ROADMAP.md` Era 0, `Docs/RowPatches/2026-10-29-fire-drill-first-Recipes.json`). Claude's calls, noted: the knife kept as
+  a speed-up rather than dropped; the odds of lighting (F33) unchanged.
+- **An early-access notice opens every new game; a tutorial step for every menu** (Wes: "add a little notice screen at the beginning of every
+  new game ... 'This is an early access game still in development. Please report all bugs via the bug report menu (press tab).' and also add
+  a 'open the game menu by pressing tab' to the tutorial quests ... make sure there's a tutorial quest for every menu"). `Docs/UI.md` § 3.
+  Claude's calls, noted: the notice says where the Bug Report button is (in the game menu); it shows after the character creator (also for a
+  joiner new to the world), one button; the menu steps run in order after the movement steps (game menu, inventory, status, skills, journal,
+  crafting, build).
 - **A survivor with a lit campfire within 200 m of every player** (Wes: "take a look at the survivor spawning code, i haven't seen one in ages
   and another player asked about them also saying he's never seen one ... let's make it so there's always one within 200m with the campfire
   going"). Built: `UMOSpawnManagerSubsystem::EnsureSurvivorNearEachPlayer` (`Docs/AI_And_Colony.md` § A survivor near every player). Claude's

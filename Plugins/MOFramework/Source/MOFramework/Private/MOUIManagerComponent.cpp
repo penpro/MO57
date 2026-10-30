@@ -22,6 +22,7 @@
 #include "MOCreatureDefinitionRow.h"
 #include "MOPredatorCreature.h"
 #include "MOQuestSubsystem.h"
+#include "MOInputHintFormatter.h"
 #include "MOStatusEffectStripWidget.h"
 #include "MOWaterSourceSettings.h"
 #include "MOWindDirectionWidget.h"
@@ -263,6 +264,7 @@ void UMOUIManagerComponent::ToggleInventoryMenu()
 	{
 		InvController->ToggleInventoryMenu();
 	}
+	ReportMenuOpened(TEXT("OpenedInventory"), IsInventoryMenuOpen());
 }
 
 void UMOUIManagerComponent::OpenInventoryMenu()
@@ -537,6 +539,7 @@ void UMOUIManagerComponent::TogglePlayerStatus()
 	{
 		CharController->TogglePlayerStatus();
 	}
+	ReportMenuOpened(TEXT("OpenedStatus"), IsPlayerStatusVisible());
 }
 
 UMOStatusPanel* UMOUIManagerComponent::GetStatusPanel() const
@@ -759,6 +762,7 @@ void UMOUIManagerComponent::ToggleCraftingMenu()
 	{
 		CraftController->ToggleCraftingMenu();
 	}
+	ReportMenuOpened(TEXT("OpenedCrafting"), IsCraftingMenuOpen());
 }
 
 void UMOUIManagerComponent::OpenCraftingMenu()
@@ -805,6 +809,7 @@ void UMOUIManagerComponent::ToggleSkillsPanel()
 	{
 		CharController->ToggleSkillsPanel();
 	}
+	ReportMenuOpened(TEXT("OpenedSkills"), IsSkillsPanelOpen());
 }
 
 void UMOUIManagerComponent::OpenSkillsPanel()
@@ -851,6 +856,7 @@ void UMOUIManagerComponent::ToggleQuestLog()
 	{
 		QuestController->ToggleQuestLog();
 	}
+	ReportMenuOpened(TEXT("OpenedJournal"), IsQuestLogOpen());
 }
 
 void UMOUIManagerComponent::OpenQuestLog()
@@ -925,6 +931,7 @@ void UMOUIManagerComponent::ToggleInGameMenu()
 	{
 		SysController->ToggleInGameMenu();
 	}
+	ReportMenuOpened(TEXT("OpenedGameMenu"), IsInGameMenuOpen());
 }
 
 void UMOUIManagerComponent::OpenInGameMenu()
@@ -990,6 +997,37 @@ void UMOUIManagerComponent::ShowConfirmationDialog(const FText& Title, const FTe
 	if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
 	{
 		SysController->ShowConfirmationDialog(Title, Message, ConfirmText, CancelText);
+	}
+}
+
+void UMOUIManagerComponent::ShowEarlyAccessNotice()
+{
+	// Wes, Oct 29 2026: "add a little notice screen at the beginning of every new game ... 'This is an early access game still in development.
+	// Please report all bugs via the bug report menu (press tab).'" A one-button notice (no cancel label) on the modal layer: the game menu's
+	// key is read from the bindings, so a rebound key still reads right. Test instances skip it (-NoEarlyAccessNotice, Tools/ue_inst.py).
+	if (FParse::Param(FCommandLine::Get(), TEXT("NoEarlyAccessNotice")) || !IsLocalOwningPlayerController())
+	{
+		return;
+	}
+	const FText Message = FMOInputHintFormatter::Format(NSLOCTEXT("MOUI", "EarlyAccessNotice",
+		"This is an early access game still in development.\n\nPlease report all bugs via the bug report menu (press {key:BackMenuAction:1} for the game menu, then Bug Report)."),
+		ResolveOwningPlayerController());
+	ShowConfirmationDialog(NSLOCTEXT("MOUI", "EarlyAccessTitle", "Early Access"), Message, NSLOCTEXT("MOUI", "EarlyAccessOk", "Got it"), FText::GetEmpty());
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] early-access notice shown: %s"), *Message.ToString().Replace(TEXT("\n"), TEXT(" ")));
+}
+
+void UMOUIManagerComponent::ReportMenuOpened(const TCHAR* EventName, bool bOpenNow)
+{
+	// The tutorial's "open the X menu" steps (Wes, Oct 29: "make sure there's a tutorial quest for every menu"): one event per menu, from the one
+	// place each opens. Quests live on this player's machine (UMOQuestSubsystem is per game instance).
+	if (!bOpenNow)
+	{
+		return;
+	}
+	UMOQuestSubsystem* Quests = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (Quests && Quests->IsAnyQuestListeningForEvent(FName(EventName)))
+	{
+		Quests->FireGameEvent(FName(EventName));
 	}
 }
 

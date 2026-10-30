@@ -1,4 +1,5 @@
 #include "MOFireActions.h"
+#include "MOQuestSubsystem.h"
 #include "MOBodySex.h"
 #include "HAL/IConsoleManager.h"
 #include "MOCarriedLightComponent.h"
@@ -343,6 +344,7 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				{
 					S->SetStationActive(true);
 					Notify(P, LOCTEXT("CaughtFromFlame", "The kindling catches from the flame."), EMONotificationType::Success);
+					UMOQuestSubsystem::ReportForActor(P, EMOObjectiveType::Event, FName(TEXT("FireLit")), 1);
 				}
 				else
 				{
@@ -380,6 +382,8 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				if (Taken > 0)
 				{
 					Inv->RemoveItemByDefinitionId(FuelItem, Taken);
+					// The tutorial's "lay fuel on the campfire" step (Tutorial_LightFire, Oct 29), on the layer's machine.
+					UMOQuestSubsystem::ReportForActor(WeakPawn.Get(), EMOObjectiveType::Event, FName(TEXT("FuelLaid")), 1);
 				}
 				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s laid %d x %s on %s: fuel %.0f / %.0f"), *GetNameSafe(WeakPawn.Get()), Taken, *FuelItem.ToString(), *S->GetName(),
 					S->CurrentFuel, S->MaxFuel);
@@ -434,6 +438,8 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				{
 					S->SetStationActive(true);
 					Notify(P, LOCTEXT("Caught", "An ember -- the tinder catches and the fire takes."), EMONotificationType::Success);
+					// The tutorial's "light it" step (Tutorial_LightFire, Oct 29); a carried flame reports it too.
+					UMOQuestSubsystem::ReportForActor(P, EMOObjectiveType::Event, FName(TEXT("FireLit")), 1);
 				}
 				else
 				{

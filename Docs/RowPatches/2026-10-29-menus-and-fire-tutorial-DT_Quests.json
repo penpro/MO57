@@ -1,0 +1,298 @@
+{
+ "Tutorial_GameMenu": {
+  "questId": "Tutorial_GameMenu",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_GameMenu_Name\", \"The Game Menu\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_GameMenu_Desc\", \"Open the game menu.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_View"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_GameMenu_Open_Desc\", \"Open the game menu\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedGameMenu",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_GameMenu_Open_HintTitle\", \"The Game Menu\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_GameMenu_Open_HintBody\", \"Open the game menu by pressing {key:BackMenuAction:1}: save, load, options, and the bug report (please report every bug you find) are there.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 8,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Inventory": {
+  "questId": "Tutorial_Inventory",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Inventory_Name\", \"Your Pack\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Inventory_Desc\", \"Look at what you carry.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_GameMenu"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Inventory_Open_Desc\", \"Open your inventory\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedInventory",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Inventory_Open_HintTitle\", \"Your Pack\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Inventory_Open_HintBody\", \"Press {key:InventoryAction} to open your inventory: what you carry and what you wear. Right-click an item for what you can do with it.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 9,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Status": {
+  "questId": "Tutorial_Status",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Status_Name\", \"Your Body\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Status_Desc\", \"Check on your body.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_Inventory"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Status_Open_Desc\", \"Open your status\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedStatus",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Status_Open_HintTitle\", \"Your Body\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Status_Open_HintBody\", \"Press {key:PlayerStatusAction} to see your body: health, hunger, thirst, warmth and wounds.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 10,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Skills": {
+  "questId": "Tutorial_Skills",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Skills_Name\", \"Skills\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Skills_Desc\", \"See what you know.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_Status"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Skills_Open_Desc\", \"Open your skills\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedSkills",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Skills_Open_HintTitle\", \"Skills\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Skills_Open_HintBody\", \"Press {key:SkillsAction} to see your skills and what you have learned. You get better at what you do.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 11,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Journal": {
+  "questId": "Tutorial_Journal",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Journal_Name\", \"Your Journal\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Journal_Desc\", \"Read your journal.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_Skills"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Journal_Open_Desc\", \"Open your journal\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedJournal",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Journal_Open_HintTitle\", \"Your Journal\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Journal_Open_HintBody\", \"Press {key:JournalAction} to open your journal: your quests and what each one needs.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 12,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_Crafting": {
+  "questId": "Tutorial_Crafting",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_Crafting_Name\", \"Crafting\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_Crafting_Desc\", \"See what you can make.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_Journal"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_Crafting_Open_Desc\", \"Open crafting\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedCrafting",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_Crafting_Open_HintTitle\", \"Crafting\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_Crafting_Open_HintBody\", \"Press {key:CraftAction} to see what you can make from what you carry.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 13,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_BuildMenu": {
+  "questId": "Tutorial_BuildMenu",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildMenu_Name\", \"Building\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildMenu_Desc\", \"Open the build menu.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_Crafting"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "Open",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildMenu_Open_Desc\", \"Open the build menu\")",
+    "Type": "Event",
+    "TargetEventOrId": "OpenedBuildMenu",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildMenu_Open_HintTitle\", \"Building\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildMenu_Open_HintBody\", \"Press {key:BuildAction} to open the build menu: pick a building, place it, then add its materials.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 14,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_FireDrill": {
+  "questId": "Tutorial_FireDrill",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_Name\", \"A Fire Drill\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_Desc\", \"A fire starts with a drill: make one.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_InspectTree"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "InspectBranch",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_InspectBranch_Desc\", \"Inspect a dry branch\")",
+    "Type": "Event",
+    "TargetEventOrId": "Inspected_Branch01",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_InspectBranch_HintTitle\", \"A Fire Drill\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_InspectBranch_HintBody\", \"Fire starts with a drill. Pick up a dry branch (deadwood under the trees), then right-click it in your inventory ({key:InventoryAction}) and choose Inspect.\")",
+    "bShowAsTutorialPopup": true
+   },
+   {
+    "ObjectiveId": "MakeDrill",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_MakeDrill_Desc\", \"Make a fire drill\")",
+    "Type": "ItemCraft",
+    "TargetEventOrId": "FireDrill01",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_MakeDrill_HintTitle\", \"Make a Fire Drill\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_FireDrill_MakeDrill_HintBody\", \"Open crafting ({key:CraftAction}) and make a Fire Drill from a straight branch and a dry branch. A knife cuts its notch faster.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 35,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_BuildCampfire": {
+  "questId": "Tutorial_BuildCampfire",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildCampfire_Name\", \"Build a Campfire\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildCampfire_Desc\", \"Fire was humanity\\'s first great discovery. A campfire provides warmth, light, protection from predators, and the ability to cook food - transforming survival.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_GatherSticks",
+   "Tutorial_GatherBark",
+   "Tutorial_FireDrill"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "BuildFire",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildCampfire_Obj1\", \"Construct a campfire\")",
+    "Type": "ItemCraft",
+    "TargetEventOrId": "BuildCampfire",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": false,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildCampfire_HintTitle\", \"Build a Campfire\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_BuildCampfire_HintBody\", \"Open the build menu ({key:BuildAction}), pick Campfire, place it, then add its materials.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 50,
+  "category": "Tutorial",
+  "rewards": []
+ },
+ "Tutorial_LightFire": {
+  "questId": "Tutorial_LightFire",
+  "displayName": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_Name\", \"Light the Fire\")",
+  "description": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_Desc\", \"Lay fuel on your campfire and light it.\")",
+  "bIsTutorial": true,
+  "bAutoStart": true,
+  "prerequisites": [
+   "Tutorial_BuildCampfire"
+  ],
+  "objectives": [
+   {
+    "ObjectiveId": "LayFuel",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_LayFuel_Desc\", \"Lay fuel on the campfire\")",
+    "Type": "Event",
+    "TargetEventOrId": "FuelLaid",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_LayFuel_HintTitle\", \"Fuel the Fire\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_LayFuel_HintBody\", \"Right-click the campfire ({key:SecondaryAction}) and lay branches or firewood on it.\")",
+    "bShowAsTutorialPopup": true
+   },
+   {
+    "ObjectiveId": "Light",
+    "Description": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_Light_Desc\", \"Light the campfire\")",
+    "Type": "Event",
+    "TargetEventOrId": "FireLit",
+    "RequiredCount": 1,
+    "bOptional": false,
+    "bSequential": true,
+    "HintTitle": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_Light_HintTitle\", \"Light It\")",
+    "HintBody": "NSLOCTEXT(\"Quests\", \"Tutorial_LightFire_Light_HintBody\", \"You need dry tinder (dry grass or shredded bark) and your fire drill. Right-click the campfire and choose Light. Drilling takes minutes and can fail; every try teaches you.\")",
+    "bShowAsTutorialPopup": true
+   }
+  ],
+  "sortOrder": 55,
+  "category": "Tutorial",
+  "rewards": []
+ }
+}

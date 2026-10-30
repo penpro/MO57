@@ -92,6 +92,10 @@ D:/UEProjects/MO_WorldLab/Saved/WorldLabExport/worldlab_patch_latest.json [--dry
 Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go, and holds on at a lip with no room on
 top (N-236); host and joiner must agree; each block is faced only once the joiner's machine has it; ~6 min; an occasional run fails
 from its first jump for reasons outside the moves: N-238 -- rerun once).
+A new player's first minutes (Oct 29): `python Tools/check_onboarding.py [--seed 777] [--keep]` (one instance, a new world through the
+creator: the early-access notice after Begin and "Got it"; every tutorial popup walked, each menu step done with its key; the fire from nothing
+-- inspect a dry branch, make the drill with no Firemaking and no knife, a campfire, lay fuel, light it -- and the FuelLaid / FireLit events;
+screenshots in `Saved/Screenshots/onboarding/`; ~10 min). Harness instances skip the notice (`-NoEarlyAccessNotice`; `ue_inst.start(..., notice=True)` keeps it).
 Survivors, their dialogue and the reticle (Oct 29): `python Tools/check_survivor_reticle.py [--seed 777] [--keep] [--reuse]` (one instance, a
 new world: a wandering survivor with a lit fire within 200 m at the start and again 800 m away; E on her -> the dialogue and the campfire ask,
 a campfire built -> she joins, the next one -> "already built one", the fourth with three settlers -> the trust gate; the reticle green on a

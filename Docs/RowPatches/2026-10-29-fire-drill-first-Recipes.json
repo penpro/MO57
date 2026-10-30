@@ -1,0 +1,82 @@
+{
+ "MakeFireDrill": {
+  "recipeId": "MakeFireDrill",
+  "displayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFireDrill_DisplayName\", \"Make Fire Drill\")",
+  "description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFireDrill_Description\", \"Shave a straight, dry rod (hazel is a classic) into a spindle and split a dry branch flat for the hearth board, then cut a socket and a notch to collect the ember. Matched woods twirled on a proper notch catch far more often than any two sticks.\")",
+  "ingredients": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 1,
+    "bRequiresKnowledge": false
+   },
+   {
+    "ItemDefinitionId": "Branch01",
+    "Quantity": 1,
+    "bRequiresKnowledge": false
+   }
+  ],
+  "outputs": [
+   {
+    "ItemDefinitionId": "FireDrill01",
+    "Quantity": 1,
+    "Chance": 1
+   }
+  ],
+  "craftTime": 30,
+  "requiredStation": "None",
+  "minimumProcessTemperatureCelsius": 0,
+  "requiredSkillId": "Firemaking",
+  "requiredSkillLevel": 0,
+  "requiredKnowledge": [],
+  "skillXPReward": 25,
+  "icon": "None",
+  "category": "Tools",
+  "requiredTools": [
+   {
+    "ToolType": "Knife",
+    "MinQuality": 0.15,
+    "DurabilityConsumed": 1,
+    "bIsRequired": false,
+    "MissingToolTimeMultiplier": 2.0,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "bRequiresDiscovery": true,
+  "discoveryKnowledgeId": "HandDrill",
+  "discoveryKnowledgeLevel": 1,
+  "discoverySkillLevel": 0,
+  "bIsBuilding": false,
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "PreviewScale": {
+    "X": 1,
+    "Y": 1,
+    "Z": 1
+   },
+   "BuildableActorClass": "None"
+  },
+  "buildParts": [],
+  "totalBuildTime": 60,
+  "buildRange": 150,
+  "providedStationType": "None",
+  "providedProcessTemperatureCelsius": 0,
+  "containerSlotCount": 0,
+  "bIsSchool": false,
+  "housingCapacity": 0,
+  "bRequiresFuel": false,
+  "maxFuel": 100,
+  "fuelConsumptionRate": 1,
+  "acceptedFuelItems": [],
+  "bIsHarvestRecipe": false,
+  "requiredTargetTag": "None",
+  "bDestroysTarget": false
+ }
+}

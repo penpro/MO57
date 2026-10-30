@@ -14,6 +14,7 @@ Usage (MO57's editor):  python Tools/ue.py py --file Content/Python/retarget_wea
 Prints "WEAPONS ..." lines; the last says which clips are off their source by more than 12 cm anywhere (Oct 29: the three two-hand thrusts,
 15 cm: a shallower lunge on her body; everything else within 4-11 cm).
 """
+import math
 import os
 import unreal
 
@@ -56,6 +57,14 @@ def make_rigs(kind, mesh):
     c.set_ik_rig(unreal.RetargetSourceOrTarget.SOURCE, rig)
     c.set_preview_mesh(unreal.RetargetSourceOrTarget.SOURCE, mesh)
     c.auto_map_chains(unreal.AutoMapChainType.FUZZY, True)
+    # The MetaHuman's hands have metacarpal chains; these sources do not. The fuzzy map fed each source finger chain to the metacarpal chain AND
+    # the finger chain, so every palm bone bent like a knuckle (140-177 deg off rest: Wes, Oct 29, "the hands are completely fucked up"). With
+    # no source they keep the rest pose, as a hand with no metacarpal motion should.
+    target_chains = [ch.chain_name for ch in unreal.IKRigController.get_controller(c.get_ik_rig(unreal.RetargetSourceOrTarget.TARGET)).get_retarget_chains()]
+    for chain in target_chains:
+        if "Metacarpal" in str(chain):
+            c.set_source_chain(unreal.Name("None"), chain)
+    log("%s: metacarpal chains unmapped: %s" % (kind, ", ".join("%s<-%s" % (ch, c.get_source_chain(ch)) for ch in target_chains if "Metacarpal" in str(ch))))
     unreal.EditorAssetLibrary.save_loaded_asset(rig, False)
     unreal.EditorAssetLibrary.save_loaded_asset(rtg, False)
     return rtg
@@ -111,11 +120,22 @@ def measure(src_path, dst_path):
     worst = max(abs(d[j] - s[j] * k) for d, s in rows for j in range(4))
     d, s = rows[4]
 
+    # The hands: the metacarpals should stay near the body's rest pose (the sources have none); > 10 deg is a mis-mapped chain.
+    ref = unreal.AnimPoseExtensions.get_reference_pose(dst.get_editor_property("skeleton"))
+    mid_pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(dst, Ld * 0.5, unreal.AnimPoseEvaluationOptions())
+
+    def off_rest(bone):
+        a = unreal.AnimPoseExtensions.get_bone_pose(mid_pose, bone, unreal.AnimPoseSpaces.LOCAL).rotation
+        b = unreal.AnimPoseExtensions.get_bone_pose(ref, bone, unreal.AnimPoseSpaces.LOCAL).rotation
+        return math.degrees(2.0 * math.acos(min(1.0, abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w))))
+    palm = max(off_rest("%s_metacarpal_%s" % (f, side)) for f in ("index", "middle", "ring", "pinky") for side in ("l", "r"))
+    worst = max(worst, palm)   # a twisted palm fails the clip like a misplaced leg
+
     def travel(anim, L, bone):   # how far the bone gets from where it starts, across the ground (cm)
         p0 = world(anim, bone, 0.0)
         return max(((world(anim, bone, L * i / 8.0) - p0) * unreal.Vector(1.0, 1.0, 0.0)).length() for i in range(9))
-    log("%-32s x%.2f | mid pelvis %3.0f (src %3.0f) thigh %3.0f (%3.0f) feet %3.0f/%3.0f (%3.0f/%3.0f) | worst %4.1f cm | travel: root %3.0f pelvis %3.0f (src root %3.0f pelvis %3.0f)" % (
-        dst_path.split("/")[-1], k, d[0], s[0] * k, d[1], s[1] * k, d[2], d[3], s[2] * k, s[3] * k, worst,
+    log("%-32s x%.2f | mid pelvis %3.0f (src %3.0f) thigh %3.0f (%3.0f) feet %3.0f/%3.0f (%3.0f/%3.0f) | worst %4.1f | palm %3.0f deg | travel: root %3.0f pelvis %3.0f (src root %3.0f pelvis %3.0f)" % (
+        dst_path.split("/")[-1], k, d[0], s[0] * k, d[1], s[1] * k, d[2], d[3], s[2] * k, s[3] * k, worst, palm,
         travel(dst, Ld, "root"), travel(dst, Ld, "pelvis"), travel(src, Ls, "root"), travel(src, Ls, "pelvis")))
     return worst
 

@@ -141,6 +141,8 @@ void UMOConfirmationBase::Configure(
 	if (CancelButton)
 	{
 		CancelButton->SetButtonText(CancelText);
+		// No cancel label = a notice with one button (the early-access notice, Oct 29 2026).
+		CancelButton->SetVisibility(CancelText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	}
 }
 

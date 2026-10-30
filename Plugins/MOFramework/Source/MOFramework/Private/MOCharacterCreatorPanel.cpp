@@ -6,6 +6,7 @@
 #include "MOIdentityComponent.h"
 #include "MOMetaHumanCharacter.h"
 #include "MOPlayerController.h"
+#include "MOUIManagerComponent.h"
 #include "MOSurvivorBase.h"
 #include "MOUIUtils.h"
 #include "MOWorldReadinessSubsystem.h"
@@ -795,4 +796,13 @@ void UMOCharacterCreatorPanel::HandleBegin()
 		}
 	}
 	DeactivateWidget();
+
+	// A new game begins: the early-access notice (Wes, Oct 29 2026), once the creator is off the stack.
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (UMOUIManagerComponent* UI = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			UI->ShowEarlyAccessNotice();
+		}
+	}
 }

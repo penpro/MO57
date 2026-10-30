@@ -80,7 +80,7 @@ def env_for(name):
     return env
 
 
-def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=(), creator=False, sound=False):
+def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=(), creator=False, sound=False, notice=False):
     """Command line (after the exe) of a standalone game process. Pure: unit-tested offline.
 
     -forcelogflush so the log can be polled line by line; no -log (no console window to clutter the desktop);
@@ -92,9 +92,13 @@ def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=Fa
     [MOAudio] HB heartbeat).
     -MOHoldContextMenus: the instance's menus leave the real cursor alone (no warp onto a menu, no close when it leaves): it belongs to
     whoever sits at the machine, whose next mouse move closed a menu mid-test (Oct 22, UMOContextMenuBase::IgnoresRealCursor).
+    -NoEarlyAccessNotice (unless notice=True): no early-access notice after the creator's Begin (Oct 29): a modal waiting for "Got it" would
+    hold every game key a harness injects after Begin (the controller ignores gameplay input while a menu is open).
     """
     args = [uproject, "-game", "-windowed", f"-ResX={res[0]}", f"-ResY={res[1]}", f"-WinX={pos[0]}",
             f"-WinY={pos[1]}", "-nosplash", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark", "-MOHoldContextMenus"]
+    if not notice:
+        args.append("-NoEarlyAccessNotice")
     if not sound:
         args.append("-nosound")
     if nosteam:

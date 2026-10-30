@@ -482,6 +482,12 @@
   every bow clip on load in game, while the editor loaded them fine. Remove a source's curves you do not want
   (`AnimationLibrary.remove_all_curve_data`; `Content/Python/retarget_weapon_sets.py` does) and load one clip in a -game instance before
   anything plays it. Keep the ones you do want (Titan's contact curves drive the climbing IK). (Oct 29)
+- **Retargeted hands look broken (palms folded, fingers clawed)** -> the MetaHuman's hands have METACARPAL chains (index / middle / ring /
+  pinky metacarpal); a UE4-mannequin or Paragon source has none, and the fuzzy chain map fed each source finger chain to the metacarpal chain
+  AND the finger chain: every palm bone bent like a knuckle, 140-177 deg off rest (Wes, Oct 29: "the hands are completely fucked up in all
+  of them") -> leave the target's metacarpal chains with no source (`set_source_chain("None", chain)` after `auto_map_chains`;
+  `retarget_weapon_sets.py` does, and fails a clip whose palm is > 10-12 deg off rest). A source WITH metacarpals (UE5 Manny: the crouch,
+  climbing sets) maps them 1:1 and reads 0 deg. (Oct 29)
 - **The pelvis repair left the thighs and the legs floated (feet ~95 cm up)** -> `repair_crouch_pelvis.py` counted a pelvis child as carrying
   the offset only within 6 cm of spine_01's; Sparrow's and the spear pack's thighs carried it 7-20 cm off and went up a second time with the
   pelvis -> 25 cm now. Measure the legs after any repair (`retarget_weapon_sets.py` prints pelvis / thigh / feet against the source). (Oct 29)

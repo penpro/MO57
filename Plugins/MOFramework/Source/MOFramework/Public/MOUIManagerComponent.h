@@ -572,6 +572,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Confirmation")
 	void ShowConfirmationDialog(const FText& Title, const FText& Message, const FText& ConfirmText, const FText& CancelText);
 
+	/** The early-access notice ("This is an early access game still in development ..."): shown once a new game's survivor is made (the creator's
+	 *  Begin). Skipped with -NoEarlyAccessNotice (test instances). */
+	void ShowEarlyAccessNotice();
+
+	/** A menu just opened (bOpenNow): its tutorial event ("OpenedInventory", "OpenedGameMenu", ...) on this player's quests. */
+	void ReportMenuOpened(const TCHAR* EventName, bool bOpenNow);
+
 	/** Called when any confirmation is confirmed. */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOConfirmationConfirmedSignature);
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Confirmation")

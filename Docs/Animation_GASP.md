@@ -186,6 +186,11 @@ Measured (Oct 29): pelvis, thighs and feet within 4-11 cm of the source in 31 cl
 the 2H grip scales with her (hands 54 cm apart, the source's 69 x 0.84 = 58). Every bow and spear clip loads and plays in a -game instance
 (held poses photographed on the survivor: `Saved/Screenshots/weapons/`, side and front, eleven poses).
 
+**The hands (fixed Oct 29, Wes: "the hands are completely fucked up in all of them"):** the first retarget mapped each source finger chain to
+the MetaHuman's metacarpal chain as well as its finger chain (the sources have no metacarpals), so every palm bone bent like a knuckle --
+140-177 deg off rest, in all 34 clips. The metacarpal chains now have no source and keep the rest pose (0 deg in every clip, as in the
+crouch and climbing sets); the script checks it (a palm > 12 deg off rest fails the clip). Close-ups: `Saved/Screenshots/weapons_hands/`.
+
 Not done (F53's work, when the attacks are built): **no weapon in her hands** (the hands close on nothing; the bow item, the spear and
 their grip sockets, the bow string following the nock); **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
 the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must
