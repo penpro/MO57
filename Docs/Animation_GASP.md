@@ -161,7 +161,40 @@ exactly that. So it makes no bow draw, spear throw or sling swing. Where it coul
 motion matching (40-50 MB of network instead of the GASP pose database), or carry styles ("walking with a spear") once we HAVE clips of
 them. Where the missing action animations should come from is F53's sibling, F54 (DECISIONS).
 
-## 7. Verifying
+## 7. Weapon sets: the bow and the spear (Oct 29, F54)
+
+Wes: "let's start with sparrow"; "i added sparrow and 'mega spear animation pack' to mo tools for you to go through". Sources (Fab, local
+only, gitignored, copied from MO_Tools at the same /Game paths): **Paragon: Sparrow** (Epic, free; `/Game/ParagonSparrow`, 3 GB: her bow
+is bones under `hand_l` -- `bow_base`, the shaft, the string --, the nock under `hand_r`: bow in the left hand, drawn with the right) and
+the **Mega Spear Animation Pack** (`/Game/SpearAnimationsV2`, 76 MB, UE4 mannequin: one- and two-hand spear, four 1H and six 2H stances,
+jabs / thrusts / swings high, mid and low, walk / run / idle / crouch per stance, blocks, hit reactions, every stance-to-stance
+transition, a one-hand throw, and the spear prop's own clips). No sling in either.
+
+Made (tracked, `/MOFramework/Characters/Bow|Spear/`, 34 clips `<name>_MH`): **bow** -- `idle`, `idle_relaxed`, `Travel_mode_Idle`,
+`Travel_Mode_Idle_BowDown`, `RMB_Drawback` (the draw), `RMB_Loop` (held at full draw), `RMB_Fire` (the release), `Primary_Fire_Slow /
+Med / Fast` (draw and loose in one), `idle_AO_CU / CC / CD` (aim up / level / down at full draw); **spear** -- 2H `Idle`, `walk`, `run`,
+`Crouch`, `Thrust_High / Mid / Low`, `Jab_Mid`, `Swing_HorizontalMid`, `Swing_VerticalDown`, `Block`, `HitHigh`, `HitLow`, 1H `Idle`,
+`walk`, `run`, `Thrust_Mid`, `Jab_Mid`, the 1H<->2H changes and `A_1H_Throw` (the spear throw; a thrown stone can use it too).
+`Content/Python/retarget_weapon_sets.py` remakes all of it in one run: IK rigs (`IK_BowSource` / `IK_SpearSource`: GASP's UE4 mannequin
+rig on each pack's mesh, every bone it names present), retargeters (`RTG_BowToMetaHuman` / `RTG_SpearToMetaHuman`: the crouch set's
+`RTG_MoverMannyToMetaHuman` with the source swapped, chains re-mapped), the batch retarget, the source's curves removed (Paragon's crashed
+a -game process on load: TRAPS), the pelvis repair (the retargeter put every pelvis on the floor again; the repair's thigh check widened
+for these: TRAPS), then each clip measured against its source, scaled by the bodies' head heights (her 0.84-0.86 of theirs).
+
+Measured (Oct 29): pelvis, thighs and feet within 4-11 cm of the source in 31 clips; the three 2H thrusts 15 cm (a shallower lunge: pelvis
+64 vs 49 cm at the deepest). The draw brings the right hand to 7-15 cm of the head (the anchor at the face), the bow arm out straight;
+the 2H grip scales with her (hands 54 cm apart, the source's 69 x 0.84 = 58). Every bow and spear clip loads and plays in a -game instance
+(held poses photographed on the survivor: `Saved/Screenshots/weapons/`, side and front, eleven poses).
+
+Not done (F53's work, when the attacks are built): **no weapon in her hands** (the hands close on nothing; the bow item, the spear and
+their grip sockets, the bow string following the nock); **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
+the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must
+carry the capsule with it (root motion from the pelvis, as `UpdateTraversalAnimation` fits the GASP moves) or the body leaves it and
+snaps back; the 2H stance is the pack's (back heel up), Sparrow's is Paragon's (wide, stylized); the rest of the spear pack (the other
+stances, high / low variants, the spear prop's clips) and the bow's locomotion (jog / sprint with the bow) are there to retarget when wanted
+(add them to `SETS` in the script).
+
+## 8. Verifying
 
 `python Tools/check_legs.py` (the femme and every base: standing, walking, crouched; feet and pelvis heights, screenshots in
 `Saved/Screenshots/legs/`); `python Tools/check_cliff_climb.py --side 3 [--shots DIR]` (each climbing sample names the clip on the body and

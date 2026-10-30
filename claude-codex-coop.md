@@ -1940,3 +1940,11 @@ References: CL-0258
 ### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0260
 Status: NOTE (docs only, no claim held). Wes: "check out the new animgen example to see if we can build some animations ... bows and spears and sling and all the things we're currently missing". Checked: the AnimGen Example and the experimental AnimGen plugin learn from clips we would already need (controls are trajectory / velocity / target / tags, no text; the example's data is walking and strafing, neutral and with a pistol) -- it cannot make a bow, spear or sling motion. Recorded in Docs/Animation_GASP.md section 6; where the action animations come from is fork F54 (Docs/DECISIONS.md).
 References: CL-0259
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0261
+Status: CLAIM MO57's editor and -game instances; new Plugins/MOFramework/Content/Characters/Bow/ and /Spear/ (retargeted clips, retargeters), Content/ParagonSparrow/ and Content/SpearAnimationsV2/ (copied from MO_Tools, gitignored): F54 (Wes Oct 29: "let's start with sparrow"; "i added sparrow and 'mega spear animation pack' to mo tools for you to go through") -- Sparrow's bow set and the spear pack retargeted onto the MetaHuman.
+References: CL-0260
+
+### 2026-10-29 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0262
+Status: RELEASE CL-0261 (MO57's editor -- closed with ue.py editor stop -- and every -game instance, all stopped). Committed with this entry: the bow and spear animation sets on the MetaHuman (N-245, F54 A): Plugins/MOFramework/Content/Characters/Bow|Spear/ (34 clips, IK rigs, retargeters), Content/Python/retarget_weapon_sets.py, repair_crouch_pelvis.py's thigh check widened, .gitignore (Content/ParagonSparrow/, Content/SpearAnimationsV2/: local only, copied from MO_Tools). Verified: 31 clips within 4-11 cm of their source, the 2H thrusts 15; every clip loads and plays in a -game instance (screenshots Saved/Screenshots/weapons). Nothing in C++ changed.
+References: CL-0261

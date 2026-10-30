@@ -81,8 +81,10 @@ def main():
         if d0.length() < 2.0:
             _emit("CROUCH %s: already right (spine_01 %.1f cm off its reference)" % (path.split("/")[-1], d0.length()))
             continue
-        # The children that carry the pelvis's offset (within 6 cm of spine_01's at frame 0); the rest are left as they are.
-        carry = [b for b in children if (kids[b][0].translation - ref_t[b] - d0).length() < 6.0]
+        # The children that carry the pelvis's offset (within 25 cm of spine_01's ~80-90 cm at frame 0); the rest are left as they are. Each
+        # takes back d itself, so it stays where it is in the world. It was 6 cm: Sparrow's and the spear pack's thighs (Oct 29) carried the
+        # offset 7-20 cm off spine_01's, were "left", and went up a second time with the pelvis -- floating legs, feet ~95 cm off the floor.
+        carry = [b for b in children if (kids[b][0].translation - ref_t[b] - d0).length() < 25.0]
         new_pel, new_kids = [], {b: [] for b in carry}
         for i in range(len(pel)):
             d = kids["spine_01"][i].translation - ref_t["spine_01"]

@@ -42,6 +42,11 @@ Content/Misc/
 Content/Audio/Foley/
 Content/Audio/Mix/
 Content/Audio/DefaultAttenuation.uasset
+# Epic's Paragon: Sparrow (Fab, free; Oct 29, F54: the bow set) and the Mega Spear Animation Pack (Fab; Content/SpearAnimationsV2): local
+# only like the GASP set -- Wes added them to MO_Tools, copied here at the same /Game paths. Only the clips retargeted onto the MetaHuman are
+# tracked (/MOFramework/Characters/Bow/, /MOFramework/Characters/Spear/).
+Content/ParagonSparrow/
+Content/SpearAnimationsV2/
 
 # Voxel Plugin (dev-phy build) — large vendored tree kept out of git history.
 # Recover from the Phyronnaz dev-phy branch if a fresh checkout needs it.

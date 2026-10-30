@@ -477,6 +477,14 @@
   takes `unreal.Vector` / `unreal.Quat` arrays (`Quat4f` has no fields in Python, the float overload is not exposed); build every array
   BEFORE `open_bracket` (an exception inside leaves the editor's transaction open: close it with `close_bracket`). `os.environ` set
   through the bridge stays set in the editor process for later calls. (Oct 27)
+- **A -game process crashes loading a retargeted clip (EXCEPTION_ACCESS_VIOLATION in UnrealEd, FlushAsyncLoading)** -> the batch retarget
+  copies the source's curves: Paragon's (`DissolveAmount`, a material curve for its dissolve effect; `DistanceCurve`; `mask_geo`) crashed
+  every bow clip on load in game, while the editor loaded them fine. Remove a source's curves you do not want
+  (`AnimationLibrary.remove_all_curve_data`; `Content/Python/retarget_weapon_sets.py` does) and load one clip in a -game instance before
+  anything plays it. Keep the ones you do want (Titan's contact curves drive the climbing IK). (Oct 29)
+- **The pelvis repair left the thighs and the legs floated (feet ~95 cm up)** -> `repair_crouch_pelvis.py` counted a pelvis child as carrying
+  the offset only within 6 cm of spine_01's; Sparrow's and the spear pack's thighs carried it 7-20 cm off and went up a second time with the
+  pelvis -> 25 cm now. Measure the legs after any repair (`retarget_weapon_sets.py` prints pelvis / thigh / feet against the source). (Oct 29)
 - **Retargeted clips move only the root / slide** -> a 5.8 IKRetargeter is an op stack (add_default_ops + auto_map_chains); root motion folds into the pelvis (zero the root on copies). `get_raw_track_data` is empty in 5.8. (animation-retarget)
 - **New MO content disappears from git** -> `Plugins/MOFramework/Content/Characters/MetaHumans/` and `Content/PCG/` are gitignored. (swimming, package-cook-errors)
 - **A case-only rename returns False** -> FName is case-insensitive -> go through a temporary name. (footsteps, animation-retarget)
