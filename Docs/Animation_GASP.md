@@ -27,6 +27,14 @@ capsule (AMOCharacter, our CMC: UMOCharacterMovementComponent)
   `UMOCombatComponent`, the swim strokes `AMOCharacter::UpdateSwimAnimation`) and play over the retargeted walk. The retarget is the pattern
   of the engine's retarget preview instance (IKRigEditor `UIKRetargetAnimInstance`). Not `FAnimNode_Slot`: in 5.8 it calls the Sequencer
   mixer (MovieSceneAnimMixer, enabled for GASP), which asserts that the instance has a blueprint's anim subsystems (TRAPS).
+- **The ankles keep a human range** (`FMOBodyRetargetAnimInstanceProxy::LimitAnkles`, last in the body's evaluation, after the slot and the
+  climbing IK; BR31-6, Oct 31 2026). GASP's foot placement turns the foot to the ground with no limit, and the retarget onto the MetaHuman
+  adds to it: on Wes's boulder the driver's foot rolled 17 deg while the body's rolled 56-65 ("my ankle is bending like a twig"). In the
+  calf's frame, from the foot's reference pose (standing on flat ground the feet sit 5-20 deg from it), flexion is the twist about Z
+  (a flat-ground crouch, -42 deg; negative = toes toward the shin): kept to -60 (dorsiflexion: a loaded deep squat; crouching round that
+  rock takes 42-58) .. 50 (plantarflexion); the rest of the turn (rolling, turning about the shin) one 30 deg cone. Ordinary motion stays
+  inside (walk / sprint / crouch-walk / swim stroke -56..+20 and at most 27 of roll); at the twig spot the body's foot now sits on the
+  limits (-60, 30).
 - **The pawn interface.** GASP's ABP calls `Get_PropertiesForAnimation` on its owning actor. `BP_MOMetaHuman_Female` implements
   `BPI_SandboxCharacter_Pawn` and builds the `S_CharacterPropertiesForAnimation` struct the way GASP's own character does, except where the
   data is ours (C++ getters, category `MO|Animation`):

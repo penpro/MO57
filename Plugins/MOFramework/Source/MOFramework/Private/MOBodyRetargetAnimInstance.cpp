@@ -86,12 +86,49 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyClimbIK(FPoseContext& Output)
 	}
 }
 
+void FMOBodyRetargetAnimInstanceProxy::LimitAnkles(FPoseContext& Output) const
+{
+	static const FName Feet[] = {TEXT("foot_l"), TEXT("foot_r")};
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	for (const FName& Foot : Feet)
+	{
+		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(Foot);
+		const FCompactPoseBoneIndex Index = MeshIndex == INDEX_NONE ? FCompactPoseBoneIndex(INDEX_NONE) : Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+		if (!Index.IsValid())
+		{
+			continue;
+		}
+		// The foot's turn from neutral, in the calf's frame: flexion about Z (the twist), the rest as one swing.
+		const FQuat Neutral = Output.Pose.GetRefPose(Index).GetRotation();
+		FTransform& Local = Output.Pose[Index];
+		FQuat Swing, Twist;
+		(Local.GetRotation() * Neutral.Inverse()).GetNormalized().ToSwingTwist(FVector::ZAxisVector, Swing, Twist);
+		const float Flex = FMath::RadiansToDegrees(Twist.GetTwistAngle(FVector::ZAxisVector));
+		const float FlexLimited = FMath::Clamp(Flex, -AnkleDorsiflexionLimitDeg, AnklePlantarflexionLimitDeg);
+		if (Swing.W < 0.0f)
+		{
+			Swing = FQuat(-Swing.X, -Swing.Y, -Swing.Z, -Swing.W);
+		}
+		FVector SwingAxis;
+		float SwingRad;
+		Swing.ToAxisAndAngle(SwingAxis, SwingRad);
+		const float RollLimitRad = FMath::DegreesToRadians(AnkleRollLimitDeg);
+		if (FlexLimited == Flex && SwingRad <= RollLimitRad)
+		{
+			continue;   // inside the range: the pose as animated
+		}
+		const FQuat SwingLimited = SwingRad > RollLimitRad ? FQuat(SwingAxis, RollLimitRad) : Swing;
+		Local.SetRotation((SwingLimited * FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(FlexLimited)) * Neutral).GetNormalized());
+	}
+}
+
 bool FMOBodyRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 {
 	if (SlotNodeWeight <= ZERO_ANIMWEIGHT_THRESH)
 	{
 		RetargetNode->Evaluate_AnyThread(Output);
 		ApplyClimbIK(Output);
+		LimitAnkles(Output);
 		return true;
 	}
 	// A montage is playing: the retargeted locomotion is its source pose (what shows where it blends in or out).
@@ -108,6 +145,7 @@ bool FMOBodyRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	FAnimationPoseData OutData(Output);
 	SlotEvaluatePose(UMOBodyRetargetAnimInstance::MontageSlot, SourceData, SlotSourceWeight, OutData, SlotNodeWeight, SlotTotalNodeWeight);
 	ApplyClimbIK(Output);
+	LimitAnkles(Output);
 	return true;
 }
 

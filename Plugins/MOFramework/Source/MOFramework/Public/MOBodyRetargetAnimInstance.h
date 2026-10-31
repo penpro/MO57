@@ -54,9 +54,24 @@ protected:
 	virtual void Update(float DeltaSeconds) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
 
+	/**
+	 * A human ankle's range, from the foot's reference pose (anatomical neutral: standing on flat ground the feet sit 5-20 deg from it) in the calf's
+	 * frame, whose Z is the ankle's flexion axis (a flat-ground crouch turns both feet about it alone, -42 deg; negative = toes toward the shin). The
+	 * rest of the foot's turn -- rolling onto its edge, turning about the shin -- is one cone. GASP's foot placement turns the foot to the ground it
+	 * stands on with no limit, so on a rock's slope it rolled the foot 56-65 deg onto its side (BR31-6, Oct 30 2026: "my ankle is bending like a
+	 * twig"; a human foot inverts ~35 and everts ~20 deg). Crouching takes 42-58 deg of dorsiflexion on the ground round that rock, hence 60 (a
+	 * weight-bearing deep squat; the textbook 20 is the unloaded range). Measured on Trey; every base shares the skeleton.
+	 */
+	static constexpr float AnkleDorsiflexionLimitDeg = 60.0f;
+	static constexpr float AnklePlantarflexionLimitDeg = 50.0f;
+	static constexpr float AnkleRollLimitDeg = 30.0f;
+
 private:
 	/** The climbing limbs onto their holds (component space, after the slot). */
 	void ApplyClimbIK(FPoseContext& Output);
+
+	/** Each foot back inside the ankle's range (local space, last: after the retarget, the slot and the climbing IK). */
+	void LimitAnkles(FPoseContext& Output) const;
 
 	FAnimNode_RetargetPoseFromMesh* RetargetNode = nullptr;
 
