@@ -1980,3 +1980,11 @@ References: CL-0265
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (crop-plant test side session) — CL-0271
 Status: RELEASE CL-0266 (the "croptest" instance, stopped; the open editor, PID 37004, untouched beyond five glTF imports, item_mesh_prepare and their saves, all under the gitignored /Game/Misc/CropTest/). Committed with this entry: DECISIONS F55's TRELLIS result (D: usable free, beats the stand-in grass; the pack only if the ripe close-ups fail Wes's eye). Note: the mesh saves first failed while "croptest" had the packages loaded (TRAPS: a running inst locks its .uasset files) and only went through after it stopped.
 References: CL-0266
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0269
+Status: CLAIM Plugins/MOFramework/Content/UI/WBP_BugReportPanel.uasset (rebuilt from Content/Python/ui_specs/kit_bugreport.py, the current spec; bug_report_panel.py was run by mistake first and only reached the editor's memory through the open editor's bridge, PID 37004, not launched by me: no PIE, not stopped) and a -game instance "bugshot": Wes Oct 30 -- "player is confused about screenshot toggle in bug report, have it say something about the screen shot being automatically generated".
+References: CL-0268
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0272
+Status: RELEASE CL-0269 (WBP_BugReportPanel saved; the "bugshot" instance stopped). Committed with this entry: the bug report's screenshot toggle says it is taken automatically (kit_bugreport.py -> WBP_BugReportPanel, seen in a -game instance); the superseded bug_report_panel.py / bug_report_button.py refuse to build; mo_ui.build reports a failed save. WBP_MOInGameMenu is left marked unsaved in the open editor (PID 37004) by the mistaken old-spec build: recompiled only, no content change.
+References: CL-0269

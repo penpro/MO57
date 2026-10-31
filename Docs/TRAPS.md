@@ -284,7 +284,10 @@
 - **An editor save fails ("save_assets -> False"; the editor log says `MoveFile was unable to move ... .uasset`)** -> another process had
   the file open at that moment (Oct 18, DT_SurvivorJobs, while another session's two `-game` instances were starting; the holder wasn't
   identified) -> the edit stays in memory; retry `ue.py save <asset>` (it succeeded 80 s later with the same instances running) and check
-  `git status` for the .uasset. `save_assets` now says so and lists any running instances.
+  `git status` for the .uasset. `save_assets` now says so and lists any running instances. **A running instance that has the asset loaded
+  holds it the whole time** (Oct 30, WBP_BugReportPanel: `Error moving file ... to ... .tmp`, `Failed to move ... to temp directory`, every
+  try while two other sessions' instances ran -- the in-game menu loads the panel): saving waits until they exit. `ue.py ui build` ignored
+  the failed save and printed "contract satisfied" (fixed: `mo_ui.build` now prints `UI ERROR: ... NOT SAVED`, and `ue.py ui` exits 1).
 - **"editor is RUNNING" / `editor start` refused while no editor was open** -> `editor_running()` counted the `-game` instances (same
   UnrealEditor.exe) -> it now reads command lines; `ue.py build` names the instances holding the DLLs. (Oct 18)
 

@@ -8,6 +8,10 @@ title, subtitle, Title, [Category | Contact], What happened, Steps, attachment c
 
 Apply with:  python Tools/ue.py ui build Content/Python/ui_specs/bug_report_panel.py   (idempotent; PIE must not be running)
 """
+# SUPERSEDED (Oct 30): the Oct 12 Field Ledger redesign (c747c9d7) rebuilt this panel from kit_bugreport.py. Building this older layout
+# appends its widgets to the new panel and restyles it (it did, Oct 30, in the editor's memory only). Edit kit_bugreport.py instead.
+raise RuntimeError("superseded by kit_bugreport.py: edit and build that spec")
+
 UI = "/MOFramework/UI"
 
 GREY = [0.72, 0.72, 0.72, 1.0]

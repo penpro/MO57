@@ -42,7 +42,9 @@ BUG = {
                 K.checkbox("IncludeLogCheck", toggle=True, slot={**VC, "padding": [0, 0, 12, 0]}),
                 K.text("LogCheckRowText", "body", "Include the end of the game log", "color.text.primary", slot={**VC, "padding": [0, 0, 40, 0]}),
                 K.checkbox("IncludeScreenshotCheck", toggle=True, slot={**VC, "padding": [0, 0, 12, 0]}),
-                K.text("ScreenshotCheckRowText", "body", "Include a screenshot of the game", "color.text.primary", slot=VC)]},
+                # The game takes the screenshot when the form opens (MOBugReportPanel.h): say so, or a player looks for a way to take one (Wes, Oct 30:
+                # "player is confused about screenshot toggle in bug report, have it say something about the screen shot being automatically generated").
+                K.text("ScreenshotCheckRowText", "body", "Include the screenshot (taken automatically when you opened this)", "color.text.primary", slot=VC)]},
             {"type": "SizeBox", "name": "PreviewSizeBox", "height": 110, "slot": {"padding": [0, 16, 0, 0]}, "children": [
                 {"type": "Overlay", "name": "PreviewOverlay", "children": [
                     K.image9("PreviewWell", "input_fill", "color.surface.0", slot=K.fill_slot()),

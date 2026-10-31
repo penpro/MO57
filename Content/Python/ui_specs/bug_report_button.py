@@ -9,6 +9,10 @@ in column 0 collides with nothing.)
 
 Apply with:  python Tools/ue.py ui build Content/Python/ui_specs/bug_report_button.py   (idempotent; PIE must not be running)
 """
+# SUPERSEDED (Oct 30): the Oct 12 Field Ledger redesign (c747c9d7) rebuilt this panel from kit_menus.py. Building this older layout
+# appends its widgets to the new panel and restyles it (it did, Oct 30, in the editor's memory only). Edit kit_menus.py instead.
+raise RuntimeError("superseded by kit_menus.py: edit and build that spec")
+
 UI = "/MOFramework/UI"
 
 IN_GAME_MENU = {

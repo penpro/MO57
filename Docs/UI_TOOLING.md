@@ -89,7 +89,11 @@ class and asset references as package paths. Aliases: `MOButton`, `MOListEntry`,
 
 1. **The C++ header is the source of truth.** Add/rename a `BindWidget` member in C++, then re-run
    `ui contract` / `ui check`; the contract is parsed, not remembered.
-2. **Specs are idempotent and additive.** `build` creates what is missing and updates what exists.
+2. **Specs are idempotent and additive.** `build` creates what is missing and updates what exists. **So build the panel's CURRENT spec:**
+   the Oct 12 Field Ledger redesign (`c747c9d7`) rebuilt the menus from `kit_*.py`, and the older specs that name the same assets are stale --
+   built over a redesigned panel they append their old widgets and restyle it (Oct 30: `bug_report_panel.py` over WBP_BugReportPanel; it
+   and `bug_report_button.py` now refuse to run). Before editing a spec, `git log` the specs that name its asset and take the newest
+   (`coop_menu.py`, `load_host.py`, `save_slot_layout.py`, `options_graphics.py`, `hud_text_fixes.py` predate the kit too).
 3. **Look once, at the end.** `check` + `find` prove structure and state; one `shot` proves it looks right.
 4. **Use `dump` to discover property names** instead of guessing — then paste them into the spec.
 

@@ -492,7 +492,11 @@ def build(spec, save=True):
         unreal.BlueprintEditorLibrary.compile_blueprint(wbp)
     if save:
         # only_if_is_dirty=False: a class-default change on the CDO does not dirty the package, and the default (skip when clean) silently dropped it (the button's 0.356 tint 'fix' never reached disk)
-        EAL.save_loaded_asset(wbp, False)
+        if not EAL.save_loaded_asset(wbp, False):
+            # Oct 30: a build "satisfied the contract" while nothing reached disk -- the save had failed (a running -game instance can hold the
+            # file open: TRAPS). Say so, as an error: the change is in the open editor only.
+            report.append(f"UI ERROR: {asset} NOT SAVED -- the change is in the editor's memory only (a running -game instance can hold the "
+                          f"file open; retry: ue.py save {asset})")
     report.append(check(asset))
     return "\n".join(report)
 
