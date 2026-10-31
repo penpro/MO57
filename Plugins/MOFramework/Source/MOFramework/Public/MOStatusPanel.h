@@ -118,6 +118,10 @@ struct FMOStatusFieldConfig
 	/** Sort priority within category (lower = higher in list) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 SortPriority = 0;
+
+	/** What the row measures (its "i" tooltip). Empty = UMOStatusPanel::DescribeField(FieldId); empty there too = no "i" on the row. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FText Description;
 };
 
 /**
@@ -169,6 +173,9 @@ public:
 	/** Add a field dynamically at runtime */
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")
 	UMOStatusField* AddField(const FMOStatusFieldConfig& Config);
+
+	/** What a built-in row measures, in plain words with its healthy range (the row's "i"). Empty for a field it does not know (wounds, conditions). */
+	static FText DescribeField(FName FieldId);
 
 	/** Remove a field by ID */
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")

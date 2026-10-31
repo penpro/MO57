@@ -89,6 +89,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")
 	void SetFieldId(FName InFieldId) { FieldId = InFieldId; }
 
+	/**
+	 * What this row measures: the tooltip of its "i" (IconImage), shown when the pointer rests on it. Empty = the row shows no "i": an icon that explains
+	 * nothing must not look like a button (BR31-4, Oct 30 2026: "none of the info buttons in the heathy screen do anything").
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|Status")
+	void SetInfo(const FText& InInfo);
+
+	UFUNCTION(BlueprintCallable, Category = "MO|Status")
+	FText GetInfo() const { return Info; }
+
 protected:
 	virtual void NativeConstruct() override;
 
@@ -116,6 +126,10 @@ protected:
 	/** Unique identifier for this field (used for data binding) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status")
 	FName FieldId;
+
+	/** SetInfo's text (kept so NativeConstruct can apply it to an icon bound after the call). */
+	UPROPERTY(Transient)
+	FText Info;
 
 	/** Color thresholds */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status|Colors")

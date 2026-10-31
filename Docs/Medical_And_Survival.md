@@ -120,6 +120,10 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
     the muscle and the weight they make together, so it holds through `UpdateBodyWeight`. **The defaults do not:** 75 kg at 18 % becomes
     62 kg at 21.8 % on the first update (fat mass 13.5 kg + muscle 30 + bone 3.5 + the rest 15). Test `MOFramework.Metabolism.StartingBodyHolds`.
   - The pawn Blueprint's own survivor (MH_F_1) has no shapes; its body never shows the composition.
+- **The status screen explains its rows** (BR31-4, Oct 30): each built-in row's "i" carries a tooltip from `UMOStatusPanel::DescribeField`
+  (what it measures, the healthy range, what moves it in this body); a row it does not know (a wound, a condition) shows no "i".
+  Keep those lines true to the model when it changes. Found doing it: "Energy" is `1 - MoraleFatigue`, the same number as "Morale/Fatigue"
+  (two rows, one quantity): a design call for later, not fixed.
 
 ## 4. Body temperature (F2: single node shipped as the interim, Oct 19)
 

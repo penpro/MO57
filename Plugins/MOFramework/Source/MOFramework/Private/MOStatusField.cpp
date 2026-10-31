@@ -15,6 +15,18 @@ void UMOStatusField::NativeConstruct()
 		// Default to hidden until SetFieldData is called with a valid normalized value
 		ValueBar->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	SetInfo(Info);   // a row nobody described shows no "i"
+}
+
+void UMOStatusField::SetInfo(const FText& InInfo)
+{
+	Info = InInfo;
+	if (IconImage)
+	{
+		IconImage->SetToolTipText(Info);
+		// Visible (hit-testable), so the pointer finds the "i" and its tooltip shows.
+		IconImage->SetVisibility(Info.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
 }
 
 void UMOStatusField::SetFieldData(const FText& Title, const FText& Value, float NormalizedValue)

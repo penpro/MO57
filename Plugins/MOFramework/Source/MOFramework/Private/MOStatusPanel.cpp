@@ -200,6 +200,7 @@ UMOStatusField* UMOStatusPanel::AddField(const FMOStatusFieldConfig& Config)
 	// Configure the field
 	Field->SetFieldId(Config.FieldId);
 	Field->SetFieldData(Config.Title, FText::GetEmpty(), -1.0f);
+	Field->SetInfo(Config.Description.IsEmpty() ? DescribeField(Config.FieldId) : Config.Description);
 
 	if (Config.WarningThreshold >= 0.0f)
 	{
@@ -491,6 +492,56 @@ void UMOStatusPanel::UpdateScrollBoxVisibility(EMOStatusCategory ActiveCategory)
 	SetScrollBoxVisible(MentalScrollBox, ActiveCategory == EMOStatusCategory::Mental);
 	SetScrollBoxVisible(WoundsScrollBox, ActiveCategory == EMOStatusCategory::Wounds);
 	SetScrollBoxVisible(ConditionsScrollBox, ActiveCategory == EMOStatusCategory::Conditions);
+}
+
+FText UMOStatusPanel::DescribeField(FName FieldId)
+{
+	// Each row's "i" (BR31-4, Oct 30 2026): what it measures, the healthy range in real terms, and what moves it in this body. Keep every claim true to the
+	// simulation (Docs/Medical_And_Survival.md); a row with no entry here shows no "i".
+	static const TMap<FName, FText> Info = {
+		// Vitals
+		{FName("HeartRate"), NSLOCTEXT("MOStatusInfo", "HeartRate", "Heartbeats per minute. About 60-100 at rest. Exertion, fear, heat, blood loss and shock push it up.")},
+		{FName("BloodPressureSystolic"), NSLOCTEXT("MOStatusInfo", "BPSystolic", "The pressure in your arteries as the heart beats. About 90-120 mmHg at rest. Heavy blood loss and shock make it fall, and then the organs go short of blood.")},
+		{FName("BloodPressureDiastolic"), NSLOCTEXT("MOStatusInfo", "BPDiastolic", "The pressure in your arteries between beats. About 60-80 mmHg at rest. It falls with blood loss and shock.")},
+		{FName("SpO2"), NSLOCTEXT("MOStatusInfo", "SpO2", "How much of your blood's oxygen-carrier is loaded with oxygen. 95-100 % is normal. Below 90 % your body and brain are short of oxygen: holding your breath under water, drowning, a lung injury.")},
+		{FName("BodyTemperature"), NSLOCTEXT("MOStatusInfo", "Temperature", "Your core temperature. About 36.5-37.5 °C. Below 35 °C is hypothermia (cold air, wind, wet clothing); above 38 °C is fever or overheating.")},
+		{FName("FeelsLike"), NSLOCTEXT("MOStatusInfo", "FeelsLike", "How cold or warm it is on your skin here: the air after wind, rain, sun and shelter, and why. Below what your clothing can hold off, your body loses heat.")},
+		{FName("Clothing"), NSLOCTEXT("MOStatusInfo", "Clothing", "What you are wearing and how wet it is. Wet clothing loses most of its warmth and draws heat out of your body.")},
+		{FName("BloodVolume"), NSLOCTEXT("MOStatusInfo", "BloodVolume", "The blood in your body: about 5,000 mL in an adult. Losing a fifth makes you weak and your heart race; losing two fifths can kill. Bleeding wounds drain it: stop them first.")},
+		{FName("RespiratoryRate"), NSLOCTEXT("MOStatusInfo", "RespRate", "Breaths per minute. About 12-20 at rest. Work raises it; fast, shallow breathing can mean shock or a lack of oxygen.")},
+		{FName("BloodGlucose"), NSLOCTEXT("MOStatusInfo", "Glucose", "Sugar in your blood, the brain's fuel. About 70-140 mg/dL. Going without food and working hard bring it down; very low glucose brings shaking, confusion and fainting.")},
+		// Nutrition
+		{FName("Hunger"), NSLOCTEXT("MOStatusInfo", "Hunger", "Your energy reserve: the glycogen (stored carbohydrate) in your liver and muscles, as a share of what they can hold. 100 % is well fed. Work burns it; food refills it.")},
+		{FName("Thirst"), NSLOCTEXT("MOStatusInfo", "Thirst", "How well hydrated you are; 100 % is fully hydrated. Breathing, sweating and urine lose water, faster in heat and hard work. Untreated water can make you ill.")},
+		{FName("GlycogenStores"), NSLOCTEXT("MOStatusInfo", "Glycogen", "The carbohydrate stored in your liver and muscles, in grams. It fuels hard work; when it runs low the body turns to its fat and you tire quickly. Food refills it.")},
+		{FName("HydrationLevel"), NSLOCTEXT("MOStatusInfo", "Hydration", "The water in your body, as a share of what it should be (the same measure as Thirst). Low hydration brings headaches, weakness and confusion.")},
+		{FName("ProteinBalance"), NSLOCTEXT("MOStatusInfo", "Protein", "Protein eaten minus protein used, in grams. A surplus with hard work builds muscle; a long deficit wastes it.")},
+		{FName("CalorieBalance"), NSLOCTEXT("MOStatusInfo", "Calories", "Today's food energy minus the energy you burned, in kcal. Below zero your body draws on its glycogen, then its fat; a long deficit is starvation.")},
+		// Nutrients
+		{FName("VitaminA"), NSLOCTEXT("MOStatusInfo", "VitaminA", "Vitamin A, as a share of what your body needs. Eyesight (night vision goes first), skin and fighting infection. Liver, eggs and orange and dark green plants carry it.")},
+		{FName("VitaminB"), NSLOCTEXT("MOStatusInfo", "VitaminB", "The B vitamins, as a share of what your body needs. They turn food into energy and keep nerves and blood healthy; a lack brings tiredness and weakness. Meat, fish, eggs, grains and beans carry them.")},
+		{FName("VitaminC"), NSLOCTEXT("MOStatusInfo", "VitaminC", "Vitamin C, as a share of what your body needs. Without it wounds heal badly and gums bleed (scurvy). Fresh fruit and greens carry it.")},
+		{FName("VitaminD"), NSLOCTEXT("MOStatusInfo", "VitaminD", "Vitamin D, as a share of what your body needs. Your skin makes it in sunlight; fatty fish and eggs carry it. It keeps bones strong.")},
+		{FName("Iron"), NSLOCTEXT("MOStatusInfo", "Iron", "Iron, as a share of what your body needs. Your blood carries oxygen with it; a lack, or blood loss, brings anaemia: tiredness and breathlessness. Red meat, liver and leafy greens carry it.")},
+		{FName("Calcium"), NSLOCTEXT("MOStatusInfo", "Calcium", "Calcium, as a share of what your body needs: bones, teeth, muscles and nerves. Milk, small fish eaten whole and leafy greens carry it.")},
+		{FName("Potassium"), NSLOCTEXT("MOStatusInfo", "Potassium", "Potassium, as a share of what your body needs. It keeps the heart and muscles working; sweating and diarrhoea lose it. Fruit, vegetables, meat and fish carry it.")},
+		{FName("Sodium"), NSLOCTEXT("MOStatusInfo", "Sodium", "Sodium (salt), as a share of what your body needs. It holds water in your body; heavy sweating loses it and brings cramps and weakness.")},
+		// Fitness
+		{FName("MuscleMass"), NSLOCTEXT("MOStatusInfo", "MuscleMass", "The muscle on your body, in kg. It grows slowly with hard work and a protein surplus, and wastes on a protein deficit.")},
+		{FName("BodyFatPercent"), NSLOCTEXT("MOStatusInfo", "BodyFat", "The share of your weight that is fat: the body's long-term energy store, what carries you through days without food. Roughly 10-20 % for a fit man, 18-28 % for a fit woman.")},
+		{FName("CardiovascularFitness"), NSLOCTEXT("MOStatusInfo", "CardioFitness", "How well your heart and lungs keep your muscles supplied with oxygen through long work. Higher means you tire more slowly.")},
+		{FName("StrengthLevel"), NSLOCTEXT("MOStatusInfo", "Strength", "How much force your muscles can give: how much you can carry, lift and swing.")},
+		{FName("TotalWeight"), NSLOCTEXT("MOStatusInfo", "Weight", "Your body weight, in kg.")},
+		{FName("Stamina"), NSLOCTEXT("MOStatusInfo", "Stamina", "The effort you have left right now. Hard work spends it. Rest gives it back fully, walking half as fast, jogging a quarter; swimming, climbing and sprinting give none back.")},
+		// Mental
+		{FName("Consciousness"), NSLOCTEXT("MOStatusInfo", "Consciousness", "How awake and aware you are: Alert, Confused, Drowsy, Unconscious or Comatose. Blood loss, lack of oxygen, cold, head injuries and shock lower it.")},
+		{FName("ShockLevel"), NSLOCTEXT("MOStatusInfo", "Shock", "Circulatory shock: your body failing to get enough blood to its organs, mostly from blood loss and severe injury. Higher is worse.")},
+		{FName("TraumaticStress"), NSLOCTEXT("MOStatusInfo", "Trauma", "The mental strain of pain, fear and injury. Higher is worse; it eases slowly.")},
+		{FName("MoraleFatigue"), NSLOCTEXT("MOStatusInfo", "Morale", "Your will to keep going; 100 % is unshaken. Hardship wears it down and it comes back slowly.")},
+		{FName("Energy"), NSLOCTEXT("MOStatusInfo", "Energy", "Your mental energy. It moves with Morale: worn down by hardship, back slowly.")},
+	};
+	const FText* Found = Info.Find(FieldId);
+	return Found ? *Found : FText::GetEmpty();
 }
 
 void UMOStatusPanel::PopulateFieldConfigs_Implementation()
