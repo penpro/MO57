@@ -634,6 +634,10 @@
 
 ## 16. AI and gameplay
 
+- **The third-person camera goes into a rock face beside the player** -> the spring arm sweeps for collision only from the pawn to its
+  socket (plus `SocketOffset` / `TargetOffset`); an offset on the CAMERA component itself is placed after the sweep, untested. The
+  shoulder view's 80 cm sat on `FollowCamera` until Oct 30 (BR31-7) -> put any camera offset in the arm's `SocketOffset`.
+
 - **Nobody met a survivor; then none near a new camp** -> the spawn categories the game uses are the MAP's spawn settings actor
   (`BP_SpawnController`), not `Config/DefaultGame.ini`: survivors 1800-3600 s, cap 3, 100-500 m out, 200 m from any finished building --
   and a survivor's own campfire is a finished building. Read the live actor (`get_editor_property("survivor_config")`) before reasoning from

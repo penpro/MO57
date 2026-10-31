@@ -89,14 +89,16 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = 400.0f;
 	CameraBoom->bUsePawnControlRotation = true;
-	// Keep SocketOffset zeroed - shoulder offset is handled via FollowCamera relative location
+	// The shoulder view is the arm's SocketOffset (right shoulder by default; ToggleCameraShoulder swaps it), never the camera's own offset: the arm
+	// sweeps for collision from the pawn to its socket INCLUDING SocketOffset, so the shoulder point is tested too. With the 80 cm on the camera
+	// instead, the sweep ended at the arm and the camera went 80 cm further sideways untested -- into any rock face beside the player (BR31-7,
+	// Oct 30 2026: "can clip camera into terrain if it is vertical").
+	CameraBoom->SocketOffset = FVector(0.0f, CameraShoulderOffset, 0.0f);
 
-	// Follow camera
+	// Follow camera: at the arm's (collision-tested) end
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
-	// Default to right shoulder view - toggled via ToggleCameraShoulder()
-	FollowCamera->SetRelativeLocation(FVector(0.0f, 80.0f, 0.0f));
 
 	// Movement defaults (same as ThirdPerson template). The survivor moves as its animation set expects (AMOMetaHumanCharacter's constructor).
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -309,6 +311,14 @@ void AMOCharacter::ApplySkinLook()
 void AMOCharacter::BeginPlay()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_AMOCharacter_BeginPlay_Total);   // spawn-cost breakdown: the whole BeginPlay (Super = its components + Blueprint part)
+	// A Blueprint that saved its own shoulder offset on the camera (before BR31-7) has it moved onto the arm, where the collision sweep sees it.
+	if (CameraBoom && FollowCamera && !FMath::IsNearlyZero(FollowCamera->GetRelativeLocation().Y))
+	{
+		FVector Rel = FollowCamera->GetRelativeLocation();
+		CameraBoom->SocketOffset.Y = Rel.Y;
+		Rel.Y = 0.0f;
+		FollowCamera->SetRelativeLocation(Rel);
+	}
 	// Load and apply default mesh if not already set
 	if (!GetMesh()->GetSkeletalMeshAsset())
 	{
@@ -629,8 +639,8 @@ void AMOCharacter::Tick(float DeltaTime)
 		}
 	}
 
-	// Handle smooth camera shoulder transition
-	if (bIsCameraTransitioning && FollowCamera)
+	// Handle smooth camera shoulder transition (the arm's SocketOffset: see the constructor)
+	if (bIsCameraTransitioning && CameraBoom)
 	{
 		CameraTransitionAlpha += DeltaTime / FMath::Max(CameraTransitionDuration, 0.01f);
 
@@ -639,20 +649,13 @@ void AMOCharacter::Tick(float DeltaTime)
 			// Transition complete
 			CameraTransitionAlpha = 1.0f;
 			bIsCameraTransitioning = false;
-
-			FVector FinalLocation = FollowCamera->GetRelativeLocation();
-			FinalLocation.Y = CameraTargetY;
-			FollowCamera->SetRelativeLocation(FinalLocation);
+			CameraBoom->SocketOffset.Y = CameraTargetY;
 		}
 		else
 		{
 			// Smooth interpolation using ease-out curve
 			const float EasedAlpha = 1.0f - FMath::Pow(1.0f - CameraTransitionAlpha, 2.0f);
-			const float NewY = FMath::Lerp(CameraStartY, CameraTargetY, EasedAlpha);
-
-			FVector CurrentLocation = FollowCamera->GetRelativeLocation();
-			CurrentLocation.Y = NewY;
-			FollowCamera->SetRelativeLocation(CurrentLocation);
+			CameraBoom->SocketOffset.Y = FMath::Lerp(CameraStartY, CameraTargetY, EasedAlpha);
 		}
 	}
 
@@ -1026,7 +1029,7 @@ void AMOCharacter::ApplyGameSettings()
 
 void AMOCharacter::ToggleCameraShoulder()
 {
-	if (!FollowCamera)
+	if (!CameraBoom)
 	{
 		return;
 	}
@@ -1045,7 +1048,7 @@ void AMOCharacter::ToggleCameraShoulder()
 	//   - Mid-transition: the in-flight CameraTargetY is the commitment
 	//     (the player asked to go there; pressing V again means "go back").
 	// Start is always the currently rendered Y so the visual stays smooth.
-	const float CurrentRenderedY = FollowCamera->GetRelativeLocation().Y;
+	const float CurrentRenderedY = CameraBoom->SocketOffset.Y;
 	const float CommittedSide = bIsCameraTransitioning ? CameraTargetY : CurrentRenderedY;
 
 	const float Offset = FMath::Max(FMath::Abs(CameraShoulderOffset), 1.0f);
