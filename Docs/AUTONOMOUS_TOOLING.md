@@ -422,7 +422,7 @@ The eyes now close the loop with **zero screenshots**. Two pieces:
 | Command | Marker | Checks |
 |---------|--------|--------|
 | `MO.Test.State` | `[MOQUERY] STATE` | netmode / level / inGame / possessed pawn (menu→NO, in-game→YES) |
-| `MO.Test.FindWidget [sub]` | `[MOQUERY] WIDGET` | live CommonUI widgets matching the substring, with on-screen center/rect — the "where's the button" locator |
+| `MO.Test.FindWidget [sub] [in=<owner>] [nth=<n>]` | `[MOQUERY] WIDGET` | live CommonUI widgets matching the substring, with on-screen center/rect — the "where's the button" locator. Top of the screen first, each with `#n` and `in=` (the UserWidget it sits in). A repeated name (every status row's IconImage) is narrowed by `in=` (an enclosing UserWidget's name, class or shown text: `in=Heart Rate`, spaces allowed) and `nth=` (the #n). ClickWidget and HitTest take the same filters (BR31-13, Oct 31 2026) |
 | `MO.Test.DropPickup [item]` | `[MOTEST] PASS/FAIL` | give→drop→pick-up round-trip; GUID identity preserved |
 | `MO.Test.Attack` | `[MOTEST] PASS/FAIL` | StartLightAttack → combat state |
 | `MO.Test.Craft [recipe]` | `[MOTEST] INFO` | EnqueueCraft (false on a fresh pawn = no recipe/mats — expected) |
@@ -430,6 +430,7 @@ The eyes now close the loop with **zero screenshots**. Two pieces:
 | `MO.Test.RunAll` / `MO.Test.ValidateData` | `Saved/MOTestResults.txt` | full regression suite / DataTable-integrity gate; results FILE, not log scraping |
 | `MO.Test.Input <action>` | `[MOTEST] PASS/FAIL` | drives IMOControllableInterface::Execute_Request* (Move/Look/Jump/Sprint/Interact/Primary/Secondary/Terraform...) — the post-Enhanced-Input seam, so #144 doesn't apply. Move/Look are per-frame: drive via claude_seq |
 | `MO.Test.ClickWidget <name>` | `[MOTEST] PASS/FAIL` | REAL UI click: UMOCommonButton -> guarded SimulateClick(); others -> synthesized Slate pointer click at screen center. Locate names with FindWidget first |
+| `MO.Test.HitTest <name> [in=<owner>] [nth=<n>]` | `[MOQUERY] HITTEST` | where a REAL click at the widget's centre lands (Slate's own hit test): REACHES / BLOCKED, the widget's tooltip, the top of the path. A simulated click proves nothing about hit-testing (TRAPS) |
 | `MO.AI.DumpBlackboard <pawnSub>` | `[MOQUERY] BB` | every blackboard key+value (DescribeKeyValue over the asset chain) |
 | `MO.AI.SetKey <pawnSub> <key> <val...>` | `[MOQUERY] BB` | typed write (bool/float/int/vector/name/string/enum/object-by-actor-name) + readback |
 

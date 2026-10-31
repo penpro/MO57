@@ -124,6 +124,7 @@
 #include "Components/QuadTree/OceanologyWaterMeshComponent.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Components/Widget.h"
+#include "Components/PanelWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
@@ -481,6 +482,157 @@ namespace
 					Body(W);
 				}
 			}));
+	}
+
+	/**
+	 * Which live widget a harness verb means (BR31-13, Oct 30 2026). Names repeat -- every status row has an IconImage, and the first one
+	 * anywhere was the HUD's "Soaked" moodle -- so after the name substring two filters narrow it: in=<text> keeps a widget that sits in a
+	 * UserWidget whose name or class contains the text or that shows it in a text block (in=MOStatusPanel; in=Heart Rate, the status row
+	 * with that label: the value runs to the next key, spaces allowed), and nth=<n> takes the n-th match from the top of the screen (0 first).
+	 * Only laid-out widgets count. FindWidget, ClickWidget's pointer path and HitTest share it, so what FindWidget lists as #n is what the
+	 * other two act on with nth=n.
+	 */
+	struct FMOWidgetQuery
+	{
+		FString Name;
+		FString In;
+		int32 Nth = INDEX_NONE;          // unset: an exact name first, else the first match
+		TMap<FString, FString> Extra;    // the verb's own key=value args (ClickWidget's at=)
+	};
+
+	FMOWidgetQuery ParseWidgetQuery(const TArray<FString>& Args)
+	{
+		FMOWidgetQuery Q;
+		bool bInOpen = false;
+		for (int32 I = 0; I < Args.Num(); ++I)
+		{
+			const FString& Arg = Args[I];
+			int32 Eq = INDEX_NONE;
+			if (I == 0)
+			{
+				Q.Name = Arg;
+			}
+			else if (Arg.FindChar(TEXT('='), Eq) && Eq > 0)
+			{
+				const FString Key = Arg.Left(Eq).ToLower();
+				const FString Value = Arg.Mid(Eq + 1);
+				bInOpen = Key == TEXT("in");
+				if (bInOpen) { Q.In = Value; }
+				else if (Key == TEXT("nth")) { Q.Nth = FMath::Max(0, FCString::Atoi(*Value)); }
+				else { Q.Extra.Add(Key, Value); }
+			}
+			else if (bInOpen)
+			{
+				Q.In += TEXT(" ") + Arg;
+			}
+		}
+		return Q;
+	}
+
+	/** The UserWidgets a widget sits in, innermost first: the one whose tree holds it, then the one that UserWidget was added to, and on out. */
+	TArray<UUserWidget*> EnclosingUserWidgets(const UWidget* Widget)
+	{
+		TArray<UUserWidget*> Out;
+		const UWidget* Cur = Widget;
+		while (Cur && Out.Num() < 32)
+		{
+			const UWidget* Root = Cur;
+			while (Root->GetParent())
+			{
+				Root = Root->GetParent();
+			}
+			UUserWidget* Owner = Root->GetTypedOuter<UUserWidget>();
+			if (!Owner || Out.Contains(Owner))
+			{
+				break;
+			}
+			Out.Add(Owner);
+			Cur = Owner;
+		}
+		return Out;
+	}
+
+	bool UserWidgetMatches(UUserWidget* UW, const FString& Needle)
+	{
+		if (UW->GetName().Contains(Needle) || UW->GetClass()->GetName().Contains(Needle))
+		{
+			return true;
+		}
+		bool bShows = false;
+		if (UW->WidgetTree)
+		{
+			UW->WidgetTree->ForEachWidget([&bShows, &Needle](UWidget* Child)
+			{
+				const UTextBlock* Text = Cast<UTextBlock>(Child);
+				bShows |= Text && Text->GetText().ToString().Contains(Needle);
+			});
+		}
+		return bShows;
+	}
+
+	/** Every laid-out widget the query names, top of the screen first. bMatchLabel: a text block also matches by the text it shows. */
+	TArray<UWidget*> FindQueriedWidgets(UWorld* World, const FMOWidgetQuery& Q, bool bMatchLabel)
+	{
+		TArray<UWidget*> Out;
+		for (TObjectIterator<UWidget> It; It; ++It)
+		{
+			UWidget* W = *It;
+			if (!IsValid(W) || W->GetWorld() != World || !W->GetCachedWidget().IsValid())
+			{
+				continue;
+			}
+			// A widget never laid out (or collapsed before its first layout) has no size, and no click can reach it.
+			const FVector2D Size = W->GetCachedGeometry().GetLocalSize();
+			if (Size.X <= 1.f && Size.Y <= 1.f)
+			{
+				continue;
+			}
+			if (!Q.Name.IsEmpty() && !W->GetName().Contains(Q.Name))
+			{
+				const UTextBlock* Text = bMatchLabel ? Cast<UTextBlock>(W) : nullptr;
+				if (!Text || !Text->GetText().ToString().Contains(Q.Name))
+				{
+					continue;
+				}
+			}
+			if (!Q.In.IsEmpty() && !EnclosingUserWidgets(W).ContainsByPredicate([&Q](UUserWidget* UW) { return UserWidgetMatches(UW, Q.In); }))
+			{
+				continue;
+			}
+			Out.Add(W);
+		}
+		Out.StableSort([](const UWidget& A, const UWidget& B)
+		{
+			const FVector2D PA = FVector2D(A.GetCachedGeometry().GetAbsolutePosition());
+			const FVector2D PB = FVector2D(B.GetCachedGeometry().GetAbsolutePosition());
+			return PA.Y != PB.Y ? PA.Y < PB.Y : PA.X < PB.X;
+		});
+		return Out;
+	}
+
+	/** The one widget a verb acts on: nth= when given, else a widget named exactly like the arg, else the top match. */
+	UWidget* PickQueriedWidget(const TArray<UWidget*>& Matches, const FMOWidgetQuery& Q)
+	{
+		if (Q.Nth != INDEX_NONE)
+		{
+			return Matches.IsValidIndex(Q.Nth) ? Matches[Q.Nth] : nullptr;
+		}
+		for (UWidget* W : Matches)
+		{
+			if (W->GetName().Equals(Q.Name, ESearchCase::IgnoreCase))
+			{
+				return W;
+			}
+		}
+		return Matches.Num() > 0 ? Matches[0] : nullptr;
+	}
+
+	FString DescribeQuery(const FMOWidgetQuery& Q)
+	{
+		FString Out = Q.Name;
+		if (!Q.In.IsEmpty()) { Out += FString::Printf(TEXT(" in=%s"), *Q.In); }
+		if (Q.Nth != INDEX_NONE) { Out += FString::Printf(TEXT(" nth=%d"), Q.Nth); }
+		return Out;
 	}
 
 	void RunBiomeValidation(TArray<FMOTestResult>& OutResults); // defined below (P1)
@@ -5232,7 +5384,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.ClickWidget <NameSubstring> ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.ClickWidget"),
-		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center (at=<0..1>: that far across instead -- a slider takes the value there). Usage: MO.Test.ClickWidget <NameSubstring> [at=<0..1>] | text=<button label> (locate names via MO.Test.FindWidget)"),
+		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center (at=<0..1>: that far across instead -- a slider takes the value there). Usage: MO.Test.ClickWidget <NameSubstring> [in=<owner name, class or shown text>] [nth=<n>] [at=<0..1>] | text=<button label> (locate names via MO.Test.FindWidget)"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (!World || Args.Num() < 1)
@@ -5250,10 +5402,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				LabelNeedle = FString::Join(Args, TEXT(" ")).RightChop(5);
 			}
 
+			// in= / nth= (BR31-13) pick one widget up front, through the lookup FindWidget lists; a button among them still takes pass 1's click.
+			const FMOWidgetQuery Q = ParseWidgetQuery(Args);
+			const bool bNarrowed = LabelNeedle.IsEmpty() && (!Q.In.IsEmpty() || Q.Nth != INDEX_NONE);
+			TArray<UWidget*> Matches;
+			if (bNarrowed)
+			{
+				Matches = FindQueriedWidgets(World, Q, /*bMatchLabel=*/false);
+				Matches.RemoveAll([](const UWidget* M) { return !M->IsVisible(); });
+			}
+
 			// Pass 1: MO buttons -- deterministic, guard-respecting click.
-			UMOCommonButton* Exact = nullptr;
+			UMOCommonButton* Exact = bNarrowed ? Cast<UMOCommonButton>(PickQueriedWidget(Matches, Q)) : nullptr;
 			UMOCommonButton* Partial = nullptr;
-			for (TObjectIterator<UMOCommonButton> It; It; ++It)
+			for (TObjectIterator<UMOCommonButton> It; It && !bNarrowed; ++It)
 			{
 				UMOCommonButton* Btn = *It;
 				if (!IsValid(Btn) || Btn->GetWorld() != World || !Btn->GetCachedWidget().IsValid() || !Btn->IsVisible())
@@ -5293,33 +5455,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			// Pass 2: any widget -- synthesized pointer click through real Slate
 			// hit-testing at the widget's absolute center (same coords FindWidget
 			// reports), so occlusion/z-order behave as they would for a user.
-			UWidget* Target = nullptr;
-			UWidget* TargetPartial = nullptr;
-			for (TObjectIterator<UWidget> It; It; ++It)
+			if (!bNarrowed)
 			{
-				UWidget* W = *It;
-				if (!IsValid(W) || W->GetWorld() != World || !W->GetCachedWidget().IsValid() || !W->IsVisible())
-				{
-					continue;
-				}
-				if (W->GetName().Equals(Needle, ESearchCase::IgnoreCase)) { Target = W; break; }
-				if (!TargetPartial && W->GetName().Contains(Needle)) { TargetPartial = W; }
+				Matches = FindQueriedWidgets(World, Q, /*bMatchLabel=*/false);
+				Matches.RemoveAll([](const UWidget* M) { return !M->IsVisible(); });
 			}
-			UWidget* W = Target ? Target : TargetPartial;
+			UWidget* W = PickQueriedWidget(Matches, Q);
 			if (!W)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: no live widget matching '%s' (try MO.Test.FindWidget)"), *Needle);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: no live widget matching '%s' (try MO.Test.FindWidget)"), *DescribeQuery(Q));
 				return;
 			}
 			// "at=<0..1>": how far across the widget the click lands (a slider takes the value under it; Oct 27, the creator's build sliders).
-			float Across = 0.5f;
-			for (const FString& Arg : Args)
-			{
-				if (Arg.StartsWith(TEXT("at="), ESearchCase::IgnoreCase))
-				{
-					Across = FMath::Clamp(FCString::Atof(*Arg.RightChop(3)), 0.0f, 1.0f);
-				}
-			}
+			const FString* AtArg = Q.Extra.Find(TEXT("at"));
+			const float Across = AtArg ? FMath::Clamp(FCString::Atof(**AtArg), 0.0f, 1.0f) : 0.5f;
 			const FGeometry& Geo = W->GetCachedGeometry();
 			const FVector2D Center = FVector2D(Geo.GetAbsolutePosition()) + FVector2D(Geo.GetAbsoluteSize()) * FVector2D(Across, 0.5f);
 			FSlateApplication& Slate = FSlateApplication::Get();
@@ -5516,58 +5665,41 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.FindWidget [NameSubstring] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.FindWidget"),
-		TEXT("Log [MOQUERY] live widgets whose name contains the arg, with absolute on-screen center/rect -- locate UI without screenshots. Usage: MO.Test.FindWidget [NameSubstring]"),
+		TEXT("Log [MOQUERY] live widgets whose name (or a text block's text) contains the arg, with absolute on-screen center/rect, top of the screen first, each with its #n for nth= and the UserWidget it sits in -- locate UI without screenshots. Usage: MO.Test.FindWidget [NameSubstring] [in=<owner name, class or shown text>] [nth=<n>]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+			// CommonUI button labels are UCommonTextBlock (: UTextBlock) leaves in the button's own WidgetTree, so the filter also matches
+			// the visible text -- "FindWidget Load" finds a button by its on-screen label, not just an internal object name. Only laid-out
+			// widgets count (a cached size): the old IsInViewport() gate wrongly excluded every CommonUI widget, which lives on
+			// activatable widget-stacks, not AddToViewport (#160).
+			const FMOWidgetQuery Q = ParseWidgetQuery(Args);
+			const TArray<UWidget*> Matches = FindQueriedWidgets(World, Q, /*bMatchLabel=*/true);
 			int32 Found = 0;
-			for (TObjectIterator<UUserWidget> It; It; ++It)
+			for (int32 I = 0; I < Matches.Num(); ++I)
 			{
-				UUserWidget* UW = *It;
-				if (!IsValid(UW) || UW->GetWorld() != World || !UW->WidgetTree)
+				if (Q.Nth != INDEX_NONE && I != Q.Nth)
 				{
 					continue;
 				}
-				UW->WidgetTree->ForEachWidget([&Filter, &Found](UWidget* Child)
+				UWidget* Child = Matches[I];
+				FString LabelText;
+				if (const UTextBlock* AsText = Cast<UTextBlock>(Child))
 				{
-					if (!Child)
-					{
-						return;
-					}
-					const FString Name = Child->GetName();
-					// CommonUI button labels are UCommonTextBlock (: UTextBlock) leaves in the
-					// button's own WidgetTree, so capture the visible text and let the filter
-					// match on it -- "FindWidget Load" should find a button by its on-screen
-					// label, not just an internal object name.
-					FString LabelText;
-					if (const UTextBlock* AsText = Cast<UTextBlock>(Child))
-					{
-						LabelText = AsText->GetText().ToString();
-					}
-					if (!Filter.IsEmpty() && !Name.Contains(Filter) && !LabelText.Contains(Filter))
-					{
-						return;
-					}
-					const FGeometry& Geo = Child->GetCachedGeometry();
-					const FVector2D LocalSize = Geo.GetLocalSize();
-					// Skip widgets not currently laid out on screen (zero cached size). This
-					// replaces the old IsInViewport() gate, which wrongly excluded every CommonUI
-					// widget -- they live on activatable widget-stacks, not AddToViewport (#160).
-					if (LocalSize.X <= 1.f && LocalSize.Y <= 1.f)
-					{
-						return;
-					}
-					const FVector2D TopLeft = Geo.LocalToAbsolute(FVector2D::ZeroVector);
-					const FVector2D Center = Geo.LocalToAbsolute(LocalSize * 0.5f);
-					UE_LOG(LogMOFramework, Warning,
-						TEXT("[MOQUERY] WIDGET '%s' (%s) text='%s' center=(%.0f,%.0f) topLeft=(%.0f,%.0f) size=(%.0f,%.0f) visible=%d"),
-						*Name, *Child->GetClass()->GetName(), *LabelText,
-						Center.X, Center.Y, TopLeft.X, TopLeft.Y, LocalSize.X, LocalSize.Y,
-						Child->IsVisible() ? 1 : 0);
-					Found++;
-				});
+					LabelText = AsText->GetText().ToString();
+				}
+				const TArray<UUserWidget*> Owners = EnclosingUserWidgets(Child);
+				const FGeometry& Geo = Child->GetCachedGeometry();
+				const FVector2D LocalSize = Geo.GetLocalSize();
+				const FVector2D TopLeft = Geo.LocalToAbsolute(FVector2D::ZeroVector);
+				const FVector2D Center = Geo.LocalToAbsolute(LocalSize * 0.5f);
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOQUERY] WIDGET '%s' (%s) text='%s' center=(%.0f,%.0f) topLeft=(%.0f,%.0f) size=(%.0f,%.0f) visible=%d #%d in=%s"),
+					*Child->GetName(), *Child->GetClass()->GetName(), *LabelText,
+					Center.X, Center.Y, TopLeft.X, TopLeft.Y, LocalSize.X, LocalSize.Y,
+					Child->IsVisible() ? 1 : 0, I, Owners.Num() > 0 ? *Owners[0]->GetName() : TEXT("-"));
+				Found++;
 			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FindWidget('%s'): %d match(es)"), *Filter, Found);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FindWidget('%s'): %d match(es)"), *DescribeQuery(Q), Found);
 		}),
 		ECVF_Default));
 
@@ -5577,33 +5709,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// widget's centre lands on.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.HitTest"),
-		TEXT("Where a REAL mouse click at the centre of the first live widget whose name contains the arg would land (Slate's hit test). Logs [MOQUERY] HITTEST: REACHES / BLOCKED and the top of the widget path. Usage: MO.Test.HitTest <NameSubstring>"),
+		TEXT("Where a REAL mouse click at the centre of a live widget would land (Slate's hit test). Logs [MOQUERY] HITTEST: REACHES / BLOCKED, the widget's tooltip and the top of the widget path. Usage: MO.Test.HitTest <NameSubstring> [in=<owner name, class or shown text>] [nth=<n>] (the widget MO.Test.FindWidget lists as #n)"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (Args.Num() < 1 || !FSlateApplication::IsInitialized())
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST usage: MO.Test.HitTest <NameSubstring> (needs Slate)"));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST usage: MO.Test.HitTest <NameSubstring> [in=<owner>] [nth=<n>] (needs Slate)"));
 				return;
 			}
-			UWidget* Target = nullptr;
-			for (TObjectIterator<UUserWidget> It; It && !Target; ++It)
-			{
-				UUserWidget* UW = *It;
-				if (!IsValid(UW) || UW->GetWorld() != World || !UW->WidgetTree)
-				{
-					continue;
-				}
-				UW->WidgetTree->ForEachWidget([&Target, &Args](UWidget* Child)
-				{
-					if (!Target && Child && Child->GetName().Contains(Args[0]) && Child->GetCachedGeometry().GetLocalSize().X > 1.f)
-					{
-						Target = Child;
-					}
-				});
-			}
+			const FMOWidgetQuery Q = ParseWidgetQuery(Args);
+			const TArray<UWidget*> Matches = FindQueriedWidgets(World, Q, /*bMatchLabel=*/false);
+			UWidget* Target = PickQueriedWidget(Matches, Q);
 			if (!Target)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST no laid-out widget named like '%s'"), *Args[0]);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST no laid-out widget named like '%s' (%d match(es))"), *DescribeQuery(Q), Matches.Num());
 				return;
 			}
 			const FGeometry& Geo = Target->GetCachedGeometry();
@@ -5622,8 +5741,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					Top += FString::Printf(TEXT("\n[MOQUERY] HITTEST   %d: %s"), I, *FReflectionMetaData::GetWidgetDebugInfo(&W));
 				}
 			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST '%s' at (%.0f, %.0f): %s (path of %d)%s"), *Target->GetName(), Center.X, Center.Y,
-				bReaches ? TEXT("REACHES it") : TEXT("BLOCKED -- a real click lands on something else"), Path.Widgets.Num(), *Top);
+			// The tooltip a pointer resting there shows (when the click REACHES it): the status rows' "i" exists only for this (BR31-4).
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST '%s' at (%.0f, %.0f): %s (path of %d) tooltip='%s'%s"), *Target->GetName(), Center.X, Center.Y,
+				bReaches ? TEXT("REACHES it") : TEXT("BLOCKED -- a real click lands on something else"), Path.Widgets.Num(),
+				*Target->GetToolTipText().ToString().Left(80).Replace(TEXT("\n"), TEXT(" ")), *Top);
 		}),
 		ECVF_Default));
 
