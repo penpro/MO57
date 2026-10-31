@@ -1972,3 +1972,11 @@ References: CL-0265
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (rainforest card side session) — CL-0270
 Status: RELEASE CL-0267 (the "rainpic" instance, stopped; the open editor, PID 37004, untouched beyond one texture import and save). Committed with this entry: a new Rainforest starting-biome card (Wes Oct 30): T_BiomePreview_Rainforest re-imported in place from a 1280x720 instance shot (seed 3014, rainforest start, FindBiomeSpot spot 1.6 km west, 10:00 clear, the sun behind the camera; same settings: UI group, no mips, sRGB), Content/Python/import_biome_previews.py (BIOME_PREVIEW_SOURCES re-imports one card), Docs/World_Creation.md §3, a BACKLOG by-eye row. Verified: a fresh -game instance's New Game panel shows the new card, selected ("Starting in: Rainforest"). The look is Wes's call (before / after sent).
 References: CL-0267
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (crop-plant test side session) — CL-0266
+Status: CLAIM the open editor's bridge for asset imports only (PID 37004, not launched by this session: not stopped, no PIE) into the gitignored /Game/Misc/CropTest/, and a -game instance "croptest": the TRELLIS crop-plant test (Wes Oct 30, "Yes, test one"; DECISIONS F55).
+References: CL-0265
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (crop-plant test side session) — CL-0271
+Status: RELEASE CL-0266 (the "croptest" instance, stopped; the open editor, PID 37004, untouched beyond five glTF imports, item_mesh_prepare and their saves, all under the gitignored /Game/Misc/CropTest/). Committed with this entry: DECISIONS F55's TRELLIS result (D: usable free, beats the stand-in grass; the pack only if the ripe close-ups fail Wes's eye). Note: the mesh saves first failed while "croptest" had the packages loaded (TRAPS: a running inst locks its .uasset files) and only went through after it stopped.
+References: CL-0266
