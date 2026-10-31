@@ -29,6 +29,18 @@ namespace
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "DrawDebugHelpers.h"
+#include "GameFramework/CharacterMovementComponent.h"
+
+namespace
+{
+	/** A swimmer has no footing to strike from and the water takes the swing's speed: no melee while swimming (BR31-9, Oct 30 2026: "can punch
+	 *  underwater"; Principle 11). Every machine asks the same replicated movement mode, so the owner's prediction and the server agree. */
+	bool IsOwnerSwimming(const AActor* Owner)
+	{
+		const ACharacter* Character = Cast<ACharacter>(Owner);
+		return Character && Character->GetCharacterMovement() && Character->GetCharacterMovement()->IsSwimming();
+	}
+}
 
 // ============================================================================
 // CONSTRUCTOR
@@ -214,6 +226,10 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	FVector SwingAim;
 	if (!GetOwner()->HasAuthority())
 	{
+		if (IsOwnerSwimming(GetOwner()))
+		{
+			return false;   // the server refuses it too (CanAttack): don't turn to a swing that will not happen
+		}
 		// The owner sees its pawn turn to the swing at once; the server turns it again for everyone else when it runs the attack.
 		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 		if (OwnerPawn && OwnerPawn->IsLocallyControlled() && GetPlayerSwingAim(SwingOrigin, SwingAim))
@@ -305,6 +321,12 @@ bool UMOCombatComponent::CanAttack(EMOAttackType AttackType, FString& OutReason)
 		CombatState != EMOCombatState::Recovering)
 	{
 		OutReason = TEXT("Already in combat action");
+		return false;
+	}
+
+	if (IsOwnerSwimming(GetOwner()))
+	{
+		OutReason = TEXT("Swimming");
 		return false;
 	}
 
