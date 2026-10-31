@@ -2028,3 +2028,11 @@ References: CL-0280
 ### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0282
 Status: RELEASE CL-0280 (and its note CL-0281): the "br31b" / "br31c" instances stopped; the editor started again (stopped gracefully for the build). The second BR31 batch, one build, `ue.py auto` 407/407, verified in Wes's seed 8027 as Trey: committed 669511fe (BR31-13: in= / nth= for the widget verbs; BR31-4's "i" proven with a real pointer), c2232828 (BR31-10: the lakes' base swell scaled -- the waviness Wes reported, A/B in Docs/Water.md §5a -- and the swimmer's body lift), 5b42bef5 (BR31-6: ankle limits), 213e2558 (BR31-8: trunk hulls; 32 local tree meshes rebuilt with fix_mesh_collision.py). New: BR31-14 (sea swimming vs the ocean's drawn waves).
 References: CL-0281
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0283
+Status: CLAIM for the climbing batch (Wes, Oct 31: "make the collission for the cliffs and ED cliff rocks complex and see if you can get the hand/foot IKs to land on the mesh better and have the animations with a little less bend in the elbows and knees ... they can't climb around corners ... can't climb over even the smallest overhang"): MOCharacterMovementComponent (TraceClimbFace / PhysClimb, the climb settings), MOBodyRetargetAnimInstance (the climbing IK), Content/Python/fix_mesh_collision.py (big rocks complex; NordicBoulder_02 rebuilt, local), Docs/Movement_And_Traversal.md, Docs/Animation_GASP.md; -game instances "cliff"; one build window now (the editor is already stopped, I stopped it).
+References: CL-0282
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0284
+Status: RELEASE CL-0283: the "cliff" instances stopped; the editor started again (I had stopped it for this batch). Committed: f-commits for the big-rock complex collision (NordicBoulder_02 rebuilt, local), the climbing movement (corners, bulges, the 22 cm gap, the turn rate; `ue.py auto` 407/407, `nettest traversal` PASS 0.0 cm apart) and the climbing IK (drawn-rock sweeps, feet lower and deeper). BACKLOG N-250..252, a by-eye row for the climbing look.
+References: CL-0283
