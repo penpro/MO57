@@ -1652,6 +1652,14 @@ public:
 
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
+	/**
+	 * How far to raise a swimmer's mesh at the surface so the drawn body floats where a real one does (BR31-10). From where the body's pelvis and
+	 * head ARE (the current raise included) and the water: upright (treading water) the head bone ~5 cm out, lying flat (a stroke) the body's line
+	 * ~12 cm under with the back at the surface, blended by how flat the spine is -- so a stroke blending back to treading water loses its lift with
+	 * the pose. 0..70 cm. Pure: the automation tests check it.
+	 */
+	static float SurfaceSwimRaise(float CurrentRaise, const FVector& Pelvis, const FVector& Head, float SurfaceZ);
+
 private:
 	/** Holding still, crouched. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Crouch", meta=(AllowPrivateAccess="true"))

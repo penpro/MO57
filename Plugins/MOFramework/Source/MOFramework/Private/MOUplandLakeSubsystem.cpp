@@ -28,9 +28,9 @@ namespace
 	// travels (bigger = clearer; the plugin's units): 2.5 / 4.5 / 3 keeps the deep water dark and the shallows green, a highland freshwater lake (A/B shots 2026-10-13; 35/30/45 went clear
 	// and pink). Applied at spawn (the lake pushes it into its material in Init).
 	TAutoConsoleVariable<FString> CVarLakeAbsorption(TEXT("mo.Lakes.Absorption"), TEXT("2.5 4.5 3 50"), TEXT("Upland lake water absorption \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
-	TAutoConsoleVariable<float> CVarLakeWaveScale(TEXT("mo.Lakes.WaveScale"), 0.03f, TEXT("Upland lake wave height as a fraction of the lake preset's (Wes, Oct 18 2026: \"make lakes less splashy, smaller waves\" -> 0.4; Oct 23, BR23-16: \"these are all small lakes so they should be almost still\" -> 0.1). Takes effect for lakes spawned afterwards. Oct 24, BR24-15: \"still huge swaths of water material rolling across the lake surface, dial them down a LOT still, they should be almost still\" -> 0.03."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeWaveScale(TEXT("mo.Lakes.WaveScale"), 0.03f, TEXT("Upland lake wave height as a fraction of the lake preset's (Wes, Oct 18 2026: \"make lakes less splashy, smaller waves\" -> 0.4; Oct 23, BR23-16: \"these are all small lakes so they should be almost still\" -> 0.1). Takes effect for lakes spawned afterwards. Oct 24, BR24-15: \"still huge swaths of water material rolling across the lake surface, dial them down a LOT still, they should be almost still\" -> 0.03. Oct 31: it scales the base swell (BaseOffset) too, which it never did -- the swell was the waviness."), ECVF_Default);
 	TAutoConsoleVariable<float> CVarLakeWavelengthScale(TEXT("mo.Lakes.WavelengthScale"), 0.2f, TEXT("Upland lake wavelength as a fraction of the lake preset's (Oct 23, BR23-16: \"reduce lake water wavelength by like 80%\"); each wave's speed follows by deep-water dispersion (c ~ sqrt(wavelength)). Takes effect for lakes spawned afterwards."), ECVF_Default);
-	TAutoConsoleVariable<float> CVarLakeTurbulenceScale(TEXT("mo.Lakes.TurbulenceScale"), 0.1f, TEXT("Upland lake procedural surface noise (Oceanology Procedural.Turbulance) as a fraction of the lake blueprint's (Oct 23, BR23-16: \"reduce lake water noise by like 90%\"). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarLakeTurbulenceScale(TEXT("mo.Lakes.TurbulenceScale"), 0.1f, TEXT("Upland lake procedural surface noise (Oceanology Procedural.Turbulance) as a fraction of the lake blueprint's (Oct 23, BR23-16: \"reduce lake water noise by like 90%\"). Takes effect for lakes spawned afterwards. Measured Oct 31 2026: no visible effect on the lake material (x10 left frame motion and surface texture unchanged, A/B in Docs/Water.md); kept for the plugin value it writes."), ECVF_Default);
 	TAutoConsoleVariable<float> CVarLakeNormalScale(TEXT("mo.Lakes.NormalScale"), 0.25f, TEXT("Upland lake surface normal detail (Oceanology Flipbook: the near / mid / far normal strengths and their animation rate) as a fraction of the lake blueprint's: the animated normal maps were the broad bands rolling across a small lake (Oct 24, BR24-15). Takes effect for lakes spawned afterwards."), ECVF_Default);
 	TAutoConsoleVariable<FString> CVarLakeScattering(TEXT("mo.Lakes.Scattering"), TEXT("0.005 0.012 0.008 2"), TEXT("Upland lake water scattering \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
 
@@ -164,10 +164,21 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 		const float WaveScale = FMath::Clamp(CVarLakeWaveScale.GetValueOnGameThread(), 0.0f, 2.0f);
 		const float LengthScale = FMath::Clamp(CVarLakeWavelengthScale.GetValueOnGameThread(), 0.05f, 2.0f);
 		const float SpeedScale = FMath::Sqrt(LengthScale);
-		Gerstner->Wave_1.Amplitude_1 *= WaveScale;
-		Gerstner->Wave_2.Amplitude_2 *= WaveScale;
-		Gerstner->Wave_3.Amplitude_3 *= WaveScale;
-		Gerstner->Wave_4.Amplitude_4 *= WaveScale;
+		// Never a zero amplitude: Oceanology's Gerstner sum divides by it (ComputeGerstnerWaves, and its material the same way), and one zero makes
+		// every vertex NaN -- the lake is not drawn at all, only its bed (A/B Oct 31 2026). 0.01 cm is still water.
+		auto Scaled = [WaveScale](float Amplitude) { return FMath::Max(Amplitude * WaveScale, 0.01f); };
+		// The base swell (BaseOffset: four long waves summed, amplitude 80 in the lake blueprint) is the lake's biggest motion by far and was never
+		// scaled: with the four waves below down to 1.5 cm the swell still heaved the drawn water -55..+61 cm (A/B, seed 8027's lake, Oct 31 2026:
+		// Wes, "the lakes are still very wavy ... it doesn't seem like [the wave changes] are doing anything"), and a swimmer floating on the flat
+		// surface (FMOWorldGen::GetWaterSurfaceCm) hung in air in its troughs (BR31-10: "you can sometimes swim on air"). Scaled like the rest it
+		// heaves +-2 cm, so the drawn water and the surface swimming uses agree.
+		Gerstner->BaseOffset.Amplitude = Scaled(Gerstner->BaseOffset.Amplitude);
+		Gerstner->BaseOffset.WaveLength *= LengthScale;
+		Gerstner->BaseOffset.Speed *= SpeedScale;
+		Gerstner->Wave_1.Amplitude_1 = Scaled(Gerstner->Wave_1.Amplitude_1);
+		Gerstner->Wave_2.Amplitude_2 = Scaled(Gerstner->Wave_2.Amplitude_2);
+		Gerstner->Wave_3.Amplitude_3 = Scaled(Gerstner->Wave_3.Amplitude_3);
+		Gerstner->Wave_4.Amplitude_4 = Scaled(Gerstner->Wave_4.Amplitude_4);
 		Gerstner->Wave_1.WaveLength_1 *= LengthScale;
 		Gerstner->Wave_2.WaveLength_2 *= LengthScale;
 		Gerstner->Wave_3.WaveLength_3 *= LengthScale;

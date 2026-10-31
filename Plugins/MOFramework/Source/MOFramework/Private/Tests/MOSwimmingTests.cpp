@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "MOBreathMeterWidget.h"
+#include "MOCharacter.h"
 #include "MOCharacterMovementComponent.h"
 #include "MOCreature.h"
 #include "MOMetaHumanCharacter.h"
@@ -74,6 +75,28 @@ bool FMOSwim_Decisions::RunTest(const FString& Parameters)
 	TestTrue(TEXT("swimming starts at about 1 m of water (Wes)"), Defaults->SwimEnterDepthCm >= 90.0f && Defaults->SwimEnterDepthCm <= 110.0f);
 	TestTrue(TEXT("the swim-exit depth is below the swim-enter depth (hysteresis), by no more than 20 cm"), Defaults->SwimExitDepthCm < Defaults->SwimEnterDepthCm && Defaults->SwimEnterDepthCm - Defaults->SwimExitDepthCm <= 20.0f);
 	TestTrue(TEXT("wading in chest-deep water roughly halves the walking speed"), Defaults->WadeDragAtFullImmersion > 0.4f && Defaults->WadeDragAtFullImmersion < 0.7f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_SurfaceRaise,
+	"MOFramework.Water.SurfaceRaise",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSwim_SurfaceRaise::RunTest(const FString& Parameters)
+{
+	// BR31-10 (Oct 30 2026, "you can sometimes swim on air"): the drawn swimmer is raised from the capsule's frame to where a real body floats -- treading
+	// water upright, the head bone ~5 cm out; lying flat in a stroke, the body's line ~12 cm under (the back at the surface) -- from where the body IS.
+	const float Surface = 1000.0f;
+	TestTrue(TEXT("treading, the head 20 cm under: raised 25 cm (head 5 cm out)"),
+		FMath::IsNearlyEqual(AMOCharacter::SurfaceSwimRaise(0.0f, FVector(0, 0, 900), FVector(0, 0, 980), Surface), 25.0f, 0.5f));
+	TestTrue(TEXT("a stroke lying flat at 1000: lowered back to 0 from a 10 cm raise (never above the water: the hips out was the bug)"),
+		FMath::IsNearlyEqual(AMOCharacter::SurfaceSwimRaise(10.0f, FVector(0, 0, 1000), FVector(60, 0, 1000), Surface), 0.0f, 0.5f));
+	TestTrue(TEXT("a stroke lying flat 40 cm under: raised 28 cm (the line 12 cm under)"),
+		FMath::IsNearlyEqual(AMOCharacter::SurfaceSwimRaise(0.0f, FVector(0, 0, 960), FVector(60, 0, 960), Surface), 28.0f, 0.5f));
+	TestTrue(TEXT("the raise from where the body is: already raised 25 and in place -> stays 25"),
+		FMath::IsNearlyEqual(AMOCharacter::SurfaceSwimRaise(25.0f, FVector(0, 0, 925), FVector(0, 0, 1005), Surface), 25.0f, 0.5f));
+	TestEqual(TEXT("deep under: at most 70 cm"), AMOCharacter::SurfaceSwimRaise(0.0f, FVector(0, 0, 0), FVector(0, 0, 80), Surface), 70.0f);
+	TestEqual(TEXT("a degenerate spine: no raise"), AMOCharacter::SurfaceSwimRaise(30.0f, FVector(0, 0, 900), FVector(0, 0, 900), Surface), 0.0f);
 	return true;
 }
 

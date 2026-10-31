@@ -521,6 +521,10 @@
 - **A lake setting changed after `FinishSpawning` never reaches the water** -> `AOceanologyLake::Init` runs from OnConstruction AND
   BeginPlay, both inside FinishSpawning, and pushes the waves / surface to the material there -> set things before FinishSpawning, or push
   again after (`UpdateWaves()` for the Gerstner waves). Measure the MATERIAL (its MID's Amplitude_N), not the solver. (Oct 25)
+- **Oceanology's water has a fifth wave: the base swell (`BaseOffset`, amplitude 80)** -> scaling Wave_1..4 leaves the biggest motion
+  untouched (the lakes heaved +-60 cm at WaveScale 0.03 until Oct 31). **And an amplitude of exactly 0 (swell or wave) erases the water:**
+  the Gerstner sum divides by it, every vertex goes NaN and only the bed is drawn -> floor every amplitude (0.01 cm). Before trusting an A/B
+  of the water, LOOK at one frame of each setting: a "still" setting that drew no water at all measured as perfectly still. (Oct 31)
 
 ## 12. Light, rendering, materials
 

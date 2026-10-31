@@ -2204,22 +2204,40 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 		PendingSwimPoseSeconds = 0.0f;
 	}
 
-	// A horizontal swimmer rides the surface: lift the mesh until the body line is at the water (the capsule's centre is ~60 cm below it while floating). Upright and underwater poses keep the capsule's frame.
+	// A swimmer at the surface floats: the mesh is raised from the capsule's frame (whose centre floats ~55 cm under the water) until the DRAWN body sits
+	// where a real one does (SurfaceSwimRaise). It used to lift by the chosen pose alone, to the body line 6 cm OVER the water: a stroke rode on top of
+	// the lake with the hips out, and blending back to treading water kept the lift on an upright body, the waist at the surface (BR31-10, Oct 30 2026:
+	// "you can sometimes swim on air"; measured in seed 8027's lake: pelvis +4 cm, head +6 cm while swimming). Underwater poses keep the capsule's frame.
 	if (CurrentSwimPose != ESwimPose::None)
 	{
 		float TargetRaise = 0.0f;
-		if (CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
+		if (CurrentSwimPose == ESwimPose::Tread || CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
 		{
 			float Surface = 0.0f;
 			const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
-			if (Move && Move->GetWaterSurfaceZ(Surface))
+			static const FName Pelvis(TEXT("pelvis"));
+			static const FName Head(TEXT("head"));
+			if (Move && Move->GetWaterSurfaceZ(Surface) && Body->GetBoneIndex(Pelvis) != INDEX_NONE && Body->GetBoneIndex(Head) != INDEX_NONE)
 			{
-				TargetRaise = FMath::Clamp(Surface - GetActorLocation().Z - 6.0f, 0.0f, 70.0f);
+				TargetRaise = SurfaceSwimRaise(SwimMeshRaise, Body->GetSocketLocation(Pelvis), Body->GetSocketLocation(Head), Surface);
 			}
 		}
 		SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, TargetRaise, DeltaTime, 6.0f);
 		Body->SetRelativeLocation(SavedMeshRelativeLocation + FVector(0.0f, 0.0f, SwimMeshRaise));
 	}
+}
+
+float AMOCharacter::SurfaceSwimRaise(float CurrentRaise, const FVector& Pelvis, const FVector& Head, float SurfaceZ)
+{
+	const FVector Spine = Head - Pelvis;
+	if (Spine.SizeSquared() < 1.0f)
+	{
+		return 0.0f;
+	}
+	const float Flat = 1.0f - FMath::Abs(static_cast<float>(Spine.GetSafeNormal().Z));   // 0 upright, 1 lying flat
+	const float TopTarget = SurfaceZ + FMath::Lerp(5.0f, -12.0f, Flat);
+	const float Top = static_cast<float>(FMath::Max(Pelvis.Z, Head.Z));
+	return FMath::Clamp(CurrentRaise + TopTarget - Top, 0.0f, 70.0f);
 }
 
 void AMOCharacter::TickWater(float DeltaTime)

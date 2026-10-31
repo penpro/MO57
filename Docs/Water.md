@@ -52,7 +52,8 @@
   each channel CARRIES (bigger = clearer, not more absorbed); plugin default 10/25/30 = turquoise pool; ours = dark teal + green
   shallows. Cost: a lake filling the view ~1.2 ms GPU of 10; the 4 km spawn radius stays.
 - **Lake waves** (Oct 18, Wes: "make lakes less splashy, smaller waves"; Oct 23, BR23-16: "these are all small lakes so they should be almost
-  still"): as each lake spawns, `mo.Lakes.WaveScale` (0.1; 0.4 until Oct 23) scales the preset's four Gerstner wave heights,
+  still"): as each lake spawns, `mo.Lakes.WaveScale` (0.03 since Oct 24, §5a) scales the preset's four Gerstner wave heights and,
+  since Oct 31, its base swell (§5a: the swell was the waviness),
   `mo.Lakes.WavelengthScale` (0.2) their wavelengths, and each wave's speed follows by deep-water dispersion (x sqrt(0.2): short waves are
   slow); `mo.Lakes.TurbulenceScale` (0.1) scales the procedural surface noise (`Procedural.Turbulance`). All lakes share the elected lake's
   wave parameters, so they all get the same scales. The lake's SOUND is the Water ambience (Audio.md): x0.2 since Oct 23.
@@ -77,6 +78,11 @@
 - `AMOCharacter::TickWater`: Space = rise, steering by camera pitch with a +-12 deg dead zone, hustle = crawl; stamina / MET /
   exertion / XP / wetness. Swim poses play single-node on the body mesh (`Plugins/MOFramework/Content/Characters/Swim/*_MH`, the
   plugin's Manny set retargeted: `Docs/TOOLING.md` § animation retarget); the ABP is restored on exit (crouch and swim never overlap).
+- **Where the drawn swimmer floats** (`AMOCharacter::SurfaceSwimRaise`, BR31-10, Oct 31 2026): the capsule's centre floats ~55 cm under
+  the water, so the mesh is raised from where the body IS -- treading water upright, the head bone ~5 cm out; lying flat in a stroke, the
+  body's line ~12 cm under with the back at the surface; blended by the spine's tilt, 0..70 cm (test `Water.SurfaceRaise`). Measured in
+  seed 8027's lake: treading, head +2..+5 cm, pelvis -60; stroking, pelvis -13, head -11. It used to lift by the chosen pose alone, to
+  the body line 6 cm OVER the water (the hips out), and it was first measured against a lake whose drawn swell was off by ~60 cm (§5a).
 - **Drowning is the medical sim:** `UMORespirationComponent` (oxygen reserve, `SetAirwayClosedBy(source, bool)`; a closed airway
   drains it, 110 s at rest, /4 at full exertion) caps SpO2 via `UMOVitalsComponent::SetAirwayOxygenReserve`; asphyxia death 75 s
   after empty -> `DieOf(Drowned)`. Pure math `FMOBreathMath`; `EMOActivityLevel::Swimming` (appended last).
@@ -117,6 +123,29 @@
   `FinishSpawning` -- and pushes the waves into the material there; the scaling came after it, and nothing pushed again until a lake was
   removed (`ReelectWaveTimeSource`'s re-init: why it looked "hit or miss"). `SpawnLake` now calls the solver's `UpdateWaves()` after
   scaling. Every wave tuning since Oct 18 (0.4, 0.1, 0.03, the wavelength and speed) only ever reached the CPU wave query until then.
+- **The swell was never scaled (A/B Oct 31 2026, Wes: "the lakes are still very wavy, do an A/B test between some extremes to see if any of
+  the wave shape changes are even doing anything").** Besides the four waves, Oceanology sums a base swell (the solver's `BaseOffset`:
+  four long waves, amplitude 80 in the lake blueprint) that no lake knob touched. Seed 8027's lake (-692550, 1380000), every lake set live,
+  heave = the solver's own wave height at 5 points over 4 s, motion / texture = two frames from a fixed camera 57 m off (mean absolute
+  difference and neighbour gradient of the water, 0-255):
+
+  | Setting | Heave (cm) | Motion | Texture |
+  |---|---|---|---|
+  | shipped (swell 80, waves x0.03, length x0.2, noise x0.1, normals x0.25) | -55..+61 | 15.7 | 9.4 |
+  | swell 0.01 | +-0.8 | 6.8 | 9.6 |
+  | swell x0.03 (the fix) | -1.9..+2.3 | 6.8 | 9.5 |
+  | swell 0.01, waves back to the preset (x33) | +-35 | 24.1 | 34.0 |
+  | ... and the preset wavelengths | -29..+43 | 17.3 | 15.3 |
+  | swell 0.01, noise back to the preset (x10) | +-0.7 | 6.8 | 9.5 |
+  | swell 0.01, normals back to the preset (x4) | +-0.8 | 18.1 | 24.7 |
+  | swell x3 | -236..+240 | 33.5 | 12.0 |
+
+  So `WaveScale`, `WavelengthScale` and `NormalScale` do reach the water; `TurbulenceScale` changes nothing measurable; the unscaled swell
+  was the waviness, and it heaved the drawn water ~60 cm around the flat surface swimming floats on (BR31-10: "swimming in air" in its
+  troughs). `SpawnLake` scales the swell like the four waves (height x WaveScale, length and speed with them): +-2 cm. **Trap:** an amplitude
+  of exactly 0 (the swell or any wave) erases the lake -- Oceanology divides by it and every vertex goes NaN, only the bed is drawn --
+  so every scaled amplitude keeps a 0.01 cm floor. Frames: `Saved/Screenshots/lake_ab/` (local); rig: a scratch script, re-runnable from
+  this table.
 - **Shore wetness:** the ocean lays a 1 km shoreline wetness decal; its preset made everything within 4 m of the water 75 % metallic at
   roughness 0.1 -- beach rocks and wet skin read as chrome ("looks metallic instead of wet"). `UMOSceneLightingSubsystem` sets it a tick after
   the ocean loads its preset: metallic 0, roughness 0.25, a 1 m band (`mo.Water.ShoreWetMetallic` / `ShoreWetRoughness` / `ShoreWetRadius`).
