@@ -117,17 +117,41 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
   the holds it had (`[MOTraversal] ... holds on at the lip at ..., no pull-over: <why>`, once per lip). Decided by the position, the face
   normal (which rides the saved moves) and the rock, so a joiner's replay holds where the server does. The face lost at the start of a
   step (no step took it there: right after a grab, a correction) still lets go.
-- **The face is felt at six holds** (`TraceClimbFace`: the chest, above the head, the waist, the thighs, either side of the chest), for the
-  grab and for every climbing step: the climber holds the gap to the nearest and steers by their mean normal, which the body turns to over
-  ~0.1 s. Until Oct 29 one ray at the chest did both, and on an Electric Dreams cliff its normal swings up to 70 degrees between facets 25 cm
-  apart: the climber turned off the face and let go 1-3 m up every side. The face is lost only when it leaves every hold; the log then
-  says what was there and why there was no pull-over (`[MOTraversal] ... the face ended at the hands (...) ...; no pull-over: <why>`).
+- **The face is felt at seven holds** (`TraceClimbFace`: the chest, the head, the waist, the thighs, either side of the chest, and the
+  reaching hands 20 cm above the head, `ClimbReachAboveHeadCm`), for the grab and for every climbing step: the climber holds the gap to the
+  nearest and steers by their mean normal, which the body turns to over ~0.1 s. Until Oct 29 one ray at the chest did both, and on an
+  Electric Dreams cliff its normal swings up to 70 degrees between facets 25 cm apart: the climber turned off the face and let go 1-3 m up
+  every side. The face is lost only when it leaves every hold; the log then says what was there and why there was no pull-over
+  (`[MOTraversal] ... the face ended at the hands (...) ...; no pull-over: <why>`). The holds reach `ClimbReachCm` past the gap held.
+- **The body hangs 22 cm off the face** (`ClimbWallGapCm`; 6 until Oct 31, Wes: "a little less bend in the elbows and knees... they look
+  like spider monkeys"): at 6 the chest was 33 cm off the rock and the elbows folded to 76-120 deg, the knees to 65; measured on SM_Cliff_09
+  as Trey: 15 -> elbows 90-148, 25 -> 115-180, 35 -> a hand short of the rock. The body turns to the face at most `ClimbTurnRateDeg` (270)
+  a second.
+- **Over a bulge** (Oct 31, Wes: "they can't climb over even the smallest overhang"): the reaching hands' hold feels an outcrop coming up
+  before the head meets its underside, and the gap is held to it -- the body leans out round it, up to `ClimbLeanOutCm` (40) out from the
+  face below; a roof sticking out further still stops the line, as on real rock. Until then the capsule's top met the outcrop with every
+  hold still on the face below: 9 cm of climb under a 30 cm shelf 2.6 m up, then nothing.
+- **Round corners** (Oct 31, Wes: "they can't climb around corners very well if at all"). An outside corner (an arete): moving across, the
+  face runs out beside the body; the hands, reaching past the face's plane, feel back across for the rock round the edge, and the body
+  swings round the edge at its distance from the rock, at climbing speed, turning with it (`ClimbRoundCorner`). An inside corner: moving
+  across, the body meets climbable rock turned toward it and turns into the corner, halfway each bump. Until then the step past an edge was
+  undone by the hold rule (stuck there) and an inside corner was a wall. Input stays camera-relative: round a corner a player turns the
+  camera with the body, or A / D becomes up / down the new face.
 - The stuck-in-the-ground rescue (`AMOCharacter::CheckEmbeddedSafety`) skips a climbing or traversing body: it read a climber against a
   cliff's bumps as embedded and lifted it off the face 5 s into every climb (Oct 29).
 - W is camera-relative, like every move: a face that turns 50 degrees off the camera splits W into up and across, so a player keeps the
   camera on the face (as on foot). A face-relative mapping (W always up) is possible: Wes's call.
 
 ## 5. Verified (Oct 26, one game instance, real input actions through `MO.Test.InjectInput`)
+
+**Corners and a bulge (Oct 31, seed 777 near SM_Cliff_09, climbable `MO.Test.SpawnLedge` blocks moved into shape; the camera follows the
+body as a player's would):**
+
+| Shape | Before | After |
+|---|---|---|
+| outside corner: a 2 m wide, 3 m deep block, 2 m up, D held 12 s | stuck 18 cm past the edge ("holds on at the lip") | round the edge, turned 90, 2.7 m along the side face, still climbing |
+| inside corner: wall B at 90 on the right | stopped against B | turned onto B, along it, and round B's far end (an outside corner) onto its back: both in one run |
+| a 30 cm shelf sticking out 2.6 m up, W held 14 s | 9 cm, then stuck under it | 5.4 m up, past the shelf |
 
 Hop up onto a 90 cm block (standing on it after); vault a 90 x 30 cm fence (1.58 m on, same ground height); pull up onto a 170 cm ledge; a
 4 m plain block: no move (control); a 4 m climbable block: grabbed while pushing at it, 120 cm climbed in 4 s, crouch let go and the body

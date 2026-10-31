@@ -122,13 +122,29 @@ public:
 	/** Let go of the face (crouch, exhaustion): falls, or stands when Next is walking. */
 	void StopClimbing(EMovementMode Next = MOVE_Falling);
 
-	/** How far from the face the climber's capsule is held (cm). */
+	/**
+	 * How far from the face the climber's capsule is held (cm). 22: a climber hangs off nearly straight arms with the chest away from the rock.
+	 * At 6 (until Oct 31) the chest was 33 cm off the rock and the elbows folded to 76-120 deg, the knees to 65 (Wes: "they look like spider
+	 * monkeys"); measured on SM_Cliff_09 as Trey: 15 -> elbows 90-148, 25 -> 115-180 with the hands still on the rock (35: a hand short of it).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="0"))
-	float ClimbWallGapCm = 6.0f;
+	float ClimbWallGapCm = 22.0f;
 
 	/** How far past the capsule the hands find a face to grab (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="5"))
 	float ClimbReachCm = 30.0f;
+
+	/** Where the reaching hands feel the face, above the capsule's top (cm): a bulge coming up is felt there before the head meets it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="0"))
+	float ClimbReachAboveHeadCm = 20.0f;
+
+	/** How far out from the face below a climber leans round a bulge above (cm); a roof sticking out further stops the line. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="0"))
+	float ClimbLeanOutCm = 40.0f;
+
+	/** How fast the climber's body turns to the face it holds (deg/s): round a corner the face turns 45-90 degrees in one step. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="30"))
+	float ClimbTurnRateDeg = 270.0f;
 
 	/** The climber's own scale on the climbing speed: training and strength against weight (FMOTraversal::ClimbAbility). AMOCharacter sets it every half
 	 *  second on the server and the owning client alike (both have the skill and the body), so a predicted climb matches the server's. */
@@ -346,9 +362,13 @@ private:
 	void PhysClimb(float DeltaTime, int32 Iterations);
 	/** The body's facing for traversal probes: the face held while climbing, else where the body looks (flat). */
 	FVector TraversalFacing() const;
-	/** A climbable face along Direction (flattened) within the climbing reach, felt at six holds (chest, head, waist, thighs, the chest's sides):
-	 *  OutHit is the nearest climbable hold, its normals replaced by the holds' mean; Distance - capsule radius is the gap to the body. */
+	/** A climbable face along Direction (flattened) within the climbing reach, felt at seven holds (chest, head, waist, thighs, the chest's sides,
+	 *  the reaching hands above the head): OutHit is the nearest climbable hold (the hands' only when a bulge the body can lean round, within
+	 *  ClimbLeanOutCm), its normals replaced by the holds' mean; Distance - capsule radius is the gap to the body. */
 	bool TraceClimbFace(const FVector& Direction, FHitResult& OutHit, EMOClimbSurface& OutSurface) const;
+	/** Round an outside corner: the face held (FaceHeld) ran out moving Across; finds the rock round the edge and swings the body StepCm round
+	 *  the edge, setting ClimbNormal. False (nothing moved for good) when there is no climbable rock round it. */
+	bool ClimbRoundCorner(const FHitResult& FaceHeld, const FVector& Across, float StepCm);
 
 	struct FTraverseState
 	{

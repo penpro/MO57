@@ -778,6 +778,10 @@ bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHi
 	const FVector Into = Direction.GetSafeNormal2D(UE_SMALL_NUMBER, Direction.GetSafeNormal());
 	const FVector Side = FVector::CrossProduct(FVector::UpVector, Into).GetSafeNormal();
 	const FVector Centre = UpdatedComponent->GetComponentLocation();
+	// The last hold is where the reaching hands are, above the head: a bulge coming up is felt there first, and holding the gap to it leans the
+	// body out round it before the head meets its underside (Wes, Oct 31: "they can't climb over even the smallest overhang"; until then the
+	// capsule's top met the outcrop with every hold still on the face below and the climb stopped there).
+	constexpr int32 ReachHold = 6;
 	const FVector Holds[] = {
 		Centre + FVector(0.0, 0.0, Half * 0.3f),
 		Centre + FVector(0.0, 0.0, Half * 0.7f),
@@ -785,13 +789,18 @@ bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHi
 		Centre - FVector(0.0, 0.0, Half * 0.4f),
 		Centre + FVector(0.0, 0.0, Half * 0.3f) + Side * (Radius * 0.6f) - Into * (Radius * 0.2f),
 		Centre + FVector(0.0, 0.0, Half * 0.3f) - Side * (Radius * 0.6f) - Into * (Radius * 0.2f),
+		Centre + FVector(0.0, 0.0, Half + ClimbReachAboveHeadCm),
 	};
-	const float Reach = Radius + ClimbReachCm + 10.0f;
+	// Past the gap the body is held at, the same reach as ever (the gap was 6 cm when this was sized).
+	const float Reach = Radius + ClimbWallGapCm + ClimbReachCm + 4.0f;
 	FVector NormalSum = FVector::ZeroVector;
 	FHitResult Nearest;
 	FHitResult NearestAny;
-	for (const FVector& Start : Holds)
+	FHitResult Above;
+	EMOClimbSurface AboveKind = EMOClimbSurface::None;
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Holds); ++i)
 	{
+		const FVector& Start = Holds[i];
 		FHitResult Hit;
 		if (!GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + Into * Reach, UpdatedComponent->GetCollisionObjectType(), Params, Response))
 		{
@@ -807,11 +816,24 @@ bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHi
 			continue;
 		}
 		NormalSum += Hit.ImpactNormal;
+		if (i == ReachHold)
+		{
+			Above = Hit;
+			AboveKind = Kind;
+			continue;
+		}
 		if (!Nearest.bBlockingHit || Hit.Distance < Nearest.Distance)
 		{
 			Nearest = Hit;
 			OutSurface = Kind;
 		}
+	}
+	// The reaching hands hold the gap only to a bulge the body can lean out round: a roof sticking out further than that still stops the line,
+	// as on real rock (and with no face at the body, the hands' hold alone is not enough to stay on).
+	if (Above.bBlockingHit && Nearest.bBlockingHit && Above.Distance < Nearest.Distance && Nearest.Distance - Above.Distance <= ClimbLeanOutCm)
+	{
+		Nearest = Above;
+		OutSurface = AboveKind;
 	}
 	if (!Nearest.bBlockingHit)
 	{
@@ -822,6 +844,65 @@ bool UMOCharacterMovementComponent::TraceClimbFace(const FVector& Direction, FHi
 	OutHit = Nearest;
 	OutHit.ImpactNormal = NormalSum.GetSafeNormal(UE_SMALL_NUMBER, Nearest.ImpactNormal);
 	OutHit.Normal = OutHit.ImpactNormal;
+	return true;
+}
+
+bool UMOCharacterMovementComponent::ClimbRoundCorner(const FHitResult& FaceHeld, const FVector& Across, float StepCm)
+{
+	// An outside corner (Wes, Oct 31: "they can't climb around corners very well if at all"): moving across, the face ran out beside the body.
+	// Until then every hold missed past the edge and the step was undone -- stuck at the corner. A climber reaches round the arete: the hands,
+	// past the plane of the face held, feel back across for the rock round the edge; the body then swings round the edge at its distance from
+	// the rock, as far as this step's travel, turning with it. Decided by the position, ClimbNormal and the rock, so a replay rounds it the same way.
+	if (!UpdatedComponent || !CharacterOwner || !GetWorld())
+	{
+		return false;
+	}
+	float Radius = 0.0f;
+	float Half = 0.0f;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, Half);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbCorner), /*bTraceComplex=*/false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	const FVector N0 = ClimbNormal.GetSafeNormal2D();
+	const FVector Pos = UpdatedComponent->GetComponentLocation();
+	const float Hold = Radius + ClimbWallGapCm;   // the body's axis from the rock
+	const float ToPlane = FVector::DotProduct(FaceHeld.ImpactPoint - Pos, -N0);
+	const FVector From = Pos - N0 * (ToPlane + 20.0f) + FVector(0.0, 0.0, Half * 0.3f);
+	FHitResult Side;
+	if (!GetWorld()->LineTraceSingleByChannel(Side, From, From - Across * (Hold + 60.0f), UpdatedComponent->GetCollisionObjectType(), Params, Response))
+	{
+		return false;
+	}
+	const FVector N1 = Side.ImpactNormal.GetSafeNormal2D();
+	const double Det = N0.X * N1.Y - N0.Y * N1.X;
+	if (ClassifyClimbHit(Side) == EMOClimbSurface::None || FVector::DotProduct(N1, Across) < 0.5f || FMath::Abs(Det) < 0.2)
+	{
+		return false;   // no climbable rock round the edge, or not a corner (the same plane, near enough)
+	}
+	// The edge: where the face held and the face round it meet (two vertical planes).
+	const double D0 = FVector::DotProduct(N0, FaceHeld.ImpactPoint);
+	const double D1 = FVector::DotProduct(N1, Side.ImpactPoint);
+	const FVector Edge((D0 * N1.Y - N0.Y * D1) / Det, (N0.X * D1 - D0 * N1.X) / Det, Pos.Z);
+	FVector Dir = (Pos - Edge).GetSafeNormal2D();
+	if (Dir.IsNearlyZero())
+	{
+		Dir = N0;
+	}
+	const float Remaining = FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(Dir, N1)), -1.0f, 1.0f));
+	const float Step = FMath::Min(Remaining, FMath::Max(StepCm, 0.5f) / Hold);
+	const FVector NewDir = Dir.RotateAngleAxisRad(FVector::CrossProduct(Dir, N1).Z >= 0.0 ? Step : -Step, FVector::UpVector).GetSafeNormal2D();
+	FHitResult Hit;
+	SafeMoveUpdatedComponent(Edge + NewDir * Hold - Pos, UpdatedComponent->GetComponentQuat(), /*bSweep=*/true, Hit);
+	const FVector Before = ClimbNormal;
+	ClimbNormal = NewDir;
+	FHitResult Check;
+	EMOClimbSurface Kind = EMOClimbSurface::None;
+	if (!TraceClimbFace(-NewDir, Check, Kind))
+	{
+		ClimbNormal = Before;   // round the edge there is nothing to hold after all
+		return false;
+	}
+	ClimbSurface = Kind;
 	return true;
 }
 
@@ -1054,9 +1135,19 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 	const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 	const FQuat OldQuat = UpdatedComponent->GetComponentQuat();
 	FHitResult Hit;
-	SafeMoveUpdatedComponent(Velocity * DeltaTime, Into.ToOrientationQuat(), /*bSweep=*/true, Hit);
+	// The body turns to the face at most ClimbTurnRateDeg a second: round a corner the face held can turn 45-90 degrees in one step.
+	const FQuat Facing = FMath::QInterpConstantTo(OldQuat, Into.ToOrientationQuat(), DeltaTime, FMath::DegreesToRadians(ClimbTurnRateDeg));
+	SafeMoveUpdatedComponent(Velocity * DeltaTime, Facing, /*bSweep=*/true, Hit);
 	if (Hit.IsValidBlockingHit())
 	{
+		// An inside corner: moving across, the body meets more climbable rock turned toward it -- the climber turns into the corner, halfway
+		// each time it bumps, and goes on along the new face (Wes, Oct 31: "they can't climb around corners very well if at all").
+		const FVector Bumped = Hit.ImpactNormal.GetSafeNormal2D();
+		if (FMath::Abs(InputSide) > 0.3f && !Bumped.IsNearlyZero() && FVector::DotProduct(Bumped, ClimbNormal.GetSafeNormal2D()) < 0.85f
+			&& FVector::DotProduct(Bumped, Right * FMath::Sign(InputSide)) < -0.3f && ClassifyClimbHit(Hit) != EMOClimbSurface::None)
+		{
+			ClimbNormal = (ClimbNormal.GetSafeNormal2D() + Bumped).GetSafeNormal(UE_SMALL_NUMBER, ClimbNormal);
+		}
 		SlideAlongSurface(Velocity * DeltaTime, 1.0f - Hit.Time, Hit.Normal, Hit, true);
 	}
 
@@ -1068,7 +1159,12 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 	bool bHeldThisTick = false;
 	FHitResult Held;
 	EMOClimbSurface HeldSurface = EMOClimbSurface::None;
-	if (!TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Held, HeldSurface))
+	bool bOnFace = TraceClimbFace(-ClimbNormal.GetSafeNormal2D(), Held, HeldSurface);
+	if (!bOnFace && FMath::Abs(InputSide) > 0.3f)
+	{
+		bOnFace = ClimbRoundCorner(Wall, Right * FMath::Sign(InputSide), Velocity.Size() * DeltaTime);
+	}
+	if (!bOnFace)
 	{
 		FTraversalPlan Plan;
 		FString WhyNot = TEXT("not pushing up");
