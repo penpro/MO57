@@ -148,7 +148,12 @@ the face.
   curves (`c_lefthand / c_righthand / c_leftfoot / c_rightfoot`; idle and up all four, down the hands, the side clips none); past 0.6 a limb
   sweeps for the rock from where the clip puts it, past 0.95 it stays on that hold (kept in the touched component's space); after the slot
   each chain (upperarm-lowerarm-hand, thigh-calf-foot) bends to its hold by two-bone IK, keeping the clip's elbow / knee direction. Per
-  machine and presentation only. Measured on SM_Cliff_09: hands on holds sit 4 cm off the rock, feet 8 (the offsets).
+  machine and presentation only. Measured on SM_Cliff_09: hands on holds sit 4 cm off the rock, feet 8 (the offsets). Since Oct 31 (Wes:
+  "see if you can get the hand/foot IKs to land on the mesh better and have the animations with a little less bend in the elbows and
+  knees"): the sweeps hit the DRAWN rock (a complex trace: a rock with hulls bridges its cracks); a foot looks for its hold 12 cm lower than
+  the clip has it (`ClimbFootDropCm`: the clips' feet sit high under the hips, knees 65-89 deg) and 70 cm in (a hand 45: under a ledge the
+  rock stands back); and the body hangs 22 cm off the face (`ClimbWallGapCm`, was 6: `Docs/Movement_And_Traversal.md` §4), so the arms
+  hang nearly straight -- 9 m up SM_Cliff_09 the elbows read 167-180 deg (at 6: 76-120). The ankle limits (above) apply after the IK.
 - **Other machines' copies** read the server's replicated movement mode and velocity (`IsClimbingAsSeen` / `IsTraversingAsSeen`, the
   replicated `LinearVelocity`), and never run the climb themselves (`PhysCustom` returns on a simulated proxy) -- until then a copy ran
   `PhysClimb` with a zero face normal, "lost" the face and let go every tick: a host resting on a wall dropped to the ground on the joiner's

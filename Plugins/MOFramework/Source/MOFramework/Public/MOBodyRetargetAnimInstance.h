@@ -102,6 +102,9 @@ protected:
 	static constexpr float ClimbIKTraceThreshold = 0.6f;
 	static constexpr float ClimbIKLockThreshold = 0.95f;
 
+	/** How much lower than the climbing clip has it a foot looks for its hold (cm): the clips' feet sit high under the hips (knees 65-89 deg). */
+	static constexpr float ClimbFootDropCm = 12.0f;
+
 private:
 	/** Point the retarget at the owner's driver and retargeter. False while the owner has none (the body then holds its reference pose). */
 	bool BindToOwnerDriver();

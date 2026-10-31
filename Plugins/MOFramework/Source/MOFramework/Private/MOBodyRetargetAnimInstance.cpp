@@ -203,11 +203,16 @@ void UMOBodyRetargetAnimInstance::UpdateClimbIK(float DeltaSeconds)
 		}
 		else if (!Hold.bLocked)
 		{
-			// Reaching: sweep for the rock from where the clip puts the hand / foot, along the face's normal.
-			const FVector From = ToWorld.TransformPosition(Proxy.AnimatedEndCS[i]);
-			FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbLimbIK), false, Owner);
+			// Reaching: sweep for the rock from where the clip puts the hand / foot, along the face's normal. A foot looks a little lower than the
+			// clip has it: the climbing set's feet sit high under the hips, and on the rock the knees folded to 65-89 deg (Wes, Oct 31: "a little
+			// less bend in the elbows and knees... they look like spider monkeys").
+			const FVector From = ToWorld.TransformPosition(Proxy.AnimatedEndCS[i]) - FVector(0.0, 0.0, i >= 2 ? ClimbFootDropCm : 0.0f);
+			// The drawn surface (complex), not the collision: a rock with hulls bridges its cracks, and a hand there sat on air (presentation only).
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbLimbIK), /*bTraceComplex=*/true, Owner);
 			FHitResult Hit;
-			Hold.bHeld = World->SweepSingleByChannel(Hit, From + Out * 30.0f, From - Out * 45.0f, FQuat::Identity, ECC_Visibility,
+			// A foot looks further in than a hand: the rock under a climber often stands back (a ledge's underside), and since the body hangs
+			// 22 cm off the face (was 6) a 45 cm reach left both feet dangling 66-70 cm from it 9 m up SM_Cliff_09 (Oct 31).
+			Hold.bHeld = World->SweepSingleByChannel(Hit, From + Out * 30.0f, From - Out * (i >= 2 ? 70.0f : 45.0f), FQuat::Identity, ECC_Visibility,
 				FCollisionShape::MakeSphere(4.0f), Params) && Hit.GetComponent();
 			if (Hold.bHeld)
 			{
