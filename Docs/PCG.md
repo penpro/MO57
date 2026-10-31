@@ -112,12 +112,18 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   (NoCollision). `EMOSpeciesCollision` (Auto / Passable / Solid) on `FMOBiomeSpeciesEntry` overrides "a Tree in the resource table
   but a knee-high plant" (every Black Locust `wdvhberja` variant is Passable). `MO.Dev.ScatterCollision [filter]`,
   `MOFramework.Data.SolidMeshCollision`.
-- **The mesh's own collision** (`Content/Python/fix_mesh_collision.py`, re-run after importing or migrating plants): a tree is ONE trunk
-  capsule around its MEASURED trunk (the bark's vertices 30-150 cm up, centred on them, the radius taking in 90 % of them, 20-120 cm;
-  trees under 4 m keep 2.2 % of their height at the pivot), never its canopy. Before Oct 30 every trunk was 2.2 % of the tree's height
-  at the pivot: BlackAlder_Field_02's r 38 against a 68 cm trunk centred 31 cm off the pivot, and Wes walked into it (BR31-8). Trees,
-  saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you, and you slide off rather than stand on top
-  (BR31-5, "very stong bush"). Rocks stay walkable. Re-running the tool is a no-op on meshes already right (it re-measures).
+- **The mesh's own collision** (`Content/Python/fix_mesh_collision.py`, re-run after importing or migrating plants): a tree 4 m and taller
+  is ONE convex hull round its MEASURED trunk -- the convex outline of the bark's cross-sections 30, 50, 70, 90 and 110 cm up (where its
+  triangles cross those planes: a low-poly trunk has no vertices between its root ring and the next one metres up), a branch stub past
+  1.5x the trunk's radius left out, upright from the base to ~45 % of the tree's height (at most 6 m); never its canopy. A tree with no bark
+  at hip height, and every sapling, gets a capsule (2.2 % of its height at the pivot; a sapling's stem 6-12 cm). History (BR31-8): before
+  Oct 30 every trunk was that pivot capsule -- BlackAlder_Field_02's r 38 against a 68 cm trunk centred 31 cm off the pivot, and Wes walked
+  into it; one capsule round the measured trunk then over-covered a lopsided trunk by up to 71 cm, and a hull of a 30-150 cm band drew a
+  branch's base (it leaves Field_02's trunk ~136 cm up) down to hip height, 65 cm short of the bark. Measured at Field_02 (x1.32), rays at
+  hip height from 8 sides: the hull meets each at or before the bark, 7-30 cm out (Oct 31). Python cannot write a hull's vertices; the tool
+  goes through the struct's text import. Trees, saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you,
+  and you slide off rather than stand on top (BR31-5, "very stong bush"). Rocks stay walkable. Re-running the tool is a no-op on meshes
+  already right (it re-measures; the first save in an editor session can move a mesh's bounds a few cm, so a second run may rebuild a few).
 - **Rock alignment:** aligned species rotate as `PointRot * FQuat(Up, Yaw)` (yaw about the surface normal), pivot-to-bottom
   lift + `SinkFraction` (auto 0.25 for aligned) / `SinkMinCm`.
 - **Open-backed cliff slabs face downhill (Oct 19 2026, BR18-14 / BR18-19):** a mesh that is only a rock face with a hollow back

@@ -7,9 +7,11 @@ Idempotent: a mesh that already blocks (simple shapes, or "use complex as simple
                           (climbable hero terrain); standing trees: trunk capsule; plants stay walk-through. Electric Dreams meshes are gitignored and migrated
                           per machine (Tools/ede_migrate.py): re-run this tool after a migration.
   * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks.
-  * TREE meshes        -> one trunk capsule around the MEASURED trunk: the bark's LOD0 vertices 30-150 cm above the base, centred on them, the radius taking in 90 % of
-                          them (20..120 cm; BR31-8, Oct 30 2026). A mesh with no bark there falls back to 2.2 % of the tree's height (20..55 cm) at the pivot. Length ~45% of
-                          the height, at most 6 m. A tree's collision must NOT be its canopy: a bounding capsule of the whole tree would be an invisible wall 4 m from the trunk.
+  * TREE meshes        -> one convex hull round the MEASURED trunk: the convex outline of the bark's LOD0 vertices 30-110 cm above the base (a stray branch stub
+                          left out), upright from the base to the capsule's top (BR31-8, Oct 30-31 2026: a pivot capsule left wood walk-through, one capsule round the
+                          measured trunk over-covered a lopsided trunk by up to 71 cm). A mesh with no bark there gets a capsule, 2.2 % of the tree's height (20..55 cm)
+                          at the pivot. Height ~45% of the tree's, at most 6 m. A tree's collision must NOT be its canopy: a bounding capsule of the whole tree would
+                          be an invisible wall 4 m from the trunk.
   * PLANTS THAT BLOCK (trees, saplings, bushes) are never a floor: their body's walkable slope is Unwalkable, so a bush stops you but never holds you up
                           (BR31-5, Oct 30 2026: the player stood on top of one). Rocks stay walkable (you climb boulders).
   * PCG graph nodes    -> native Static Mesh Spawner entries of rocks/trees that carry NoCollision / IgnoreOnlyPawn become BlockAll (the FreshWaterSpring boulders, the locust woodland).
@@ -187,12 +189,15 @@ def fix_rock(mesh):
     return "convex decomposition (%s)" % ("ok" if hull is None or hull else "FAILED")
 
 
-def trunk_only(mesh):
-    """A tree / sapling is done when its collision is ONE capsule (the trunk) and nothing else: no canopy hulls (an invisible wall metres from the trunk; Wes,
-    2026-10-14 #11: "make all the little saplings have a narrow trunk collision, their branches block movement") and not its render triangles."""
+def trunk_only(mesh, hull=False):
+    """A tree / sapling is done when its collision is ONE trunk shape and nothing else -- a capsule, or (hull: a tree whose trunk was measured) one convex
+    hull round the wood: no canopy hulls (an invisible wall metres from the trunk; Wes, 2026-10-14 #11: "make all the little saplings have a narrow trunk
+    collision, their branches block movement") and not its render triangles. (The simple count is boxes + spheres + capsules; hulls count apart.)"""
     body = mesh.get_editor_property("body_setup")
     if body is None or body.get_editor_property("collision_trace_flag").name == "CTF_USE_COMPLEX_AS_SIMPLE":
         return False
+    if hull:
+        return ESL.get_convex_collision_count(mesh) == 1 and ESL.get_simple_collision_count(mesh) == 0
     return ESL.get_convex_collision_count(mesh) <= 0 and ESL.get_simple_collision_count(mesh) == 1
 
 
@@ -207,31 +212,80 @@ def set_unwalkable(body):
         walkable_slope_behavior=unreal.WalkableSlopeBehavior.WALKABLE_SLOPE_UNWALKABLE, walkable_slope_angle=0.0))
 
 
-def measure_trunk(mesh, base):
-    """(centre x, centre y, radius) of the wood a walker bumps into: the bark sections' LOD0 vertices 30-150 cm above the base, the radius taking in 90 % of
-    them. None when there is no bark there. (BR31-8, Oct 30 2026: the 2.2 %-of-height capsule at the pivot was r 38 on BlackAlder_Field_02, whose trunk
-    reaches 68 cm round a centre 31 cm off the pivot: the player walked into the wood.)"""
+def hull_2d(pts):
+    """Convex hull of (x, y) points, counter-clockwise (Andrew's monotone chain)."""
+    pts = sorted(set(pts))
+    if len(pts) < 3:
+        return pts
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+# Where the trunk is measured: cross-sections of the bark at these heights above the base (cm). The top stays below a field tree's first branches
+# (BlackAlder_Field_02's leave the trunk ~136 cm up: a band to 150 drew one branch's base -- 138 cm out -- down to hip height as a prism, a wall
+# 65 cm short of the bark; Oct 31 2026).
+TRUNK_SLICES = (30.0, 50.0, 70.0, 90.0, 110.0)
+
+
+def bark_slices(mesh, base, heights):
+    """(x, y) where the bark's LOD0 triangles cross each horizontal plane base + h: the trunk's real cross-sections. Vertices alone miss a straight
+    trunk -- a low-poly cylinder has a ring at the root and the next one metres up (EuropeanHornbeam_Forest_01: none between 23 and 110 cm)."""
     pts = []
     for s in range(mesh.get_num_sections(0)):
         mat = mesh.get_material(SMES.get_lod_material_slot(mesh, 0, s))
         if mat is not None and any(w in mat.get_name() for w in NOT_BARK):
             continue
-        verts = unreal.ProceduralMeshLibrary.get_section_from_static_mesh(mesh, 0, s)[0]
-        pts += [(v.x, v.y) for v in verts if base + 30.0 <= v.z <= base + 150.0]
-    if len(pts) < 8:
+        section = unreal.ProceduralMeshLibrary.get_section_from_static_mesh(mesh, 0, s)
+        verts, tris = section[0], section[1]
+        for h in heights:
+            z = base + h
+            for i in range(0, len(tris) - 2, 3):
+                tri = (verts[tris[i]], verts[tris[i + 1]], verts[tris[i + 2]])
+                if min(v.z for v in tri) > z or max(v.z for v in tri) < z:
+                    continue
+                for p, q in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
+                    if (p.z - z) * (q.z - z) < 0.0:
+                        t = (z - p.z) / (q.z - p.z)
+                        pts.append((p.x + t * (q.x - p.x), p.y + t * (q.y - p.y)))
+    return pts
+
+
+def measure_trunk(mesh, base):
+    """(centre x, centre y, radius, outline) of the wood a walker bumps into: the bark's cross-sections 30-110 cm above the base (TRUNK_SLICES), the radius
+    taking in 90 % of their points, the outline their convex hull (a stray branch stub -- a point past 1.5x that radius -- left out). None when there is
+    no bark there. (BR31-8, Oct 30 2026: the 2.2 %-of-height capsule at the pivot was r 38 on BlackAlder_Field_02, whose trunk reaches 68 cm round a
+    centre 31 cm off the pivot: the player walked into the wood. Then one capsule round the measured trunk over-covered a lopsided one by up to 71 cm:
+    the outline is the shape.)"""
+    pts = bark_slices(mesh, base, TRUNK_SLICES)
+    if len(pts) < 5:
         return None
     cx = sum(p[0] for p in pts) / len(pts)
     cy = sum(p[1] for p in pts) / len(pts)
     d = sorted(math.hypot(x - cx, y - cy) for x, y in pts)
-    return cx, cy, d[int(0.9 * (len(d) - 1))]
+    r90 = d[int(0.9 * (len(d) - 1))]
+    outline = hull_2d([(round(x, 1), round(y, 1)) for x, y in pts if math.hypot(x - cx, y - cy) <= 1.5 * r90])
+    return cx, cy, r90, outline
 
 
 def trunk_shape(mesh, sapling=False):
-    """(centre x, centre y, centre z, radius, length) of the capsule a tree should have."""
+    """(centre x, centre y, centre z, radius, length, outline) of the trunk collision a tree should have: a capsule, or -- outline set, a tree whose trunk was
+    measured -- that outline as an upright prism over the capsule's height (base to base + 2 radius + length)."""
     b = mesh.get_bounds()
     height = 2.0 * b.box_extent.z
     base = b.origin.z - b.box_extent.z
-    cx, cy = 0.0, 0.0
+    cx, cy, outline = 0.0, 0.0, None
     if sapling:
         radius = max(6.0, min(12.0, 0.03 * height))     # a sapling's stem: you brush past the twigs, you bump into the stem
         length = max(40.0, min(250.0, 0.6 * height))
@@ -240,20 +294,48 @@ def trunk_shape(mesh, sapling=False):
         trunk = measure_trunk(mesh, base) if height >= 400.0 else None
         if trunk:
             cx, cy, radius = trunk[0], trunk[1], max(20.0, min(120.0, trunk[2]))
+            outline = trunk[3] if len(trunk[3]) >= 3 else None
         else:
             radius = max(20.0, min(55.0, 0.022 * height))
         length = max(60.0, min(600.0, 0.45 * height))
-    return cx, cy, base + radius + length * 0.5, radius, length
+    return cx, cy, base + radius + length * 0.5, radius, length, outline
+
+
+def trunk_prism(outline, bottom, top):
+    """One convex hull: the trunk's outline from bottom to top. Python cannot write a hull's vertices (not editor properties), but the struct's text import
+    can; the cook builds the hull from these points."""
+    xs, ys = [p[0] for p in outline], [p[1] for p in outline]
+    verts = ",".join("(X=%.2f,Y=%.2f,Z=%.2f)" % (x, y, z) for z in (bottom, top) for x, y in outline)
+    elem = unreal.KConvexElem()
+    ok = elem.import_text("(VertexData=(%s),ElemBox=(Min=(X=%.2f,Y=%.2f,Z=%.2f),Max=(X=%.2f,Y=%.2f,Z=%.2f),IsValid=True))"
+                          % (verts, min(xs), min(ys), bottom, max(xs), max(ys), top))
+    return elem if ok else None
+
+
+def hull_extent(elem):
+    """(min x, min y, min z, max x, max y, max z) of a convex element's points, read back through its text export."""
+    pts = [tuple(float(v) for v in m) for m in re.findall(r"\(X=([-\d.]+),Y=([-\d.]+),Z=([-\d.]+)\)", elem.export_text().split("IndexData=")[0])]
+    if not pts:
+        return None
+    return (min(p[0] for p in pts), min(p[1] for p in pts), min(p[2] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts), max(p[2] for p in pts))
 
 
 def plant_done(mesh, kind):
-    """A tree / sapling / bush: one capsule, never walkable, and a tree's capsule where its trunk is (within 15 % of the radius / 10 cm of the centre)."""
-    if not (trunk_only(mesh) and is_unwalkable(mesh)):
+    """A tree / sapling / bush: one trunk shape, never walkable, and a tree's shape where its trunk is: the measured outline's prism (its extent within 5 cm),
+    or the capsule within 15 % of the radius / 10 cm of the centre."""
+    want = trunk_shape(mesh) if kind == "Tree" else None
+    hull = bool(want and want[5])
+    if not (trunk_only(mesh, hull) and is_unwalkable(mesh)):
         return False
     if kind != "Tree":
         return True
-    want = trunk_shape(mesh)
-    have = mesh.get_editor_property("body_setup").get_editor_property("agg_geom").get_editor_property("sphyl_elems")[0]
+    ag = mesh.get_editor_property("body_setup").get_editor_property("agg_geom")
+    if hull:
+        have = hull_extent(ag.get_editor_property("convex_elems")[0])
+        xs, ys = [p[0] for p in want[5]], [p[1] for p in want[5]]
+        top = want[2] + want[3] + want[4] * 0.5
+        return have is not None and max(abs(a - b) for a, b in zip(have, (min(xs), min(ys), have[2], max(xs), max(ys), top))) <= 5.0
+    have = ag.get_editor_property("sphyl_elems")[0]
     c = have.get_editor_property("center")
     return abs(have.get_editor_property("radius") - want[3]) <= 0.15 * want[3] and math.hypot(c.x - want[0], c.y - want[1]) <= 10.0
 
@@ -282,11 +364,19 @@ def fix_bush(mesh):
 
 
 def fix_tree(mesh, sapling=False):
-    cx, cy, cz, radius, length = trunk_shape(mesh, sapling)
+    cx, cy, cz, radius, length, outline = trunk_shape(mesh, sapling)
     ESL.remove_collisions(mesh)   # the canopy hulls go: the trunk is the only thing that stops you
     body = mesh.get_editor_property("body_setup")
     body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_DEFAULT)
     ag = body.get_editor_property("agg_geom")
+    prism = trunk_prism(outline, cz - radius - length * 0.5, cz + radius + length * 0.5) if outline else None
+    if prism is not None:
+        ag.set_editor_property("convex_elems", [prism])
+        body.set_editor_property("agg_geom", ag)
+        set_unwalkable(body)
+        xs, ys = [p[0] for p in outline], [p[1] for p in outline]
+        return "trunk hull of %d points, %.0f x %.0f cm, %.0f cm tall (tree height %.0f), unwalkable" % (
+            len(outline), max(xs) - min(xs), max(ys) - min(ys), 2.0 * radius + length, 2.0 * mesh.get_bounds().box_extent.z)
     capsule = unreal.KSphylElem()
     capsule.set_editor_property("center", unreal.Vector(cx, cy, cz))
     capsule.set_editor_property("radius", radius)
