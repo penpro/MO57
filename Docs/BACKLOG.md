@@ -22,6 +22,8 @@ word in `Docs/BugReports_2026-10-23.md` § Wes's votes): thumbs up = row removed
 
 | What to look at | Where / how | Fixed looks like | From |
 |---|---|---|---|
+| The brush cut, coil and twisted braids on every base (Oct 30, BR31-2: they bind through SKM_Groom_Head_Legacy01 now) | `Saved/Screenshots/br31/verify_trey_brushcut_side.png` (Trey, brush cut); or New game -> each base -> Hair style Hair_S_BrushCut / Hair_S_Coil / Hair_M_TwistedBraids | each sits on the scalp at the hairline, nothing on the neck or floating, on Femme, Jalena, Zuri, Harvey and Trey | BR31-2 |
+| The breath meter's colours (Oct 30, BR31-11: the segments draw their real colour now, ~30x brighter) | `Saved/Screenshots/br31/verify_breath_meter_underwater_2.png`; or dive in any lake | the lit segments read at a glance over bright and dark water; the empty ones read as empty; warning / critical colours as it runs low | BR31-11 |
 | The new Rainforest card (Oct 30: the old one faced into the sun, a dark silhouette) | New Game panel, scroll the starting-biome cards to Rainforest; before / after `Saved/Review/2026-10-30-rainforest/rainforest_card_before_after.jpg` | reads as rainforest at a glance at card size (ferns, broad leaves, a dense layered stand); it is darker than its neighbours (deep canopy) -- say if it should be brighter (a clearing edge or noon) | Wes Oct 30 |
 | The World look lab's first pass (Oct 28, `D:/UEProjects/MO_WorldLab`: MO57's temperate forest -- its ground surfaces, species and wind -- on a 512 m voxel patch, with sliders and an Export for MO57) | review page https://claude.ai/artifact/3ZTzrpGGF2gmQTe61MmKHT (votes in its `verdicts`); or open the lab, Play, L_Menu -> World | the patch reads like MO57's forest (the same ground textures, trees, grass and light), so tuning there means something here; the sliders' changes are visible and are what each names; Reset matches the first shot. Then tune: move sliders, Export for MO57, `python Tools/apply_worldlab_patch.py <export>` (MO57's editor open) | Wes Oct 26 |
 | Climbing an Electric Dreams cliff (Oct 29; Wes: "i want to be able to climb on top of the electric dreams cliffs") | A new world (seed 777): the SM_Cliff_09 stack ~600 m from the start, its south-west side (`python Tools/check_cliff_climb.py --side 3 --keep` puts you at its foot); W at the face, jump to grab (a full bar is ~100 s of sheer face: F51 / F52), A / D across under a roof | the climber stays on the face over its bumps and turns with it smoothly (no snapping); under a roof it stops and goes across; at a ledge it pulls up; at a lip with no room on top it holds still on the face (N-236: does the hold look like holding on, not frozen?) and A / D take it along; at the crest it pulls over (28.7-33.5 m on that side). No animation yet: stand-in pose | Oct 29 |
@@ -109,6 +111,10 @@ word in `Docs/BugReports_2026-10-23.md` § Wes's votes): thumbs up = row removed
 | Wolves as a pack | `MO.AI.StressSpawn 2 800 1200`, hit one wolf | the other comes for you too, not only the one you hit | N-096 (Oct 20) |
 | Colony alerts | Found a settlement, recruit a colonist, play another pawn while a wolf goes for the colonist | "<name> is being attacked by a wolf!" then "... is bleeding badly.", readable, not spammy (once a minute) | N-095 (Oct 20) |
 ## Waiting on Wes (decisions; details in DECISIONS "Needs Wes")
+
+**GitHub LFS budget (Oct 30):** pushes carrying LFS objects are refused -- "This repository exceeded its LFS budget. The account responsible
+for the budget should increase it." Code and docs still push; any `.uasset` change cannot. 17 plant meshes (BR31-5 / 8, made by
+`fix_mesh_collision.py`) wait on DARKSIDE. Raise the budget (Wes's GitHub billing) or decide what stays out of LFS.
 
 F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target · F5 reed source · F7 building refund ·
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
@@ -397,17 +403,18 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | ID | Status | Owner | Item | Ref | Aliases |
 |---|---|---|---|---|---|
 | BR31-1 | DONE (fixed Oct 29, after this build) | Claude | Fire drill missing from the crafting list | `Docs/BugReports_2026-10-31.md` | b40024ab |
-| BR31-2 | OPEN | Claude | Trey's brush cut sits on his neck: Hair_S_BrushCut's binding has no source head (MH_Groom_Head never imported); Coil and TwistedBraids too | `Docs/BugReports_2026-10-31.md` | 2d7b96de |
-| BR31-3 | OPEN (repro first) | Claude | A leg the foot IK bent onto a raised spot snaps back to a straight stand | `Docs/BugReports_2026-10-31.md` | 3916ea64 |
-| BR31-4 | OPEN | Claude | The status screen's "i" on every row does nothing (an unwired icon): make it explain the row | `Docs/BugReports_2026-10-31.md` | d7ff4502 |
-| BR31-5 | OPEN (repro first) | Claude | A bush holds the player up (blocking core = a floor): plants block but are never walkable | `Docs/BugReports_2026-10-31.md` | 9ba5dd23 |
-| BR31-6 | OPEN | Claude | The foot IK folds the ankle past a human range on a boulder: clamp it | `Docs/BugReports_2026-10-31.md` | 4f15d18a |
-| BR31-7 | OPEN (repro first) | Claude | The camera goes into a vertical terrain face | `Docs/BugReports_2026-10-31.md` | c105bc13 |
-| BR31-8 | OPEN | Claude | Thick tree trunks are walk-through: the trunk capsule is 2.2 % of the tree's height, not the trunk's width | `Docs/BugReports_2026-10-31.md` | 976a2493 |
-| BR31-9 | OPEN | Claude | A swimmer can punch: no melee while swimming | `Docs/BugReports_2026-10-31.md` | f43175af |
-| BR31-10 | OPEN (repro first) | Claude | Swimming in air at a lake: the swim decision trusts GetSurfaceZ, not the drawn water | `Docs/BugReports_2026-10-31.md` | 1e67003b |
-| BR31-11 | OPEN | Claude | Breath meter colours too dim: brighter fills, darker track, an outline (then by eye) | `Docs/BugReports_2026-10-31.md` | 3da41fdf, BR23-17 |
+| BR31-2 | DONE 5025cf03 (Oct 30; by eye on the list) | Claude | Trey's brush cut sat on his neck: the three sourceless library styles bind through SKM_Groom_Head_Legacy01 (the same head, measured) | `Docs/BugReports_2026-10-31.md` | 2d7b96de |
+| BR31-3 | NOT REPRODUCED (Oct 30: Wes's spot holds the bent leg 5 s standing, 2.5 s crouched) -- need Wes's steps | Claude | A leg the foot IK bent onto a raised spot snaps back to a straight stand | `Docs/BugReports_2026-10-31.md` | 3916ea64 |
+| BR31-4 | DONE 144e09e2 (a real-pointer check waits on MO.Test.HitTest's widget filter) | Claude | The status screen's "i" explains each row (a tooltip from DescribeField); no "i" where there is nothing to explain | `Docs/BugReports_2026-10-31.md` | d7ff4502 |
+| BR31-5 | DONE 075d4d0c (17 LFS meshes unpushed: the LFS budget) | Claude | The hazel sapling Wes stood on: trees, saplings and bushes are Unwalkable | `Docs/BugReports_2026-10-31.md` | 9ba5dd23 |
+| BR31-6 | OPEN, next batch (reproduced; the reference-cone limit was pulled before the build) | Claude | The foot IK folds the ankle past a human range on a boulder: per-axis limits from anatomical neutral | `Docs/BugReports_2026-10-31.md` | 4f15d18a |
+| BR31-7 | DONE 4e7110ae (7 of 36 -> 0 of 36 at his cliff) | Claude | The camera went into a vertical face: the shoulder offset is the arm's SocketOffset now | `Docs/BugReports_2026-10-31.md` | c105bc13 |
+| BR31-8 | DONE 075d4d0c + follow-up OPEN (a lopsided trunk is over-covered by up to 71 cm: a convex hull of the trunk base) | Claude | Trunks were walk-through: the capsule goes round the measured trunk | `Docs/BugReports_2026-10-31.md` | 976a2493 |
+| BR31-9 | DONE 0224764d | Claude | No punch while swimming | `Docs/BugReports_2026-10-31.md` | f43175af |
+| BR31-10 | OPEN, next batch (evidence in the tracker: the drawn lake surface sits ~60-80 cm below the one swimming floats on) | Claude | Swimming in air: make the drawn water and the swim surface agree, then the body lift (`Docs/agent/br31_10_swimlift.patch`) | `Docs/BugReports_2026-10-31.md` | 1e67003b |
+| BR31-11 | DONE 56c0e03f (by eye on the list) | Claude | Breath meter dim: the segment brush was tinted the dark track colour under the fill | `Docs/BugReports_2026-10-31.md` | 3da41fdf, BR23-17 |
 | BR31-12 | OPEN (Wes's grip work: ask first) | Wes / Claude | The hammer stone floats beside the right hand: its held grip is unaligned | `Docs/BugReports_2026-10-31.md` | e462993f, N-207 |
+| BR31-13 | OPEN, next batch | Claude | `MO.Test.HitTest` needs a widget filter (owner class or path): it takes the first widget named like the arg anywhere, so a status row's "i" cannot be checked past the HUD's moodle icon | `Docs/BugReports_2026-10-31.md` | BR31-4 |
 
 ## UI
 

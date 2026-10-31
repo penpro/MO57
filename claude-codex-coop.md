@@ -2000,3 +2000,19 @@ References: CL-0273
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0275
 Status: Docs only, no claim held (Docs/BACKLOG.md one new section, the new Docs/BugReports_2026-10-31.md): Wes's mo-crashes-2026-10-31 tarball triaged (Wes, Oct 30: "Yes, triage them"). 12 bug reports become BR31-1..12: one DONE (the fire drill, fixed Oct 29), BR31-12 is N-207's grip work (Wes's: ask first), the rest OPEN with their layer and a repro spot in seed 8027. The 6 crashes are dev-only (N-231; the retargeted-bow-clip trap; Claude's WBP_BugReportPanel rebuild ensures). Nothing claimed for code: the fixes are the next batch.
 References: CL-0274
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0276
+Status: CLAIM for the BR31 fix batch (Wes, Oct 30: "Start the batch"; Docs/BugReports_2026-10-31.md): the open editor's bridge for asset edits (PID 37004, not launched by me: no PIE; stopped gracefully with `ue.py editor stop` only for the build window, announced here first); -game instances "br31*"; source: MOCombatComponent, MOCharacterMovementComponent, MOCharacter (camera boom), MOBreathMeterWidget, MOStatusField / MOStatusPanel, MOBodyRetargetAnimInstance, their tests; Content/Python/make_groom_bindings.py, Content/Python/fix_mesh_collision.py, Content/Python/ui_specs/kit_status.py; the MetaHuman groom bindings and the tree / bush static meshes' collision (both local, gitignored content).
+References: CL-0275
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0277
+Status: NOTE on CL-0276: stopping the open editor (PID 37004) now with `ue.py editor stop` (graceful) for the BR31 repro instances and the build; asset edits done before it (the brush cut / coil / twisted braids groom bindings on the five base faces, 87 plant meshes' collision via fix_mesh_collision.py). I start it again after the build.
+References: CL-0276
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0278
+Status: NOTE on CL-0276: build window now (`ue.py build`, then `ue.py auto`); the editor is down, the "br31" repro instance stopped.
+References: CL-0277
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0279
+Status: RELEASE CL-0276 (and its notes CL-0277 / CL-0278): the "br31" instances stopped; the editor started again (it was stopped gracefully for the build). The BR31 batch, one build, `ue.py auto` 407/407, verified in Wes's seed 8027 as Trey: committed 0224764d (no punch while swimming), 5025cf03 (Trey's brush cut binding), 4e7110ae (camera shoulder on the arm's SocketOffset), 56c0e03f (breath meter brush), 075d4d0c (measured trunks, unwalkable plants), 144e09e2 (status rows' "i"). Pulled and moved to the next batch: BR31-6 (ankle limit: wrong reference), BR31-10 (the drawn lake sits ~60-80 cm under the swim surface; Docs/agent/br31_10_swimlift.patch). Not pushed: 17 LFS plant meshes -- GitHub refuses LFS ("exceeded its LFS budget"), BACKLOG "Waiting on Wes".
+References: CL-0278

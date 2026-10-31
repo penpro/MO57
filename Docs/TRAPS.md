@@ -13,6 +13,11 @@
   but the index is case-sensitive, and one bad pathspec in `git add a b c` stages NOTHING -> before EVERY commit run `git status --short` and
   check the staged column; never pipe `git add` stderr to /dev/null; copy paths from `git status`; after a push `git show HEAD --stat`. (memory git-staging-verification)
 - **Codex's work lands in your commit** -> `git add -A` in the shared tree -> stage your exact paths only. (multi-agent-coop)
+- **A push fails "This repository exceeded its LFS budget"** -> GitHub refuses LFS uploads until Wes raises the budget; plain files still push,
+  and a commit that carries any `.uasset` blocks every commit after it -> split it: commit the code and docs now, leave the assets unstaged
+  (say so in the commit and in BACKLOG "Waiting on Wes"), commit them when LFS takes pushes again. (Oct 30)
+- **A partial stage (some hunks of a file) "does not apply"** -> the index keeps CRLF in many files here, and a text-mode diff round trip
+  drops the CRs -> pipe the diff as bytes (`git diff` -> filter hunks -> `git apply --cached`, all binary).
 - **A partly staged file lands with a block in the wrong function** -> `git diff -U0` + `git apply --cached --unidiff-zero` of SOME hunks places a pure insertion by its new-side line number, which counts the hunks you left out (Oct 20: the gait warm-up landed inside `_client_carcass`; caught before the push, amended) -> to commit part of a file, build its blob from the base with the chosen changes (difflib on lines, anchored to the base) and `git hash-object -w` + `git update-index --cacheinfo`; then read the staged file (`git show :path`) where the change should be.
 - **Stray assets / MegaMaterialCache in the staged list** -> the editor's source control auto-stages every asset it saves and rewrites
   `Content/Developers/penum/MegaMaterialCache.uasset` -> `git rm --cached` strays; never stage MegaMaterialCache or `.claude/settings.local.json`. (animation-retarget)

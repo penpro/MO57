@@ -1,0 +1,70 @@
+diff --git a/Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp b/Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp
+index e07934b1..a1e12fa7 100644
+--- a/Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp
++++ b/Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp
+@@ -2204,17 +2204,22 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
+ 		PendingSwimPoseSeconds = 0.0f;
+ 	}
+ 
+-	// A horizontal swimmer rides the surface: lift the mesh until the body line is at the water (the capsule's centre is ~60 cm below it while floating). Upright and underwater poses keep the capsule's frame.
++	// A swimmer at the surface floats: the mesh is raised from the capsule's frame (whose centre floats ~55 cm under the water) until the DRAWN body sits
++	// where a real one does (SurfaceSwimRaise). It used to lift by the chosen pose alone, to the body line 6 cm OVER the water: a stroke rode on top of
++	// the lake with the hips out, and blending back to treading water kept the lift on an upright body, the waist at the surface (BR31-10, Oct 30 2026:
++	// "you can sometimes swim on air"; measured in seed 8027's lake: pelvis +4 cm, head +6 cm while swimming). Underwater poses keep the capsule's frame.
+ 	if (CurrentSwimPose != ESwimPose::None)
+ 	{
+ 		float TargetRaise = 0.0f;
+-		if (CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
++		if (CurrentSwimPose == ESwimPose::Tread || CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
+ 		{
+ 			float Surface = 0.0f;
+ 			const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+-			if (Move && Move->GetWaterSurfaceZ(Surface))
++			static const FName Pelvis(TEXT("pelvis"));
++			static const FName Head(TEXT("head"));
++			if (Move && Move->GetWaterSurfaceZ(Surface) && Body->GetBoneIndex(Pelvis) != INDEX_NONE && Body->GetBoneIndex(Head) != INDEX_NONE)
+ 			{
+-				TargetRaise = FMath::Clamp(Surface - GetActorLocation().Z - 6.0f, 0.0f, 70.0f);
++				TargetRaise = SurfaceSwimRaise(SwimMeshRaise, Body->GetSocketLocation(Pelvis), Body->GetSocketLocation(Head), Surface);
+ 			}
+ 		}
+ 		SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, TargetRaise, DeltaTime, 6.0f);
+@@ -2222,6 +2227,19 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
+ 	}
+ }
+ 
++float AMOCharacter::SurfaceSwimRaise(float CurrentRaise, const FVector& Pelvis, const FVector& Head, float SurfaceZ)
++{
++	const FVector Spine = Head - Pelvis;
++	if (Spine.SizeSquared() < 1.0f)
++	{
++		return 0.0f;
++	}
++	const float Flat = 1.0f - FMath::Abs(static_cast<float>(Spine.GetSafeNormal().Z));   // 0 upright, 1 lying flat
++	const float TopTarget = SurfaceZ + FMath::Lerp(5.0f, -12.0f, Flat);
++	const float Top = static_cast<float>(FMath::Max(Pelvis.Z, Head.Z));
++	return FMath::Clamp(CurrentRaise + TopTarget - Top, 0.0f, 70.0f);
++}
++
+ void AMOCharacter::TickWater(float DeltaTime)
+ {
+ 	UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+diff --git a/Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h b/Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h
+index baf5b343..6efe5da6 100644
+--- a/Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h
++++ b/Plugins/MOFramework/Source/MOFramework/Public/MOCharacter.h
+@@ -1652,6 +1652,14 @@ public:
+ 
+ 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+ 
++	/**
++	 * How far to raise a swimmer's mesh at the surface so the drawn body floats where a real one does (BR31-10). From where the body's pelvis and
++	 * head ARE (the current raise included) and the water: upright (treading water) the head bone ~5 cm out, lying flat (a stroke) the body's line
++	 * ~12 cm under with the back at the surface, blended by how flat the spine is -- so a stroke blending back to treading water loses its lift with
++	 * the pose. 0..70 cm. Pure: the automation tests check it.
++	 */
++	static float SurfaceSwimRaise(float CurrentRaise, const FVector& Pelvis, const FVector& Head, float SurfaceZ);
++
+ private:
+ 	/** Holding still, crouched. */
+ 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Crouch", meta=(AllowPrivateAccess="true"))
