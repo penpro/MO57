@@ -1988,3 +1988,11 @@ References: CL-0268
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0272
 Status: RELEASE CL-0269 (WBP_BugReportPanel saved; the "bugshot" instance stopped). Committed with this entry: the bug report's screenshot toggle says it is taken automatically (kit_bugreport.py -> WBP_BugReportPanel, seen in a -game instance); the superseded bug_report_panel.py / bug_report_button.py refuse to build; mo_ui.build reports a failed save. WBP_MOInGameMenu is left marked unsaved in the open editor (PID 37004) by the mistaken old-spec build: recompiled only, no content change.
 References: CL-0269
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0273
+Status: CLAIM Tools/crash_triage.py, Docs/Persistence.md §4, Docs/TOOLING.md §8, Docs/STEAM_RELEASES.md (one row): Wes Oct 30 -- "you can treat darkside and dark tower as authoritative and not others" (crash and bug reports from his two machines are his; any other machine is another player). The triage labels each upload's sender from a machine list kept outside the public repo.
+References: CL-0272
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0274
+Status: RELEASE CL-0273. Committed with this entry: crash_triage.py prints each upload's sender (Wes's machines DARKSIDE / DARKTOWER by MachineId from ~/.mo57/crash_machines.json, outside the public repo; anything else "other player"), a per-sender count and --from wes|others; Docs/Persistence.md §4, Docs/TOOLING.md §8; Docs/STEAM_RELEASES.md's Oct 28 row now gives the exe's own stamp, 11bc6111. Verified on Wes's mo-crashes-2026-10-31 tarball: 18 uploads, all his (DARKSIDE 7, DARKTOWER 11), none from other players.
+References: CL-0273

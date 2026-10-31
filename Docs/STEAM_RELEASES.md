@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 2026-10-16 (built 00:21; upload time not recorded) | `0573ab31` | (before this log) | Claude, from Wes 2026-10-17: "Yes, the last Steam upload was 0573ab31 (Oct 16)" |
 | 2026-10-17 22:59 (built 22:49; recorded Oct 28 from SteamPipe's `depot_build_1602811.log` and the build stamp in the uploaded exe) | `afb9aabc` | `0573ab31..2ea93fc9` (the draft below) | Claude, Oct 28. A DEVELOPMENT build, and it carried this machine's `MO57\Saved` (settings at 2560 x 1440, a save, a log: TRAPS §17) |
-| 2026-10-28 21:38-21:40 (BuildID 26289075; the Shipping exe built 16:42; recorded Oct 30 from SteamPipe's `app_build_1602810.log` / `depot_build_1602811.log` and the staged package's dates) | `2121b981` | `afb9aabc..2121b981` (no draft written) | Claude, Oct 30, after Wes asked about the fire drill and Harvey's climbing on Steam: this build has neither the fire drill fix nor the climbing animation (both Oct 29), nor anything after `2121b981` |
+| 2026-10-28 21:38-21:40 (BuildID 26289075; the Shipping exe built 16:42; recorded Oct 30 from SteamPipe's `app_build_1602810.log` / `depot_build_1602811.log` and the staged package's dates) | `11bc6111` (the exe's own stamp, `Build.Commit` in its Oct 30 bug reports; first recorded as `2121b981`, which was committed at 17:04, after the 16:42 exe build, so its save carry-over may or may not be in it) | `afb9aabc..2121b981` (no draft written) | Claude, Oct 30, after Wes asked about the fire drill and Harvey's climbing on Steam: this build has neither the fire drill fix nor the climbing animation (both Oct 29), nor anything after `2121b981` |
 
 ## Known Shipping builds Wes played over Steam (not confirmed as Steam uploads; for orientation only)
 

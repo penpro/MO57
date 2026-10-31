@@ -399,7 +399,8 @@ Codex resolves `python` to anaconda, where graphify is not installed: use the Wi
 
 ## 8. Crash and bug reports
 
-`python -I Tools/crash_triage.py <crash-dumps dir> [--since DATE]`, `Tools/ue_crash_bundle.py`, `Tools/bugreport_receiver.py`,
+`python -I Tools/crash_triage.py <crash-dumps dir> [--since DATE] [--from wes|others]` (each upload's sender: Wes's machines, DARKSIDE /
+DARKTOWER, from `~/.mo57/crash_machines.json`, kept out of the repo; anything else is another player), `Tools/ue_crash_bundle.py`, `Tools/bugreport_receiver.py`,
 `ue.py nettest bugreport --package`; diagnostics `Tools/pawnvis_probe.py`, `Tools/rescue_probe.py [--hunt N]`, `Tools/weather_probe.py`
 (`Docs/Persistence.md` §4). Co-op smoothness: every report carries `Net.*` rows (the last 60 s, `Net.Events`, the server clock); two
 machines' logs: `python -I Tools/ue_netdiag.py logs host.log joiner.log` (`Docs/Coop_And_Networking.md` §7).
