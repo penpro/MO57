@@ -5,8 +5,10 @@ A groom swapped onto a pawn at run time (UMOAppearanceSubsystem::ApplyGroomsToCh
 groom is the style and whose target is that face mesh; the subsystem finds it in the asset registry (the binding's Groom tag). Each library groom
 was authored on one of the MetaHuman template heads (Tools/metahuman_groom_heads.json, read off the library's own bindings): that head is the
 binding's SOURCE, so the engine transfers the groom from the head it was made on onto the survivor's (the MetaHuman Creator fits its grooms per
-character the same way). Hair_S_Coil, Hair_M_TwistedBraids and Hair_S_BrushCut were authored on MH_Groom_Head (208 MB, not imported): their
-bindings have no source and project straight onto the face.
+character the same way). Hair_S_Coil, Hair_M_TwistedBraids and Hair_S_BrushCut were authored on MH_Groom_Head (208 MB with its DNA, not imported:
+a binding's source head is cooked into the game). Until Oct 30 their bindings had no source and projected straight onto the face, which put Trey's
+brush cut on his neck (BR31-2: his face sits 25 cm higher than the head the groom was made on). They use SKM_Groom_Head_Legacy01 instead
+(STAND_IN): measured the same head (bounds origin z 142.08 vs 142.00 cm, extents within 0.1 cm).
 
     python Tools/ue.py py --file Content/Python/make_groom_bindings.py --timeout 1800           (editor open, NOT in PIE: creates and saves)
     GROOMBIND_VERIFY=1 ... the same file                                                         (a second call: the built root counts)
@@ -24,6 +26,7 @@ VERIFY = os.environ.pop("GROOMBIND_VERIFY", "") == "1"
 LIBRARY = "/Game/MetaHumans/Common/Optional/Grooms"
 CATEGORIES = ("Hair", "Beards", "Mustaches")
 HEADS = json.load(open(os.path.join(unreal.Paths.project_dir(), "Tools", "metahuman_groom_heads.json"), encoding="utf-8"))
+STAND_IN = {"MH_Groom_Head": "SKM_Groom_Head_Legacy01"}   # an authoring head left out of the project -> the imported head with the same geometry
 
 reg = unreal.AssetRegistryHelpers.get_asset_registry()
 eal = unreal.EditorAssetLibrary
@@ -54,6 +57,8 @@ for cat, name, package in grooms:
         continue
     groom = unreal.load_asset(package)
     head_name = HEADS.get(name)
+    if head_name and not eal.does_asset_exist("%s/GroomMesh/%s" % (LIBRARY, head_name)):
+        head_name = STAND_IN.get(head_name, head_name)
     head = unreal.load_asset("%s/GroomMesh/%s" % (LIBRARY, head_name)) if head_name else None
     b = unreal.load_asset(path) if eal.does_asset_exist(path) else None
     if b and b.get_editor_property("groom") == groom and b.get_editor_property("target_skeletal_mesh") == face and \
