@@ -2016,3 +2016,15 @@ References: CL-0277
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0279
 Status: RELEASE CL-0276 (and its notes CL-0277 / CL-0278): the "br31" instances stopped; the editor started again (it was stopped gracefully for the build). The BR31 batch, one build, `ue.py auto` 407/407, verified in Wes's seed 8027 as Trey: committed 0224764d (no punch while swimming), 5025cf03 (Trey's brush cut binding), 4e7110ae (camera shoulder on the arm's SocketOffset), 56c0e03f (breath meter brush), 075d4d0c (measured trunks, unwalkable plants), 144e09e2 (status rows' "i"). Pulled and moved to the next batch: BR31-6 (ankle limit: wrong reference), BR31-10 (the drawn lake sits ~60-80 cm under the swim surface; Docs/agent/br31_10_swimlift.patch). Not pushed: 17 LFS plant meshes -- GitHub refuses LFS ("exceeded its LFS budget"), BACKLOG "Waiting on Wes".
 References: CL-0278
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0280
+Status: CLAIM for the next BR31 batch (Wes, Oct 30: "Start next batch"): BR31-13 (a widget filter for MO.Test.FindWidget / ClickWidget / HitTest), BR31-10 (the drawn lake surface vs the swim surface), BR31-6 (ankle limits from anatomical neutral), BR31-8's follow-up (trunk collision from a hull). Source: MOCheatSubsystem.cpp (the widget verbs), MOUplandLakeSubsystem, MOCharacterMovementComponent / MOCharacter (swim), MOBodyRetargetAnimInstance, their tests; Content/Python/fix_mesh_collision.py and the tree meshes' collision (local). -game instances "br31*"; the open editor's bridge (no PIE); one build window, announced here first.
+References: CL-0279
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0281
+Status: NOTE on CL-0280: build window now -- stopping the open editor with `ue.py editor stop` (graceful), then `ue.py build` and `ue.py auto`; I start the editor again after. Asset edits done before it: 32 tree meshes' trunk collision via fix_mesh_collision.py (local, gitignored packs). The "br31b" instance is stopped.
+References: CL-0280
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0282
+Status: RELEASE CL-0280 (and its note CL-0281): the "br31b" / "br31c" instances stopped; the editor started again (stopped gracefully for the build). The second BR31 batch, one build, `ue.py auto` 407/407, verified in Wes's seed 8027 as Trey: committed 669511fe (BR31-13: in= / nth= for the widget verbs; BR31-4's "i" proven with a real pointer), c2232828 (BR31-10: the lakes' base swell scaled -- the waviness Wes reported, A/B in Docs/Water.md §5a -- and the swimmer's body lift), 5b42bef5 (BR31-6: ankle limits), 213e2558 (BR31-8: trunk hulls; 32 local tree meshes rebuilt with fix_mesh_collision.py). New: BR31-14 (sea swimming vs the ocean's drawn waves).
+References: CL-0281
