@@ -6,7 +6,7 @@ world placed (PCG rocks and boulders, the landmark crags, the Electric Dreams cl
 heights. The pawn is set on the ground in front of each, facing its face, and MO.Test.Traversal says what a jump would do there (vault /
 hop up / pull-up / plain jump), whether the face is climbable, and why not.
 
-    python Tools/check_traversal_world.py [--seed N] [--radius M] [--keep]
+    python Tools/check_traversal_world.py [--seed N] [--radius M] [--execute] [--base Harvey] [--keep]
 
 Prints one TRY line per obstacle (its height above the ground beside it: rocks sit sunk into the terrain) and a table per mesh kind. Read-only: nothing in the world changes but the pawn's place.
 """
@@ -149,6 +149,20 @@ out("FEET %.0f %.0f %.0f %s" % (l.x, l.y, l.z - cap.get_scaled_capsule_half_heig
 '''
 
 
+MOVE_CLIP = r'''
+p = unreal.GameplayStatics.get_player_pawn(world, 0)
+def clip(mesh):
+    ai = mesh.get_anim_instance() if mesh else None
+    mo = ai.get_current_active_montage() if ai else None
+    if not mo:
+        return "-"
+    seg = mo.get_editor_property("slot_anim_tracks")[0].get_editor_property("anim_track").get_editor_property("anim_segments")[0]
+    return seg.get_editor_property("anim_reference").get_name()
+drv = [c for c in p.get_components_by_class(unreal.SkeletalMeshComponent) if "LocomotionDriver" in c.get_name()]
+out("MOVECLIP driver=%s body=%s" % (clip(drv[0] if drv else None), clip(p.get_editor_property("mesh"))))
+'''
+
+
 def do_jump(kind):
     """The move for real: W held, a jump; then where the feet ended against where they started (a hop up / pull-up rises by about the ledge's
     height, a vault lands past the obstacle at about the same height) and the traversal line the movement component logged."""
@@ -158,7 +172,9 @@ def do_jump(kind):
     time.sleep(0.15)
     moving = traversal()   # what a jump would do now, walking at it
     ui.console(NAME, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
-    time.sleep(2.5)
+    time.sleep(0.4)
+    playing = q(MOVE_CLIP, "MOVECLIP")   # the move's animation, mid-move: GASP's sequence on the locomotion driver (Docs/Animation_GASP.md §5)
+    time.sleep(2.1)
     after = re.search(r"FEET (-?\d+) (-?\d+) (-?\d+) (\S+)", "FEET " + q(FEET, "FEET"))
     logged = re.findall(r"\[MOTraversal\] [^\r\n]*", ui.read_log_from(NAME, off))
     if not (before and after):
@@ -166,7 +182,7 @@ def do_jump(kind):
     dz = int(after.group(3)) - int(before.group(3))
     dxy = ((int(after.group(1)) - int(before.group(1))) ** 2 + (int(after.group(2)) - int(before.group(2))) ** 2) ** 0.5
     walking = re.search(r"jump=([a-z -]+?) height=(\d+).*why=(.*)$", moving)
-    return "feet rose %d cm, moved %.0f cm, mode %s | %s | walking at it: %s" % (dz, dxy, after.group(4),
+    return "feet rose %d cm, moved %.0f cm, mode %s | playing %s | %s | walking at it: %s" % (dz, dxy, after.group(4), playing or "?",
         (logged[0].split("] ", 1)[-1] if logged else "no traversal logged")[:100],
         ("%s %s %s" % walking.groups()) if walking else moving[:80])
 
@@ -185,6 +201,7 @@ def main():
     ap.add_argument("--per-kind", type=int, default=4)
     ap.add_argument("--keep", action="store_true")
     ap.add_argument("--execute", action="store_true", help="where a move is offered, really jump (W held) and report where the body ended")
+    ap.add_argument("--base", help="the survivor's body base (MO.Test.Base: Femme, Jalena, Zuri, Harvey, Trey)")
     a = ap.parse_args()
     try:
         ui.start(NAME, ue.UPROJECT, ue.EDITOR_EXE, creator=True, res=(1280, 720), nosteam=True)
@@ -205,6 +222,12 @@ def main():
         print("creator view: %s%s" % (view or "no answer", (" | " + pulled[-1][:160]) if pulled else " | the camera was not pulled in"))
         ui.console(NAME, "MO.Test.ClickWidget BeginButton")
         time.sleep(40)   # the world round the start: voxel terrain, PCG rocks and trees, world features
+        if a.base:   # Wes, Oct 30: "i tried harvey and he just walks up the tree ... it also doesn't seem like he can vault"
+            off = ui.log_size(NAME)
+            ui.console(NAME, "MO.Test.Base %s" % a.base)
+            m = ui.wait_log(NAME, r"\[MOTEST\] Base[^\r\n]*", since=off, timeout=30)
+            print("BASE", m.group(0) if m else "no [MOTEST] Base line")
+            time.sleep(3)
         raw = q(FIND.replace("RADIUS", str(a.radius)), "CANDIDATES", timeout=120)
         if not raw:
             print("FAIL: no candidate list")

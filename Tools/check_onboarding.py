@@ -9,7 +9,8 @@ One -game instance, a new world, through the character creator:
   1. the early-access notice comes up after Begin (one button); "Got it" closes it
   2. the tutorial: every popup step is walked (its own steps skipped like F1 does), and each menu step is done with its real key:
      game menu, inventory, status, skills, journal, crafting, build -- each completes on its menu opening
-  3. the fire, from nothing (no Firemaking, no knife): inspect a dry branch -> the fire drill recipe; craft it; a campfire; lay fuel; light it
+  3. the fire, from nothing (no Firemaking, no knife): inspect a dry branch -> the fire drill recipe, listed in the crafting menu; craft it;
+     a campfire; lay fuel; light it
      (attempts shortened to 2 s by MO.Test.FireAttemptSeconds; the odds are the game's) -> the tutorial's FuelLaid / FireLit events
 Screenshots in Saved/Screenshots/onboarding/.
 
@@ -153,6 +154,19 @@ def main():
         know = q('import unreal\np = unreal.GameplayStatics.get_player_pawn(world, 0)\nk = p.get_component_by_class(unreal.MOKnowledgeComponent)\n'
                  'out("KNOW %s" % k.has_knowledge("HandDrill"))', "KNOW")
         check("inspecting a dry branch teaches the hand drill", know == "True", "HandDrill known: " + know)
+        # The menu itself (Wes, Oct 30: "in the current version i have on steam the fire drill isn't in the crafting list"): the list shows only
+        # the recipes this survivor can make, and MO.Test.Craft below goes round it.
+        ui.console(NAME, "MO.Test.InjectInput IA_Craft 1 0 0.1")
+        time.sleep(2.0)
+        listed = q('import unreal\nids = sorted(set(str(w.get_recipe_id()) for w in unreal.WidgetLibrary.get_all_widgets_of_class(world, unreal.MORecipeEntryWidget, False)))\n'
+                   'out("LISTED %d %s" % (len(ids), ",".join(ids)))', "LISTED")
+        check("... and the fire drill is in the crafting menu's list", "MakeFireDrill" in listed.split(" ", 1)[-1].split(","), listed[:300])
+        shot("3_crafting_list")
+        ui.console(NAME, "MO.Test.InjectInput IA_Craft 1 0 0.1")
+        time.sleep(1.0)
+        if menu_open():
+            ui.console(NAME, "MO.UI.Close")
+            time.sleep(0.5)
         off = ui.log_size(NAME)
         ui.console(NAME, "MO.Test.Craft MakeFireDrill")
         crafted = False
@@ -182,7 +196,7 @@ def main():
                 break
         check("the campfire lights with the fire drill", caught is not None, "")
         check("... and reports FireLit to the tutorial", bool(caught) and bool(re.search(r"FireLit", caught)), "")
-        shot("3_fire_lit")
+        shot("4_fire_lit")
 
         failed = [r for r in RESULTS if not r[1]]
         print("RESULT %d of %d checks pass%s" % (len(RESULTS) - len(failed), len(RESULTS), "" if not failed else ": FAILED " + "; ".join(r[0] for r in failed)))

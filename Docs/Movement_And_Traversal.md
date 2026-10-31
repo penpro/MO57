@@ -15,7 +15,10 @@
 > `ClimbingStaminaCostPerSecond`, `ClimbingCostByFaceAngle`, `ClimbingExertionByFaceAngle`, `ClimbingSkillId`). **Dev verbs:** `MO.Test.SpawnLedge <HeightCm> [DepthCm] [Climbable] [DistanceCm]`, `MO.Test.ClearLedges`,
 > `MO.Test.Traversal` (what a jump would do here, and why not). **Tests:** `MOFramework.Traversal.*` (ClassifyLedges, PathShape, Climbable,
 > PickTop); `python Tools/check_traversal_world.py [--execute]` (the world's rocks, cliffs and trees round a new world's start);
-> `python Tools/check_cliff_climb.py [--all]` (each side of an Electric Dreams cliff climbed for real).
+> `python Tools/check_cliff_climb.py [--all]` (each side of an Electric Dreams cliff climbed for real). Both take `--base <Id>` (Oct 30, Wes:
+> "i tried harvey and he just walks up the tree ... it also doesn't seem like he can vault"): as Harvey on the current build the climb plays
+> the climbing set on his body, hands on the rock, and he vaults, hops up and pulls up -- his Steam build (`2121b981`, Oct 28) predates the
+> climbing animation (Oct 29), when every survivor walked up a face. The base only swaps the body; the moves and the driver are the same.
 
 ## 1. Jump is the one verb
 

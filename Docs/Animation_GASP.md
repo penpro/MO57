@@ -202,6 +202,7 @@ stances, high / low variants, the spear prop's clips) and the bow's locomotion (
 ## 8. Verifying
 
 `python Tools/check_legs.py` (the femme and every base: standing, walking, crouched; feet and pelvis heights, screenshots in
-`Saved/Screenshots/legs/`); `python Tools/check_cliff_climb.py --side 3 [--shots DIR]` (each climbing sample names the clip on the body and
-the move on the driver with their rates, and each hand's / foot's distance to the rock; `--shots` saves behind + side pairs); `python Tools/check_gasp_movement.py` (the capsule, the gait speeds, the jump, the facing hold, the body's sex). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
+`Saved/Screenshots/legs/`); `python Tools/check_cliff_climb.py --side 3 [--shots DIR] [--base Harvey]` (each climbing sample names the clip on the body and
+the move on the driver with their rates, and each hand's / foot's distance to the rock; `--shots` saves behind + side pairs; `--base` climbs as
+another base: Harvey Oct 30, `AS_Climb_Up_MH` on his body, hands 4-6 cm off the rock); `python Tools/check_gasp_movement.py` (the capsule, the gait speeds, the jump, the facing hold, the body's sex). The instance log shows `[MOCharacter] ...: GASP drives the locomotion (SKM_UEFN_Mannequin with
 SandboxCharacter_CMC_ABP_C, retargeted by RTG_UEFN_to_Metahuman_nrw)` per survivor.

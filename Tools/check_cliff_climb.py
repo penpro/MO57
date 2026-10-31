@@ -9,7 +9,7 @@ player would; stuck on the face for 4 s (a roof, an overhang) it steers across i
 component logged. Ends when the feet get no higher for 30 s (6 s with --no-steer), at the top, or after --seconds.
 
     python Tools/check_cliff_climb.py [--mesh SM_Cliff_09] [--seed 777] [--seconds 150] [--side 0] [--all] [--no-steer] [--real-stamina]
-        [--body FAT,MUSCLE] [--climbing-level N] [--keep] [--reuse]
+        [--body FAT,MUSCLE] [--climbing-level N] [--base Harvey] [--keep] [--reuse]
 
 Prints PLACE (the face found), one SAMPLE line per 2 s, and one RESULT per side climbed: the highest the feet got against the cliff's top,
 and how it ended (TOPPED OUT: standing above; OUT OF STRENGTH with --real-stamina: the bar emptied on the face and the climber fell; no
@@ -242,6 +242,7 @@ def main():
     ap.add_argument("--real-stamina", action="store_true", help="keep the climbing stamina cost (F51): does a body last the climb?")
     ap.add_argument("--body", metavar="FAT,MUSCLE", help="the climber's body: body fat %% and kg of muscle (MO.Test.BodyComposition), e.g. 35,25")
     ap.add_argument("--climbing-level", type=int, help="the climber's Climbing skill level")
+    ap.add_argument("--base", help="the climber's body base (MO.Test.Base: Femme, Jalena, Zuri, Harvey, Trey)")
     ap.add_argument("--shots", metavar="DIR", help="screenshots of the climber on the face (behind and side, up to four pairs) into DIR")
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args()
@@ -261,6 +262,12 @@ def main():
             ui.console(NAME, "MO.Test.ClickWidget BeginButton")
             time.sleep(40)
         # The climber (F51: the muscle share of the body and the Climbing level change what a climb costs and how fast it goes).
+        if a.base:
+            off = ui.log_size(NAME)
+            ui.console(NAME, "MO.Test.Base %s" % a.base)
+            m = ui.wait_log(NAME, r"\[MOTEST\] Base[^\r\n]*", since=off, timeout=30)
+            print("BASE", m.group(0) if m else "no [MOTEST] Base line")
+            time.sleep(3)
         if a.body:
             fat, muscle = (float(v) for v in a.body.split(","))
             ui.console(NAME, "MO.Test.BodyComposition %.1f %.1f" % (fat, muscle))

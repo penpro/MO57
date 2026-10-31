@@ -1956,3 +1956,11 @@ References: CL-0262
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0264
 Status: CLAIM then RELEASE (docs only; no editor, build or instance). Committed with this entry: DECISIONS F55 (where the crop plants come from: nothing local is a crop plant; Fab searched -- Megascans barley / wheat are atlases only, the cheap crop packs are AI-generated; recommended CropCraft Ultimate Farming, Wes's purchase) and BACKLOG N-224 pointing at it.
 References: CL-0263
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0265
+Status: CLAIM -game instances "cliff" / "trav" / "onboard" (no editor, no build): Wes Oct 30 -- Harvey "just walks up the tree or bounced off ... doesn't seem like he can vault"; the climb checks run per base. Tools/check_cliff_climb.py gets --base. (The open editor, PID 37004, is not mine: untouched. The crop-plant session runs its own "croptest" instance.)
+References: CL-0264
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0268
+Status: RELEASE CL-0265 (the "cliff", "trav" and "onboard" instances, all stopped) and the Oct 28 claim on D:/CurrentMO57SteamPackage (its upload is now recorded: Docs/STEAM_RELEASES.md, BuildID 26289075, 2121b981, Oct 28 21:38). Committed with this entry: Wes's Steam build predates the Oct 29 climbing animation and the fire drill fix (nothing to fix in the current build: Harvey climbs with the climbing set on his body, vaults, hops up and pulls up; the drill is in the crafting list after a branch is inspected); check_cliff_climb / check_traversal_world --base; check_onboarding reads the crafting menu's list (19/19).
+References: CL-0265

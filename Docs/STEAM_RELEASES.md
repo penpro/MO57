@@ -10,6 +10,8 @@
 | Date / time (PT) | Commit | Notes generated from | Who recorded |
 |---|---|---|---|
 | 2026-10-16 (built 00:21; upload time not recorded) | `0573ab31` | (before this log) | Claude, from Wes 2026-10-17: "Yes, the last Steam upload was 0573ab31 (Oct 16)" |
+| 2026-10-17 22:59 (built 22:49; recorded Oct 28 from SteamPipe's `depot_build_1602811.log` and the build stamp in the uploaded exe) | `afb9aabc` | `0573ab31..2ea93fc9` (the draft below) | Claude, Oct 28. A DEVELOPMENT build, and it carried this machine's `MO57\Saved` (settings at 2560 x 1440, a save, a log: TRAPS §17) |
+| 2026-10-28 21:38-21:40 (BuildID 26289075; the Shipping exe built 16:42; recorded Oct 30 from SteamPipe's `app_build_1602810.log` / `depot_build_1602811.log` and the staged package's dates) | `2121b981` | `afb9aabc..2121b981` (no draft written) | Claude, Oct 30, after Wes asked about the fire drill and Harvey's climbing on Steam: this build has neither the fire drill fix nor the climbing animation (both Oct 29), nor anything after `2121b981` |
 
 ## Known Shipping builds Wes played over Steam (not confirmed as Steam uploads; for orientation only)
 
@@ -20,7 +22,16 @@
 
 When Wes next asks for Steam patch notes, ask which commit the last Steam patch was built from if it is not recorded above, then record it here.
 
-## Next patch (drafted 2026-10-17, not uploaded yet)
+## How MO57 goes to Steam (Oct 28)
+
+App 1602810, depot 1602811 (SteamPipe GUI, `D:\SteamWorksSDK\sdk\tools\SteamPipeGUI`; scripts in `...\ContentBuilder\scripts`): the depot's
+content root is `D:\CurrentMO57SteamPackage`, whose `Windows64content` folder is the staged `Windows` folder of a package, with the
+launcher stub also there as `Origins.exe`. The root also still holds an older `Windows` folder (Sep 20) that goes up with every build.
+Package Shipping fresh (`BuildCookRun -clientconfig=Shipping ... -stagingdirectory=Saved\StagedBuilds_Ship`), copy it into
+`Windows64content` with no `Saved` folder, and never run the game from there. Before the cook: the Voxel shader hooks in place (TRAPS §2, Oct 28); while today's Fab update
+breaks editor compiles, add `-nocompileeditor` (or `-skipbuild` when the binaries are current) and keep Fab enabled.
+
+## Draft: Oct 17 patch (shipped with `afb9aabc`)
 
 - Generated from `git log 0573ab31..2ea93fc9` (feat / fix commits; docs, tests and dev tooling left out).
 - **A build packaged from the working tree also contains uncommitted work** (Codex's batches A-F, BACKLOG N-001; torch wear,
