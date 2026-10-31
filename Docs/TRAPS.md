@@ -591,6 +591,11 @@
 - **A pooled CommonUI widget builds its rows again on every showing** -> `PushWidgetToLayer` reuses instances and `NativeConstruct` re-runs,
   so code that adds children in it adds them again on top of the old ones (the status panel listed the vitals once per showing, the old rows
   bound to pawns played before) -> clear the containers first, or build once in `NativeOnInitialized`. (Oct 18)
+- **A UI image draws far darker than its colour token** -> an image draws its brush's TintColor TIMES its ColorAndOpacity: a brush tinted
+  with a dark token (`color.data.track`, #2C2822) and a bright colour set on top drew the breath meter's lit segments at ~3 % (BR31-11, Oct
+  30) -> tint the brush white when the code sets the colour (`UMOUITokens::NineSliceBrush(Piece, NAME_None)`).
+- **An icon that looks like a button and does nothing** reads as a bug (BR31-4: the status rows' "i") -> give it a job (a tooltip, a
+  click) or do not draw it; the status rows draw their "i" only when `UMOStatusPanel::DescribeField` has a line for them.
 
 ## 14. Audio
 

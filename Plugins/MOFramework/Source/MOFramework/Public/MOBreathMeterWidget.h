@@ -26,6 +26,9 @@ public:
 	/** Should the meter show: head under water (airway closed) or the reserve not yet back to full. */
 	static bool ShouldShow(bool bAirwayClosed, float Reserve01);
 
+	/** A segment's brush. Untinted (white): each tick's colour (track -> severity) is the whole colour, since an image draws brush tint x colour. */
+	static FSlateBrush SegmentBrush();
+
 protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;

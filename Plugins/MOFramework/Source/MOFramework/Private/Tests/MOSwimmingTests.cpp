@@ -13,6 +13,7 @@
 #include "MOCreature.h"
 #include "MOMetaHumanCharacter.h"
 #include "MORespirationComponent.h"
+#include "MOUITokens.h"
 #include "MOVitalsComponent.h"
 #include "MOWorldGen.h"
 
@@ -374,6 +375,13 @@ bool FMOSwim_BreathMeter::RunTest(const FString& Parameters)
 	TestTrue(TEXT("calm is blue (blue > red)"), Calm.B > Calm.R);
 	TestTrue(TEXT("danger is red (red > blue)"), Low.R > Low.B + 0.5f);
 	TestTrue(TEXT("the warning colour is warmer than the calm one"), Mid.R > Calm.R);
+
+	// What a lit segment DRAWS: brush tint x the tick's colour (BR31-11: a track-tinted brush drew the calm blue at ~3 % brightness).
+	const FLinearColor Tint = UMOBreathMeterWidget::SegmentBrush().TintColor.GetSpecifiedColor();
+	const FLinearColor Drawn = Tint * Calm;
+	TestTrue(TEXT("a full segment draws the calm colour itself (white brush)"), Drawn.Equals(Calm, 0.001f));
+	const FLinearColor Track = UMOUITokens::Color("color.data.track");
+	TestTrue(TEXT("CONTROL: the calm colour is several times brighter than the empty track"), Drawn.GetLuminance() > 4.0f * Track.GetLuminance());
 	return true;
 }
 

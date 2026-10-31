@@ -36,6 +36,13 @@ bool UMOBreathMeterWidget::ShouldShow(bool bAirwayClosed, float Reserve01)
 	return bAirwayClosed || Reserve01 < 0.995f;
 }
 
+FSlateBrush UMOBreathMeterWidget::SegmentBrush()
+{
+	// White, not the track colour: the brush was tinted color.data.track (#2C2822) and each tick's colour multiplied on top of it, so a full
+	// segment drew the calm blue at ~3 % of its brightness (BR31-11, Oct 30 2026: "the colors of the breathing meter are to dim and hard to see").
+	return UMOUITokens::NineSliceBrush("progress_fill", NAME_None);
+}
+
 void UMOBreathMeterWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -87,7 +94,7 @@ void UMOBreathMeterWidget::NativeOnInitialized()
 		Cell->SetWidthOverride(56.0f);
 		Cell->SetHeightOverride(18.0f);
 		UImage* Segment = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
-		Segment->SetBrush(UMOUITokens::NineSliceBrush("progress_fill", "color.data.track"));
+		Segment->SetBrush(SegmentBrush());
 		Cell->AddChild(Segment);
 		if (UHorizontalBoxSlot* CellSlot = Row->AddChildToHorizontalBox(Cell))
 		{
