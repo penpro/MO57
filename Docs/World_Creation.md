@@ -94,7 +94,13 @@ it is a property of the world chosen before its first step, not a mid-game skip.
 `WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards (`WBP_BiomeCard`: the biome's `PreviewImage` from DT_Biomes and
 an MOButton with its name; the coast first, `CoastPreviewImage`), the World knobs and the Pace knobs (`WBP_WorldKnobRow`: label, slider in
 the knob's steps, value), Defaults, Back, Start. A biome is offered when its DT_Biomes row has a `PreviewImage`; the pictures are 1280x720
-instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePreviews/T_BiomePreview_<Biome>`.
+instance shots (`Tools/review_shots.py`) imported to `/MOFramework/UI/BiomePreviews/T_BiomePreview_<Biome>` (`Content/Python/import_biome_previews.py`:
+UI group, no mips, sRGB; `BIOME_PREVIEW_SOURCES` re-imports one card and leaves the rest alone).
+- Rainforest re-shot Oct 30 (Wes: "take a new rain forest picture for the biome selection"; the Oct 22 card faced into the sun and was a
+  silhouette): seed 3014 with `StartingBiome=Rainforest`, `MO.WorldGen.FindBiomeSpot Rainforest 40` spot #2 from the start (1.6 km west),
+  10:00 clear, `MO.Cam.LookAt` at eye height (1.7 m) turned to yaw 250 (the sun behind the camera: it sits at yaw ~130 at 10:00), pitch
+  -2, FOV 75. Views with the sun ahead read as silhouettes, and the start itself and the more open spots 3 km west read as dry
+  woodland: pick a dense stand, front-lit.
 
 ## 4. Tests and checks
 

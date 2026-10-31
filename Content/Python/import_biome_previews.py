@@ -5,6 +5,10 @@
 Reads Saved/Review/<date>/biome_<Biome>_card_after.jpg and coast_card_after.jpg (1280x720 instance shots, Tools/review_shots.py) and writes
 /MOFramework/UI/BiomePreviews/T_BiomePreview_<Biome> (and T_BiomePreview_Coast): UI texture group, no mips, sRGB, default compression.
 The DT_Biomes PreviewImage rows and the panel's CoastPreviewImage are set separately (ue.py rows set / the UI spec). Lines start BIOMEPREVIEW.
+
+One card only (the others untouched): define BIOME_PREVIEW_SOURCES first, e.g. the Rainforest card of Oct 30 --
+    python Tools/ue.py py -c "BIOME_PREVIEW_SOURCES = {'Rainforest': 'D:/UEProjects/MO57/Saved/Review/2026-10-30-rainforest/card.png'};
+                              exec(open('D:/UEProjects/MO57/Content/Python/import_biome_previews.py').read())"
 """
 import glob
 import os
@@ -15,10 +19,12 @@ SHOTS = "D:/UEProjects/MO57/Saved/Review/2026-10-22/"
 DEST = "/MOFramework/UI/BiomePreviews"
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 
-sources = {"Coast": SHOTS + "coast_card_after.jpg"}
-for path in glob.glob(SHOTS + "biome_*_card_after.jpg"):
-    biome = os.path.basename(path)[len("biome_"):-len("_card_after.jpg")]
-    sources[biome] = path.replace("\\", "/")
+sources = globals().get("BIOME_PREVIEW_SOURCES")
+if not sources:
+    sources = {"Coast": SHOTS + "coast_card_after.jpg"}
+    for path in glob.glob(SHOTS + "biome_*_card_after.jpg"):
+        biome = os.path.basename(path)[len("biome_"):-len("_card_after.jpg")]
+        sources[biome] = path.replace("\\", "/")
 
 for biome, path in sorted(sources.items()):
     if not os.path.exists(path):

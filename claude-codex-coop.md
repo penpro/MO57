@@ -1961,6 +1961,14 @@ References: CL-0263
 Status: CLAIM -game instances "cliff" / "trav" / "onboard" (no editor, no build): Wes Oct 30 -- Harvey "just walks up the tree or bounced off ... doesn't seem like he can vault"; the climb checks run per base. Tools/check_cliff_climb.py gets --base. (The open editor, PID 37004, is not mine: untouched. The crop-plant session runs its own "croptest" instance.)
 References: CL-0264
 
+### 2026-10-30 Pacific Daylight Time — CLAUDE (rainforest card side session) — CL-0267
+Status: CLAIM a -game instance "rainpic" and, for one texture import only, the open editor's bridge (PID 37004, not launched by this session: not stopped, no PIE): Wes Oct 30 -- "also take a new rain forest picture for the biome selection at world building screen". Replaces /MOFramework/UI/BiomePreviews/T_BiomePreview_Rainforest (same asset, same settings).
+References: CL-0266
+
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0268
 Status: RELEASE CL-0265 (the "cliff", "trav" and "onboard" instances, all stopped) and the Oct 28 claim on D:/CurrentMO57SteamPackage (its upload is now recorded: Docs/STEAM_RELEASES.md, BuildID 26289075, 2121b981, Oct 28 21:38). Committed with this entry: Wes's Steam build predates the Oct 29 climbing animation and the fire drill fix (nothing to fix in the current build: Harvey climbs with the climbing set on his body, vaults, hops up and pulls up; the drill is in the crafting list after a branch is inspected); check_cliff_climb / check_traversal_world --base; check_onboarding reads the crafting menu's list (19/19).
 References: CL-0265
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (rainforest card side session) — CL-0270
+Status: RELEASE CL-0267 (the "rainpic" instance, stopped; the open editor, PID 37004, untouched beyond one texture import and save). Committed with this entry: a new Rainforest starting-biome card (Wes Oct 30): T_BiomePreview_Rainforest re-imported in place from a 1280x720 instance shot (seed 3014, rainforest start, FindBiomeSpot spot 1.6 km west, 10:00 clear, the sun behind the camera; same settings: UI group, no mips, sRGB), Content/Python/import_biome_previews.py (BIOME_PREVIEW_SOURCES re-imports one card), Docs/World_Creation.md §3, a BACKLOG by-eye row. Verified: a fresh -game instance's New Game panel shows the new card, selected ("Starting in: Rainforest"). The look is Wes's call (before / after sent).
+References: CL-0267
