@@ -122,7 +122,10 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   branch's base (it leaves Field_02's trunk ~136 cm up) down to hip height, 65 cm short of the bark. Measured at Field_02 (x1.32), rays at
   hip height from 8 sides: the hull meets each at or before the bark, 7-30 cm out (Oct 31). Python cannot write a hull's vertices; the tool
   goes through the struct's text import. Trees, saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you,
-  and you slide off rather than stand on top (BR31-5, "very stong bush"). Rocks stay walkable. Re-running the tool is a no-op on meshes
+  and you slide off rather than stand on top (BR31-5, "very stong bush"). Rocks stay walkable. A rock 3 m or more is climbed, so its
+  real surface is its collision (complex as simple, like every composition rock and cliff; Wes, Oct 31: "make the collission for the
+  cliffs and ED cliff rocks complex" -- the audit found every placed cliff and ED cliff rock already so but NordicBoulder_02, up to 7 m on
+  the Nordic beach with 6 hulls); smaller boulders keep a few hulls. Re-running the tool is a no-op on meshes
   already right (it re-measures; the first save in an editor session can move a mesh's bounds a few cm, so a second run may rebuild a few).
 - **Rock alignment:** aligned species rotate as `PointRot * FQuat(Up, Yaw)` (yaw about the surface normal), pivot-to-bottom
   lift + `SinkFraction` (auto 0.25 for aligned) / `SinkMinCm`.

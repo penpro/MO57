@@ -6,7 +6,8 @@ Idempotent: a mesh that already blocks (simple shapes, or "use complex as simple
   * WORLD-FEATURE compositions (DT_WorldFeatures, manifest data/worldfeature_meshes.json from worldfeature_meshes.py) -> rocks / cliffs / logs: complex as simple
                           (climbable hero terrain); standing trees: trunk capsule; plants stay walk-through. Electric Dreams meshes are gitignored and migrated
                           per machine (Tools/ede_migrate.py): re-run this tool after a migration.
-  * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks.
+  * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks; a rock 3 m or more (BIG_ROCK_CM, its
+                          largest side unscaled) is climbed, so its real surface is its collision (complex as simple; Wes, Oct 31).
   * TREE meshes        -> one convex hull round the MEASURED trunk: the convex outline of the bark's LOD0 vertices 30-110 cm above the base (a stray branch stub
                           left out), upright from the base to the capsule's top (BR31-8, Oct 30-31 2026: a pivot capsule left wood walk-through, one capsule round the
                           measured trunk over-covered a lopsided trunk by up to 71 cm). A mesh with no bark there gets a capsule, 2.2 % of the tree's height (20..55 cm)
@@ -160,6 +161,12 @@ def worldfeature_meshes():
 
 
 BUSH_MIN_HEIGHT = 100.0   # cm: a lower "bush" is a step you would climb onto -- it stays walk-through (no collision)
+BIG_ROCK_CM = 300.0       # cm: a rock this big (its largest side, unscaled) is climbed, not hopped onto: its real surface is its collision
+
+
+def big_rock(mesh):
+    ext = mesh.get_bounds().box_extent
+    return 2.0 * max(ext.x, ext.y, ext.z) >= BIG_ROCK_CM
 
 
 def no_collision(mesh):
@@ -403,6 +410,11 @@ def fix_meshes(dry=False, force=()):
         # drops where the rock is visibly there (grid test, Oct 14 2026: SM_Cliff_06 at 4x). So "has hulls" is not enough for these.
         if kind == "Bush" and who.startswith("feature:") and 2.0 * mesh.get_bounds().box_extent.z < BUSH_MIN_HEIGHT:
             kind = "Plant"   # a knee-high composition shrub: nothing to bump into (the palette's harvestable bushes keep their core capsule as an interaction target)
+        if kind == "Rock" and big_rock(mesh):
+            # A rock you climb collides with its REAL surface too (Wes, Oct 31: "make the collision for the cliffs and ED cliff rocks complex"): a
+            # climber's hands and feet land on what is drawn, and a few hulls bridge the cracks and ledges a climb goes by (NordicBoulder_02, up
+            # to 7 m in the beach palette, had 6 hulls).
+            kind = "Composition"
         if kind == "Composition" and "/Items/" in path:
             # An ITEM mesh (Bark01 = shore driftwood debris AND the bark pickup) is also a dropped world item that simulates physics, and a complex-as-simple
             # body cannot simulate: it keeps convex hulls (Oct 14 2026: Bark01 had been switched to its real surface by the Solid-species rule).
