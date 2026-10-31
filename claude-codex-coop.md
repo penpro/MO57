@@ -1996,3 +1996,7 @@ References: CL-0272
 ### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0274
 Status: RELEASE CL-0273. Committed with this entry: crash_triage.py prints each upload's sender (Wes's machines DARKSIDE / DARKTOWER by MachineId from ~/.mo57/crash_machines.json, outside the public repo; anything else "other player"), a per-sender count and --from wes|others; Docs/Persistence.md §4, Docs/TOOLING.md §8; Docs/STEAM_RELEASES.md's Oct 28 row now gives the exe's own stamp, 11bc6111. Verified on Wes's mo-crashes-2026-10-31 tarball: 18 uploads, all his (DARKSIDE 7, DARKTOWER 11), none from other players.
 References: CL-0273
+
+### 2026-10-30 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0275
+Status: Docs only, no claim held (Docs/BACKLOG.md one new section, the new Docs/BugReports_2026-10-31.md): Wes's mo-crashes-2026-10-31 tarball triaged (Wes, Oct 30: "Yes, triage them"). 12 bug reports become BR31-1..12: one DONE (the fire drill, fixed Oct 29), BR31-12 is N-207's grip work (Wes's: ask first), the rest OPEN with their layer and a repro spot in seed 8027. The 6 crashes are dev-only (N-231; the retargeted-bow-clip trap; Claude's WBP_BugReportPanel rebuild ensures). Nothing claimed for code: the fixes are the next batch.
+References: CL-0274

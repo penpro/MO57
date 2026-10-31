@@ -392,6 +392,23 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR25-19 | VERIFY (by eye; Oct 25 evening) | Claude | Western cliffs: none found; in the POI list, many more, lined-up clusters of 5-10 | `Docs/BugReports_2026-10-25.md` | ec63f653 |
 | BR25-20 | DONE-2026-10-25 | Claude | `poi` puts you very far from the cliffs | `Docs/BugReports_2026-10-25.md` | c187fadd |
 
+## Wes's Oct 30 reports (BR31; tracker `Docs/BugReports_2026-10-31.md`; the Steam build 11bc6111, BR31-2..12 from DARKTOWER, seed 8027, as Trey)
+
+| ID | Status | Owner | Item | Ref | Aliases |
+|---|---|---|---|---|---|
+| BR31-1 | DONE (fixed Oct 29, after this build) | Claude | Fire drill missing from the crafting list | `Docs/BugReports_2026-10-31.md` | b40024ab |
+| BR31-2 | OPEN | Claude | Trey's brush cut sits on his neck: Hair_S_BrushCut's binding has no source head (MH_Groom_Head never imported); Coil and TwistedBraids too | `Docs/BugReports_2026-10-31.md` | 2d7b96de |
+| BR31-3 | OPEN (repro first) | Claude | A leg the foot IK bent onto a raised spot snaps back to a straight stand | `Docs/BugReports_2026-10-31.md` | 3916ea64 |
+| BR31-4 | OPEN | Claude | The status screen's "i" on every row does nothing (an unwired icon): make it explain the row | `Docs/BugReports_2026-10-31.md` | d7ff4502 |
+| BR31-5 | OPEN (repro first) | Claude | A bush holds the player up (blocking core = a floor): plants block but are never walkable | `Docs/BugReports_2026-10-31.md` | 9ba5dd23 |
+| BR31-6 | OPEN | Claude | The foot IK folds the ankle past a human range on a boulder: clamp it | `Docs/BugReports_2026-10-31.md` | 4f15d18a |
+| BR31-7 | OPEN (repro first) | Claude | The camera goes into a vertical terrain face | `Docs/BugReports_2026-10-31.md` | c105bc13 |
+| BR31-8 | OPEN | Claude | Thick tree trunks are walk-through: the trunk capsule is 2.2 % of the tree's height, not the trunk's width | `Docs/BugReports_2026-10-31.md` | 976a2493 |
+| BR31-9 | OPEN | Claude | A swimmer can punch: no melee while swimming | `Docs/BugReports_2026-10-31.md` | f43175af |
+| BR31-10 | OPEN (repro first) | Claude | Swimming in air at a lake: the swim decision trusts GetSurfaceZ, not the drawn water | `Docs/BugReports_2026-10-31.md` | 1e67003b |
+| BR31-11 | OPEN | Claude | Breath meter colours too dim: brighter fills, darker track, an outline (then by eye) | `Docs/BugReports_2026-10-31.md` | 3da41fdf, BR23-17 |
+| BR31-12 | OPEN (Wes's grip work: ask first) | Wes / Claude | The hammer stone floats beside the right hand: its held grip is unaligned | `Docs/BugReports_2026-10-31.md` | e462993f, N-207 |
+
 ## UI
 
 | ID | Status | Owner | Item | Detail | Aliases |
