@@ -7,20 +7,26 @@ Idempotent: a mesh that already blocks (simple shapes, or "use complex as simple
                           (climbable hero terrain); standing trees: trunk capsule; plants stay walk-through. Electric Dreams meshes are gitignored and migrated
                           per machine (Tools/ede_migrate.py): re-run this tool after a migration.
   * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks.
-  * TREE meshes        -> one trunk capsule at the pivot (radius ~2.2% of the tree's height, 20..55 cm; length ~45% of the height, at most 6 m). A tree's collision must NOT be its
-                          canopy: a bounding capsule of the whole tree would be an invisible wall 4 m from the trunk.
+  * TREE meshes        -> one trunk capsule around the MEASURED trunk: the bark's LOD0 vertices 30-150 cm above the base, centred on them, the radius taking in 90 % of
+                          them (20..120 cm; BR31-8, Oct 30 2026). A mesh with no bark there falls back to 2.2 % of the tree's height (20..55 cm) at the pivot. Length ~45% of
+                          the height, at most 6 m. A tree's collision must NOT be its canopy: a bounding capsule of the whole tree would be an invisible wall 4 m from the trunk.
+  * PLANTS THAT BLOCK (trees, saplings, bushes) are never a floor: their body's walkable slope is Unwalkable, so a bush stops you but never holds you up
+                          (BR31-5, Oct 30 2026: the player stood on top of one). Rocks stay walkable (you climb boulders).
   * PCG graph nodes    -> native Static Mesh Spawner entries of rocks/trees that carry NoCollision / IgnoreOnlyPawn become BlockAll (the FreshWaterSpring boulders, the locust woodland).
 The audit that finds the meshes: Content/Python/audit_table_mesh_collision.py; the regression test: MOFramework.Data.SolidMeshCollision.
 Output lines start with FIXCOLL.
 """
 import csv
 import io
+import math
 import re
 
 import unreal
 
 ESL = unreal.EditorStaticMeshLibrary
+SMES = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
 SOLID = ("Tree", "Rock", "Ore", "Bush")   # bushes block at their core since 2026-10-14 (playtest #21)
+NOT_BARK = ("TwoSided", "Leaf", "Leaves", "Foliage", "Needle", "Frond", "Billboard", "Card", "Decoration", "Moss", "Ivy")   # material names of a tree's non-wood sections
 
 
 def blocks(mesh):
@@ -190,6 +196,68 @@ def trunk_only(mesh):
     return ESL.get_convex_collision_count(mesh) <= 0 and ESL.get_simple_collision_count(mesh) == 1
 
 
+def is_unwalkable(mesh):
+    body = mesh.get_editor_property("body_setup")
+    return body is not None and body.get_editor_property("walkable_slope_override").get_editor_property("walkable_slope_behavior") == \
+        unreal.WalkableSlopeBehavior.WALKABLE_SLOPE_UNWALKABLE
+
+
+def set_unwalkable(body):
+    body.set_editor_property("walkable_slope_override", unreal.WalkableSlopeOverride(
+        walkable_slope_behavior=unreal.WalkableSlopeBehavior.WALKABLE_SLOPE_UNWALKABLE, walkable_slope_angle=0.0))
+
+
+def measure_trunk(mesh, base):
+    """(centre x, centre y, radius) of the wood a walker bumps into: the bark sections' LOD0 vertices 30-150 cm above the base, the radius taking in 90 % of
+    them. None when there is no bark there. (BR31-8, Oct 30 2026: the 2.2 %-of-height capsule at the pivot was r 38 on BlackAlder_Field_02, whose trunk
+    reaches 68 cm round a centre 31 cm off the pivot: the player walked into the wood.)"""
+    pts = []
+    for s in range(mesh.get_num_sections(0)):
+        mat = mesh.get_material(SMES.get_lod_material_slot(mesh, 0, s))
+        if mat is not None and any(w in mat.get_name() for w in NOT_BARK):
+            continue
+        verts = unreal.ProceduralMeshLibrary.get_section_from_static_mesh(mesh, 0, s)[0]
+        pts += [(v.x, v.y) for v in verts if base + 30.0 <= v.z <= base + 150.0]
+    if len(pts) < 8:
+        return None
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+    d = sorted(math.hypot(x - cx, y - cy) for x, y in pts)
+    return cx, cy, d[int(0.9 * (len(d) - 1))]
+
+
+def trunk_shape(mesh, sapling=False):
+    """(centre x, centre y, centre z, radius, length) of the capsule a tree should have."""
+    b = mesh.get_bounds()
+    height = 2.0 * b.box_extent.z
+    base = b.origin.z - b.box_extent.z
+    cx, cy = 0.0, 0.0
+    if sapling:
+        radius = max(6.0, min(12.0, 0.03 * height))     # a sapling's stem: you brush past the twigs, you bump into the stem
+        length = max(40.0, min(250.0, 0.6 * height))
+    else:
+        # Only a real tree has a trunk at hip height: on a knee-high "Tree" (the Black Locust wdvhberja variants, 0.5-1.5 m) that band is the whole plant.
+        trunk = measure_trunk(mesh, base) if height >= 400.0 else None
+        if trunk:
+            cx, cy, radius = trunk[0], trunk[1], max(20.0, min(120.0, trunk[2]))
+        else:
+            radius = max(20.0, min(55.0, 0.022 * height))
+        length = max(60.0, min(600.0, 0.45 * height))
+    return cx, cy, base + radius + length * 0.5, radius, length
+
+
+def plant_done(mesh, kind):
+    """A tree / sapling / bush: one capsule, never walkable, and a tree's capsule where its trunk is (within 15 % of the radius / 10 cm of the centre)."""
+    if not (trunk_only(mesh) and is_unwalkable(mesh)):
+        return False
+    if kind != "Tree":
+        return True
+    want = trunk_shape(mesh)
+    have = mesh.get_editor_property("body_setup").get_editor_property("agg_geom").get_editor_property("sphyl_elems")[0]
+    c = have.get_editor_property("center")
+    return abs(have.get_editor_property("radius") - want[3]) <= 0.15 * want[3] and math.hypot(c.x - want[0], c.y - want[1]) <= 10.0
+
+
 def fix_bush(mesh):
     """A bush stops you at its stems, not at its outer leaves: one upright capsule about a third of its width, through most of its height."""
     b = mesh.get_bounds()
@@ -209,30 +277,24 @@ def fix_bush(mesh):
     capsule.set_editor_property("length", length)
     ag.set_editor_property("sphyl_elems", [capsule])
     body.set_editor_property("agg_geom", ag)
-    return "core capsule r=%.0f len=%.0f (bush %.0f cm wide, %.0f tall)" % (radius, length, 2.0 * max(b.box_extent.x, b.box_extent.y), height)
+    set_unwalkable(body)
+    return "core capsule r=%.0f len=%.0f (bush %.0f cm wide, %.0f tall), unwalkable" % (radius, length, 2.0 * max(b.box_extent.x, b.box_extent.y), height)
 
 
 def fix_tree(mesh, sapling=False):
-    b = mesh.get_bounds()
-    height = 2.0 * b.box_extent.z
-    base = b.origin.z - b.box_extent.z
-    if sapling:
-        radius = max(6.0, min(12.0, 0.03 * height))     # a sapling's stem: you brush past the twigs, you bump into the stem
-        length = max(40.0, min(250.0, 0.6 * height))
-    else:
-        radius = max(20.0, min(55.0, 0.022 * height))
-        length = max(60.0, min(600.0, 0.45 * height))
+    cx, cy, cz, radius, length = trunk_shape(mesh, sapling)
     ESL.remove_collisions(mesh)   # the canopy hulls go: the trunk is the only thing that stops you
     body = mesh.get_editor_property("body_setup")
     body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_DEFAULT)
     ag = body.get_editor_property("agg_geom")
     capsule = unreal.KSphylElem()
-    capsule.set_editor_property("center", unreal.Vector(0.0, 0.0, base + radius + length * 0.5))
+    capsule.set_editor_property("center", unreal.Vector(cx, cy, cz))
     capsule.set_editor_property("radius", radius)
     capsule.set_editor_property("length", length)
     ag.set_editor_property("sphyl_elems", [capsule])
     body.set_editor_property("agg_geom", ag)
-    return "trunk capsule r=%.0f len=%.0f (tree height %.0f)" % (radius, length, height)
+    set_unwalkable(body)
+    return "trunk capsule r=%.0f len=%.0f at (%.0f, %.0f) (tree height %.0f), unwalkable" % (radius, length, cx, cy, 2.0 * mesh.get_bounds().box_extent.z)
 
 
 def fix_meshes(dry=False, force=()):
@@ -255,7 +317,7 @@ def fix_meshes(dry=False, force=()):
             # An ITEM mesh (Bark01 = shore driftwood debris AND the bark pickup) is also a dropped world item that simulates physics, and a complex-as-simple
             # body cannot simulate: it keeps convex hulls (Oct 14 2026: Bark01 had been switched to its real surface by the Solid-species rule).
             kind = "Rock"
-        done =(complex_as_simple(mesh) if kind == "Composition" else trunk_only(mesh) if kind in ("Tree", "Sapling", "Bush")
+        done =(complex_as_simple(mesh) if kind == "Composition" else plant_done(mesh, kind) if kind in ("Tree", "Sapling", "Bush")
                 else no_collision(mesh) if kind == "Plant" else blocks(mesh)) and kind not in force
         if done:
             print("FIXCOLL ok      %s (%s, %s)" % (path.rsplit("/", 1)[-1].split(".")[0], kind, who))
@@ -273,7 +335,7 @@ def fix_meshes(dry=False, force=()):
         except Exception:
             pass
         saved = unreal.EditorAssetLibrary.save_loaded_asset(mesh)
-        now = (complex_as_simple(mesh) if kind == "Composition" else trunk_only(mesh) if kind in ("Tree", "Sapling", "Bush")
+        now = (complex_as_simple(mesh) if kind == "Composition" else plant_done(mesh, kind) if kind in ("Tree", "Sapling", "Bush")
                else no_collision(mesh) if kind == "Plant" else blocks(mesh))
         fixed += 1 if now else 0
         print("FIXCOLL %s %s (%s, %s): %s, saved=%s" % ("FIXED  " if now else "STILL-BROKEN", path.rsplit("/", 1)[-1].split(".")[0], kind, who, note, saved))

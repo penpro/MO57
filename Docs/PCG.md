@@ -112,6 +112,12 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   (NoCollision). `EMOSpeciesCollision` (Auto / Passable / Solid) on `FMOBiomeSpeciesEntry` overrides "a Tree in the resource table
   but a knee-high plant" (every Black Locust `wdvhberja` variant is Passable). `MO.Dev.ScatterCollision [filter]`,
   `MOFramework.Data.SolidMeshCollision`.
+- **The mesh's own collision** (`Content/Python/fix_mesh_collision.py`, re-run after importing or migrating plants): a tree is ONE trunk
+  capsule around its MEASURED trunk (the bark's vertices 30-150 cm up, centred on them, the radius taking in 90 % of them, 20-120 cm;
+  trees under 4 m keep 2.2 % of their height at the pivot), never its canopy. Before Oct 30 every trunk was 2.2 % of the tree's height
+  at the pivot: BlackAlder_Field_02's r 38 against a 68 cm trunk centred 31 cm off the pivot, and Wes walked into it (BR31-8). Trees,
+  saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you, and you slide off rather than stand on top
+  (BR31-5, "very stong bush"). Rocks stay walkable. Re-running the tool is a no-op on meshes already right (it re-measures).
 - **Rock alignment:** aligned species rotate as `PointRot * FQuat(Up, Yaw)` (yaw about the surface normal), pivot-to-bottom
   lift + `SinkFraction` (auto 0.25 for aligned) / `SinkMinCm`.
 - **Open-backed cliff slabs face downhill (Oct 19 2026, BR18-14 / BR18-19):** a mesh that is only a rock face with a hollow back
