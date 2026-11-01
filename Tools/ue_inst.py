@@ -5396,11 +5396,19 @@ def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
         time.sleep(30)   # the world builds round both pawns
 
         top = _trav_ledge(host, client, 90, 150, 0)
+        host_off, client_off = log_size(host), log_size(client)
         console(client, "MO.Test.InjectInput IA_MOJump 1 0 0.15")
         time.sleep(2.5)
         h, c = _trav_view(host, 1), _trav_view(client, 0)
-        rep.step("a joiner hops up onto a 90 cm block: on it on both machines (centre ~ top + 88)",
-                 bool(h and c and top) and abs(h[2] - (top + 88)) < 25 and abs(c[2] - (top + 88)) < 25, f"host {h} client {c} top {top}")
+        hopped = bool(h and c and top) and abs(h[2] - (top + 88)) < 25 and abs(c[2] - (top + 88)) < 25
+        rep.step("a joiner hops up onto a 90 cm block: on it on both machines (centre ~ top + 88)", hopped, f"host {h} client {c} top {top}")
+        if not hopped:
+            # N-238 (3 of 7 runs on Oct 29): what each machine made of the press -- AMOCharacter::CheckJumpInput / DoJump log it on both.
+            for who, name, off in (("host", host, host_off), ("joiner", client, client_off)):
+                lines = [ln for ln in read_log_from(name, off).splitlines() if "[MOTraversal]" in ln]
+                print(f"[nettest] traversal: the {who}'s [MOTraversal] lines at the hop ({len(lines)}):", flush=True)
+                for ln in lines[:20]:
+                    print("    " + ln.strip(), flush=True)
         rep.step("... host and joiner agree where it is (< 20 cm)", 0 <= _trav_gap(h, c) < 20, f"gap {_trav_gap(h, c):.1f} cm")
 
         # 5 m: the grab climbs ~70 cm while the first push is still held, and 4 s of W adds 120 -- a 4 m edge then comes within arm's reach

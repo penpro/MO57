@@ -361,6 +361,11 @@ private:
 	void PhysClimb(float DeltaTime, int32 Iterations);
 	/** The body's facing for traversal probes: the face held while climbing, else where the body looks (flat). */
 	FVector TraversalFacing() const;
+	/** Is there a floor the body could stand on under a traversal's stand spot (the capsule at Stand, swept down DropCm)? A top a body's depth across may be no more than a thin wall's
+	 *  edge with air where the body would stand (N-237). */
+	bool HasFloorUnderStand(const FVector& Stand, float DropCm, const FCollisionQueryParams& Params, const FCollisionResponseParams& Response) const;
+	/** How far under a traversal's stand spot (past its lift) the floor may be: a step's drop, the body lands at the move's end (MaxStepHeight's default). */
+	static constexpr float StandFloorDropCm = 45.0f;
 	/** A climbable face along Direction (flattened) within the climbing reach, felt at seven holds (chest, head, waist, thighs, the chest's sides,
 	 *  the reaching hands above the head): OutHit is the nearest climbable hold (the hands' only when a bulge the body can lean round, within
 	 *  ClimbLeanOutCm), its normals replaced by the holds' mean; Distance - capsule radius is the gap to the body. */

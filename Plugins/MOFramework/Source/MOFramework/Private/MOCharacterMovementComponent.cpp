@@ -591,6 +591,18 @@ FVector UMOCharacterMovementComponent::TraversalFacing() const
 	return Facing.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
 }
 
+bool UMOCharacterMovementComponent::HasFloorUnderStand(const FVector& Stand, float DropCm, const FCollisionQueryParams& Params, const FCollisionResponseParams& Response) const
+{
+	// The room-on-top test alone (no blocking overlap at the stand) passed over a thin wall's top with air where the body would stand: a pull-over at a 5 m climbable wall 10 cm
+	// deep put the climber in the air past it and it fell 5 m off the far side (N-237, Oct 29). The body's own capsule, swept down from the stand: it must land on something.
+	float Radius = 0.0f;
+	float Half = 0.0f;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(Radius, Half);
+	FHitResult Floor;
+	return GetWorld()->SweepSingleByChannel(Floor, Stand, Stand - FVector(0.0, 0.0, DropCm), FQuat::Identity, UpdatedComponent->GetCollisionObjectType(),
+		FCollisionShape::MakeCapsule(Radius, Half), Params, Response) && IsValidLandingSpot(Floor.Location, Floor);
+}
+
 bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FString* OutWhyNot) const
 {
 	OutPlan = FTraversalPlan();
@@ -658,8 +670,9 @@ bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FStri
 	}
 
 	// 3-4. For each top, best first (FMOTraversal::RankTops): room to rise straight up beside the face to clear the edge (no overhang, no
-	// ceiling), and room for the body standing on it -- over the top found, never hanging over the edge. A lumpy top's highest spot may have no
-	// room where a lower one does; the body may also come down a hand's breadth onto uneven rock (it lands at the move's end).
+	// ceiling), and room for the body standing on it -- over the top found, never hanging over the edge, with a floor under it (HasFloorUnderStand:
+	// a thin wall's top is no place to stand). A lumpy top's highest spot may have no room where a lower one does; the body may also come down
+	// a step onto uneven rock (it lands at the move's end).
 	constexpr float Clearance = 8.0f;
 	constexpr float Lifts[] = { 2.0f, 20.0f };
 	int32 TopIndex = Tops[0];
@@ -684,7 +697,8 @@ bool UMOCharacterMovementComponent::FindTraversal(FTraversalPlan& OutPlan, FStri
 				break;   // a higher lift cannot rise either
 			}
 			const FVector Stand(OnTopXY.X, OnTopXY.Y, CandidateZ + Half + Lift);
-			if (!World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response))
+			if (!World->OverlapBlockingTestByChannel(Stand, FQuat::Identity, Channel, FCollisionShape::MakeCapsule(Radius, Half), Params, Response)
+				&& HasFloorUnderStand(Stand, Lift + StandFloorDropCm, Params, Response))
 			{
 				TopIndex = Candidate;
 				Rise = CandidateRise;
@@ -999,20 +1013,22 @@ bool UMOCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime
 		Velocity = Away * ClimbPushOffSpeed + FVector(0.0, 0.0, ClimbPushOffUpSpeed);
 		return true;
 	}
-	// A joiner's jump re-run on the server (N-219): what the server decided, so a refused move is visible in the host's log.
+	// A joiner's jump re-run on the server (N-219): what the server decided, so a refused move is visible in the host's log. And the joiner's own
+	// press on its machine (N-238; AMOCharacter::CheckJumpInput logs the press itself): what its machine decided.
 	const bool bServerForRemote = CharacterOwner && CharacterOwner->HasAuthority() && !CharacterOwner->IsLocallyControlled();
+	const bool bJoinerOwnPress = CharacterOwner && !CharacterOwner->HasAuthority() && CharacterOwner->IsLocallyControlled() && !bReplayingMoves;
 	if (CharacterOwner && !CharacterOwner->bIsCrouched && (IsMovingOnGround() || IsFalling()))
 	{
 		FString WhyNot;
-		if (FindTraversal(Plan, bServerForRemote ? &WhyNot : nullptr))
+		if (FindTraversal(Plan, bServerForRemote || bJoinerOwnPress ? &WhyNot : nullptr))
 		{
 			StartTraversal(Plan);
 			return true;
 		}
-		if (bServerForRemote)
+		if (bServerForRemote || bJoinerOwnPress)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] server: %s's jump (replay=%d) has no traversal: %s; at %s facing %s"), *CharacterOwner->GetName(),
-				bReplayingMoves ? 1 : 0, *WhyNot, *UpdatedComponent->GetComponentLocation().ToCompactString(), *TraversalFacing().ToCompactString());
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: %s's jump (replay=%d) has no traversal: %s; at %s facing %s"), bServerForRemote ? TEXT("server") : TEXT("joiner"),
+				*CharacterOwner->GetName(), bReplayingMoves ? 1 : 0, *WhyNot, *UpdatedComponent->GetComponentLocation().ToCompactString(), *TraversalFacing().ToCompactString());
 		}
 		FHitResult Wall;
 		EMOClimbSurface Surface = EMOClimbSurface::None;

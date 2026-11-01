@@ -605,6 +605,24 @@ float AMOCharacter::GetMovementNoiseLoudness(float Speed) const
 	return FMath::Clamp(Loudness, 0.0f, 1.0f);
 }
 
+void AMOCharacter::CheckJumpInput(float DeltaTime)
+{
+	// N-238: `ue.py nettest traversal`'s first step sometimes saw the joiner's hop at a block come out a plain jump, still falling 2.5 s later on its
+	// own machine, with nothing at all in the host's log -- not even DoJump's "has no traversal". A joiner's press, on its machine and as the server
+	// replays it, once per press: what each saw (a press while falling counts as a jump spent, so CanJump refuses it before DoJump runs).
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	const bool bJoinerPress = Move && HasAuthority() != IsLocallyControlled() && !bClientUpdating;   // the server's copy of a joiner, or the joiner's own (not a replay)
+	if (bPressedJump && bJoinerPress && !bJumpPressLogged)
+	{
+		const FFindFloorResult& Floor = Move->CurrentFloor;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s: %s pressed jump: mode %s, can jump %d (jumps %d of %d), floor %s (walkable %d, %.1f cm under the feet), at %s"),
+			HasAuthority() ? TEXT("server") : TEXT("joiner"), *GetName(), *Move->GetMovementName(), ACharacter::CanJump() ? 1 : 0, JumpCurrentCount, JumpMaxCount,
+			Floor.bBlockingHit ? *GetNameSafe(Floor.HitResult.GetActor()) : TEXT("none"), Floor.IsWalkableFloor() ? 1 : 0, Floor.FloorDist, *GetActorLocation().ToCompactString());
+	}
+	bJumpPressLogged = bPressedJump && bJoinerPress;
+	Super::CheckJumpInput(DeltaTime);
+}
+
 void AMOCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);

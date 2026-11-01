@@ -379,6 +379,9 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
+	/** Logs a joiner's jump press, on its own machine and on the server (N-238): CanJump can refuse it before the move's DoJump runs (a press while falling counts as a jump spent). */
+	virtual void CheckJumpInput(float DeltaTime) override;
+
 	/**
 	 * Soft assets this pawn class loads at RUNTIME (behavior trees, tables resolved on possession / death), appended to Out. Called on the class
 	 * default object by whoever spawns the class later (UMOSpawnManagerSubsystem), so they are loaded asynchronously behind the loading screen
@@ -1710,6 +1713,8 @@ private:
 	bool bSwimPoseViaSlot = false;
 	FVector SavedMeshRelativeLocation = FVector::ZeroVector;
 	float SwimMeshRaise = 0.0f;
+	/** CheckJumpInput logged this press already (one line per press, N-238). */
+	bool bJumpPressLogged = false;
 
 protected:
 	/** Apply physiological effects of current movement mode. */

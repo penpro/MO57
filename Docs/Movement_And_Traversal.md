@@ -110,7 +110,13 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
   of reach or ends -- a rock is a dome, and one probe just past the face read its steep shoulder as its top (Oct 29: a 135 cm boulder as a
   77 cm ledge with no room on top); for each, best first, a capsule swept straight up for room to rise (from 5 cm up: the body's floor
   contact is not a ceiling) and a capsule overlap for room on top, standing 2 cm above the top or, on uneven rock, 20 cm (it lands at the
-  move's end); for a vault the ground just behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
+  move's end), **with a floor under it** (`HasFloorUnderStand`, N-237, Nov 1: the body's capsule swept down from the stand by the lift and
+  a step, 45 cm, must land on something `IsValidLandingSpot` accepts -- a top a body's depth across can be no more than a thin wall's edge with
+  air where the body would stand; on Oct 29 a 5 m climbable wall 10 cm deep pulled the climber over into the air past it, a 5 m fall); for a
+  vault the ground just behind. `MO.Test.Traversal` prints the answer and, when there is none, why.
+- **A joiner's jump is logged on both machines** (N-238, `ue.py nettest traversal` fails some runs at its first hop): the press itself
+  (`AMOCharacter::CheckJumpInput`, once per press: "joiner: / server: ... pressed jump: mode, can jump (jumps n of m), floor, walkable, cm
+  under the feet") and DoJump's answer ("... has no traversal: <why>"); the test prints both machines' `[MOTraversal]` lines when the hop fails.
 - Climbing, the face lost at the hands while pushing up (the top come level with the chest: a rounded edge, a boulder's crest) pulls over
   the top if one is in reach (Oct 29: a rock grabbed and let go 0.24 s later). **A climbing step that would leave every hold is not made**
   (`PhysClimb`, N-236): after each step the holds are felt again; none, and no pull-over from there, and the step is undone -- the body keeps
