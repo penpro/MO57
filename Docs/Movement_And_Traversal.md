@@ -123,10 +123,10 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
   Electric Dreams cliff its normal swings up to 70 degrees between facets 25 cm apart: the climber turned off the face and let go 1-3 m up
   every side. The face is lost only when it leaves every hold; the log then says what was there and why there was no pull-over
   (`[MOTraversal] ... the face ended at the hands (...) ...; no pull-over: <why>`). The holds reach `ClimbReachCm` past the gap held.
-- **The body hangs 22 cm off the face** (`ClimbWallGapCm`; 6 until Oct 31, Wes: "a little less bend in the elbows and knees... they look
-  like spider monkeys"): at 6 the chest was 33 cm off the rock and the elbows folded to 76-120 deg, the knees to 65; measured on SM_Cliff_09
-  as Trey: 15 -> elbows 90-148, 25 -> 115-180, 35 -> a hand short of the rock. The body turns to the face at most `ClimbTurnRateDeg` (270)
-  a second.
+- **The body hangs 6 cm off the face** (`ClimbWallGapCm`). Tried at 22 on Oct 31 for straighter arms (Wes had said the bent elbows and
+  knees looked like "spider monkeys"; at 6 the elbows fold to 76-120 deg, the knees to 65): it read as a climber holding itself off the
+  rock in a push-up (Wes, Oct 31: "they look worse now"), so it went back to 6, and the IK change made with it (feet looking lower and
+  further in, complex limb sweeps) was reverted too. The body turns to the face at most `ClimbTurnRateDeg` (270) a second.
 - **Over a bulge** (Oct 31, Wes: "they can't climb over even the smallest overhang"): the reaching hands' hold feels an outcrop coming up
   before the head meets its underside, and the gap is held to it -- the body leans out round it, up to `ClimbLeanOutCm` (40) out from the
   face below; a roof sticking out further still stops the line, as on real rock. Until then the capsule's top met the outcrop with every
@@ -136,7 +136,10 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
   swings round the edge at its distance from the rock, at climbing speed, turning with it (`ClimbRoundCorner`). An inside corner: moving
   across, the body meets climbable rock turned toward it and turns into the corner, halfway each bump. Until then the step past an edge was
   undone by the hold rule (stuck there) and an inside corner was a wall. Input stays camera-relative: round a corner a player turns the
-  camera with the body, or A / D becomes up / down the new face.
+  camera with the body, or A / D becomes up / down the new face. `MO.Debug.ClimbCorners 1` logs every step across that meets rock (what it
+  met, whether the climber turned into it) and every step the hold rule undoes (what the holds found): `[MOTraversal] corner probe ...`.
+  A notch is not an inside corner: a wall that stops 50 cm short of the face held leaves a slot the holds look into, and the climber
+  holds on in front of it (the first inside-corner test rig had one; found with that log, Oct 31).
 - The stuck-in-the-ground rescue (`AMOCharacter::CheckEmbeddedSafety`) skips a climbing or traversing body: it read a climber against a
   cliff's bumps as embedded and lifted it off the face 5 s into every climb (Oct 29).
 - W is camera-relative, like every move: a face that turns 50 degrees off the camera splits W into up and across, so a player keeps the
@@ -147,11 +150,15 @@ slab, so the bar came back 72 -> 100), the check's steering moved it along, and 
 **Corners and a bulge (Oct 31, seed 777 near SM_Cliff_09, climbable `MO.Test.SpawnLedge` blocks moved into shape; the camera follows the
 body as a player's would):**
 
-| Shape | Before | After |
-|---|---|---|
-| outside corner: a 2 m wide, 3 m deep block, 2 m up, D held 12 s | stuck 18 cm past the edge ("holds on at the lip") | round the edge, turned 90, 2.7 m along the side face, still climbing |
-| inside corner: wall B at 90 on the right | stopped against B | turned onto B, along it, and round B's far end (an outside corner) onto its back: both in one run |
-| a 30 cm shelf sticking out 2.6 m up, W held 14 s | 9 cm, then stuck under it | 5.4 m up, past the shelf |
+| Shape | Before | After (22 cm gap) | After, the 6 cm gap again (the pose reverted, Oct 31) |
+|---|---|---|---|
+| outside corner: a 2 m wide, 3 m deep block, 2 m up, D held 12 s | stuck 18 cm past the edge ("holds on at the lip") | round the edge, turned 90, 2.7 m along the side face, still climbing | round the edge, turned 90 |
+| inside corner: a 1 x 1 m wall B at 90 on the right, flush with the face | stopped against B | turned onto B, along it, and round B's far end (an outside corner) onto its back: both in one run | the same: onto B (yaw 90), round its far end, onto its back (yaw -90) |
+| a 30 cm shelf sticking out 2.6 m up, W held 14 s | 9 cm, then stuck under it | 5.4 m up, past the shelf | 5.3 m up, past the shelf |
+
+SM_Cliff_09 side 3 with the corner and bulge code at the 6 cm gap, five runs from the same start: topped out 3 times (feet rose 17.8, 21.4
+and 8.3 m, standing on top), stopped twice (5.0 and 4.4 m, ending off the face); the old code at 6 cm: 5.6 m, let go at a ledge. The
+spread between runs is large, so one run proves little either way.
 
 Hop up onto a 90 cm block (standing on it after); vault a 90 x 30 cm fence (1.58 m on, same ground height); pull up onto a 170 cm ledge; a
 4 m plain block: no move (control); a 4 m climbable block: grabbed while pushing at it, 120 cm climbed in 4 s, crouch let go and the body

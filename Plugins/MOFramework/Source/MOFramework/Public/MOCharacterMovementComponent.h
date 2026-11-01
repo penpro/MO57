@@ -123,12 +123,11 @@ public:
 	void StopClimbing(EMovementMode Next = MOVE_Falling);
 
 	/**
-	 * How far from the face the climber's capsule is held (cm). 22: a climber hangs off nearly straight arms with the chest away from the rock.
-	 * At 6 (until Oct 31) the chest was 33 cm off the rock and the elbows folded to 76-120 deg, the knees to 65 (Wes: "they look like spider
-	 * monkeys"); measured on SM_Cliff_09 as Trey: 15 -> elbows 90-148, 25 -> 115-180 with the hands still on the rock (35: a hand short of it).
+	 * How far from the face the climber's capsule is held (cm). 22 for a day (Oct 31: straight arms, chest off the rock) read as a climber
+	 * holding itself off the rock in a push-up (Wes: "they look worse now"), so back to 6.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="0"))
-	float ClimbWallGapCm = 22.0f;
+	float ClimbWallGapCm = 6.0f;
 
 	/** How far past the capsule the hands find a face to grab (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Traversal", meta=(ClampMin="5"))

@@ -23,6 +23,10 @@ static TAutoConsoleVariable<float> CVarGlideSpeed(TEXT("MO.Dev.GlideSpeed"), 110
 static TAutoConsoleVariable<float> CVarGlideSink(TEXT("MO.Dev.GlideSink"), 100.0f,
 	TEXT("Dev glider (MO.Dev.Glider): the steady descent, cm/s (default 100 = 1 m/s)."), ECVF_Default);
 
+static TAutoConsoleVariable<int32> CVarDebugClimbCorners(TEXT("MO.Debug.ClimbCorners"), 0,
+	TEXT("Log every climbing step that meets rock while moving across: what it met, whether the climber turned into an inside corner, and whether the hold rule undid the step (off by default)."),
+	ECVF_Default);
+
 static FAutoConsoleCommandWithWorldAndArgs GDevGliderCommand(
 	TEXT("MO.Dev.Glider"),
 	TEXT("Dev: a hang glider for looking at the world from the air (BR18-17). While on, a falling pawn glides: W flies along the view, A / D steer; "
@@ -1143,8 +1147,18 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 		// An inside corner: moving across, the body meets more climbable rock turned toward it -- the climber turns into the corner, halfway
 		// each time it bumps, and goes on along the new face (Wes, Oct 31: "they can't climb around corners very well if at all").
 		const FVector Bumped = Hit.ImpactNormal.GetSafeNormal2D();
-		if (FMath::Abs(InputSide) > 0.3f && !Bumped.IsNearlyZero() && FVector::DotProduct(Bumped, ClimbNormal.GetSafeNormal2D()) < 0.85f
-			&& FVector::DotProduct(Bumped, Right * FMath::Sign(InputSide)) < -0.3f && ClassifyClimbHit(Hit) != EMOClimbSurface::None)
+		const float TurnedFromHeld = FVector::DotProduct(Bumped, ClimbNormal.GetSafeNormal2D());
+		const float AgainstAcross = FVector::DotProduct(Bumped, Right * FMath::Sign(InputSide));
+		const EMOClimbSurface BumpedKind = ClassifyClimbHit(Hit);
+		const bool bInsideCorner = FMath::Abs(InputSide) > 0.3f && !Bumped.IsNearlyZero() && TurnedFromHeld < 0.85f && AgainstAcross < -0.3f
+			&& BumpedKind != EMOClimbSurface::None;
+		if (CVarDebugClimbCorners.GetValueOnGameThread() != 0 && FMath::Abs(InputSide) > 0.3f)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] corner probe %s at %s: across %.2f met %s, normal %s (against the face held %.2f, against the way across %.2f, climbable %d) -> %s"),
+				*GetNameSafe(CharacterOwner), *OldLocation.ToCompactString(), InputSide, *GetNameSafe(Hit.GetComponent()), *Bumped.ToCompactString(), TurnedFromHeld,
+				AgainstAcross, int32(BumpedKind != EMOClimbSurface::None), bInsideCorner ? TEXT("turns into it") : TEXT("no turn"));
+		}
+		if (bInsideCorner)
 		{
 			ClimbNormal = (ClimbNormal.GetSafeNormal2D() + Bumped).GetSafeNormal(UE_SMALL_NUMBER, ClimbNormal);
 		}
@@ -1174,10 +1188,10 @@ void UMOCharacterMovementComponent::PhysClimb(float DeltaTime, int32 Iterations)
 			StartTraversal(Plan);   // over the top
 			return;
 		}
-		if (!bHeldAtLip)
+		if (!bHeldAtLip || CVarDebugClimbCorners.GetValueOnGameThread() != 0)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s holds on at the lip at %s, the face held %s; no pull-over: %s"), *GetNameSafe(CharacterOwner),
-				*OldLocation.ToCompactString(), *ClimbNormal.ToCompactString(), *WhyNot);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTraversal] %s holds on at the lip at %s, the face held %s (the holds found %s); no pull-over: %s"), *GetNameSafe(CharacterOwner),
+				*OldLocation.ToCompactString(), *ClimbNormal.ToCompactString(), Held.bBlockingHit ? *GetNameSafe(Held.GetComponent()) : TEXT("nothing"), *WhyNot);
 		}
 		MoveUpdatedComponent(OldLocation - UpdatedComponent->GetComponentLocation(), OldQuat, /*bSweep=*/false);
 		// ... and back to the face the holds were found along: the turn this tick made toward the lip's slope stays undone too, or the next tick
