@@ -8,11 +8,16 @@ Idempotent: a mesh that already blocks (simple shapes, or "use complex as simple
                           per machine (Tools/ede_migrate.py): re-run this tool after a migration.
   * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks; a rock 3 m or more (BIG_ROCK_CM, its
                           largest side unscaled) is climbed, so its real surface is its collision (complex as simple; Wes, Oct 31).
-  * TREE meshes        -> one convex hull round the MEASURED trunk: the convex outline of the bark's LOD0 vertices 30-110 cm above the base (a stray branch stub
-                          left out), upright from the base to the capsule's top (BR31-8, Oct 30-31 2026: a pivot capsule left wood walk-through, one capsule round the
-                          measured trunk over-covered a lopsided trunk by up to 71 cm). A mesh with no bark there gets a capsule, 2.2 % of the tree's height (20..55 cm)
-                          at the pivot. Height ~45% of the tree's, at most 6 m. A tree's collision must NOT be its canopy: a bounding capsule of the whole tree would
-                          be an invisible wall 4 m from the trunk.
+  * TREE meshes        -> a tree 4 m and taller with bark at hip height collides with its BARK (Oct 31 2026, Wes: "do the tree collisions"): a collision mesh
+                          made from its full-detail source model's bark sections (the leaves / cards left out), cut flat at the old trunk top (~45 % of the height,
+                          at most ~7 m), welded and simplified to 1 cm (BARK_TOLERANCE_CM), saved beside the tree as Collision/<Tree>_BarkCollision and set as
+                          its complex collision mesh, the body complex as simple. Branches in that band are wood you bump into; the leaves are not. Measured:
+                          rays at 50-300 cm from 16 sides meet the collision within 0.4 cm (median) / 1.1 cm (p90) of the drawn bark. History (BR31-8): a pivot
+                          capsule left wood walk-through; one capsule round the measured trunk over-covered a lopsided trunk by up to 71 cm; a hull of the
+                          measured outline still stood 7-30 cm off (it is the fallback when no bark mesh can be made, reported on every run). A tree with no
+                          bark at hip height gets a capsule, 2.2 % of the tree's height (20..55 cm) at the pivot. A tree's collision must NOT be its canopy:
+                          its render triangles (or a bounding shape) would be an invisible wall metres from the trunk -- MOFramework.Data.SolidMeshCollision
+                          fails a tree that is complex as simple with no bark mesh.
   * PLANTS THAT BLOCK (trees, saplings, bushes) are never a floor: their body's walkable slope is Unwalkable, so a bush stops you but never holds you up
                           (BR31-5, Oct 30 2026: the player stood on top of one). Rocks stay walkable (you climb boulders).
   * PCG graph nodes    -> native Static Mesh Spawner entries of rocks/trees that carry NoCollision / IgnoreOnlyPawn become BlockAll (the FreshWaterSpring boulders, the locust woodland).
@@ -29,7 +34,7 @@ import unreal
 ESL = unreal.EditorStaticMeshLibrary
 SMES = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
 SOLID = ("Tree", "Rock", "Ore", "Bush")   # bushes block at their core since 2026-10-14 (playtest #21)
-NOT_BARK = ("TwoSided", "Leaf", "Leaves", "Foliage", "Needle", "Frond", "Billboard", "Card", "Decoration", "Moss", "Ivy")   # material names of a tree's non-wood sections
+NOT_BARK = ("TwoSided", "Leaf", "Leaves", "Foliage", "Needle", "Frond", "Billboard", "Card", "Decoration", "Moss", "Ivy", "Impostor")   # material names of a tree's non-wood sections
 
 
 def blocks(mesh):
@@ -196,15 +201,13 @@ def fix_rock(mesh):
     return "convex decomposition (%s)" % ("ok" if hull is None or hull else "FAILED")
 
 
-def trunk_only(mesh, hull=False):
-    """A tree / sapling is done when its collision is ONE trunk shape and nothing else -- a capsule, or (hull: a tree whose trunk was measured) one convex
-    hull round the wood: no canopy hulls (an invisible wall metres from the trunk; Wes, 2026-10-14 #11: "make all the little saplings have a narrow trunk
-    collision, their branches block movement") and not its render triangles. (The simple count is boxes + spheres + capsules; hulls count apart.)"""
+def trunk_only(mesh):
+    """A sapling / bush / short tree is done when its collision is ONE capsule and nothing else: no canopy hulls (an invisible wall metres from the
+    trunk; Wes, 2026-10-14 #11: "make all the little saplings have a narrow trunk collision, their branches block movement") and not its render
+    triangles. (The simple count is boxes + spheres + capsules; hulls count apart.)"""
     body = mesh.get_editor_property("body_setup")
     if body is None or body.get_editor_property("collision_trace_flag").name == "CTF_USE_COMPLEX_AS_SIMPLE":
         return False
-    if hull:
-        return ESL.get_convex_collision_count(mesh) == 1 and ESL.get_simple_collision_count(mesh) == 0
     return ESL.get_convex_collision_count(mesh) <= 0 and ESL.get_simple_collision_count(mesh) == 1
 
 
@@ -244,6 +247,13 @@ def hull_2d(pts):
 # (BlackAlder_Field_02's leave the trunk ~136 cm up: a band to 150 drew one branch's base -- 138 cm out -- down to hip height as a prism, a wall
 # 65 cm short of the bark; Oct 31 2026).
 TRUNK_SLICES = (30.0, 50.0, 70.0, 90.0, 110.0)
+
+# A tall tree's bark collision mesh comes from the FULL-DETAIL source model (what Nanite draws), not the fallback LOD: the fallback dropped a
+# Hornbeam's small branches (rays to them missed by up to 2.5 m) and a BlackAlder's carries an impostor section. Simplified to a TOLERANCE, not a
+# triangle budget: a Hornbeam's bark below its trunk top is ~2,800 separate branch pieces with open ends, so a budget stalls at ~17k triangles and
+# clips twig tips by up to 25 cm; within 1 cm it is 10-25k triangles (Oct 31 2026, measured on BlackAlder_Field_02 and Hornbeam_Forest_02).
+BARK_LOD_TYPE = "SOURCE_MODEL"
+BARK_TOLERANCE_CM = 1.0
 
 
 def bark_slices(mesh, base, heights):
@@ -308,6 +318,93 @@ def trunk_shape(mesh, sapling=False):
     return cx, cy, base + radius + length * 0.5, radius, length, outline
 
 
+def trunk_top(mesh):
+    """Where a tree's trunk collision ends (z, mesh space): the top of the old trunk capsule -- ~45 % of the tree's height, at most ~7 m."""
+    cx, cy, cz, radius, length, outline = trunk_shape(mesh)
+    return cz + radius + length * 0.5
+
+
+def bark_collision_path(mesh):
+    """The bark collision mesh made for a tree: beside it (the tree packs are local, so is it), in a Collision folder."""
+    folder, name = mesh.get_path_name().split(".")[0].rsplit("/", 1)
+    return "%s/Collision/%s_BarkCollision" % (folder, name)
+
+
+def bark_band(mesh, top):
+    """(DynamicMesh, bark material names) of the tree's bark below top: its LOD0 with the leaf / card sections (NOT_BARK) deleted, cut flat at top,
+    welded, simplified to BARK_TOLERANCE_CM."""
+    U = unreal
+    lod = U.GeometryScriptMeshReadLOD()
+    lod.set_editor_property("lod_type", getattr(U.GeometryScriptLODType, BARK_LOD_TYPE))
+    lod.set_editor_property("lod_index", 0)
+    opts = U.GeometryScriptCopyMeshFromAssetOptions()
+    opts.set_editor_property("apply_build_settings", True)
+    opts.set_editor_property("request_tangents", False)
+    dm, outcome = U.GeometryScript_AssetUtils.copy_mesh_from_static_mesh_v2(mesh, U.DynamicMesh(), opts, lod, True)
+    if outcome != U.GeometryScriptOutcomePins.SUCCESS:
+        return None, []
+    # With section materials the triangles' material ids index this list (a section's slot index is NOT its section index).
+    bark = []
+    for i, mat in enumerate(U.GeometryScript_AssetUtils.get_section_material_list_from_static_mesh(mesh, lod)[0]):
+        if mat is not None and any(w in mat.get_name() for w in NOT_BARK):
+            U.GeometryScript_Materials.delete_triangles_by_material_id(dm, i)
+        else:
+            bark.append(mat.get_name() if mat else "-")
+    cut = U.GeometryScriptMeshPlaneCutOptions()
+    cut.set_editor_property("fill_holes", False)
+    U.GeometryScript_MeshBooleans.apply_mesh_plane_cut(dm, U.Transform(location=U.Vector(0.0, 0.0, top)), cut)   # keeps what is below
+    U.GeometryScript_MeshEdits.discard_mesh_attributes(dm)   # no UV / normal seams to hold the simplifier back
+    weld = U.GeometryScriptWeldEdgesOptions()
+    weld.set_editor_property("tolerance", 0.1)
+    U.GeometryScript_MeshRepair.weld_mesh_edges(dm, weld)
+    U.GeometryScript_MeshSimplification.apply_simplify_to_tolerance(dm, BARK_TOLERANCE_CM, U.GeometryScriptSimplifyMeshOptions())
+    U.GeometryScript_Materials.clear_material_i_ds(dm)
+    U.GeometryScript_MeshRepair.compact_mesh(dm)
+    return dm, bark
+
+
+def bark_collision_done(mesh):
+    """A tall tree is done when its body is complex as simple, its complex collision is its own bark mesh (never its render triangles: the canopy),
+    there are no simple shapes, and it is never a floor."""
+    body = mesh.get_editor_property("body_setup")
+    cm = mesh.get_editor_property("complex_collision_mesh")
+    return (complex_as_simple(mesh) and cm is not None and cm.get_path_name().split(".")[0] == bark_collision_path(mesh)
+            and ESL.get_simple_collision_count(mesh) <= 0 and ESL.get_convex_collision_count(mesh) <= 0 and is_unwalkable(mesh))
+
+
+def fix_tree_bark(mesh):
+    """A tree 4 m and taller collides with its BARK below the trunk's top (Wes, Oct 31: "do the tree collisions" -- the measured hull still stood
+    7-30 cm off a lopsided trunk): a collision mesh of its bark, set as its complex collision mesh, the body complex as simple. Branches in that band
+    are wood you bump into; the leaves are not. None when there is no bark there."""
+    top = trunk_top(mesh)
+    dm, bark = bark_band(mesh, top)
+    tris = unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(dm) if dm else 0
+    if tris < 8:
+        return None
+    path = bark_collision_path(mesh)
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        cm = unreal.load_asset(path)
+        unreal.GeometryScript_AssetUtils.copy_mesh_to_static_mesh(dm, cm, unreal.GeometryScriptCopyMeshToAssetOptions(), unreal.GeometryScriptMeshWriteLOD())
+    else:
+        opts = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+        opts.set_editor_property("enable_nanite", False)
+        opts.set_editor_property("enable_collision", True)
+        opts.set_editor_property("collision_mode", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+        cm, outcome = unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(dm, path, opts)
+        if outcome != unreal.GeometryScriptOutcomePins.SUCCESS or cm is None:
+            return None
+    unreal.EditorAssetLibrary.save_loaded_asset(cm)
+    ESL.remove_collisions(mesh)
+    mesh.set_editor_property("complex_collision_mesh", cm)
+    body = mesh.get_editor_property("body_setup")
+    body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+    set_unwalkable(body)
+    bb = cm.get_bounds()
+    return "bark collision mesh %s: %d triangles of %s, %.0f x %.0f cm, up to %.0f cm (tree height %.0f), unwalkable" % (
+        path.rsplit("/", 1)[-1], tris, "+".join(bark), 2.0 * bb.box_extent.x, 2.0 * bb.box_extent.y,
+        top - (mesh.get_bounds().origin.z - mesh.get_bounds().box_extent.z), 2.0 * mesh.get_bounds().box_extent.z)
+
+
 def trunk_prism(outline, bottom, top):
     """One convex hull: the trunk's outline from bottom to top. Python cannot write a hull's vertices (not editor properties), but the struct's text import
     can; the cook builds the hull from these points."""
@@ -319,29 +416,18 @@ def trunk_prism(outline, bottom, top):
     return elem if ok else None
 
 
-def hull_extent(elem):
-    """(min x, min y, min z, max x, max y, max z) of a convex element's points, read back through its text export."""
-    pts = [tuple(float(v) for v in m) for m in re.findall(r"\(X=([-\d.]+),Y=([-\d.]+),Z=([-\d.]+)\)", elem.export_text().split("IndexData=")[0])]
-    if not pts:
-        return None
-    return (min(p[0] for p in pts), min(p[1] for p in pts), min(p[2] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts), max(p[2] for p in pts))
-
-
 def plant_done(mesh, kind):
-    """A tree / sapling / bush: one trunk shape, never walkable, and a tree's shape where its trunk is: the measured outline's prism (its extent within 5 cm),
-    or the capsule within 15 % of the radius / 10 cm of the centre."""
+    """A tree / sapling / bush: never walkable, and a tree with bark at hip height collides with its bark (bark_collision_done; the prism is only
+    the fallback when no bark mesh could be made, and then the tool says so on every run); otherwise one capsule, a tree's within 15 % of the radius /
+    10 cm of the centre."""
     want = trunk_shape(mesh) if kind == "Tree" else None
-    hull = bool(want and want[5])
-    if not (trunk_only(mesh, hull) and is_unwalkable(mesh)):
+    if want and want[5]:
+        return bark_collision_done(mesh)
+    if not (trunk_only(mesh) and is_unwalkable(mesh)):
         return False
     if kind != "Tree":
         return True
     ag = mesh.get_editor_property("body_setup").get_editor_property("agg_geom")
-    if hull:
-        have = hull_extent(ag.get_editor_property("convex_elems")[0])
-        xs, ys = [p[0] for p in want[5]], [p[1] for p in want[5]]
-        top = want[2] + want[3] + want[4] * 0.5
-        return have is not None and max(abs(a - b) for a, b in zip(have, (min(xs), min(ys), have[2], max(xs), max(ys), top))) <= 5.0
     have = ag.get_editor_property("sphyl_elems")[0]
     c = have.get_editor_property("center")
     return abs(have.get_editor_property("radius") - want[3]) <= 0.15 * want[3] and math.hypot(c.x - want[0], c.y - want[1]) <= 10.0
@@ -372,7 +458,11 @@ def fix_bush(mesh):
 
 def fix_tree(mesh, sapling=False):
     cx, cy, cz, radius, length, outline = trunk_shape(mesh, sapling)
+    note = fix_tree_bark(mesh) if outline and not sapling else None
+    if note:
+        return note
     ESL.remove_collisions(mesh)   # the canopy hulls go: the trunk is the only thing that stops you
+    mesh.set_editor_property("complex_collision_mesh", None)
     body = mesh.get_editor_property("body_setup")
     body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_DEFAULT)
     ag = body.get_editor_property("agg_geom")
@@ -382,7 +472,7 @@ def fix_tree(mesh, sapling=False):
         body.set_editor_property("agg_geom", ag)
         set_unwalkable(body)
         xs, ys = [p[0] for p in outline], [p[1] for p in outline]
-        return "trunk hull of %d points, %.0f x %.0f cm, %.0f cm tall (tree height %.0f), unwalkable" % (
+        return "NO BARK MESH, fallback trunk hull of %d points, %.0f x %.0f cm, %.0f cm tall (tree height %.0f), unwalkable" % (
             len(outline), max(xs) - min(xs), max(ys) - min(ys), 2.0 * radius + length, 2.0 * mesh.get_bounds().box_extent.z)
     capsule = unreal.KSphylElem()
     capsule.set_editor_property("center", unreal.Vector(cx, cy, cz))

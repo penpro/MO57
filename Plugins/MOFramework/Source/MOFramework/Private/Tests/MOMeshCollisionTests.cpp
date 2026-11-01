@@ -43,6 +43,7 @@ bool FMOData_SolidMeshCollision::RunTest(const FString& Parameters)
 	}
 
 	TMap<FString, FString> Solid;   // mesh path -> who places it
+	TSet<FString> Trees;            // the tree meshes among them
 	TArray<FName> BiomeIds;
 	UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);
 	for (const FName& BiomeId : BiomeIds)
@@ -54,6 +55,10 @@ bool FMOData_SolidMeshCollision::RunTest(const FString& Parameters)
 			if (Resource && IsSolidKind(Resource->ResourceType) && !Species.Mesh.IsNull())
 			{
 				Solid.Add(Species.Mesh.ToString(), FString::Printf(TEXT("biome %s (%s)"), *BiomeId.ToString(), *Species.ResourceNodeId.ToString()));
+				if (Resource->ResourceType == EMOResourceType::Tree)
+				{
+					Trees.Add(Species.Mesh.ToString());
+				}
 			}
 		}
 	}
@@ -88,6 +93,16 @@ bool FMOData_SolidMeshCollision::RunTest(const FString& Parameters)
 			AddError(FString::Printf(TEXT("%s has no collision geometry (%s): the pawn walks through it. Fix: Content/Python/fix_mesh_collision.py"), *Pair.Key, *Pair.Value));
 			++Missing;
 		}
+#if WITH_EDITORONLY_DATA
+		// A tree that collides with its triangles collides with its own bark mesh (fix_mesh_collision.py, Oct 31 2026), never its render triangles:
+		// those are the canopy too, an invisible wall metres from the trunk.
+		else if (Trees.Contains(Pair.Key) && Mesh->GetBodySetup()->CollisionTraceFlag == CTF_UseComplexAsSimple && !Mesh->ComplexCollisionMesh)
+		{
+			AddError(FString::Printf(TEXT("%s (%s) is complex as simple with no bark collision mesh: its canopy is its collision. Fix: Content/Python/fix_mesh_collision.py"),
+				*Pair.Key, *Pair.Value));
+			++Missing;
+		}
+#endif
 	}
 	AddInfo(FString::Printf(TEXT("%d solid-kind meshes placed by the biome and cave scatter tables checked, %d without collision"), Checked, Missing));
 	TestTrue(TEXT("the biome table places at least one solid-kind mesh (the check is not vacuous)"), Checked > 0);

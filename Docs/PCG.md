@@ -113,15 +113,25 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   but a knee-high plant" (every Black Locust `wdvhberja` variant is Passable). `MO.Dev.ScatterCollision [filter]`,
   `MOFramework.Data.SolidMeshCollision`.
 - **The mesh's own collision** (`Content/Python/fix_mesh_collision.py`, re-run after importing or migrating plants): a tree 4 m and taller
-  is ONE convex hull round its MEASURED trunk -- the convex outline of the bark's cross-sections 30, 50, 70, 90 and 110 cm up (where its
-  triangles cross those planes: a low-poly trunk has no vertices between its root ring and the next one metres up), a branch stub past
-  1.5x the trunk's radius left out, upright from the base to ~45 % of the tree's height (at most 6 m); never its canopy. A tree with no bark
-  at hip height, and every sapling, gets a capsule (2.2 % of its height at the pivot; a sapling's stem 6-12 cm). History (BR31-8): before
-  Oct 30 every trunk was that pivot capsule -- BlackAlder_Field_02's r 38 against a 68 cm trunk centred 31 cm off the pivot, and Wes walked
-  into it; one capsule round the measured trunk then over-covered a lopsided trunk by up to 71 cm, and a hull of a 30-150 cm band drew a
-  branch's base (it leaves Field_02's trunk ~136 cm up) down to hip height, 65 cm short of the bark. Measured at Field_02 (x1.32), rays at
-  hip height from 8 sides: the hull meets each at or before the bark, 7-30 cm out (Oct 31). Python cannot write a hull's vertices; the tool
-  goes through the struct's text import. Trees, saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you,
+  with bark at hip height collides with its BARK (Oct 31, Wes: "do the tree collisions"): a collision mesh of its bark below the trunk top
+  (~45 % of its height, at most ~7 m), saved beside the tree as `Collision/<Tree>_BarkCollision` (local, like the packs) and set as the
+  tree's complex collision mesh, the body complex as simple. Made with GeometryScripting from the FULL-DETAIL source model (what Nanite
+  draws; the fallback LOD dropped a Hornbeam's small branches and a BlackAlder's carries an impostor section): the leaf / card sections
+  deleted, a plane cut at the top, welded, simplified to 1 cm (`BARK_TOLERANCE_CM`; a triangle budget stalls on a Hornbeam's ~2,800 open
+  branch pieces and clips twig tips by up to 25 cm). 32 trees, from 77 to 76,789 triangles each (the wide field hornbeams 54-77k: their
+  branches spread 12 m inside the band). Branches in the band are wood you bump into; the leaves are not; a chopped tree is removed, never simulated, so a
+  complex-only body is safe. Measured (Oct 31): rays at 50-300 cm from 16 sides of every tree meet the collision within 0.4 cm (median) /
+  1.1 cm (p90) / 5.5 cm (p99) of the drawn bark (2,040 pairs; the rest graze a twig edge, each hit within 1.2 cm of the other surface);
+  at Wes's BlackAlder_Field_02 (x1.32, seed 8027) the hip-height rays from 8 sides read 390 390 352 359 333 331 329 330 cm, at the bark
+  (the hull: 353 358 343 347 325 313 308 267); on a flat floor the pawn walked at three trees from 8 sides each and stopped touching the
+  bark every time (6-30 cm at hip height: the capsule meets the wider root flare first; one side of Field_02 at its low branch); the
+  camera beside a trunk is pulled in only where the trunk stands behind the player (6-8 of 24 directions). The measured hull is the
+  fallback when no bark mesh can be made (the tool reports it every run); a tree with no bark at hip height, and every sapling, gets a
+  capsule (2.2 % of its height at the pivot; a sapling's stem 6-12 cm). `MOFramework.Data.SolidMeshCollision` fails a tree that is
+  complex as simple with no bark mesh (its canopy would be its collision). History (BR31-8): before Oct 30 every trunk was a pivot capsule
+  -- BlackAlder_Field_02's r 38 against a 68 cm trunk centred 31 cm off the pivot, and Wes walked into it; one capsule round the measured
+  trunk then over-covered a lopsided trunk by up to 71 cm; the measured hull stood 7-30 cm off. Python cannot write a hull's vertices;
+  the tool goes through the struct's text import. Trees, saplings and bushes are UNWALKABLE (their body's walkable-slope override): they stop you,
   and you slide off rather than stand on top (BR31-5, "very stong bush"). Rocks stay walkable. A rock 3 m or more is climbed, so its
   real surface is its collision (complex as simple, like every composition rock and cliff; Wes, Oct 31: "make the collission for the
   cliffs and ED cliff rocks complex" -- the audit found every placed cliff and ED cliff rock already so but NordicBoulder_02, up to 7 m on
