@@ -151,6 +151,14 @@ the face.
   machine and presentation only. Measured on SM_Cliff_09: hands on holds sit 4 cm off the rock, feet 8 (the offsets). The ankle limits
   (above) apply after the IK. Tried and reverted on Oct 31: the body 22 cm off the face with the feet looking 12 cm lower and 70 cm in and
   complex sweeps (straight elbows, knees 101-113 deg) read as a push-up off the rock (Wes: "they look worse now").
+  **The feet find their own rock** (Oct 31, Wes: "can you get the foot ik's to land on geometry for climbing instead of just keeping them
+  lined up with the hands?"; `UpdateClimbFoot`): a foot no longer waits for the clip's foot curve (the down and side clips have none) and no
+  longer looks only 45 cm straight in from where the clip puts it (the clip's flat-wall plane under the hands). It holds a point on the
+  rock until the clip has moved that foot `ClimbFootStepCm` (25) across the face, then steps -- a sweep from `ClimbFootOutCm` (40) out to
+  `ClimbFootReachCm` (70) in, from the clip's foot -- and slides to the new hold in ~0.15 s (`ClimbHoldFollowRate`). The hands keep the curves.
+  Measured on SM_Cliff_09 side 3 (seed 777, `check_cliff_climb.py`, the feet's distance to the rock straight ahead every 2 s): before, the
+  feet on the rock (within 15 cm) in 40 % of 98 samples and off it (more than 30 cm, or nothing within 60) in 48 %; after, on the rock in
+  32 of 32 samples (median 8 cm: the ankle's offset). Shots: `Saved/Screenshots/climb_feet/`.
 - **Other machines' copies** read the server's replicated movement mode and velocity (`IsClimbingAsSeen` / `IsTraversingAsSeen`, the
   replicated `LinearVelocity`), and never run the climb themselves (`PhysCustom` returns on a simulated proxy) -- until then a copy ran
   `PhysClimb` with a zero face normal, "lost" the face and let go every tick: a host resting on a wall dropped to the ground on the joiner's

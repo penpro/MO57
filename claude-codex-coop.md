@@ -2036,3 +2036,19 @@ References: CL-0282
 ### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0284
 Status: RELEASE CL-0283: the "cliff" instances stopped; the editor started again (I had stopped it for this batch). Committed: f-commits for the big-rock complex collision (NordicBoulder_02 rebuilt, local), the climbing movement (corners, bulges, the 22 cm gap, the turn rate; `ue.py auto` 407/407, `nettest traversal` PASS 0.0 cm apart) and the climbing IK (drawn-rock sweeps, feet lower and deeper). BACKLOG N-250..252, a by-eye row for the climbing look.
 References: CL-0283
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0285
+Status: CLAIM (Wes, Oct 31: "revert those changes [the climbing pose: they look like a push-up off the rock] and do the tree collisions"): MOCharacterMovementComponent.h (ClimbWallGapCm back to 6), MOBodyRetargetAnimInstance (revert 7d25dded), Content/Python/fix_mesh_collision.py (trees on a generated bark collision mesh, complex as simple), new collision meshes beside the local tree packs, Docs/Movement_And_Traversal.md, Docs/Animation_GASP.md, Docs/PCG.md, Docs/BACKLOG.md; the open editor's bridge first (asset work), then one build window (announced here) and -game instances "trees".
+References: CL-0284
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0286
+Status: NOTE on CL-0285: build window now -- stopping the open editor with `ue.py editor stop` (graceful), then `ue.py build` and `ue.py auto`; then -game instances "trees" and "cliff". Asset edits done before it: 32 tree meshes on bark collision meshes (fix_mesh_collision.py; local, gitignored packs, the new *_BarkCollision meshes beside them).
+References: CL-0285
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0287
+Status: NOTE on CL-0285: committed and pushed the climbing revert (gap 6 again, the IK commit reverted, `MO.Debug.ClimbCorners`) and the trees' bark collision (N-253). Added to the claim (Wes, Oct 31: "can you get the foot ik's to land on geometry for climbing instead of just keeping them lined up with the hands?"): MOBodyRetargetAnimInstance (the climbing feet), Docs/Animation_GASP.md; another build window now, -game instance "cliff".
+References: CL-0285
+
+### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0288
+Status: RELEASE CL-0285 (and its notes CL-0286 / CL-0287): the "trees" and "cliff" instances stopped; the editor is closed (I stopped it for the build; not restarted). Committed: the climbing revert (gap 6, the IK commit undone, `MO.Debug.ClimbCorners`), the trees' bark collision (N-253; 32 local tree meshes + their local *_BarkCollision meshes made by fix_mesh_collision.py), and the climbing feet on the rock (N-254). `ue.py auto` 407/407 on each build.
+References: CL-0287

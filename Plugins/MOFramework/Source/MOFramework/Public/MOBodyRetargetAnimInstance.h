@@ -15,10 +15,10 @@
 #include "MOBodyRetargetAnimInstance.generated.h"
 
 /** A climber's hand or foot on the rock (Wes, Oct 29: "we can probably reuse the hand/foot IK rigging to follow the cliff"): Titan Climbing's
- *  approach on our own climb. The climbing clips carry a contact curve per limb (c_lefthand ...): rising past ClimbIKTraceThreshold the limb reaches
- *  for the rock (a sweep from where the clip puts it), past ClimbIKLockThreshold it stays on that hold, kept on the thing it touched; the chain
- *  bends to it by two-bone IK after the slot. Every machine works out its own (the position, the climbing mode and the clips replicate; where a
- *  hand lands is presentation, never movement). */
+ *  approach on our own climb. The climbing clips carry a contact curve per limb (c_lefthand ...): rising past ClimbIKTraceThreshold a hand reaches
+ *  for the rock (a sweep from where the clip puts it), past ClimbIKLockThreshold it stays on that hold, kept on the thing it touched. A foot finds
+ *  its own rock and steps when the clip has moved on (ClimbFootStepCm). The chain bends to its hold by two-bone IK after the slot. Every machine
+ *  works out its own (the position, the climbing mode and the clips replicate; where a hand lands is presentation, never movement). */
 struct FMOClimbLimbIK
 {
 	FName Upper;            // the chain (the MetaHuman body's bones)
@@ -98,9 +98,19 @@ protected:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
-	/** Titan Climbing's rig profile defaults: a limb reaches for the rock past the first, stays on its hold past the second. */
+	/** Titan Climbing's rig profile defaults: a hand reaches for the rock past the first, stays on its hold past the second. */
 	static constexpr float ClimbIKTraceThreshold = 0.6f;
 	static constexpr float ClimbIKLockThreshold = 0.95f;
+
+	/** A foot finds its own rock (Wes, Oct 31: "get the foot ik's to land on geometry for climbing instead of just keeping them lined up with the
+	 *  hands"), not by the clip's contact curves (the down and side clips have none): it holds a point on the rock until the clip has moved that
+	 *  foot ClimbFootStepCm away across the face, then steps to the rock in front of where the clip has it now. The sweep starts ClimbFootOutCm out
+	 *  from the clip's foot (rock bulging out at the feet) and reaches ClimbFootReachCm in (rock standing back under a ledge). */
+	static constexpr float ClimbFootStepCm = 25.0f;
+	static constexpr float ClimbFootOutCm = 40.0f;
+	static constexpr float ClimbFootReachCm = 70.0f;
+	/** How fast a limb's target follows a new hold (1/s): a step to new rock takes ~0.15 s instead of a jump. */
+	static constexpr float ClimbHoldFollowRate = 20.0f;
 
 private:
 	/** Point the retarget at the owner's driver and retargeter. False while the owner has none (the body then holds its reference pose). */
@@ -114,12 +124,15 @@ private:
 	{
 		TWeakObjectPtr<UPrimitiveComponent> On;
 		FVector LocalPoint = FVector::ZeroVector;
+		FVector Target = FVector::ZeroVector;   // where the limb is going, world space: follows the hold, so a step slides there quickly
 		bool bHeld = false;
 		bool bLocked = false;
 		float Alpha = 0.0f;
 	};
 	FLimbHold LimbHolds[4];
 	FMOClimbLimbIK ClimbLimbs[4];
+	/** A foot on the rock: keeps its hold until the clip has moved it ClimbFootStepCm across the face, then finds rock in front of the clip's foot. */
+	void UpdateClimbFoot(FLimbHold& Hold, const FMOClimbLimbIK& Limb, bool bClimbing, const FVector& ClipFoot, const FVector& Out, const AActor* Owner) const;
 	bool bClimbIK = false;
 
 	friend struct FMOBodyRetargetAnimInstanceProxy;

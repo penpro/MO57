@@ -196,8 +196,13 @@ void UMOBodyRetargetAnimInstance::UpdateClimbIK(float DeltaSeconds)
 	{
 		FLimbHold& Hold = LimbHolds[i];
 		FMOClimbLimbIK& Limb = ClimbLimbs[i];
+		const bool bFoot = i >= 2;
 		const float Contact = bClimbing ? GetCurveValue(Limb.ContactCurve) : 0.0f;
-		if (Contact < ClimbIKTraceThreshold)
+		if (bFoot)
+		{
+			UpdateClimbFoot(Hold, Limb, bClimbing, ToWorld.TransformPosition(Proxy.AnimatedEndCS[i]), Out, Owner);
+		}
+		else if (Contact < ClimbIKTraceThreshold)
 		{
 			Hold.bHeld = Hold.bLocked = false;   // in the air: the clip's own reach
 		}
@@ -225,13 +230,54 @@ void UMOBodyRetargetAnimInstance::UpdateClimbIK(float DeltaSeconds)
 		Limb.Alpha = Hold.Alpha;
 		if (On)
 		{
-			Limb.TargetCS = ToWorld.InverseTransformPosition(On->GetComponentTransform().TransformPosition(Hold.LocalPoint));
+			const FVector HoldAt = On->GetComponentTransform().TransformPosition(Hold.LocalPoint);
+			// A foot slides to a new hold in ~0.15 s (a step), from where it was; a hand goes straight to its hold, as the clip's reach brings it.
+			Hold.Target = bFoot && Hold.Alpha > 0.05f ? FMath::VInterpTo(Hold.Target, HoldAt, DeltaSeconds, ClimbHoldFollowRate) : HoldAt;
+			Limb.TargetCS = ToWorld.InverseTransformPosition(Hold.Target);
 		}
 		// Elbows bend down, knees toward the rock, when the clip's own limb is straight.
 		Limb.BendHintCS = ToWorld.InverseTransformVectorNoScale(i < 2 ? FVector::DownVector : -Out);
 		bAny |= Limb.Alpha > ZERO_ANIMWEIGHT_THRESH;
 	}
 	bClimbIK = bClimbing || bAny;   // the proxy measures the clip's limbs while climbing (the sweeps start there) and blends the holds out after
+}
+
+void UMOBodyRetargetAnimInstance::UpdateClimbFoot(FLimbHold& Hold, const FMOClimbLimbIK& Limb, bool bClimbing, const FVector& ClipFoot, const FVector& Out,
+	const AActor* Owner) const
+{
+	// Until Oct 31 a foot reached for rock only while the clip's foot contact curve was up (the idle and up clips; the down and side clips have
+	// none) and only 45 cm straight in from the clip's foot, so it stayed in the clip's flat-wall plane under the hands: on SM_Cliff_09 side 3 the
+	// feet were on the rock in 40 % of samples and off it (more than 30 cm, or no rock within 60) in 48 % (the hands: 72 % on).
+	const UWorld* World = GetWorld();
+	if (!bClimbing || !World)
+	{
+		Hold.bHeld = Hold.bLocked = false;
+		return;
+	}
+	if (Hold.bLocked)
+	{
+		const UPrimitiveComponent* On = Hold.On.Get();
+		const FVector HoldAt = On ? On->GetComponentTransform().TransformPosition(Hold.LocalPoint) : ClipFoot;
+		// The clip has moved this foot on across the face (a step up, down or along): it lets go of this hold and finds the next.
+		if (!On || FVector::VectorPlaneProject(HoldAt - ClipFoot, Out).Size() > ClimbFootStepCm)
+		{
+			Hold.bLocked = false;
+		}
+	}
+	if (Hold.bLocked)
+	{
+		return;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOClimbFootIK), false, Owner);
+	FHitResult Hit;
+	const bool bFound = World->SweepSingleByChannel(Hit, ClipFoot + Out * ClimbFootOutCm, ClipFoot - Out * ClimbFootReachCm, FQuat::Identity, ECC_Visibility,
+		FCollisionShape::MakeSphere(4.0f), Params) && Hit.GetComponent() && !Hit.bStartPenetrating;
+	Hold.bHeld = Hold.bLocked = bFound;
+	if (bFound)
+	{
+		Hold.On = Hit.GetComponent();
+		Hold.LocalPoint = Hit.GetComponent()->GetComponentTransform().InverseTransformPosition(Hit.ImpactPoint + Hit.ImpactNormal * Limb.SurfaceOffset);
+	}
 }
 
 bool UMOBodyRetargetAnimInstance::BindToOwnerDriver()
