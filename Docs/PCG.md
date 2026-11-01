@@ -125,7 +125,12 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   at Wes's BlackAlder_Field_02 (x1.32, seed 8027) the hip-height rays from 8 sides read 390 390 352 359 333 331 329 330 cm, at the bark
   (the hull: 353 358 343 347 325 313 308 267); on a flat floor the pawn walked at three trees from 8 sides each and stopped touching the
   bark every time (6-30 cm at hip height: the capsule meets the wider root flare first; one side of Field_02 at its low branch); the
-  camera beside a trunk is pulled in only where the trunk stands behind the player (6-8 of 24 directions). The measured hull is the
+  camera beside a trunk is pulled in only where the trunk stands behind the player (6-8 of 24 directions). **Since Nov 1 the bark goes to
+  the top** (Wes, Oct 31, BR1101-6: "trees dont have a hitbox to the top"; his 24.9 m BlackAlder_Forest_01 x1.19 stopped at 7.5 m): above
+  the trunk top the crown's bark is added, fitted to 4 cm (`BARK_UPPER_TOLERANCE_CM`), and only its BRANCHES -- separate pieces at least
+  60 cm long and 3 cm thick by their mean width (`crown_branches`). A hornbeam's crown is ~35,000 separate pieces (each twig its own) that no
+  simplifier merges: all of it was 16k-227k triangles a tree (1.18M over the 32 trees); its branches are ~1-3k (Field_02: 129 of 34,700
+  pieces, 3,306 of 226,766 triangles, 43 % of the crown's bark area; an alder's crown keeps 97 %). Twigs and leaves stay walk-through. The measured hull is the
   fallback when no bark mesh can be made (the tool reports it every run); a tree with no bark at hip height, and every sapling, gets a
   capsule (2.2 % of its height at the pivot; a sapling's stem 6-12 cm). `MOFramework.Data.SolidMeshCollision` fails a tree that is
   complex as simple with no bark mesh (its canopy would be its collision). History (BR31-8): before Oct 30 every trunk was a pivot capsule

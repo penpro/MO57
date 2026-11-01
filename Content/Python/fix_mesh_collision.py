@@ -254,6 +254,36 @@ TRUNK_SLICES = (30.0, 50.0, 70.0, 90.0, 110.0)
 # clips twig tips by up to 25 cm; within 1 cm it is 10-25k triangles (Oct 31 2026, measured on BlackAlder_Field_02 and Hornbeam_Forest_02).
 BARK_LOD_TYPE = "SOURCE_MODEL"
 BARK_TOLERANCE_CM = 1.0
+# Above the old trunk top: the crown's branches (Wes, Oct 31, BR1101-6: "trees dont have a hitbox to the top"). A coarser fit there -- a hand on a
+# branch or the camera brushing one does not show a few cm -- keeps the thousands of twigs from multiplying the collision's triangles.
+BARK_UPPER_TOLERANCE_CM = 4.0
+# The crown's bark is thousands of separate pieces on a hornbeam (each twig its own), which no simplifier merges: all of it was 16k-227k triangles
+# a tree (1.18M over the 32 trees, against the trunk bands' 438k). A piece is kept when it is wood a body bumps into or climbs -- this long and,
+# by its mean width (area / (pi x length): a cylinder's), this thick. Twigs and leaf stems stay walk-through, like the leaves. Measured Nov 1:
+# EuropeanHornbeam_Field_02's crown, 34,700 pieces in 226,766 triangles -> 129 branches in 3,306 (43 % of the crown's bark area: the twigs are
+# the rest); BlackAlder_Forest_01's, 91 pieces -> 62 in 1,217 (97 %).
+BARK_CROWN_MIN_LENGTH_CM = 60.0
+BARK_CROWN_MIN_WIDTH_CM = 3.0
+
+
+def crown_branches(dm):
+    """(DynamicMesh of the pieces kept, pieces, pieces kept) -- dm's separate pieces of at least BARK_CROWN_MIN_LENGTH_CM and BARK_CROWN_MIN_WIDTH_CM."""
+    U = unreal
+    # A hornbeam's crown splits into ~35,000 meshes: past the pool's 1,000 the engine ensures (a crash report) and drops the pool's references.
+    U.SystemLibrary.execute_console_command(None, "geometry.DynamicMesh.MaxPoolSize 200000")
+    r = U.GeometryScript_MeshDecomposition.split_mesh_by_components(dm, U.DynamicMeshPool())
+    parts = r[1] if isinstance(r, tuple) else r
+    kept = U.DynamicMesh()
+    n = 0
+    for p in parts:
+        va = U.GeometryScript_MeshQueries.get_mesh_volume_area(p)
+        area = va[0] if isinstance(va, tuple) else va
+        bb = U.GeometryScript_MeshQueries.get_mesh_bounding_box(p)
+        length = math.sqrt((bb.max.x - bb.min.x) ** 2 + (bb.max.y - bb.min.y) ** 2 + (bb.max.z - bb.min.z) ** 2)
+        if length >= BARK_CROWN_MIN_LENGTH_CM and area / (math.pi * max(length, 1.0)) >= BARK_CROWN_MIN_WIDTH_CM:
+            U.GeometryScript_MeshEdits.append_mesh(kept, p, U.Transform())
+            n += 1
+    return kept, len(parts), n
 
 
 def bark_slices(mesh, base, heights):
@@ -330,9 +360,10 @@ def bark_collision_path(mesh):
     return "%s/Collision/%s_BarkCollision" % (folder, name)
 
 
-def bark_band(mesh, top):
-    """(DynamicMesh, bark material names) of the tree's bark below top: its LOD0 with the leaf / card sections (NOT_BARK) deleted, cut flat at top,
-    welded, simplified to BARK_TOLERANCE_CM."""
+def bark_band(mesh, top, below=True, tolerance=None):
+    """(DynamicMesh, bark material names) of the tree's bark below top (below=False: above it): its LOD0 with the leaf / card sections (NOT_BARK)
+    deleted, cut flat at top, welded, simplified to tolerance (BARK_TOLERANCE_CM)."""
+    tolerance = BARK_TOLERANCE_CM if tolerance is None else tolerance
     U = unreal
     lod = U.GeometryScriptMeshReadLOD()
     lod.set_editor_property("lod_type", getattr(U.GeometryScriptLODType, BARK_LOD_TYPE))
@@ -352,12 +383,14 @@ def bark_band(mesh, top):
             bark.append(mat.get_name() if mat else "-")
     cut = U.GeometryScriptMeshPlaneCutOptions()
     cut.set_editor_property("fill_holes", False)
-    U.GeometryScript_MeshBooleans.apply_mesh_plane_cut(dm, U.Transform(location=U.Vector(0.0, 0.0, top)), cut)   # keeps what is below
+    # The cut keeps what is below the plane; turned over (its normal down) it keeps what is above.
+    plane = U.Transform(location=U.Vector(0.0, 0.0, top), rotation=U.Rotator(0.0, 0.0, 0.0) if below else U.Rotator(roll=180.0, pitch=0.0, yaw=0.0))
+    U.GeometryScript_MeshBooleans.apply_mesh_plane_cut(dm, plane, cut)
     U.GeometryScript_MeshEdits.discard_mesh_attributes(dm)   # no UV / normal seams to hold the simplifier back
     weld = U.GeometryScriptWeldEdgesOptions()
     weld.set_editor_property("tolerance", 0.1)
     U.GeometryScript_MeshRepair.weld_mesh_edges(dm, weld)
-    U.GeometryScript_MeshSimplification.apply_simplify_to_tolerance(dm, BARK_TOLERANCE_CM, U.GeometryScriptSimplifyMeshOptions())
+    U.GeometryScript_MeshSimplification.apply_simplify_to_tolerance(dm, tolerance, U.GeometryScriptSimplifyMeshOptions())
     U.GeometryScript_Materials.clear_material_i_ds(dm)
     U.GeometryScript_MeshRepair.compact_mesh(dm)
     return dm, bark
@@ -373,14 +406,25 @@ def bark_collision_done(mesh):
 
 
 def fix_tree_bark(mesh):
-    """A tree 4 m and taller collides with its BARK below the trunk's top (Wes, Oct 31: "do the tree collisions" -- the measured hull still stood
-    7-30 cm off a lopsided trunk): a collision mesh of its bark, set as its complex collision mesh, the body complex as simple. Branches in that band
-    are wood you bump into; the leaves are not. None when there is no bark there."""
+    """A tree 4 m and taller collides with its BARK (Wes, Oct 31: "do the tree collisions" -- the measured hull still stood 7-30 cm off a lopsided
+    trunk; then "trees dont have a hitbox to the top", BR1101-6): a collision mesh of its bark -- to 1 cm below the old trunk top, to
+    BARK_UPPER_TOLERANCE_CM in the crown above it -- set as its complex collision mesh, the body complex as simple. Branches are wood you bump into
+    and climb; the leaves are not. None when there is no bark at the trunk."""
     top = trunk_top(mesh)
     dm, bark = bark_band(mesh, top)
     tris = unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(dm) if dm else 0
     if tris < 8:
         return None
+    # ... and the crown's branches above, fitted coarser (BARK_UPPER_TOLERANCE_CM), the twigs left out (crown_branches): the bark to the top of the tree.
+    upper, _ = bark_band(mesh, top, below=False, tolerance=BARK_UPPER_TOLERANCE_CM)
+    pieces = branches = 0
+    if upper and unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(upper) > 0:
+        upper, pieces, branches = crown_branches(upper)
+    upper_tris = unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(upper) if upper else 0
+    if upper_tris > 0:
+        unreal.GeometryScript_MeshEdits.append_mesh(dm, upper, unreal.Transform())
+        unreal.GeometryScript_MeshRepair.compact_mesh(dm)
+        tris = unreal.GeometryScript_MeshQueries.get_num_triangle_i_ds(dm)
     path = bark_collision_path(mesh)
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         cm = unreal.load_asset(path)
@@ -400,9 +444,11 @@ def fix_tree_bark(mesh):
     body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
     set_unwalkable(body)
     bb = cm.get_bounds()
-    return "bark collision mesh %s: %d triangles of %s, %.0f x %.0f cm, up to %.0f cm (tree height %.0f), unwalkable" % (
-        path.rsplit("/", 1)[-1], tris, "+".join(bark), 2.0 * bb.box_extent.x, 2.0 * bb.box_extent.y,
-        top - (mesh.get_bounds().origin.z - mesh.get_bounds().box_extent.z), 2.0 * mesh.get_bounds().box_extent.z)
+    base = mesh.get_bounds().origin.z - mesh.get_bounds().box_extent.z
+    return ("bark collision mesh %s: %d triangles (%d of them the crown's: %d of its %d pieces) of %s, %.0f x %.0f cm, up to %.0f cm (tree height %.0f; "
+            "1 cm fit below %.0f), unwalkable") % (
+        path.rsplit("/", 1)[-1], tris, upper_tris, branches, pieces, "+".join(bark), 2.0 * bb.box_extent.x, 2.0 * bb.box_extent.y,
+        bb.origin.z + bb.box_extent.z - base, 2.0 * mesh.get_bounds().box_extent.z, top - base)
 
 
 def trunk_prism(outline, bottom, top):
