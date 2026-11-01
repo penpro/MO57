@@ -1713,8 +1713,12 @@ private:
 	bool bSwimPoseViaSlot = false;
 	FVector SavedMeshRelativeLocation = FVector::ZeroVector;
 	float SwimMeshRaise = 0.0f;
+	/** The mesh's relative z the surface raise last wrote: unchanged by the next update = the raise is still on it (N-257). */
+	float LastSwimMeshRelZ = TNumericLimits<float>::Max();
 	/** CheckJumpInput logged this press already (one line per press, N-238). */
 	bool bJumpPressLogged = false;
+	/** MO.Debug.SwimRaise's last line for this swimmer (N-257). */
+	double LastSwimRaiseLogSeconds = -1.0;
 
 protected:
 	/** Apply physiological effects of current movement mode. */

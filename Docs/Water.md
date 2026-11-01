@@ -83,6 +83,10 @@
   body's line ~12 cm under with the back at the surface; blended by the spine's tilt, 0..70 cm (test `Water.SurfaceRaise`). Measured in
   seed 8027's lake: treading, head +2..+5 cm, pelvis -60; stroking, pelvis -13, head -11. It used to lift by the chosen pose alone, to
   the body line 6 cm OVER the water (the hips out), and it was first measured against a lake whose drawn swell was off by ~60 cm (§5a).
+  **Another machine's copy** (N-257, Nov 1): its network smoothing sets the mesh's relative location every frame, so the raise read from the
+  bones never saw its own lift and climbed to its 70 cm cap -- the copy drawn ~25 cm high. The raise keeps the relative z it last wrote: a
+  mesh rewritten since is read as if raised and the raise goes on top of what the engine set. `MO.Debug.SwimRaise 1` logs each swimmer's
+  raise once a second (role, pose, the mesh z saved / now, the raise and its target, the surface, the bones).
 - **The swim surface carries the drawn waves** (BR31-14, Nov 1 2026). `UMOWaterSubsystem::GetSurfaceZ` is the still level
   (`GetStillSurfaceZ`: the sea plane or the lake's surface, from the generator) plus the waves Oceanology draws over (X, Y) now
   (`GetWaveOffsetCm`: the Gerstner sum of the body drawn there -- the infinite ocean, or the lake's own actor -- on the server's wave clock,

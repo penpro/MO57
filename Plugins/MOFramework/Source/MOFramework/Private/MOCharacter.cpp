@@ -2104,6 +2104,10 @@ void AMOCharacter::UpdateCrouchAnimation(float DeltaTime, bool bSwimming)
 	CurrentCrouchPose = Wanted;
 }
 
+static TAutoConsoleVariable<int32> CVarDebugSwimRaise(TEXT("MO.Debug.SwimRaise"), 0,
+	TEXT("Log each swimmer's surface raise once a second: its role, pose, the mesh's saved and current relative z, the raise, the surface and the bones (N-257)."),
+	ECVF_Default);
+
 void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 {
 	USkeletalMeshComponent* Body = GetMesh();
@@ -2150,11 +2154,13 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 		{
 			SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, 0.0f, DeltaTime, 6.0f);
 			Body->SetRelativeLocation(SavedMeshRelativeLocation + FVector(0.0f, 0.0f, SwimMeshRaise));
+			LastSwimMeshRelZ = static_cast<float>(Body->GetRelativeLocation().Z);
 		}
 		else if (SwimMeshRaise > 0.0f)
 		{
 			SwimMeshRaise = 0.0f;
 			Body->SetRelativeLocation(SavedMeshRelativeLocation);
+			LastSwimMeshRelZ = static_cast<float>(Body->GetRelativeLocation().Z);
 		}
 		return;
 	}
@@ -2228,6 +2234,15 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 	// "you can sometimes swim on air"; measured in seed 8027's lake: pelvis +4 cm, head +6 cm while swimming). Underwater poses keep the capsule's frame.
 	if (CurrentSwimPose != ESwimPose::None)
 	{
+		// Is the raise we wrote last frame still on the mesh? On another machine's copy of a swimmer the network smoothing sets the mesh's relative
+		// location every frame (its base plus the smoothing offset), so the raise is gone again by the next update. Read from where the mesh then
+		// is, the bones never showed the lift: the raise climbed to its 70 cm cap and the copy was drawn ~25 cm high -- the head 25-32 cm over the
+		// water while the swimmer's own screen had it at +2..+6 (N-257, Nov 1: MO.Debug.SwimRaise on a joiner showed the host's copy reset to
+		// -90.5 before every update and the raise pinned at 70). So the bones are read as if the raise were on, and the raise goes on top of
+		// whatever the engine set (its smoothing kept).
+		const float CurrentRelZ = static_cast<float>(Body->GetRelativeLocation().Z);
+		const float RaiseOnMesh = FMath::IsNearlyEqual(CurrentRelZ, LastSwimMeshRelZ, 0.01f) ? SwimMeshRaise : 0.0f;
+		const FVector Missing(0.0f, 0.0f, SwimMeshRaise - RaiseOnMesh);
 		float TargetRaise = 0.0f;
 		if (CurrentSwimPose == ESwimPose::Tread || CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
 		{
@@ -2237,11 +2252,25 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 			static const FName Head(TEXT("head"));
 			if (Move && Move->GetWaterSurfaceZ(Surface) && Body->GetBoneIndex(Pelvis) != INDEX_NONE && Body->GetBoneIndex(Head) != INDEX_NONE)
 			{
-				TargetRaise = SurfaceSwimRaise(SwimMeshRaise, Body->GetSocketLocation(Pelvis), Body->GetSocketLocation(Head), Surface);
+				TargetRaise = SurfaceSwimRaise(SwimMeshRaise, Body->GetSocketLocation(Pelvis) + Missing, Body->GetSocketLocation(Head) + Missing, Surface);
 			}
 		}
+		// N-257 (the host draws a joiner's swimmer 25-34 cm high): what the raise reads and writes, once a second per swimmer (MO.Debug.SwimRaise 1).
+		if (CVarDebugSwimRaise.GetValueOnGameThread() > 0 && GetWorld() && GetWorld()->GetTimeSeconds() - LastSwimRaiseLogSeconds >= 1.0)
+		{
+			LastSwimRaiseLogSeconds = GetWorld()->GetTimeSeconds();
+			float Surface = 0.0f;
+			const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+			const bool bSurface = Move && Move->GetWaterSurfaceZ(Surface);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOWater] raise %s role %d local %d pose %d: mesh rel z saved %.1f now (before write) %.1f (raise on it %.1f), raise %.1f -> target %.1f, surface %s%.1f, pelvis %.1f head %.1f (as raised), capsule %.1f"),
+				*GetName(), (int32)GetLocalRole(), IsLocallyControlled() ? 1 : 0, (int32)CurrentSwimPose, SavedMeshRelativeLocation.Z, CurrentRelZ, RaiseOnMesh, SwimMeshRaise, TargetRaise,
+				bSurface ? TEXT("") : TEXT("(none) "), Surface, Body->GetSocketLocation(TEXT("pelvis")).Z + Missing.Z, Body->GetSocketLocation(TEXT("head")).Z + Missing.Z, GetActorLocation().Z);
+		}
 		SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, TargetRaise, DeltaTime, 6.0f);
-		Body->SetRelativeLocation(SavedMeshRelativeLocation + FVector(0.0f, 0.0f, SwimMeshRaise));
+		FVector Rel = Body->GetRelativeLocation();
+		Rel.Z = CurrentRelZ - RaiseOnMesh + SwimMeshRaise;
+		Body->SetRelativeLocation(Rel);
+		LastSwimMeshRelZ = static_cast<float>(Rel.Z);
 	}
 }
 
