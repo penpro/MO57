@@ -69,6 +69,9 @@ public:
 	/** The water actor of the lake owned by this generator cell, if one exists. */
 	AOceanologyLake* FindLakeBody(int64 CellX, int64 CellY) const;
 
+	/** The live lake actor whose lake centre is nearest (X, Y) (lakes are a generator cell apart: inside a lake's shore that is its own), or null when none is spawned. */
+	AOceanologyLake* FindLakeBodyAt(double X, double Y) const;
+
 	/** Is the lake blueprint loaded (lakes can only be spawned once it is)? */
 	bool IsLakeClassLoaded() const { return LakeClass.IsValid(); }
 

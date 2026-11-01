@@ -313,6 +313,8 @@ public:
 	/** A climber can always "jump" (to pull up or push off). */
 	virtual bool CanAttemptJump() const override;
 	virtual void PhysCustom(float deltaTime, int32 Iterations) override;
+	/** A swimmer rides the waves (RideTheWaves), then the stock swim physics, which then work relative to the water as on still water. */
+	virtual void PhysSwimming(float deltaTime, int32 Iterations) override;
 	/** A climber faces the face and a traversal its path: no turning to the input meanwhile. */
 	virtual void PhysicsRotation(float DeltaTime) override;
 
@@ -326,6 +328,24 @@ public:
 
 private:
 	void RefreshWater();
+
+	/**
+	 * A floating body rides a wave: the water it floats in rises and falls with it -- a swell is tens of metres long, a body under two. The stock
+	 * swim physics damp the body toward STILL water and cap how fast it rises (PhysSwimming), so on the sea's swell (the surface moving up to ~50
+	 * cm/s) the capsule lagged under every crest: the head 128 cm under the drawn water at worst (BR31-14, Nov 1). So the swim runs in the frame of
+	 * the moving surface: before it, the capsule moves up or down by how far the water over it moved since the last update (GetWaveOffsetCm), the
+	 * whole of it within a metre of the surface, fading to none 4 m down (a wave's motion dies away under it). A client's replay re-applies the
+	 * ride its saved move recorded (FSavedMove_MO::SavedRideCm): skipped, every replay lacked the water's motion over the replayed moves and the
+	 * next check corrected the joiner again -- 375 corrections in 95 s at sea, a storm feeding itself (first build, Nov 1). A gap of more than a
+	 * quarter second starts it afresh.
+	 */
+	void RideTheWaves();
+	float LastWaveOffsetCm = 0.0f;
+	double LastWaveRideSeconds = -1.0;
+	/** The ride of the move being made (summed over its physics calls), recorded by the saved move; and the one a replayed move re-applies. */
+	float MoveRideCm = 0.0f;
+	float ReplayRideCm = 0.0f;
+	bool bReplayRide = false;
 
 	/** Where the pawn was drawn when the first correction since the last replay arrived (see ClientUpdatePositionAfterServerUpdate). */
 	FVector PreCorrectionLocation = FVector::ZeroVector;

@@ -104,6 +104,22 @@ AOceanologyLake* UMOUplandLakeSubsystem::FindLakeBody(int64 CellX, int64 CellY) 
 	return Found ? Found->Body.Get() : nullptr;
 }
 
+AOceanologyLake* UMOUplandLakeSubsystem::FindLakeBodyAt(double X, double Y) const
+{
+	AOceanologyLake* Nearest = nullptr;
+	double NearestSq = TNumericLimits<double>::Max();
+	for (const TPair<FIntPoint, FLakeBody>& Pair : Bodies)
+	{
+		const double Sq = FVector2D::DistSquared(Pair.Value.Center, FVector2D(X, Y));
+		if (Sq < NearestSq && Pair.Value.Body.IsValid())
+		{
+			NearestSq = Sq;
+			Nearest = Pair.Value.Body.Get();
+		}
+	}
+	return Nearest;
+}
+
 FVector2D UMOUplandLakeSubsystem::ComputePlaneHalfSize(const FMOWorldGen::FLake& Lake)
 {
 	return Lake.PlaneHalfSizeCm();

@@ -83,6 +83,25 @@
   body's line ~12 cm under with the back at the surface; blended by the spine's tilt, 0..70 cm (test `Water.SurfaceRaise`). Measured in
   seed 8027's lake: treading, head +2..+5 cm, pelvis -60; stroking, pelvis -13, head -11. It used to lift by the chosen pose alone, to
   the body line 6 cm OVER the water (the hips out), and it was first measured against a lake whose drawn swell was off by ~60 cm (§5a).
+- **The swim surface carries the drawn waves** (BR31-14, Nov 1 2026). `UMOWaterSubsystem::GetSurfaceZ` is the still level
+  (`GetStillSurfaceZ`: the sea plane or the lake's surface, from the generator) plus the waves Oceanology draws over (X, Y) now
+  (`GetWaveOffsetCm`: the Gerstner sum of the body drawn there -- the infinite ocean, or the lake's own actor -- on the server's wave clock,
+  so every machine draws and swims on the same waves; the point whose sideways move lands on (X, Y), `WaveHeightOver`). The sea's swell heaves
+  the drawn water ~+-55 cm, and a swimmer floating on the flat level hung in air in its troughs and went under at its crests. Immersion,
+  buoyancy, breath, the drawn swimmer's raise, drinking and filling all read it; where a pawn may spawn reads the still level (a spawn decision
+  must not change with the waves). Off the game thread it is the still level (the water actors are game-thread objects). The water over
+  (X, Y) is the still point whose sideways move lands there: `MOFramework.Water.WaveHeightOver` -- within 0.05 cm of a brute-force search, the
+  naive height 8 cm off on sea-sized waves.
+- **A swimmer rides the waves** (`UMOCharacterMovementComponent::RideTheWaves`, before the stock `PhysSwimming`). The surface alone was not
+  enough: the stock swim damps the body toward STILL water and caps its rise (~36 cm/s), so the capsule lagged under every crest -- the head
+  down to 128 cm under the drawn sea (first build, Nov 1). A floating body rides a swell (tens of metres long; the body under two), so the swim
+  runs in the frame of the moving surface: the capsule moves up or down by how far the water over it moved since the last update, all of it
+  within a metre of the surface, fading to none 4 m down; buoyancy and drag then work relative to the water as tuned on still water. Measured
+  (seed 777, 80 m out, treading water 30 s, the head bone against the drawn sea over it): before, the drawn sea -47..+56 cm and the head -53..+51 cm
+  from it; after, the drawn sea -45..+30 cm and the head +2..+6 cm over it (mean 3.5). A client's replay after a correction re-applies the
+  ride each saved move recorded (`FSavedMove_MO::SavedRideCm`; a move that rode is never combined): skipped, the replay lacked the water's
+  motion and the next check corrected the joiner again -- 375 corrections in 95 s at sea; with it 40 in 111 s, median 1.9 cm (the server's
+  waves run a trip later than the joiner's). A joiner treading at sea, on its own screen: the head +2..+6 cm over the drawn sea.
 - **Drowning is the medical sim:** `UMORespirationComponent` (oxygen reserve, `SetAirwayClosedBy(source, bool)`; a closed airway
   drains it, 110 s at rest, /4 at full exertion) caps SpO2 via `UMOVitalsComponent::SetAirwayOxygenReserve`; asphyxia death 75 s
   after empty -> `DieOf(Drowned)`. Pure math `FMOBreathMath`; `EMOActivityLevel::Swimming` (appended last).

@@ -65,6 +65,8 @@ public:
 	UMOCharacterMovementComponent::FTraverseState SavedTraverse;
 	FVector SavedClimbNormal = FVector::ZeroVector;
 	EMOClimbSurface SavedClimbSurface = EMOClimbSurface::None;
+	// How far the move rode the waves (RideTheWaves), recorded after it ran: a replay re-applies it instead of reading the waves of now.
+	float SavedRideCm = 0.0f;
 
 	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0), bSavedWantsToGlide(0) {}
 
@@ -77,6 +79,17 @@ public:
 		SavedTraverse = UMOCharacterMovementComponent::FTraverseState();
 		SavedClimbNormal = FVector::ZeroVector;
 		SavedClimbSurface = EMOClimbSurface::None;
+		SavedRideCm = 0.0f;
+	}
+
+	virtual void PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode) override
+	{
+		Super::PostUpdate(C, PostUpdateMode);
+		const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(C->GetCharacterMovement());
+		if (Move && PostUpdateMode == PostUpdate_Record)
+		{
+			SavedRideCm = Move->MoveRideCm;
+		}
 	}
 
 	virtual uint8 GetCompressedFlags() const override
@@ -103,6 +116,10 @@ public:
 		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint || bSavedWantsToGlide != Other->bSavedWantsToGlide)
 		{
 			return false;   // a gait (or glider) change is a move boundary: the server must see where it happened
+		}
+		if (SavedRideCm != 0.0f)
+		{
+			return false;   // a move that rode the waves: combining re-runs it from its start, and the ride it made would be lost
 		}
 		return Super::CanCombineWith(NewMove, InCharacter, MaxDelta);
 	}
@@ -132,6 +149,8 @@ public:
 			Move->Traverse = SavedTraverse;          // ... and from the traversal / climb it started in
 			Move->ClimbNormal = SavedClimbNormal;
 			Move->ClimbSurface = SavedClimbSurface;
+			Move->ReplayRideCm = SavedRideCm;        // ... riding the waves as far as it did then
+			Move->bReplayRide = true;
 		}
 	}
 };
@@ -255,7 +274,9 @@ void UMOCharacterMovementComponent::RefreshWater()
 
 	// The depth of the water here (what the swim decision goes by): from the surface straight down to the first walkable thing this character could stand on. The trace uses the
 	// character's own collision channel and responses, so the water it swims through is not "ground", while the real floor (dug pits included), a submerged rock or a dock is.
-	// Probed only as deep as the decision needs: no bottom within reach counts as deep water. Deterministic in the position, like the rest of this refresh (client replays agree).
+	// Probed only as deep as the decision needs: no bottom within reach counts as deep water. Deterministic in the position and the wave clock, like the rest of this refresh: the
+	// surface carries the waves drawn now (UMOWaterSubsystem::GetSurfaceZ, on the server's clock), so a joiner's move re-run on the server meets waves its trip later -- the sea's
+	// swell moves ~0.4 cm in 10 ms, a buoyancy nudge, not a correction.
 	if (FeetZ < Surface)
 	{
 		WaterColumnDepthCm = TNumericLimits<float>::Max();
@@ -273,8 +294,63 @@ void UMOCharacterMovementComponent::RefreshWater()
 	}
 }
 
+void UMOCharacterMovementComponent::PhysSwimming(float deltaTime, int32 Iterations)
+{
+	RideTheWaves();
+	Super::PhysSwimming(deltaTime, Iterations);
+}
+
+void UMOCharacterMovementComponent::RideTheWaves()
+{
+	const UMOWaterSubsystem* Water = UMOWaterSubsystem::Get(this);
+	if (!Water || !UpdatedComponent || !CharacterOwner || !GetWorld())
+	{
+		return;
+	}
+	FHitResult Hit;
+	if (CharacterOwner->bClientUpdating)
+	{
+		// A replay after a correction: the ride this move made when it was first run (the waves of now are not the waves of then).
+		if (bReplayRide && !FMath::IsNearlyZero(ReplayRideCm, 0.01f))
+		{
+			SafeMoveUpdatedComponent(FVector(0.0, 0.0, ReplayRideCm), UpdatedComponent->GetComponentQuat(), /*bSweep=*/true, Hit);
+			RefreshWater();
+		}
+		bReplayRide = false;   // once per replayed move (its later physics calls in the same move ride nothing more)
+		return;
+	}
+	const FVector Center = UpdatedComponent->GetComponentLocation();
+	float Still = 0.0f;
+	if (!Water->GetStillSurfaceZ(Center.X, Center.Y, Still))
+	{
+		LastWaveRideSeconds = -1.0;
+		return;
+	}
+	const float Offset = Water->GetWaveOffsetCm(Center.X, Center.Y, Still);
+	const double Now = GetWorld()->GetTimeSeconds();
+	const bool bContinues = LastWaveRideSeconds >= 0.0 && Now - LastWaveRideSeconds < 0.25;
+	const float Moved = Offset - LastWaveOffsetCm;
+	LastWaveOffsetCm = Offset;
+	LastWaveRideSeconds = Now;
+	if (!bContinues || FMath::IsNearlyZero(Moved, 0.01f))
+	{
+		return;
+	}
+	// How deep the capsule's centre is under the water drawn over it: a body floating at the surface (its centre ~55 cm under) rides all of it.
+	const float DepthCm = Still + Offset - static_cast<float>(Center.Z);
+	const float Share = FMath::Clamp(1.0f - (DepthCm - 100.0f) / 300.0f, 0.0f, 1.0f);
+	const FVector Start = UpdatedComponent->GetComponentLocation();
+	SafeMoveUpdatedComponent(FVector(0.0, 0.0, Moved * Share), UpdatedComponent->GetComponentQuat(), /*bSweep=*/true, Hit);
+	MoveRideCm += static_cast<float>(UpdatedComponent->GetComponentLocation().Z - Start.Z);   // what it really moved (a sweep can stop short)
+	RefreshWater();   // the immersion the swim physics read: where the body floats in the water now
+}
+
 void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
+	if (CharacterOwner && !CharacterOwner->bClientUpdating)
+	{
+		MoveRideCm = 0.0f;   // a new move: its wave ride starts from nothing (RideTheWaves adds, the saved move records it)
+	}
 	RefreshWater();
 	bSwimmableWater = !bBuried && ShouldSwim(MovementMode == MOVE_Swimming, WaterColumnDepthCm, SwimEnterDepthCm, SwimExitDepthCm);
 

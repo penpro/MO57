@@ -150,6 +150,7 @@ namespace MOSpawnClearance
 	{
 		const UMOWaterSubsystem* Water = World ? World->GetSubsystem<UMOWaterSubsystem>() : nullptr;
 		float SurfaceZ = 0.0f;
-		return Water && Water->GetSurfaceZ(GroundLocation.X, GroundLocation.Y, SurfaceZ) && SurfaceZ > GroundLocation.Z + DepthToleranceCm;
+		// The still level: a spawn decision must not change with the waves passing over the spot.
+		return Water && Water->GetStillSurfaceZ(GroundLocation.X, GroundLocation.Y, SurfaceZ) && SurfaceZ > GroundLocation.Z + DepthToleranceCm;
 	}
 }

@@ -16,6 +16,7 @@
 #include "MORespirationComponent.h"
 #include "MOUITokens.h"
 #include "MOVitalsComponent.h"
+#include "MOWaterSubsystem.h"
 #include "MOWorldGen.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -97,6 +98,58 @@ bool FMOSwim_SurfaceRaise::RunTest(const FString& Parameters)
 		FMath::IsNearlyEqual(AMOCharacter::SurfaceSwimRaise(25.0f, FVector(0, 0, 925), FVector(0, 0, 1005), Surface), 25.0f, 0.5f));
 	TestEqual(TEXT("deep under: at most 70 cm"), AMOCharacter::SurfaceSwimRaise(0.0f, FVector(0, 0, 0), FVector(0, 0, 80), Surface), 70.0f);
 	TestEqual(TEXT("a degenerate spine: no raise"), AMOCharacter::SurfaceSwimRaise(30.0f, FVector(0, 0, 900), FVector(0, 0, 900), Surface), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_WaveHeightOver,
+	"MOFramework.Water.WaveHeightOver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSwim_WaveHeightOver::RunTest(const FString& Parameters)
+{
+	// BR31-14: the swim surface carries the drawn waves. A Gerstner wave moves each point sideways as well as up, so the water over (X, Y) is the still point that ends up
+	// there, not the one that starts there. Two crossing waves the size of the sea's (a 60 cm swell 30 m long moving its points 30 cm sideways, a 15 cm chop 6 m long):
+	// UMOWaterSubsystem::WaveHeightOver against a brute-force search for the still point that lands on (X, Y), and the naive height for scale.
+	struct FWave { FVector2D Dir; float K; float A; float Side; float Phase; };
+	const FWave Waves[] = { { FVector2D(1.0, 0.0), UE_TWO_PI / 3000.0f, 60.0f, 30.0f, 0.3f }, { FVector2D(0.6, 0.8), UE_TWO_PI / 600.0f, 15.0f, 8.0f, 1.1f } };
+	auto Displacement = [&Waves](const FVector& P)
+	{
+		FVector D = FVector::ZeroVector;
+		for (const FWave& W : Waves)
+		{
+			const double Theta = W.K * (W.Dir.X * P.X + W.Dir.Y * P.Y) + W.Phase;
+			D += FVector(W.Dir.X * W.Side * FMath::Cos(Theta), W.Dir.Y * W.Side * FMath::Cos(Theta), W.A * FMath::Sin(Theta));
+		}
+		return D;
+	};
+	float WorstInverted = 0.0f;
+	float WorstNaive = 0.0f;
+	for (int32 i = 0; i < 12; ++i)
+	{
+		const double X = 137.0 * i - 400.0, Y = 53.0 * i + 1200.0;
+		// Brute force: every still point on a 1 cm grid within the waves' sideways reach; the one that lands nearest (X, Y) is the water over it.
+		double BestSq = TNumericLimits<double>::Max();
+		float Truth = 0.0f;
+		for (int32 Ix = -45; Ix <= 45; ++Ix)
+		{
+			for (int32 Iy = -45; Iy <= 45; ++Iy)
+			{
+				const FVector Still(X + Ix, Y + Iy, 0.0);
+				const FVector D = Displacement(Still);
+				const double Sq = FMath::Square(Still.X + D.X - X) + FMath::Square(Still.Y + D.Y - Y);
+				if (Sq < BestSq)
+				{
+					BestSq = Sq;
+					Truth = static_cast<float>(D.Z);
+				}
+			}
+		}
+		WorstInverted = FMath::Max(WorstInverted, FMath::Abs(UMOWaterSubsystem::WaveHeightOver(X, Y, Displacement) - Truth));
+		WorstNaive = FMath::Max(WorstNaive, FMath::Abs(static_cast<float>(Displacement(FVector(X, Y, 0.0)).Z) - Truth));
+	}
+	AddInfo(FString::Printf(TEXT("worst height error over 12 points: inverted %.2f cm, naive %.2f cm"), WorstInverted, WorstNaive));
+	TestTrue(TEXT("the water over each point within 0.5 cm of the brute-force answer"), WorstInverted < 0.5f);
+	TestTrue(TEXT("(the sideways move matters: the naive height is off by more)"), WorstNaive > WorstInverted);
 	return true;
 }
 
