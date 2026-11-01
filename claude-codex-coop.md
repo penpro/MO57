@@ -2064,3 +2064,7 @@ References: CL-0289
 ### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0291
 Status: RELEASE CL-0289 / CL-0290: every file of the claim is committed (e3fe68b5 the sea, f1dcce71 the dig tool, 0291b153 the trees, b0ef4ddc traversal, 4dac5c7f the triage docs); the -game / nettest instances I launched are stopped; the editor is closed (stopped for the builds, not restarted). The 32 local tree meshes and their *_BarkCollision meshes were rebuilt (gitignored packs).
 References: CL-0290
+
+### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0292
+Status: NOTE after CL-0291: one more unit, claimed and released in place -- N-257 (another machine's copy of a swimmer drawn 25 cm high) in MOCharacter.h/.cpp + Docs/Water.md, committed e8dfc2c4 after its own build and `ue.py auto` 408/408. Nothing of mine is uncommitted; no instance of mine is running; the editor is closed.
+References: CL-0291
