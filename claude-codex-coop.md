@@ -2052,3 +2052,7 @@ References: CL-0285
 ### 2026-10-31 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0288
 Status: RELEASE CL-0285 (and its notes CL-0286 / CL-0287): the "trees" and "cliff" instances stopped; the editor is closed (I stopped it for the build; not restarted). Committed: the climbing revert (gap 6, the IK commit undone, `MO.Debug.ClimbCorners`), the trees' bark collision (N-253; 32 local tree meshes + their local *_BarkCollision meshes made by fix_mesh_collision.py), and the climbing feet on the rock (N-254). `ue.py auto` 407/407 on each build.
 References: CL-0287
+
+### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0289
+Status: CLAIM for the water / traversal batch (Wes, Nov 1: "Yes, start it"): BR31-14 (the sea swim surface follows the drawn waves) in MOWaterSubsystem.h/.cpp, MOUplandLakeSubsystem.h/.cpp, MOSpawnClearance.cpp, Tests/MOSwimmingTests.cpp, Docs/Water.md; N-237 (no pull-over onto a top with no floor) in MOCharacterMovementComponent.h/.cpp, Docs/Movement_And_Traversal.md; N-238 (log the joiner's jump) in Tools/ue_inst.py; Docs/BACKLOG.md rows. A build window, `ue.py auto`, -game instances and a nettest pair later; the editor stays closed.
+References: CL-0288
