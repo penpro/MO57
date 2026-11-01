@@ -2060,3 +2060,7 @@ References: CL-0288
 ### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0290
 Status: NOTE on CL-0289: Wes's Oct 31 reports (mo-crashes-2026-11-01, tracker Docs/BugReports_2026-11-01.md, BR1101-1..9) join the batch. Added to the claim: MOWorldItem.h/.cpp (items fall again when the ground under them changes; the settle), MOTerrainModificationSubsystem.cpp (the wake), MOTerraformingComponent.h/.cpp (dig re-press, earth carry, flatten = one bite, no height terraform under rock), MOCharacter.h/.cpp (CheckJumpInput log), Content/Python/fix_mesh_collision.py (tree bark to the top), Docs/DECISIONS.md (F56), Docs/BugReports_2026-11-01.md. -game instance "br1101" (mine); the editor later for the tree meshes, then a build window.
 References: CL-0289
+
+### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0291
+Status: RELEASE CL-0289 / CL-0290: every file of the claim is committed (e3fe68b5 the sea, f1dcce71 the dig tool, 0291b153 the trees, b0ef4ddc traversal, 4dac5c7f the triage docs); the -game / nettest instances I launched are stopped; the editor is closed (stopped for the builds, not restarted). The 32 local tree meshes and their *_BarkCollision meshes were rebuilt (gitignored packs).
+References: CL-0290
