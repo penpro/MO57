@@ -2056,3 +2056,7 @@ References: CL-0287
 ### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0289
 Status: CLAIM for the water / traversal batch (Wes, Nov 1: "Yes, start it"): BR31-14 (the sea swim surface follows the drawn waves) in MOWaterSubsystem.h/.cpp, MOUplandLakeSubsystem.h/.cpp, MOSpawnClearance.cpp, Tests/MOSwimmingTests.cpp, Docs/Water.md; N-237 (no pull-over onto a top with no floor) in MOCharacterMovementComponent.h/.cpp, Docs/Movement_And_Traversal.md; N-238 (log the joiner's jump) in Tools/ue_inst.py; Docs/BACKLOG.md rows. A build window, `ue.py auto`, -game instances and a nettest pair later; the editor stays closed.
 References: CL-0288
+
+### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0290
+Status: NOTE on CL-0289: Wes's Oct 31 reports (mo-crashes-2026-11-01, tracker Docs/BugReports_2026-11-01.md, BR1101-1..9) join the batch. Added to the claim: MOWorldItem.h/.cpp (items fall again when the ground under them changes; the settle), MOTerrainModificationSubsystem.cpp (the wake), MOTerraformingComponent.h/.cpp (dig re-press, earth carry, flatten = one bite, no height terraform under rock), MOCharacter.h/.cpp (CheckJumpInput log), Content/Python/fix_mesh_collision.py (tree bark to the top), Docs/DECISIONS.md (F56), Docs/BugReports_2026-11-01.md. -game instance "br1101" (mine); the editor later for the tree meshes, then a build window.
+References: CL-0289
