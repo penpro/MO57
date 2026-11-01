@@ -123,7 +123,7 @@ F1 survival single source · F2 thermal model · F3 regrowth · F4 perf target �
 F8 excavation stage 6 UI · F9 cliff walls · F10 heat-ladder values + kilns · F11 post engine report · F12 river reeds · F13 clock speed ·
 F14 downloads (UE logo, kit fonts, tropical / beach packs, sand sets, more Megascans) · F15 gender · F16 era play time · F17 chariot ·
 F18 attempt-anything · F19 far-colonist ground · F20 eye adaptation speed · F21 bland far mountains · F22 springs / rain / hauling · F23 rejected Steam art ·
-F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth · F53 ranged attacks (throwing, bows) with the closing circle · F54 where the action animations come from (AnimGen cannot make them).
+F26 how long studying an item takes · F27 cliff bands that read as a staircase · F28 teaching the bark container (a "Safe water" tutorial step) · F29 how a pawn sleeps (nobody can) · F34 does handling items take time · F35 how much a novice's treatment does · F36 a first-aid dressing before cloth · F53 ranged attacks (throwing, bows) with the closing circle · F54 where the action animations come from (AnimGen cannot make them) · F56 a started building's plan outside Build mode (BR1101-2).
 
 ## Collaboration dependencies and recent handoffs
 
@@ -419,6 +419,22 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 | BR31-12 | OPEN (Wes's grip work: ask first) | Wes / Claude | The hammer stone floats beside the right hand: its held grip is unaligned | `Docs/BugReports_2026-10-31.md` | e462993f, N-207 |
 | BR31-13 | DONE (Oct 31) | Claude | `MO.Test.FindWidget / ClickWidget / HitTest` take `in=<owner>` and `nth=<n>` (one shared lookup); HitTest logs the tooltip | `Docs/BugReports_2026-10-31.md` | BR31-4 |
 | BR31-14 | OPEN | Claude | Swimming at sea floats on a flat z = 0 while the ocean's drawn waves heave -60..+56 cm (measured Oct 31): the swimmer hangs in air in a trough and goes under at a crest. The sea's waves are real, so the swim surface should follow the drawn waves (Oceanology's `GetWaveHeightAtLocation`, through `UMOWaterSubsystem::GetSurfaceZ`) rather than the waves shrink | `Docs/Water.md` §5a | BR31-10 |
+
+## Wes's Oct 31 reports (BR1101; tracker `Docs/BugReports_2026-11-01.md`; the Steam build 11bc6111, DARKTOWER, seeds 5730 and 19173)
+
+| ID | Status | Owner | Item | Ref | Aliases |
+|---|---|---|---|---|---|
+| BR1101-1 | IN PROGRESS (fix written) | Claude | Items lying on ground that is dug stay in the air: a settled item never moved again. Items over a terraform's zone fall onto what is there now (`AMOWorldItem::WakeItemsOver` from `RegisterModifiedZone`) | `Docs/BugReports_2026-11-01.md` | 80e8fc0c |
+| BR1101-2 | WAITING (F56) | Wes | Plans vanish after some actions: by design since BR25-4 (shown only in Build mode; T leaves it). Fork F56: should a started building keep its plan visible in every mode? | `Docs/DECISIONS.md` F56 | 754d189c |
+| BR1101-3 | IN PROGRESS (fix written) | Claude | The player's flatten levelled the whole brush to the feet in one action, metres of earth unaccounted: now one bite (the dig's earth off the high ground onto the low, the colony's `FindBitePoint`), timed by that earth | `Docs/Terraform_Excavation_Plan.md` | 64f00be1 |
+| BR1101-4 | IN PROGRESS (fix written) | Claude | A press while digging restarted the dig and put the partial earth on the pile; the spoil piles stacked into a floating column (the settle put each 10 cm over the last). The same tool pressed again keeps going; partial earth carries over; the settle keeps what physics did | `Docs/BugReports_2026-11-01.md` | f7c9312b |
+| BR1101-5 | IN PROGRESS | Claude | Climbing a tree kicks you off near the top: re-test on the current build (bark collision to ~7.5 m on his 24.9 m tree) | BR1101-6 | e54cd656 |
+| BR1101-6 | IN PROGRESS (applied, in-game check pending) | Claude | Trees have no collision to the top (the old build's one capsule; the bark collision stopped at ~45 % of the height, at most ~7 m): the bark to the top, the crown's branches kept and its twigs left out (32 trees, 470k triangles; his tree to 22.5 of 24.9 m) | `Docs/PCG.md` § tree collision | 8c3d385f, N-253 |
+| BR1101-7 | IN PROGRESS (fix written) | Claude | A flatten in a cave opened its roof (square patches of sun): the height sculpt works the hill's surface above. Height terraforming under rock is refused with a message; working ground under rock is N-256 | `Docs/BugReports_2026-11-01.md` | 1ec6fe05 |
+| BR1101-8 | OPEN (= BR24-11) | Claude | An overhanging rock's open inside shows from below (seed 19173, -576639, 220605): an Electric Dreams cliff composition (`SM_Cliff_04` x1.82 nearest the view) standing at Epic's authored heights over our ground -- BR24-11 / N-040 | BR24-11, N-040 | 9c30314b |
+| BR1101-9 | OPEN (N-255) | Claude | "the crude chopper takes stone, idk where to get stone": the sources exist (small-stone scatters: "Pick up loose stones"; boulders; digging rock), nothing says so | N-255 | 68c19bfb |
+| N-255 | OPEN | Claude | Where to find a missing ingredient: the crafting detail says, for each ingredient the player lacks, where it comes from in words a player reads ("loose stones on the ground: Pick up loose stones", "a boulder: ...", "digging rock"), from the item-source analysis (`FMOItemSourceAnalysis` keeps only the first source, as a debug string: it needs every source with its display names). The ingredient rows are C++ text blocks (`UMORecipeDetailPanelBase::IngredientTextWidgets`): no widget asset edit | BR1101-9 | Nov 1 |
+| N-256 | OPEN | Claude | Working the ground under rock (a cave floor, a wall, under an overhang): the height sculpt can only work the top surface, so it is refused there now (BR1101-7). The volume sculpt can (`bUseVolumeSculpting`'s path, half-sphere earth accounting), but no level has an `AVoxelVolumeSculptActor` (only the height one is found): add one to the maps (a `.umap` change: blocked by the LFS budget) or spawn it at run time with its save record (`MOVoxelSculptSaveDomain`) | `Docs/Voxel_Plugin_Reference.md` §18a | Nov 1 |
 
 ## UI
 
