@@ -8,6 +8,8 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "EngineUtils.h"
+#include "MOSpawnClearance.h"
 #include "MOIdentityComponent.h"
 #include "MOInteractableComponent.h"
 #include "MOItemComponent.h"
@@ -382,6 +384,57 @@ void AMOWorldItem::EnableDropPhysics()
 		SetActorLocation(CurrentLocation + RandomOffset + FVector(0, 0, RandomDropHeight));
 	}
 
+	StartDropSimulation();
+}
+
+void AMOWorldItem::FallFromHere()
+{
+	if (!HasAuthority() || bDropPhysicsActive || !IsValid(ItemMesh) || !GetWorld() || IsHidden())
+	{
+		return;
+	}
+	// The ground it lay on is not the ground any more: the "fell through" floor (pitfall 2b) is the terrain under it now. The voxel terrain only:
+	// an object-type query for static objects also met the ocean's underwater volume (query-only, no channel blocks on it), whose top stands
+	// metres over the shore -- items were "settled back on top" of it, 3 m higher at every dig (Nov 1, the first build of this fix).
+	FHitResult Ground;
+	const FVector Here = GetActorLocation();
+	bHasDropGround = MOSpawnClearance::TraceVoxelGround(GetWorld(), static_cast<float>(Here.X), static_cast<float>(Here.Y), static_cast<float>(Here.Z + 100.0), static_cast<float>(Here.Z - 3000.0), this, Ground);
+	DropGroundLocation = bHasDropGround ? Ground.ImpactPoint : Here;
+	ItemMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	StartDropSimulation();
+}
+
+int32 AMOWorldItem::WakeItemsOver(UWorld* World, const FVector& Center, float RadiusCm)
+{
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return 0;
+	}
+	// The patch of ground a terraform changed is a disc (the brush): anything lying over it, up to a body's height above or below the brush centre
+	// (a dig lowers the ground under items that stood on it; a raise or a flatten's fill lifts it into them).
+	const float Reach = RadiusCm + 50.0f;
+	int32 Woken = 0;
+	for (TActorIterator<AMOWorldItem> It(World); It; ++It)
+	{
+		AMOWorldItem* Item = *It;
+		const FVector L = Item->GetActorLocation();
+		if (FVector::DistSquared2D(L, Center) <= FMath::Square(Reach) && FMath::Abs(L.Z - Center.Z) <= RadiusCm + 300.0f && !Item->bDropPhysicsActive && !Item->IsHidden())
+		{
+			Item->FallFromHere();
+			++Woken;
+		}
+	}
+	if (Woken > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] the ground changed at %s (radius %.0f): %d item(s) lying there fall onto it"), *Center.ToCompactString(), RadiusCm, Woken);
+	}
+	return Woken;
+}
+
+void AMOWorldItem::StartDropSimulation()
+{
+	UWorld* World = GetWorld();
+
 	// Force recreation of physics state to ensure body is properly created with new collision settings
 	ItemMesh->RecreatePhysicsState();
 
@@ -400,10 +453,10 @@ void AMOWorldItem::EnableDropPhysics()
 		// Set linear damping to slow the fall slightly (helps with collision detection)
 		BodyInstance->LinearDamping = 0.5f;
 
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: CCD enabled, body awake"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] EnableDropPhysics: CCD enabled, body awake"));
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: After SetSimulatePhysics(true), IsSimulating=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] EnableDropPhysics: After SetSimulatePhysics(true), IsSimulating=%s"),
 		ItemMesh->IsSimulatingPhysics() ? TEXT("true") : TEXT("false"));
 
 	// Track drop physics state
@@ -413,7 +466,7 @@ void AMOWorldItem::EnableDropPhysics()
 	// Enable tick to monitor physics
 	SetActorTickEnabled(true);
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics complete: bDropPhysicsActive=%s, StartTime=%.2f"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] EnableDropPhysics complete: bDropPhysicsActive=%s, StartTime=%.2f"),
 		bDropPhysicsActive ? TEXT("true") : TEXT("false"), DropPhysicsStartTime);
 }
 
@@ -435,48 +488,45 @@ void AMOWorldItem::SettleOnGround()
 	// Disable physics simulation
 	ItemMesh->SetSimulatePhysics(false);
 
-	// Get current location
-	FVector CurrentLocation = GetActorLocation();
-
-	// Trace down to find the ground
+	// Where the physics left it is where it rests -- on the ground or on another item -- unless that is no rest: under the ground (it fell through,
+	// pitfall 2b) or with nothing under it (still in the air at the timeout). Then its bottom goes onto the first thing below it.
+	// The old settle traced down from 200 cm above and put the item 10 cm over whatever it met first: another item over it as often as the ground.
+	// Items dropped at one spot (a dig's spoil) each landed on the last one's top, a column of dirt piles standing in the air with gaps between
+	// them (BR1101, Nov 1: "if you start another dig it spawns a dirt item before the bar completes" -- its screenshot).
 	UWorld* World = GetWorld();
 	if (IsValid(World))
 	{
-		FHitResult HitResult;
-		FCollisionQueryParams QueryParams;
-		QueryParams.AddIgnoredActor(this);
+		FVector Origin, Extent;
+		GetActorBounds(/*bOnlyCollidingComponents=*/true, Origin, Extent);
+		const double Bottom = Origin.Z - Extent.Z;
+		const double PivotAboveBottom = GetActorLocation().Z - Bottom;
+		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOWorldItemSettle), /*bTraceComplex=*/false, this);
 
-		// From ABOVE the item (and above the ground the drop found): an item that fell through the terrain is below it, and a trace from there
-		// down finds nothing (pitfall 2b).
-		const float TopZ = FMath::Max(CurrentLocation.Z, bHasDropGround ? DropGroundLocation.Z : CurrentLocation.Z) + 200.0f;
-		const FVector TraceStart(CurrentLocation.X, CurrentLocation.Y, TopZ);
-		const FVector TraceEnd = TraceStart - FVector(0.0f, 0.0f, 3000.0f);
+		// The terrain alone (never another item, nor the ocean's query-only underwater volume -- see FallFromHere): from above both the item and
+		// the ground its drop found.
+		const double TopZ = FMath::Max(Origin.Z + Extent.Z, bHasDropGround ? DropGroundLocation.Z : Origin.Z) + 50.0;
+		FHitResult Ground;
+		const bool bGround = MOSpawnClearance::TraceVoxelGround(World, static_cast<float>(Origin.X), static_cast<float>(Origin.Y), static_cast<float>(TopZ), static_cast<float>(TopZ - 3000.0), this, Ground);
+		// What is right under it, items included.
+		FHitResult Under;
+		const bool bUnder = World->LineTraceSingleByChannel(Under, Origin, FVector(Origin.X, Origin.Y, Bottom - 3000.0), ECC_WorldStatic, QueryParams);   // from its middle: an item resting a little sunk in the ground still finds it
 
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+		const bool bBelowGround = bGround && Bottom < Ground.ImpactPoint.Z - 5.0;
+		const bool bResting = bUnder && Bottom - Under.ImpactPoint.Z <= RestingGapCm;
+		if (bBelowGround || (!bResting && !bUnder && !bGround && bHasDropGround))
 		{
-			// Check if we're already close to the ground (within 50cm above it); below it is never fine
-			const float DistanceToGround = FVector::Dist(CurrentLocation, HitResult.Location);
-			if (DistanceToGround > 50.0f || CurrentLocation.Z < HitResult.Location.Z - 5.0f)
-			{
-				// Teleport to just above the ground
-				const FVector GroundLocation = HitResult.Location + FVector(0.0f, 0.0f, 10.0f);
-				SetActorLocation(GroundLocation);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Settled on ground at %s (was %.1fcm above)"),
-					*GroundLocation.ToString(), DistanceToGround);
-			}
-			else
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Already on ground (%.1fcm away)"), DistanceToGround);
-			}
+			const double Floor = bGround ? Ground.ImpactPoint.Z : DropGroundLocation.Z;
+			SetActorLocation(FVector(GetActorLocation().X, GetActorLocation().Y, Floor + PivotAboveBottom));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] %s settled %.0f cm under the ground: back on top of it at %.0f"), *GetName(), Floor - Bottom, Floor);
 		}
-		else if (bHasDropGround)
+		else if (!bResting && bUnder)
 		{
-			SetActorLocation(DropGroundLocation + FVector(0.0f, 0.0f, 10.0f));
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] No ground found under %s now: back on the ground its drop found (%s)"), *CurrentLocation.ToString(), *DropGroundLocation.ToString());
+			SetActorLocation(FVector(GetActorLocation().X, GetActorLocation().Y, Under.ImpactPoint.Z + PivotAboveBottom));
+			UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] %s was %.0f cm in the air at the timeout: down onto %s"), *GetName(), Bottom - Under.ImpactPoint.Z, *GetNameSafe(Under.GetActor()));
 		}
-		else
+		else if (!bResting)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] No ground found below item at %s"), *CurrentLocation.ToString());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] No ground found below item at %s"), *GetActorLocation().ToString());
 		}
 	}
 

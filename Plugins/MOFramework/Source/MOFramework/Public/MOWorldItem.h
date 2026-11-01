@@ -56,6 +56,12 @@
  *    stole the aim: in a pile, the near items' spheres hid the far ones (aimed exactly at an item, the right one was picked 3 times in 8).
  *    Things that look for dropped items by collision must include ECC_PhysicsBody (EnableDropPhysics sets it; see MOBuildProgressComponent).
  *
+ * 3b. AT REST IS NOT FOREVER (Nov 1 2026, BR1101): a settled item has no physics, so it stays wherever it settled -- in the air once the ground under
+ *    it was dug ("sometimes when you dig items keep floating"). Every terraform's zone wakes the items over it (WakeItemsOver, from
+ *    UMOTerrainModificationSubsystem::RegisterModifiedZone) and they fall onto what is there now. And the settle keeps where the physics put the item
+ *    -- on the ground or on another item -- unless that is in the air or under the ground: the old settle put it 10 cm over the FIRST thing a trace
+ *    from 2 m above met, another item as often as the ground, so drops at one spot (a dig's spoil) stacked into a column standing in the air.
+ *
  * 4. DESTROY VS HIDE: bDestroyAfterPickup = true destroys actor.
  *    bHideOnPickup = true only hides. For respawning items, use hide.
  *
@@ -142,6 +148,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Item|Drop")
 	void EnableDropPhysics();
 
+	/** A resting item falls again from where it lies (the ground under it was dug or moved): the drop's physics without its lift and spread. Server only;
+	 *  nothing while it is already falling. */
+	UFUNCTION(BlueprintCallable, Category="MO|Item|Drop")
+	void FallFromHere();
+
+	/** Every resting world item over a patch of ground that just changed (centre, radius: the terraform's zone) falls onto what is there now
+	 *  (FallFromHere). Server only. Returns how many were woken. */
+	static int32 WakeItemsOver(UWorld* World, const FVector& Center, float RadiusCm);
+
+	/** How far over what is under it a settled item may stand and still count as resting on it (cm): past this it is in the air. */
+	static constexpr float RestingGapCm = 15.0f;
+
 	/** Maximum time physics will be enabled after dropping (seconds). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Item|Drop")
 	float DropPhysicsTimeout = 3.0f;
@@ -175,6 +193,9 @@ protected:
 
 	/** Called when drop physics completes - settles item on ground and disables physics. */
 	void SettleOnGround();
+
+	/** The drop's physics from where the item is now (EnableDropPhysics after its lift and spread, FallFromHere as it lies): simulate, then SettleOnGround. */
+	void StartDropSimulation();
 
 	/**
 	 * A mesh imported without simple collision uses its triangles for simple queries. The item mesh IS the interaction target (pitfall 3), and the

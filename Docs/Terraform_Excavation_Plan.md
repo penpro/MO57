@@ -25,6 +25,34 @@
 **Oct 14 2026 -- earth accounting fixed at the primitive.** The Voxel plugin's height sculpt moves `Radius/10 x Strength` cm at the centre (smooth falloff to the rim), but `ComputeMovedVolumeCubicMeters` booked `pi r^2 x Strength x 1 m`: an excavation bite (120 cm, 0.15) was booked at 0.68 m3 and minted 54 Dirt while the ground lost 0.046 m3; the player's default dig (250 cm, 0.1) was charged 16 h for 0.28 m3 (2.3 h at the anchor). The conversion now integrates the plugin's own rule (`MOVoxel::HeightSculptMovedVolumeM3`); `test_excavation_primitive.py` measures the real ground drop (2.39 cm vs 2.5 predicted). Durations for height Dig/Raise are now ~7x shorter for the player and ~15x for a pawn bite -- still Wes's anchor (5 min per 0.01 m3), now charged for earth that really moved.
 Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd893aac`) landed earlier. See "Remaining work" at the bottom.
 
+## The player's dig tool (Nov 1 2026, Wes's Oct 31 reports BR1101-1, -3, -4, -7)
+
+- **One action at a time, and a press does not restart it.** The same tool pressed again while it works keeps it going
+  (`BeginTerraform`: "already under way ... the press keeps it going"); another tool takes over. Before, every press cancelled the dig and
+  started it again, and the cancel put the earth already dug on the pile: dirt before the bar was done, the bar back to 0 (BR1101-4).
+- **No earth lost to rounding.** A dig yields whole spoil items (80 per m3); what is left over (an interrupted dig's few litres) carries
+  to the pawn's next dig (`DigYieldCarryM3`).
+- **Flatten is one bite, never the plugin's flatten sculpt** (BR1101-3: "the flatten function is very potent"). The sculpt levelled the
+  whole 5 m brush to the feet at once -- on a slope metres of earth cut and filled in one action, timed by a nominal estimate (82 h of
+  simulated time on a 1 m bump) and never counted. Now `FindFlattenBite` (the colony's `FindBitePoint` over a zone of this action) finds the
+  highest ground more than 15 cm over the feet in the brush and the lowest more than 15 cm under them; the action cuts the brush's own earth
+  (the dig's volume) from the high spot and lays the same at the low spot, in steps over the timer like a dig (an interruption keeps the
+  part done, balanced). Its time is that earth dug (at the rock's hardness) and laid. No low ground in the brush: the cut earth is spoil on
+  the pile. Nothing over the feet: nothing to cut ("the Raise tool builds low ground up"). A joiner's flatten is the same bite, applied on
+  the server.
+- **Nothing is worked under rock** (BR1101-7: "lighting problems when using flatten in a cave"). The height sculpt edits the ground's top
+  surface over (X, Y); in a cave that is the hill above, so a flatten at the cave floor levelled the hillside down to it and opened the roof
+  (square patches of sun). Every height-sculpt mode is refused where voxel terrain stands over the aimed spot (`HasRockOverhead`), with a
+  line on screen. Working a cave floor or a wall needs the volume sculpt, and no level has its sculpt actor yet (BACKLOG N-256).
+- **What lay on the ground falls with it** (BR1101-1): every terraform's zone wakes the world items over it and they fall onto the ground
+  that is there now (`AMOWorldItem::WakeItemsOver`, from `UMOTerrainModificationSubsystem::RegisterModifiedZone`; `MOWorldItem.h` pitfall 3b).
+- **Verified (Nov 1, seed 777 / 19173, developer mode's short timers, scratch `br1101_probe.py` / `cave_check.py`):** a second press 5 s into
+  a 10 s dig -- before: 11 Dirt dropped at once, the dig cancelled and begun again; after: the same dig goes on (7 yields from 7 digs, 8 before).
+  Seven digs at the start site: 7 spoil piles within 9 m, none in the air (the first build of the settle stacked them on the ocean's
+  underwater volume's top: `Docs/TRAPS.md` §11). A flatten from a 10-dig hole, the ground round it spanning 113 cm: levelling the brush to the
+  feet, as the old tool did, would have cut 3.22 m3 and filled 2.80 m3 in one action; one bite cut 0.26 m3 and filled 0.24 m3 (the grid round
+  it). In a cave 60 m down (seed 19173), the dig and the flatten are refused with the line on screen; on open ground the dig begins.
+
 ## Goal (Wes, binding)
 
 Player **designates** separate **dig** / **dump-fill** / **flatten** areas (multiple

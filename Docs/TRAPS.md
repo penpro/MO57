@@ -525,6 +525,13 @@
   untouched (the lakes heaved +-60 cm at WaveScale 0.03 until Oct 31). **And an amplitude of exactly 0 (swell or wave) erases the water:**
   the Gerstner sum divides by it, every vertex goes NaN and only the bed is drawn -> floor every amplitude (0.01 cm). Before trusting an A/B
   of the water, LOOK at one frame of each setting: a "still" setting that drew no water at all measured as perfectly still. (Oct 31)
+- **An object-type query for static objects meets the ocean's underwater volume** (query-only, every channel ignored -- so channel traces
+  pass it, but `LineTraceSingleByObjectType(AllStaticObjects)` does not): world items "settled back on top of the ground" at its top, metres
+  over the shore, 3 m higher at every dig (Nov 1, the first build of BR1101-1) -> for "the ground" trace the voxel terrain
+  (`MOSpawnClearance::TraceVoxelGround`), for "anything under it" a channel trace.
+- **A height reading at a swimmer's (X, Y) is not the water over it:** a Gerstner wave moves each point sideways too -- the water over (X, Y)
+  is the still point whose sideways move lands there (`UMOWaterSubsystem::WaveHeightOver`, 8 cm off naively on the sea). And a moving surface
+  is not enough for a swimmer: the stock swim damps toward still water (BR31-14: `RideTheWaves`). (Nov 1)
 
 ## 12. Light, rendering, materials
 

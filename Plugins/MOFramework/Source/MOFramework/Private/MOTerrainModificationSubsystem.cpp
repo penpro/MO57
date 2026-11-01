@@ -11,6 +11,7 @@
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
+#include "MOWorldItem.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/World.h"
@@ -90,6 +91,9 @@ UMOTerrainModificationSubsystem* UMOTerrainModificationSubsystem::Get(const UObj
 void UMOTerrainModificationSubsystem::RegisterModifiedZone(const FVector& Location, float Radius)
 {
 	Radius = FMath::Max(1.0f, Radius);
+
+	// Whatever lay on the ground that just changed falls onto what is there now (BR1101, Nov 1: "sometimes when you dig items keep floating").
+	AMOWorldItem::WakeItemsOver(GetWorld(), Location, Radius);
 
 	// Merge: scan ALL zones for a close-enough match. We don't use the grid
 	// here because the merge candidate's grid cells are also probably this

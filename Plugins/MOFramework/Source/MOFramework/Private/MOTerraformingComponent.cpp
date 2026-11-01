@@ -8,6 +8,7 @@
 #include "MOViewpointUtils.h"
 #include "MOCharacter.h"
 #include "MOTerrainModificationSubsystem.h"
+#include "MODesignationSubsystem.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Character.h"
@@ -24,6 +25,12 @@
 #include "MOVoxelAlias.h"  // all Voxel sculpt calls go through this facade
 #include "Sculpt/VoxelSculptMode.h"
 #include "Sculpt/VoxelLevelToolType.h"
+#include "MOSpawnClearance.h"
+#include "MOWorldGen.h"
+#include "MOWorldSeedSubsystem.h"
+#include "MOPlayerController.h"
+
+#define LOCTEXT_NAMESPACE "MOTerraforming"
 
 namespace MOTerraformDev
 {
@@ -112,9 +119,9 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 				}
 			}
 			RegisterTerraformZone();
-			if (PendingAction.Mode == EMOTerraformMode::Dig)
+			if (PendingAction.Mode == EMOTerraformMode::Dig || (PendingAction.Mode == EMOTerraformMode::Flatten && !PendingAction.bFlattenFill))
 			{
-				GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);
+				GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);   // a flatten with no low ground in the brush: its cut earth is spoil too
 			}
 			bSuccess = true;
 		}
@@ -367,7 +374,64 @@ bool UMOTerraformingComponent::Flatten(const FVector& WorldLocation, float Targe
 	{
 		return VolumeFlatten(WorldLocation, FVector::UpVector, TargetHeight);
 	}
-	return HeightFlatten(FVector2D(WorldLocation.X, WorldLocation.Y), TargetHeight);
+	LastFlattenSpoilM3 = 0.0f;
+	FVector DigAt, FillAt;
+	bool bFill = false;
+	if (!FindFlattenBite(WorldLocation, TargetHeight, DigAt, FillAt, bFill))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Flatten at %s: nothing in the brush stands over %.0f -- nothing to cut"), *WorldLocation.ToString(), TargetHeight);
+		return false;
+	}
+	const float CutM3 = ApplyFlattenStep(DigAt, FillAt, bFill, Config.RaiseLowerStrength);
+	LastFlattenSpoilM3 = bFill ? 0.0f : CutM3;   // with no low ground in the brush the cut earth is spoil (the timed action puts it on the pile)
+	// The bite's own ground is worked ground too (the caller registers the brush centre; a bite at the brush's edge reaches a brush further).
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
+	{
+		TerrainMod->RegisterModifiedZone(DigAt, Config.Radius);
+		if (bFill)
+		{
+			TerrainMod->RegisterModifiedZone(FillAt, Config.Radius);
+		}
+	}
+	return true;
+}
+
+bool UMOTerraformingComponent::FindFlattenBite(const FVector& Center, float TargetZ, FVector& OutDig, FVector& OutFill, bool& bOutFill) const
+{
+	bOutFill = false;
+	const UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this);
+	if (!Desig)
+	{
+		return false;
+	}
+	FMODesignationZone Zone;
+	Zone.ZoneId = FGuid::NewGuid();   // a zone of this action only, never designated
+	Zone.Kind = EMODesignationKind::Flatten;
+	Zone.Center = Center;
+	Zone.Radius = Config.Radius;
+	Zone.TargetHeightZ = TargetZ;
+	int32 Samples = 0;
+	if (!Desig->FindBitePoint(Zone, /*bDig=*/true, OutDig, Samples))
+	{
+		return false;
+	}
+	bOutFill = Desig->FindBitePoint(Zone, /*bDig=*/false, OutFill, Samples);
+	return true;
+}
+
+float UMOTerraformingComponent::ApplyFlattenStep(const FVector& DigAt, const FVector& FillAt, bool bFill, float Strength)
+{
+	AActor* Actor = HeightSculptActor.Get();
+	if (!IsValid(Actor) || Strength <= 0.0f)
+	{
+		return 0.0f;
+	}
+	MOVoxel::HeightSculpt(Actor, FVector2D(DigAt.X, DigAt.Y), Config.Radius, Strength, /*bAdd*/ false);
+	if (bFill)
+	{
+		MOVoxel::HeightSculpt(Actor, FVector2D(FillAt.X, FillAt.Y), Config.Radius, Strength, /*bAdd*/ true);
+	}
+	return ComputeMovedVolumeCubicMeters(Config.Radius, Strength);
 }
 
 bool UMOTerraformingComponent::Smooth(const FVector& WorldLocation)
@@ -405,17 +469,6 @@ bool UMOTerraformingComponent::HeightRaise(const FVector2D& Location)
 		return false;
 	}
 	MOVoxel::HeightSculpt(Actor, Location, Config.Radius, Config.RaiseLowerStrength, /*bAdd*/ true);
-	return true;
-}
-
-bool UMOTerraformingComponent::HeightFlatten(const FVector2D& Location, float TargetHeight)
-{
-	AActor* Actor = HeightSculptActor.Get();
-	if (!IsValid(Actor))
-	{
-		return false;
-	}
-	MOVoxel::HeightFlatten(Actor, Location, Config.Radius, Config.Falloff, TargetHeight);
 	return true;
 }
 
@@ -808,10 +861,17 @@ int32 UMOTerraformingComponent::SpoilItemsForVolume(float VolumeM3, float ItemsP
 
 bool UMOTerraformingComponent::BeginTerraform()
 {
-	// One pending action at a time. If a previous one is still running,
-	// cancel it (which fires OnTerraformCancelled so the UI can tear down).
+	// One pending action at a time. The same tool pressed again while it works is the same work going on: it used to cancel the action and start
+	// again, and the cancel put the earth already dug on the pile -- dirt before the bar was done, every press (BR1101, Nov 1: "if you start another
+	// dig it spawns a dirt item before the bar completes"). Another tool takes over (the cancel fires OnTerraformCancelled so the UI can tear down).
 	if (PendingAction.bActive)
 	{
+		if (PendingAction.Mode == CurrentMode)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s is already under way (%.0f of %.0f s): the press keeps it going"), *GetModeDisplayName().ToString(),
+				PendingAction.ElapsedTime, PendingAction.TotalTime);
+			return true;
+		}
 		CancelTerraform();
 	}
 
@@ -821,6 +881,17 @@ bool UMOTerraformingComponent::BeginTerraform()
 	{
 		// DEBUG (MOTerraforming, disabled Oct 18): re-enable to trace verbose detail
 		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOTerraforming] BeginTerraform: no valid target"));
+		return false;
+	}
+
+	// The height sculpt works the ground's top surface over (X, Y): under rock -- in a cave, under an overhang, into a wall -- it would dig, raise
+	// or level the hill ABOVE, not the spot aimed at. A flatten in a cave levelled the hill down to the cave floor and opened the roof: square
+	// patches of sun on the floor (BR1101, Nov 1: "lighting problems when using flatten in a cave"). Digging under rock needs the volume sculpt.
+	if (!bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && HasRockOverhead(HitLocation))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s refused: rock overhead (the height sculpt would work the surface above)"), *GetModeDisplayName().ToString(),
+			*HitLocation.ToString());
+		NotifyOwner(LOCTEXT("RockOverhead", "There is rock above this spot: the ground can only be worked in the open."));
 		return false;
 	}
 
@@ -834,8 +905,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 	PendingAction.TargetNormal = HitNormal;
 	PendingAction.ElapsedTime = 0.0f;
 	// Volume-based duration: moving earth takes time proportional to how much earth this brush moves, floored at the legacy duration so
-	// trivial ops aren't instant. A height Dig/Raise moves exactly the sculpt's volume; Flatten/Smooth (and volume sculpting) keep the
-	// nominal footprint x depth estimate -- their earth depends on the ground under the brush.
+	// trivial ops aren't instant. A height Dig/Raise moves exactly the sculpt's volume; Smooth (and volume sculpting) keep the nominal
+	// footprint x depth estimate -- their earth depends on the ground under the brush; a height Flatten is timed by its bite (below).
 	const bool bHeightDigRaise = !bUseVolumeSculpting && (CurrentMode == EMOTerraformMode::Dig || CurrentMode == EMOTerraformMode::Raise);
 	PendingAction.TotalTime = bHeightDigRaise
 		? ComputeDurationForVolumeSeconds(ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength),
@@ -843,7 +914,7 @@ bool UMOTerraformingComponent::BeginTerraform()
 		: ComputeTerraformDurationSeconds(Config.Radius, GetActionDepthMeters(CurrentMode),
 			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
 	// What the brush cuts decides how long it takes (Wes, Oct 17 2026): earth at the base rate, limestone ~5x, granite ~40x -- the same points the yield is
-	// shared over (FMOGeologyYield). Raising places loose earth; flatten / smooth keep the earth rate.
+	// shared over (FMOGeologyYield). Raising places loose earth; smooth keeps the earth rate.
 	float DigHardness = 1.0f;
 	if (CurrentMode == EMOTerraformMode::Dig)
 	{
@@ -852,15 +923,6 @@ bool UMOTerraformingComponent::BeginTerraform()
 			: ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
 		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, Config.Radius, CutM3, !bUseVolumeSculpting);
 		PendingAction.TotalTime *= DigHardness;
-	}
-	// This world's digging pace (MOWorldCreationTypes.h): chosen when the world was made, never zero.
-	PendingAction.TotalTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Terraforming, PendingAction.TotalTime);
-	// A developer's shortcut (MO.Dev.TerraformSeconds), only while the world's host is in developer mode.
-	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] developer mode: %.1f s instead of the simulated %.1f s (MO.Dev.TerraformSeconds 0 = simulated)"), DevSeconds,
-			PendingAction.TotalTime);
-		PendingAction.TotalTime = DevSeconds;
 	}
 
 	if (CurrentMode == EMOTerraformMode::Flatten)
@@ -876,6 +938,32 @@ bool UMOTerraformingComponent::BeginTerraform()
 				? HitLocation.Z   // owner not a character — fall back to ray-hit Z
 				: Config.FlattenTargetHeight;
 		}
+		if (!bUseVolumeSculpting)
+		{
+			// One bite (Flatten's header): the brush's earth off the highest ground over the target, onto the lowest under it. Its time is that earth
+			// dug (at the rock's hardness) and, when it has somewhere to go, laid again -- not a nominal estimate of the whole brush.
+			if (!FindFlattenBite(HitLocation, PendingAction.FlattenTargetHeight, PendingAction.FlattenDigPoint, PendingAction.FlattenFillPoint, PendingAction.bFlattenFill))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Flatten at %s: nothing in the brush stands more than the tolerance over %.0f (the feet) -- nothing to cut"),
+					*HitLocation.ToString(), PendingAction.FlattenTargetHeight);
+				NotifyOwner(LOCTEXT("NothingToLevel", "Nothing here stands above your feet to cut down; the Raise tool builds low ground up."));
+				PendingAction.Reset();
+				return false;
+			}
+			const float BiteM3 = ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
+			DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, PendingAction.FlattenDigPoint, Config.Radius, BiteM3, /*bSlab=*/true);
+			PendingAction.TotalTime = FMath::Max(FMath::Max(0.1f, TerraformDurationSeconds),
+				BiteM3 * TerraformSecondsPerCubicMeter * (DigHardness + (PendingAction.bFlattenFill ? 1.0f : 0.0f)));
+		}
+	}
+	// This world's digging pace (MOWorldCreationTypes.h): chosen when the world was made, never zero.
+	PendingAction.TotalTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Terraforming, PendingAction.TotalTime);
+	// A developer's shortcut (MO.Dev.TerraformSeconds), only while the world's host is in developer mode.
+	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] developer mode: %.1f s instead of the simulated %.1f s (MO.Dev.TerraformSeconds 0 = simulated)"), DevSeconds,
+			PendingAction.TotalTime);
+		PendingAction.TotalTime = DevSeconds;
 	}
 
 	// Subscribe to the owner's interrupt broadcast. Movement, damage, etc.
@@ -933,7 +1021,7 @@ void UMOTerraformingComponent::CancelTerraform()
 	if (PendingAction.AppliedSteps > 0)
 	{
 		RegisterTerraformZone();
-		if (PendingAction.Mode == EMOTerraformMode::Dig)
+		if (PendingAction.Mode == EMOTerraformMode::Dig || (PendingAction.Mode == EMOTerraformMode::Flatten && !PendingAction.bFlattenFill))
 		{
 			GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);   // the earth already moved is in the pile
 		}
@@ -1060,6 +1148,10 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 	if (bSuccess)
 	{
 		RegisterTerraformZone();
+		if (PendingAction.Mode == EMOTerraformMode::Flatten && LastFlattenSpoilM3 > 0.0f)
+		{
+			GrantDigYield(LastFlattenSpoilM3, /*bSlab=*/true);   // a joiner's flatten applied here, with no low ground in the brush: spoil
+		}
 		if (PendingAction.Mode == EMOTerraformMode::Dig)
 		{
 			// The atomic dig (a volume sphere into a wall, or a joiner's dig applied here): its whole volume at once. A sphere dug into a surface takes
@@ -1081,11 +1173,20 @@ void UMOTerraformingComponent::GrantDigYield(float VolumeM3, bool bSlab)
 	{
 		return;
 	}
+	// Whole items only: the part of an item's worth of earth a dig leaves over (an interrupted dig's few litres) is carried to this pawn's next dig,
+	// not lost -- earth is conserved (Docs/Terraform_Excavation_Plan.md).
+	const float WithCarry = VolumeM3 + DigYieldCarryM3;
 	TArray<FMOItemYield> Yields;
-	if (!FMOGeologyYield::ForDigInWorld(this, PendingAction.TargetLocation, Config.Radius, VolumeM3, ExcavationItemsPerCubicMeter, bSlab, ExcavationSpoilItemId, Yields))
+	if (!FMOGeologyYield::ForDigInWorld(this, PendingAction.TargetLocation, Config.Radius, WithCarry, ExcavationItemsPerCubicMeter, bSlab, ExcavationSpoilItemId, Yields))
 	{
-		Yields.Add({ ExcavationSpoilItemId, SpoilItemsForVolume(VolumeM3, ExcavationItemsPerCubicMeter), true });   // no world seed: plain earth
+		Yields.Add({ ExcavationSpoilItemId, SpoilItemsForVolume(WithCarry, ExcavationItemsPerCubicMeter), true });   // no world seed: plain earth
 	}
+	int32 Items = 0;
+	for (const FMOItemYield& Y : Yields)
+	{
+		Items += Y.Count;
+	}
+	DigYieldCarryM3 = FMath::Max(0.0f, WithCarry - Items / FMath::Max(ExcavationItemsPerCubicMeter, 1.0f));
 	// The soil stays beside the hole as a spoil pile (earth is conserved, and a dig would otherwise fill the pack with dirt in a few strokes); stone and ore go to
 	// the pack, the rest on the pile too when it is full. (The excavation job hauls its earth to a fill instead -- see AMOSurvivorController.)
 	TArray<FMOItemYield> Soil, Kept;
@@ -1107,6 +1208,15 @@ void UMOTerraformingComponent::RegisterTerraformZone()
 	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
 	{
 		TerrainMod->RegisterModifiedZone(PendingAction.TargetLocation, Config.Radius);
+		if (PendingAction.Mode == EMOTerraformMode::Flatten && PendingAction.AppliedSteps > 0)
+		{
+			// The incremental bite worked its own two spots (a bite at the brush's edge reaches a brush further than the centre's zone).
+			TerrainMod->RegisterModifiedZone(PendingAction.FlattenDigPoint, Config.Radius);
+			if (PendingAction.bFlattenFill)
+			{
+				TerrainMod->RegisterModifiedZone(PendingAction.FlattenFillPoint, Config.Radius);
+			}
+		}
 
 		// Immediate sweep: catches any foliage currently in radius and any PCG
 		// instances that PCG already had on the ground before the player got
@@ -1130,11 +1240,10 @@ void UMOTerraformingComponent::RegisterTerraformZone()
 
 bool UMOTerraformingComponent::IsIncrementalTerraformMode(EMOTerraformMode Mode) const
 {
-	// Only the height-sculpt dig/raise path carries a fractionable Strength.
-	// Volume-sphere sculpts are all-or-nothing, and flatten/smooth converge to a
-	// target rather than accumulating — those stay atomic-at-completion.
+	// Only the height-sculpt dig/raise path -- and a flatten's bite, a dig and a raise -- carries a fractionable Strength.
+	// Volume-sphere sculpts are all-or-nothing, and smooth converges rather than accumulating — those stay atomic-at-completion.
 	return !bUseVolumeSculpting
-		&& (Mode == EMOTerraformMode::Dig || Mode == EMOTerraformMode::Raise);
+		&& (Mode == EMOTerraformMode::Dig || Mode == EMOTerraformMode::Raise || Mode == EMOTerraformMode::Flatten);
 }
 
 void UMOTerraformingComponent::ApplyTerraformHeightIncrement(int32 TotalSteps)
@@ -1144,8 +1253,13 @@ void UMOTerraformingComponent::ApplyTerraformHeightIncrement(int32 TotalSteps)
 	{
 		return;
 	}
-	const FVector2D Loc(PendingAction.TargetLocation.X, PendingAction.TargetLocation.Y);
 	const float StepStrength = Config.RaiseLowerStrength / static_cast<float>(TotalSteps);
+	if (PendingAction.Mode == EMOTerraformMode::Flatten)
+	{
+		PendingAction.DugVolumeM3 += ApplyFlattenStep(PendingAction.FlattenDigPoint, PendingAction.FlattenFillPoint, PendingAction.bFlattenFill, StepStrength);
+		return;
+	}
+	const FVector2D Loc(PendingAction.TargetLocation.X, PendingAction.TargetLocation.Y);
 	const bool bAdd = (PendingAction.Mode == EMOTerraformMode::Raise);
 	MOVoxel::HeightSculpt(Actor, Loc, Config.Radius, StepStrength, bAdd);
 }
@@ -1231,3 +1345,31 @@ void UMOTerraformingComponent::NotifyInterrupt_Implementation(const FMOInterrupt
 		break;
 	}
 }
+
+bool UMOTerraformingComponent::HasRockOverhead(const FVector& At) const
+{
+	// In a cave: the generator's cave field a metre over the aimed spot (tunnels, caverns, the sinkholes that reach the ground). No collision
+	// needed -- a cave's roof can be 60 m of rock thick, and the top of that hill is beyond the collision built round the pawn (Nov 1: in a cave
+	// 60 m down the collision trace below found nothing and the dig began).
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished()
+		&& FMOWorldGen::SampleCaveDistanceCm(*FMOWorldGenParamsProvider::Get(), At.X, At.Y, At.Z + 100.0, Seeds->GetActiveTerrainSeed()) < 0.0f)
+	{
+		return true;
+	}
+	// Under any other rock (an overhang, a wall the spot is on): the topmost voxel surface over the point's column, from 50 m up to half a metre
+	// over it -- on open ground the column is air down to the point.
+	FHitResult Above;
+	return MOSpawnClearance::TraceVoxelGround(GetWorld(), At.X, At.Y, At.Z + 5000.0f, At.Z + 50.0f, GetOwner(), Above);
+}
+
+void UMOTerraformingComponent::NotifyOwner(const FText& Message) const
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
+	{
+		PC->ClientShowNotification(Message, 3.0f, EMONotificationType::Warning);
+	}
+}
+
+#undef LOCTEXT_NAMESPACE

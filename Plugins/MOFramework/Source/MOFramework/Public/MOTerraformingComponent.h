@@ -210,6 +210,12 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
 	float DugVolumeM3 = 0.0f;
 
+	/** Flatten: the bite of this action (UMOTerraformingComponent::FindFlattenBite) -- the high ground it cuts and, when there is low ground under
+	 *  the target in the brush, where that earth goes (bFlattenFill; else it is spoil). */
+	FVector FlattenDigPoint = FVector::ZeroVector;
+	FVector FlattenFillPoint = FVector::ZeroVector;
+	bool bFlattenFill = false;
+
 	void Reset()
 	{
 		bActive = false;
@@ -221,6 +227,9 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 		TotalTime = 5.0f;
 		AppliedSteps = 0;
 		DugVolumeM3 = 0.0f;
+		FlattenDigPoint = FVector::ZeroVector;
+		FlattenFillPoint = FVector::ZeroVector;
+		bFlattenFill = false;
 	}
 
 	float GetProgress01() const
@@ -534,12 +543,26 @@ public:
 	 * Perform a flatten operation at the given target height. Callers
 	 * (TerraformAtLocation, BeginTerraform/ApplyPendingTerraform) resolve
 	 * the target Z before invoking this — see Config.bUseCharacterFeetForFlatten.
+	 * One flatten is one bite (FindFlattenBite + ApplyFlattenStep): the brush's own earth off the high ground onto the low, never the voxel plugin's
+	 * flatten sculpt, which levelled the whole brush to the target at once -- metres of earth cut and filled in one action, none of it accounted
+	 * for (BR1101, Nov 1: "the flatten function is very potent"; Docs/Terraform_Excavation_Plan.md: "Flatten = paired Dig-high + Fill-low ops").
 	 * @param WorldLocation The world position to center the brush on.
 	 * @param TargetHeight  The Z value to flatten to.
-	 * @return True if flatten was initiated.
+	 * @return True if flatten was initiated (false: nothing in the brush stands over the target).
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
 	bool Flatten(const FVector& WorldLocation, float TargetHeight = 0.0f);
+
+	/**
+	 * One bite of levelling toward TargetZ in the brush round Center: the highest ground more than the level tolerance over TargetZ (OutDig) and the
+	 * lowest ground under it (OutFill, bOutFill) -- UMODesignationSubsystem::FindBitePoint over a transient flatten zone, as the colony's flatten
+	 * jobs find theirs. False when nothing in the brush stands over the target: there is nothing to cut, and filling needs earth brought.
+	 */
+	bool FindFlattenBite(const FVector& Center, float TargetZ, FVector& OutDig, FVector& OutFill, bool& bOutFill) const;
+
+	/** Cut Strength of the brush's earth at DigAt and lay the same at FillAt (bFill): one sculpt each way, so the earth balances by construction.
+	 *  Returns the m3 cut. Authority only (the caller checks). */
+	float ApplyFlattenStep(const FVector& DigAt, const FVector& FillAt, bool bFill, float Strength);
 
 	/**
 	 * Perform a smooth operation.
@@ -613,6 +636,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
 	bool FindTerraformTarget(FVector& OutLocation, FVector& OutNormal) const;
 
+	/** Is there terrain over this point (a cave's roof, an overhang, the rest of a wall it is on)? The height sculpt would work that surface, not the
+	 *  point: BeginTerraform refuses there (BR1101-7). Voxel terrain only (a canopy or a roof is no rock). */
+	bool HasRockOverhead(const FVector& At) const;
+
+	/** A line on the owning player's screen (why an action was refused); nothing for a pawn no player controls. */
+	void NotifyOwner(const FText& Message) const;
+
 	/**
 	 * Auto-find sculpt actors in the world.
 	 * Call this if sculpt actors aren't set manually.
@@ -656,6 +686,12 @@ private:
 	/** Server: world time of this pawn's last accepted ServerApplyTerraform (-1 = none yet); the next one must wait 80 % of TerraformDurationSeconds. */
 	double LastServerTerraformTime = -1.0;
 
+	/** Earth dug but not yet a whole spoil item (m3): the next dig's yield starts from it (GrantDigYield). */
+	float DigYieldCarryM3 = 0.0f;
+
+	/** The last atomic Flatten's cut earth with no low ground to take it (m3): spoil for the caller to put on the pile (ApplyPendingTerraform). */
+	float LastFlattenSpoilM3 = 0.0f;
+
 	bool ResolveViewpoint(FVector& OutLocation, FRotator& OutRotation) const;
 
 	/** Register a successful sculpt as worked ground (zone + immediate sweep).
@@ -667,7 +703,6 @@ private:
 	// Height sculpting operations
 	bool HeightDig(const FVector2D& Location);
 	bool HeightRaise(const FVector2D& Location);
-	bool HeightFlatten(const FVector2D& Location, float TargetHeight);
 	bool HeightSmooth(const FVector2D& Location);
 
 	// Volume sculpting operations
