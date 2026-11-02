@@ -14,6 +14,7 @@ Laws) also apply; where this file differs, this file wins for MO57 (e.g. commits
 | add any instant / auto / fast mode or change a duration | Principle 11 + the tedium rule (below) |
 | pause anything | don't: `Docs/PAUSE_POLICY.md` (`AMOPlayerController::SetPause` refuses) |
 | add or change an item, recipe, station or knowledge | `Docs/PROGRESSION_ROADMAP.md` first (the design authority), then `ue.py rows set` |
+| put an item in a hand, or change how one is held | `Docs/Held_Grip.md`: measure its handle (`held_grip.measure_all`), never hand-tune a held transform; check every base (`Tools/check_grip.py`) |
 | edit a DataTable or CSV | `Docs/TOOLING.md` §4: live tables via `python Tools/ue.py rows set` (readback-verified); CSVs only via `Tools/ue_csv_utils.py`, never by hand |
 | compile C++ | close the editor (`python Tools/ue.py editor stop`), announce the window in `claude-codex-coop.md`; `python Tools/check_unity_collisions.py` before committing new .cpp |
 | edit engine source | the engine is a launcher install: stage the fix in `Docs/Engine_Patches.md` |
@@ -152,6 +153,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
 | Progression design (authority) / crafting code | `Docs/PROGRESSION_ROADMAP.md` / `Docs/Crafting_And_Progression.md` |
 | Technology history (research) | `Docs/Technology_History.md` |
 | Item art and icons | `Docs/Item_Art_Pipeline.md` |
+| Held items: how every body's hand grips them | `Docs/Held_Grip.md` |
 | Building / terraform and excavation | `Docs/Building.md` / `Docs/Terraform_Excavation_Plan.md` |
 | AI, survivors, colony | `Docs/AI_And_Colony.md` |
 | Co-op, sessions, RPC, interaction | `Docs/Coop_And_Networking.md` |

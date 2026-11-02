@@ -1,4 +1,8 @@
-"""Fit a held tool to the right hand from the hand bones, instead of nudging RightHandTransform numbers by eye.
+"""SUPERSEDED Nov 2 2026 by held_grip.py (Docs/Held_Grip.md): an item now gives its handle (GripStyle / GripTransform / GripHalfSize) and
+every body's own hand seats it, so no held transform is fitted on one body any more. Kept for Docs/Item_Art_Pipeline.md section 8 step 6,
+which still names it.
+
+Fit a held tool to the right hand from the hand bones, instead of nudging RightHandTransform numbers by eye.
 
     (PIE running, the tool equipped in the right hand)
     python Tools/ue.py py -c "import importlib, held_grip_fit as h; importlib.reload(h); h.fit(world, out, -19.0, 0.0, 5.6)"

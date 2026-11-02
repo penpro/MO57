@@ -1,5 +1,9 @@
 """Where a held bow sits in the survivor's left hand (Nov 2 2026), from her full draw: Sparrow's RMB_Loop on the MetaHuman.
 
+Since the held-item standard (Docs/Held_Grip.md, later on Nov 2) every body seats a bow from its own hand (held_grip.bow_grip writes a bow's
+row); this fit is how Femme's seat -- the standard's Power constants (held_grip.derive_standard) -- was measured. Hand(mesh=...) evaluates the
+clip on any base's body.
+
     python Tools/ue.py py -c "import bow_hand_fit as f; out(f.fit('<draw clip>', grip=(1.85, 2.15, 4.7)))"
 
 The bow (Tools/blender_items_blender.py) has its grip centre at the root, its handle along +Z, its draw along +Y (the clip's nocking-point
@@ -102,12 +106,16 @@ def _tq(t):
 class Hand:
     """Her left hand at the full draw: the fingers' parents as animated, each finger's open (reference) and fist (the clip) local joints."""
 
-    def __init__(self, clip=CLIP, t=CLIP_T, side="l"):
+    def __init__(self, clip=CLIP, t=CLIP_T, side="l", mesh=None):
+        """mesh: a body (a survivor base's SkeletalMesh or its path): the clip on its proportions and its own open hand, as in game."""
         anim = unreal.load_asset(clip)
-        pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(anim, t, unreal.AnimPoseEvaluationOptions())
-        ref = unreal.AnimPoseExtensions.get_reference_pose(anim.get_editor_property("skeleton"))
+        opts = unreal.AnimPoseEvaluationOptions()
+        if mesh:
+            opts.set_editor_property("optional_skeletal_mesh", unreal.load_asset(mesh) if isinstance(mesh, str) else mesh)
+        pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(anim, t, opts)
         W, L = unreal.AnimPoseSpaces.WORLD, unreal.AnimPoseSpaces.LOCAL
         get = lambda p, b, sp: _tq(unreal.AnimPoseExtensions.get_bone_pose(p, b, sp))
+        ref = lambda b: _tq(unreal.AnimPoseExtensions.get_ref_bone_pose(pose, b, L))   # the body's reference pose (the open hand)
         self.pose = pose
         self.at = lambda b: get(pose, b, W)[1]
         self.chains = {}
@@ -116,7 +124,7 @@ class Hand:
             j01, l01 = get(pose, names[0], W), get(pose, names[0], L)
             pq = _qmul(j01[0], (-l01[0][0], -l01[0][1], -l01[0][2], l01[0][3]))   # the parent: the 01's world over its local
             parent = (pq, _sub(j01[1], _qrot(pq, l01[1])))
-            self.chains[f] = (parent, [get(ref, n, L) for n in names], [get(pose, n, L)[0] for n in names])
+            self.chains[f] = (parent, [ref(n) for n in names], [get(pose, n, L)[0] for n in names])
         self.palm = [(self.at("%s_metacarpal_%s" % (f, side)), self.at("%s_01_%s" % (f, side))) for f in FINGERS[1:]]
         self.hand = get(pose, "hand_" + side, W)
 

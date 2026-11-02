@@ -230,6 +230,21 @@ enum class EMOEquipmentSlotType : uint8
 	Held UMETA(DisplayName="Held (Left/Right Hand)"),
 };
 
+/**
+ * How a hand holds an item (Docs/Held_Grip.md; Nov 2 2026, Wes: "make sure it works on the other metahumans and make sure we have a standard
+ * for how they grip other items"). The style picks where the handle sits in each body's own hand and the shape the fingers close on.
+ */
+UENUM(BlueprintType)
+enum class EMOGripStyle : uint8
+{
+	/** Not gripped: the item hangs at RightHandTransform / LeftHandTransform, the fingers as animated. */
+	None,
+	/** A handle across the palm along the knuckles, the fingers round it, the thumb over (tools, weapons, a torch, a bow): an elliptic cylinder. */
+	Power,
+	/** Something round in the palm, the fingers over it (a stone, an apple): an ellipsoid. */
+	Sphere,
+};
+
 USTRUCT(BlueprintType)
 struct MOFRAMEWORKCORE_API FMOItemUIVisual
 {
@@ -301,17 +316,39 @@ struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 	TSoftObjectPtr<UAnimSequence> DrawAnimation;
 
 	/**
-	 * The handle the holding hand closes on (Nov 2 2026, Wes: "her fingers are back to being all fucked up"): an elliptic cylinder on the held
-	 * mesh's origin along its Z -- X its half-width, Y its half-depth (a bow's: along the draw), Z its half-length, cm, any wrap included. Each
-	 * finger bends from the open hand toward GripPose's fist until a phalanx touches it, whatever the body's animation does with the fingers
-	 * (UMOBodyRetargetAnimInstance). Zero: the hand keeps the animation's fingers.
+	 * How the hand holds it (Docs/Held_Grip.md). Not None: the item sits where its handle belongs in THIS body's hand, worked out from the
+	 * body's own hand bones on every base (FMOHandGrip::Seat, AMOCharacter), RightHandTransform / LeftHandTransform are not used, and the
+	 * fingers close on the handle in every clip (UMOBodyRetargetAnimInstance). Needs GripTransform, GripHalfSize and GripPose
+	 * (Content/Python/held_grip.py measures the first two from the mesh and writes all of them).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	EMOGripStyle GripStyle = EMOGripStyle::None;
+
+	/**
+	 * The handle in the held mesh's space (cm as held, so at WorldVisual's scale): its origin the middle of the part the hand closes on, +Z
+	 * along it toward the item's head (the fist's index and thumb side), +X the way the item faces out of the front of the fist (an axe's
+	 * edge, a hammer's face, a bow's back). A Sphere's axes: Z its longest, Y its thinnest (against the palm).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	FTransform GripTransform = FTransform::Identity;
+
+	/** Where the centre of the hand closes on the handle, from GripTransform's origin along its +Z (cm): 0 the handle's middle; a bow's +2,
+	 *  the hand high on the grip under the arrow pass (where Sparrow's hand holds her bow), its thumb past the grip's top. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	float GripHandOffset = 0.0f;
+
+	/**
+	 * The handle's size (cm, half each way, any wrap included) in GripTransform's axes: a Power grip's elliptic cylinder -- X its half-width,
+	 * Y its half-depth, Z its half-length; a Sphere's ellipsoid. Each finger bends from the open hand toward full flexion until a phalanx
+	 * touches it (FMOHandGrip::Wrap).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	FVector GripHalfSize = FVector::ZeroVector;
 
 	/**
-	 * The fist the fingers close toward: GripPose's LEFT hand at GripPoseTime, for either hand (the MetaHuman's left and right finger bones
-	 * are mirrored, so the same local rotations close both). A bow: Sparrow's full draw (/MOFramework/Characters/Bow/RMB_Loop_MH).
+	 * The fist: GripPose's LEFT hand at GripPoseTime, for either hand (the MetaHuman's left and right hand bones are mirrored, so the same
+	 * local rotations close both). It sets the way each finger joint flexes (the fingers go on past it to their full flexion) and the palm
+	 * the seat is measured in. The standard: Sparrow's full draw (/MOFramework/Characters/Bow/RMB_Loop_MH at 0.33), a power grip.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	TSoftObjectPtr<UAnimSequence> GripPose;
@@ -326,7 +363,7 @@ struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	bool bMirrorForLeftHand = true;
 
-	/** Transform offset for right hand. Position/rotation relative to hand socket. */
+	/** Transform offset for right hand. Position/rotation relative to hand socket. Only with GripStyle None (a grip seats it from the hand). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	FTransform RightHandTransform = FTransform::Identity;
 

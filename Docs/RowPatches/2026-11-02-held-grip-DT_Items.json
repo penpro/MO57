@@ -1,0 +1,1096 @@
+{
+ "Adze01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.17,
+    "Y": 1.25,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.10234092374352105,
+     "X": 0.7019707862168542,
+     "Y": 0.10423447017983431,
+     "Z": 0.6970642193168027
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -22.627829183843787,
+     "Y": -0.6011106658060579,
+     "Z": 1.3308070756343642
+    }
+   }
+  }
+ },
+ "Apple01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 3.76,
+    "Y": 3.86,
+    "Z": 3.97
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Sphere",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.9919039591855571,
+     "X": -0.0451235271229952,
+     "Y": 0.030621444906208457,
+     "Z": -0.11468535287408489
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.046874919773086735,
+     "Y": 0.03468412493383975,
+     "Z": 0.03180938586871018
+    }
+   }
+  }
+ },
+ "Atlatl01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.02,
+    "Y": 1.06,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.10056717839250909,
+     "X": 0.7012924490326804,
+     "Y": 0.09919030431876424,
+     "Z": 0.6987391695683487
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -24.510884366530973,
+     "Y": -0.5188705127183024,
+     "Z": 1.1494124087468236
+    }
+   }
+  }
+ },
+ "BowDrill01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.21,
+    "Y": 0.93,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.543392981488955,
+     "X": 0.5471784344755236,
+     "Y": 0.4487085858647687,
+     "Z": 0.4516419306095251
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -25.21240221512806,
+     "Y": -13.096487537207544,
+     "Z": 1.0929504851961664
+    }
+   }
+  }
+ },
+ "BronzeShield01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.4,
+    "Y": 1.4,
+    "Z": 5.5
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.02899269956397046,
+     "X": 0.7068260578978861,
+     "Y": 0.023692706665562707,
+     "Z": 0.7063957834665968
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0.7439911055223781,
+     "Y": 0.4733042608372039,
+     "Z": -2.295584987731057
+    }
+   }
+  }
+ },
+ "BronzeSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.35,
+    "Y": 1.25,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.6898110712844769,
+     "X": -0.1719830989195282,
+     "Y": 0.6820184755478949,
+     "Z": -0.17156135529519348
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -34.80841707818172,
+     "Y": 0.4052205960935326,
+     "Z": 1.2097947751541063
+    }
+   }
+  }
+ },
+ "BronzeSword01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.72,
+    "Y": 1.45,
+    "Z": 4.75
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.4895162884609274,
+     "X": 0.4847023522139989,
+     "Y": 0.5162966954503143,
+     "Z": -0.5087977548660568
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 23.195558324627235,
+     "Y": 0.19866881744644058,
+     "Z": 1.5368392212414907
+    }
+   }
+  }
+ },
+ "CompositeBow01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.15,
+    "Y": 1.85,
+    "Z": 5.0
+   },
+   "GripHandOffset": 1.611,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7071067811865476,
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": -0.7071067811865476
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0,
+     "Y": 0,
+     "Z": 0
+    }
+   }
+  }
+ },
+ "CookedMeat01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 6.2,
+    "Y": 5.71,
+    "Z": 8.82
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Sphere",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.2773642636636572,
+     "X": 0.7713903273665689,
+     "Y": -0.14764542682040313,
+     "Z": 0.5533776793715445
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 1.9464111719703534,
+     "Y": 1.3764567689463494,
+     "Z": 0.45163516351041955
+    }
+   }
+  }
+ },
+ "CrudeChopper01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 3.71,
+    "Y": 2.28,
+    "Z": 4.09
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Sphere",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7821953981563455,
+     "X": -0.6021854764759373,
+     "Y": 0.019286324224453612,
+     "Z": -0.15865386450507182
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0.056910125376418305,
+     "Y": 0.08147570375835589,
+     "Z": -0.4125868187816535
+    }
+   }
+  }
+ },
+ "CrudeClub01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 3.3,
+    "Y": 3.74,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7687376618137949,
+     "X": -0.0388481378060016,
+     "Y": 0.6358576585933104,
+     "Z": -0.056729776187629075
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -21.866078104828528,
+     "Y": 1.3912369379059129,
+     "Z": 0.5680067675002621
+    }
+   }
+  }
+ },
+ "DropSpindle01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 0.6,
+    "Y": 0.6,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.39764556451494626,
+     "X": 0.5975744767362635,
+     "Y": -0.3889200896770234,
+     "Z": 0.5775152929755079
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -10.634638457228784,
+     "Y": 0.04597586384397263,
+     "Z": 0.38099312242743805
+    }
+   }
+  }
+ },
+ "FireDrill01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.01,
+    "Y": 0.99,
+    "Z": 25.22
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.022275355631668832,
+     "X": -0.001643862575250842,
+     "Y": 0.9996902681915529,
+     "Z": -0.010976061698866946
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 8.241717398461123,
+     "Y": 0.6942534033034092,
+     "Z": 20.738774448369913
+    }
+   }
+  }
+ },
+ "FireHardenedSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 5.02,
+    "Y": 4.58,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7214325848842992,
+     "X": -0.12903388064104085,
+     "Y": 0.6685800722709359,
+     "Z": -0.12603955758436527
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -39.39488715369351,
+     "Y": 1.1164629751868662,
+     "Z": 4.956249854777083
+    }
+   }
+  }
+ },
+ "FishSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.23,
+    "Y": 1.08,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.6762751467823015,
+     "X": -0.23023502631873033,
+     "Y": 0.6615455931241175,
+     "Z": -0.22803768705775274
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -34.255036858961404,
+     "Y": 0.37695090750973226,
+     "Z": 1.0475491609898036
+    }
+   }
+  }
+ },
+ "FlintSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.34,
+    "Y": 1.23,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.701204977973565,
+     "X": -0.14284098131212594,
+     "Y": 0.6839817270849134,
+     "Z": -0.1416934364634445
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -37.309005237863815,
+     "Y": 0.41292645532818995,
+     "Z": 1.173073264300419
+    }
+   }
+  }
+ },
+ "HaftedAxe01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.19,
+    "Y": 1.26,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.06625258331970871,
+     "X": 0.7055258486647412,
+     "Y": 0.06444136605351057,
+     "Z": 0.702631612162817
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -25.77481593429676,
+     "Y": -0.6211185530980765,
+     "Z": 1.3413985898155691
+    }
+   }
+  }
+ },
+ "Hammerstone01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 5.41,
+    "Y": 3.52,
+    "Z": 5.63
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Sphere",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.6514331429437606,
+     "X": -0.6839549527124095,
+     "Y": -0.133487441110091,
+     "Z": 0.3000359745104907
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0.24940676172003898,
+     "Y": 0.41515660428619205,
+     "Z": -0.38178676582349214
+    }
+   }
+  },
+  "worldVisual": {
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 0.4,
+     "Y": 0.4,
+     "Z": 0.4
+    }
+   }
+  }
+ },
+ "IronAxe01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.24,
+    "Y": 1.27,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.47659723809843646,
+     "X": -0.5074175474215658,
+     "Y": -0.5011383700994168,
+     "Z": 0.5140455614240097
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 11.831949757219945,
+     "Y": -4.786274658236164,
+     "Z": 0.04635766849322958
+    }
+   }
+  }
+ },
+ "IronShield01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.4,
+    "Y": 1.4,
+    "Z": 5.5
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.023788272197765567,
+     "X": 0.7046156706930538,
+     "Y": -0.023601409826347758,
+     "Z": 0.7087974662580503
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.09992200885879937,
+     "Y": -0.6241447548016321,
+     "Z": 4.914370859394869
+    }
+   }
+  }
+ },
+ "IronSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.39,
+    "Y": 1.3,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.5161560056731034,
+     "X": 0.49104762572730704,
+     "Y": 0.50752815641882,
+     "Z": 0.484634271917779
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -33.308387261387495,
+     "Y": 0.39389342468503213,
+     "Z": 1.2260804550592812
+    }
+   }
+  }
+ },
+ "IronSword01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.13,
+    "Y": 1.78,
+    "Z": 5.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.5587742677133533,
+     "X": -0.4183806913295913,
+     "Y": -0.5777345134088424,
+     "Z": 0.4230268867107944
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 34.60043457169717,
+     "Y": 0.07424057651948006,
+     "Z": 3.2795051859057436
+    }
+   }
+  }
+ },
+ "PolishedAxe01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.19,
+    "Y": 1.26,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.07557556691909878,
+     "X": 0.7046067629367517,
+     "Y": 0.07379515976044836,
+     "Z": 0.7016921815900323
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -25.775874211643703,
+     "Y": -0.6211184147230561,
+     "Z": 1.3414045036513904
+    }
+   }
+  }
+ },
+ "SimpleBow01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.05,
+    "Y": 1.75,
+    "Z": 5.5
+   },
+   "GripHandOffset": 1.611,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7071067811865476,
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": -0.7071067811865476
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0,
+     "Y": 0,
+     "Z": 0
+    }
+   }
+  }
+ },
+ "SinewBackedBow01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.87,
+    "Y": 1.82,
+    "Z": 5.0
+   },
+   "GripHandOffset": 1.611,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7071067811865476,
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": -0.7071067811865476
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 0,
+     "Y": 0,
+     "Z": 0
+    }
+   }
+  }
+ },
+ "SmithHammer01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.21,
+    "Y": 0.98,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.5035699907844452,
+     "X": -0.4959746717347437,
+     "Y": -0.5066990768052968,
+     "Z": 0.4936420109184661
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 11.75169941035251,
+     "Y": -0.114180298223097,
+     "Z": -0.045034914018814674
+    }
+   }
+  }
+ },
+ "SmithTongs01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.58,
+    "Y": 2.43,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.5408632756885751,
+     "X": 0.5529378273530815,
+     "Y": -0.45733755026746953,
+     "Z": 0.43882689207571157
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.22004513722384877,
+     "Y": 39.78848008715405,
+     "Z": 1.6297764491036286
+    }
+   }
+  }
+ },
+ "SteelSword01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.88,
+    "Y": 1.63,
+    "Z": 4.75
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.9977900244720016,
+     "X": 0.008290173967236582,
+     "Y": 0.00014485110811183387,
+     "Z": 0.06592661903898876
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.1682277459675991,
+     "Y": 0.07505131552901817,
+     "Z": -35.25658879653661
+    }
+   }
+  }
+ },
+ "StoneHoe01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.11,
+    "Y": 1.3,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.08386087848069024,
+     "X": 0.7120034498852924,
+     "Y": 0.07767507492403995,
+     "Z": 0.6928095143309118
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -53.24762236709608,
+     "Y": -0.07701529283722185,
+     "Z": 1.2471597656622584
+    }
+   }
+  }
+ },
+ "StoneMaul01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.52,
+    "Y": 2.31,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.3204915189918393,
+     "X": 0.6661115968705232,
+     "Y": -0.3100774657865908,
+     "Z": 0.5978565814476502
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -20.267763079745418,
+     "Y": 0.26594263007125274,
+     "Z": 5.63241539757851
+    }
+   }
+  }
+ },
+ "StoneScraper01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 3.81,
+    "Y": 1.05,
+    "Z": 6.38
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Sphere",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.5962827675854193,
+     "X": 0.5746046727623982,
+     "Y": 0.40917365311058623,
+     "Z": 0.3832143691466016
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.48715542902449804,
+     "Y": -0.8757720747606447,
+     "Z": 0.08063361933789523
+    }
+   }
+  }
+ },
+ "StoneSickle01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.82,
+    "Y": 2.91,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.43566024183200175,
+     "X": 0.40769926782962096,
+     "Y": 0.58575574294864,
+     "Z": -0.5485177028143755
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": 14.24587056138934,
+     "Y": 2.50070430383129,
+     "Z": 2.867109107093138
+    }
+   }
+  }
+ },
+ "Torch01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 2.25,
+    "Y": 1.83,
+    "Z": 5.25
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": -0.3386688477893529,
+     "X": 0.6960894587602222,
+     "Y": -0.2361505291343049,
+     "Z": 0.5873634347910338
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -24.523495120256147,
+     "Y": -6.016150272618708,
+     "Z": 1.7289412747085051
+    }
+   }
+  }
+ },
+ "WoodenShield01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 1.4,
+    "Y": 1.4,
+    "Z": 5.5
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.6938509279644873,
+     "X": 0.1379415254968186,
+     "Y": 0.6931088358925435,
+     "Z": -0.13835883388534947
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -0.504848173946606,
+     "Y": 0.09652984039006862,
+     "Z": 13.543115921278645
+    }
+   }
+  }
+ },
+ "WoodenSpear01": {
+  "heldVisual": {
+   "GripHalfSize": {
+    "X": 5.02,
+    "Y": 4.58,
+    "Z": 40.0
+   },
+   "GripHandOffset": 0.0,
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33,
+   "GripStyle": "Power",
+   "GripTransform": {
+    "Rotation": {
+     "W": 0.7214325848842992,
+     "X": -0.12903388064104085,
+     "Y": 0.6685800722709359,
+     "Z": -0.12603955758436527
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    },
+    "Translation": {
+     "X": -39.39488715369351,
+     "Y": 1.1164629751868662,
+     "Z": 4.956249854777083
+    }
+   }
+  }
+ }
+}

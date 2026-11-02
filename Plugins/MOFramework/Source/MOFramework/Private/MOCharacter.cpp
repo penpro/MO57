@@ -19,6 +19,7 @@
 #include "Animation/AnimSequence.h"
 #include "MOBodyRetargetAnimInstance.h"
 #include "MOBowMeshComponent.h"
+#include "MOHandGrip.h"
 #include "Retargeter/IKRetargeter.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
@@ -639,6 +640,15 @@ void AMOCharacter::Tick(float DeltaTime)
 	UpdateDriverHold();
 	UpdateTraversalAnimation(DeltaTime);
 	UpdateClimbAnimation(DeltaTime);
+
+	// A held item stays seated in the body's own hand: a new body (another base) re-seats it
+	for (int32 Hand = 0; Hand < 2; ++Hand)
+	{
+		if (HandGrips[Hand].Handle.IsValid() && GetMesh() && HandGrips[Hand].SeatedOn.Get() != GetMesh()->GetSkeletalMeshAsset())
+		{
+			SeatHandGrip(Hand);
+		}
+	}
 
 	// Check for falling through the world
 	if (bEnableFallThroughSafety)
@@ -3009,7 +3019,7 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 			HandBow->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
 			HandBow->SetRelativeTransform(ItemDef->HeldVisual.GetTransformForHand(EquipSlot == EMOEquipmentSlot::LeftHand));
 			HandBow->SetBow(BowMesh, ItemDef->HeldVisual.DrawAnimation.LoadSynchronous(), GetMesh(), EquipSlot == EMOEquipmentSlot::LeftHand);
-			SetHandGrip(EquipSlot, HandBow, &ItemDef->HeldVisual);
+			SetHandGrip(EquipSlot, HandBow, &ItemDef->HeldVisual, ItemDef->WorldVisual.RelativeTransform.GetScale3D());
 			return;
 		}
 		HandBow->SetBow(nullptr, nullptr, nullptr, false);
@@ -3065,7 +3075,7 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// Ensure it's attached to the correct socket, then its offset (attaching with SnapToTarget resets the relative transform)
 	TargetMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
 	TargetMesh->SetRelativeTransform(Offset);
-	SetHandGrip(EquipSlot, TargetMesh, &ItemDef->HeldVisual);
+	SetHandGrip(EquipSlot, TargetMesh, &ItemDef->HeldVisual, ItemDef->WorldVisual.RelativeTransform.GetScale3D());
 
 	TargetMesh->SetVisibility(true);
 	if (EquipSlot == EMOEquipmentSlot::Head)
@@ -3092,21 +3102,65 @@ UMOBowMeshComponent* AMOCharacter::GetHeldBow() const
 	return nullptr;
 }
 
-void AMOCharacter::SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual)
+void AMOCharacter::SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual, const FVector& HeldScale)
 {
 	if (EquipSlot != EMOEquipmentSlot::LeftHand && EquipSlot != EMOEquipmentSlot::RightHand)
 	{
 		return;
 	}
 	const int32 Hand = EquipSlot == EMOEquipmentSlot::LeftHand ? 0 : 1;
-	UAnimSequence* Fist = Handle && Visual && Visual->GripHalfSize.GetMin() > 0.0f && !Visual->GripPose.IsNull() ? Visual->GripPose.LoadSynchronous() : nullptr;
+	const bool bGrip = Handle && Visual && Visual->GripStyle != EMOGripStyle::None;
+	UAnimSequence* Fist = bGrip && Visual->GripHalfSize.GetMin() > 0.0f && !Visual->GripPose.IsNull() ? Visual->GripPose.LoadSynchronous() : nullptr;
 	GripFists[Hand] = Fist;
-	HandGrips[Hand] = Fist ? FHandGrip{Handle, Visual->GripHalfSize, Fist, Visual->GripPoseTime} : FHandGrip();
-	if (Visual && Visual->GripHalfSize.GetMin() > 0.0f && !Fist)
+	HandGrips[Hand] = FHandGrip();
+	if (!Fist)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: the %s hand's item has a grip but its fist (%s) did not load: the fingers stay as animated"),
-			*GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Visual->GripPose.ToString());
+		if (bGrip)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: the %s hand's item has a grip without a handle size or a fist (%s): it hangs at its row's transform, the fingers as animated"),
+				*GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Visual->GripPose.ToString());
+		}
+		return;
 	}
+	FHandGrip& Grip = HandGrips[Hand];
+	Grip.Handle = Handle;
+	Grip.GripTransform = Visual->GripTransform;
+	Grip.HandOffset = Visual->GripHandOffset;
+	Grip.HalfSize = Visual->GripHalfSize;
+	Grip.Style = Visual->GripStyle;
+	Grip.Fist = Fist;
+	Grip.FistTime = Visual->GripPoseTime;
+	Grip.HeldScale = HeldScale;
+	SeatHandGrip(Hand);
+}
+
+void AMOCharacter::SeatHandGrip(int32 Hand)
+{
+	FHandGrip& Grip = HandGrips[Hand];
+	USceneComponent* Handle = Grip.Handle.Get();
+	const USkeletalMesh* Body = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
+	if (!Handle || !Grip.Fist.IsValid() || !Body)
+	{
+		return;
+	}
+	Grip.SeatedOn = Body;   // once per body, whether or not it seats
+	FTransform HandleInHand;
+	FString Why;
+	if (!FMOHandGrip::Seat(Body, Grip.Fist.Get(), Grip.FistTime, Hand == 0, Grip.Style, Grip.HalfSize, Grip.HandOffset, HandleInHand, Grip.HandScale, &Why))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: the %s hand's item cannot be seated (%s): it hangs at its row's transform"),
+			*GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Why);
+		return;
+	}
+	// The mesh round its handle: the handle's frame on the mesh (cm as held) undone, then placed in the hand; the mesh at its real size
+	FTransform GripTransform = Grip.GripTransform;
+	GripTransform.SetScale3D(FVector::OneVector);
+	FTransform MeshInHand = GripTransform.Inverse() * HandleInHand;
+	MeshInHand.SetScale3D(Grip.HeldScale);
+	Handle->SetRelativeTransform(MeshInHand);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: seated %s in the %s hand of %s (hand x%.2f): handle at %s"),
+		*GetName(), *Handle->GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Body->GetName(), Grip.HandScale,
+		*HandleInHand.GetLocation().ToCompactString());
 }
 
 bool AMOCharacter::GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const
@@ -3117,6 +3171,24 @@ bool AMOCharacter::GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const
 		return false;
 	}
 	OutGrip = Grip;
+	return true;
+}
+
+bool AMOCharacter::GetHeldGripShape(bool bLeftHand, FTransform& OutHandleWorld, FVector& OutHalfSize, EMOGripStyle& OutStyle, float& OutHandScale) const
+{
+	FHandGrip Grip;
+	if (!GetHandGrip(bLeftHand, Grip))
+	{
+		return false;
+	}
+	FTransform Item = Grip.Handle->GetComponentTransform();
+	Item.SetScale3D(FVector::OneVector);
+	FTransform GripTransform = Grip.GripTransform;
+	GripTransform.SetScale3D(FVector::OneVector);
+	OutHandleWorld = GripTransform * Item;
+	OutHalfSize = Grip.HalfSize;
+	OutStyle = Grip.Style;
+	OutHandScale = Grip.HandScale;
 	return true;
 }
 
@@ -3160,7 +3232,7 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 	{
 		HandBow->SetBow(nullptr, nullptr, nullptr, false);
 	}
-	SetHandGrip(EquipSlot, nullptr, nullptr);
+	SetHandGrip(EquipSlot, nullptr, nullptr, FVector::OneVector);
 
 	if (TargetMesh)
 	{

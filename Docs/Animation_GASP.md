@@ -223,14 +223,15 @@ the thumb reported, not failed: the MetaHuman's `thumb_01` is its metacarpal, 10
 unaligned, 7-20 aligned. Failing (a known gap, not this fix): the three two-hand thrusts (arms 20-26 deg off: the arm reaches differently in
 their lunge, on top of the 15 cm shallower lunge), `A_2H_Block` (arms 14), the one-hand walk and run (fingers 17).
 
-**A held item in her hand:** each hand closes on what it holds (`UMOBodyRetargetAnimInstance`, after the slot and the climbing IK): the item's
-handle (`FMOItemHeldVisual::GripHalfSize`, an elliptic cylinder on the held mesh's origin) and a fist to close toward (`GripPose`: a bow,
-`RMB_Loop_MH` at 0.33). Every finger bends as a tendon closes it -- all its joints from the open hand (the reference pose) toward the fist until
-a phalanx touches the handle, the joints up to that phalanx stopping, the rest going on -- so a thick handle opens the fist and a thin one
-closes it, in every clip including a walk's loose hand (blended in over 0.15 s). Paragon's bow grip is thin and stylized (Sparrow's fist closes
-on ~2 cm); ours are 3.7-4.3 cm wrapped, so without it her fingers went into the handle. The closing walks each sweep in 16 steps for the first
-touch before it bisects: testing only the closed fist missed a handle that the finger passes clean through (the test caught it; in her bow hand
-the fist always ended inside the handle, so the game had not shown it). Tests: `MOFramework.Animation.HandGrip.*`.
+**A held item in her hand** -- the standard, on every base: `Docs/Held_Grip.md` (Nov 2, Wes: "make sure it works on the other metahumans
+and make sure we have a standard for how they grip other items"). The item gives its handle (`GripStyle` / `GripTransform` / `GripHandOffset` /
+`GripHalfSize`); each body seats it from its own hand bones (`FMOHandGrip::Seat`, on equip and when the base changes) and closes each finger on
+it in every clip, after the slot and the climbing IK (`FMOHandGrip::Wrap`: a tendon's closing from the open hand toward full flexion -- past
+the fist where a bigger hand needs it -- until a phalanx touches). Paragon's bow grip is thin and stylized (Sparrow's fist closes on ~2 cm);
+ours are 3.7-4.3 cm wrapped, so without the closing her fingers went into the handle; with only the fist's own bend, Harvey's (a 29 % bigger
+hand) ended 0.5-1.5 cm off it. The closing walks each sweep in 16 steps for the first touch before it bisects: testing only the closed fist
+missed a handle that the finger passes clean through. A drawn bow also stops a longer arm's drawing hand at the bow's full draw
+(`LimitDraw`: Harvey's draw is 85 cm, the bows' 64). Tests: `MOFramework.Animation.HandGrip.*`.
 
 **The bow in her hands (Nov 2):** the three bows are built in Blender, rigged with their draw (`Docs/Blender_Items.md`), held in her left hand
 (`UMOBowMeshComponent`) with the handle seated in the hollow of her fist where Sparrow's own bow sits, her fingers closed on it (above);

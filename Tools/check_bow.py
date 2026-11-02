@@ -3,17 +3,17 @@ the bow into her left hand, then MO.Test.BowShot draws it with Sparrow's clips o
 slowed down, so screenshots catch each phase from the bow's side; the [MOBow] lines give the string's draw and its distance from her fingers
 every 0.1 s of game time.
 
-    python Tools/check_bow.py [--item SimpleBow01] [--seed 777] [--slomo 0.25] [--keep] [--reuse]
+    python Tools/check_bow.py [--item SimpleBow01] [--base Harvey] [--seed 777] [--slomo 0.25] [--keep] [--reuse]
 
 Prints each phase's string-to-fingers distance and "BOW PASS" when, while nocked, the string stays within 3 cm of the fingers, the release
 brings it back to brace, and her bow hand holds the handle (Nov 2, Wes: "her fingers are back to being all fucked up"): at rest and at full
-draw no finger is more than GRIP_PEN_CM into the handle and each of the four fingers is within GRIP_TOUCH_CM of it (the same capsules and
-handle UMOBodyRetargetAnimInstance closes them on, read off the body). Screenshots: Saved/Screenshots/bow/<item>_*.png, the bow hand close
+draw no finger nor the palm is more than GRIP_PEN_CM into the handle and each of the four fingers is within GRIP_TOUCH_CM of it (the
+handle as the game holds it, AMOCharacter::GetHeldGripShape; FMOHandGrip's capsules read off the body: Tools/check_grip.py). --base: on
+another body (Nov 2: a longer arm than the bow's draw stops at its full draw, so the string stays on the fingers). Screenshots: Saved/Screenshots/bow/<item>_*.png, the bow hand close
 up in <item>_*_grip_*.png. The editor may stay open (the instance builds its own world).
 """
 import argparse
 import glob
-import json
 import os
 import re
 import shutil
@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ue  # noqa: E402
 import ue_inst as ui  # noqa: E402
+import check_grip as cg  # noqa: E402
 
 NAME = "bowcheck"
 SHOTS = os.path.join(ue.ROOT, "Saved", "Screenshots", "bow")
@@ -74,36 +75,6 @@ out('POSE %f %f %f %f %f %f %f %f %f' % (l.x, l.y, l.z, f.x, f.y, f.z, r.x, r.y,
 """
 
 
-# Each finger's nearest approach to the held bow's handle (cm, negative = into it): FMOBodyRetargetAnimInstanceProxy's capsules and handle
-GRIP = """import math
-p = unreal.GameplayStatics.get_player_pawn(world, 0)
-m = p.get_editor_property('mesh')
-T = p.get_held_bow().get_world_transform()
-half = HALF
-R = {'thumb': (1.0, 0.92, 0.8), 'index': (0.85, 0.78, 0.68), 'middle': (0.86, 0.8, 0.7), 'ring': (0.8, 0.74, 0.65), 'pinky': (0.72, 0.66, 0.58)}
-def clear(pt, r):
-    q = T.inverse_transform_location(pt)
-    if abs(q.z) > half[2] + 2.0:
-        return 99.0
-    rn = math.sqrt((q.x / half[0]) ** 2 + (q.y / half[1]) ** 2)
-    radial = math.sqrt(q.x * q.x + q.y * q.y)
-    d = radial * (1.0 - 1.0 / rn) if rn > 1e-6 else -min(half[0], half[1])
-    if abs(q.z) > half[2]:
-        d = max(d, abs(q.z) - half[2])
-    return d - r
-res = []
-for f in ('thumb', 'index', 'middle', 'ring', 'pinky'):
-    j = [m.get_socket_location('%s_%s_l' % (f, k)) for k in ('01', '02', '03')]
-    j.append(j[2] + (j[2] - j[1]) * 0.85)
-    mn = 99.0
-    for k in range(3):
-        r0, r1 = R[f][k], (R[f][k + 1] if k < 2 else R[f][2] * 0.9)
-        for i in range(1, 5):
-            mn = min(mn, clear(j[k] + (j[k + 1] - j[k]) * (i / 4.0), r0 + (r1 - r0) * i / 4.0))
-    res.append('%s=%.2f' % (f, mn))
-out('GRIPCL ' + ' '.join(res))
-"""
-
 HANDPOS = """p = unreal.GameplayStatics.get_player_pawn(world, 0)
 h = p.get_editor_property('mesh').get_socket_location('middle_01_l')
 f = p.get_actor_forward_vector(); r = p.get_actor_right_vector()
@@ -111,10 +82,11 @@ out('HANDPOS %f %f %f %f %f %f %f %f %f' % (h.x, h.y, h.z, f.x, f.y, f.z, r.x, r
 """
 
 
-def grip(half):
-    """{finger: clearance} for the bow hand now."""
-    row = q(GRIP.replace("HALF", repr(tuple(half))), "GRIPCL")
-    return {k: float(v) for k, v in (kv.split("=") for kv in row.split())}
+def grip():
+    """{finger: clearance, palm: clearance} for the bow hand now, against the handle as the game holds it (Tools/check_grip.py's measure)."""
+    row = q(cg.MEASURE.replace("LEFT", "True"), "GRIPM")
+    vals = dict(kv.split("=") for kv in row.split() if "=" in kv)
+    return {k: float(vals[k]) for k in ("thumb", "index", "middle", "ring", "pinky", "palm") if k in vals}
 
 
 def grip_shots(label):
@@ -157,6 +129,7 @@ def look(view):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--item", default="SimpleBow01")
+    ap.add_argument("--base", help="the archer's body base (MO.Test.Base: Femme, Jalena, Zuri, Harvey, Trey)")
     ap.add_argument("--seed", type=int, default=777)
     ap.add_argument("--slomo", type=float, default=0.06)   # each screenshot costs ~2 s of real time: slow enough that the plan keeps up
     ap.add_argument("--hold", type=float, default=1.5)
@@ -178,6 +151,9 @@ def main():
             time.sleep(5)
             ui.console(NAME, "MO.Test.ClickWidget BeginButton")
             time.sleep(40)
+        if a.base:
+            ui.console(NAME, "MO.Test.Base %s" % a.base)
+            time.sleep(4)
         off = ui.log_size(NAME)
         eq = q(EQUIP.replace("ITEM", a.item), "EQUIP")
         print("EQUIP", eq, flush=True)
@@ -185,10 +161,8 @@ def main():
         print("HELDBOW", q(HELD, "HELDBOW"), flush=True)
         held = ui.wait_log(NAME, r"\[MOBow\][^\r\n]*(holds|no draw clip|does not move)[^\r\n]*", since=off, timeout=10)
         print("HELD", held.group(0) if held else "no '[MOBow] ... holds' line", flush=True)
-        prefix = a.item
-        with open(os.path.join(ue.ROOT, "Saved", "BlenderItems", a.item, a.item + ".json")) as fh:
-            half = json.load(fh)["grip_cm"]
-        grips = {"rest": grip(half)}
+        prefix = a.item + ("_" + a.base if a.base else "")
+        grips = {"rest": grip()}
         print("GRIP at rest", grips["rest"], flush=True)
         grip_shots("%s_0" % prefix)
         for view in ("side", "front"):
@@ -209,7 +183,7 @@ def main():
             if wait > 0:
                 time.sleep(wait)
             if view == "grip":
-                grips["full draw"] = grip(half)
+                grips["full draw"] = grip()
                 print("GRIP at full draw", grips["full draw"], flush=True)
                 grip_shots("%s_2" % prefix)
                 continue
@@ -231,8 +205,8 @@ def main():
         worst = max(nocked) if nocked else None
         settled = after[-1] if after else None
         pen = max(-min(g.values()) for g in grips.values())
-        loose = max(max(g[f] for f in ("index", "middle", "ring", "pinky")) for g in grips.values())
-        grip_ok = len(grips) == 2 and pen <= GRIP_PEN_CM and loose <= GRIP_TOUCH_CM
+        loose = max(max(g.get(f, 99.0) for f in ("index", "middle", "ring", "pinky")) for g in grips.values())
+        grip_ok = len(grips) == 2 and all(len(g) == 6 for g in grips.values()) and pen <= GRIP_PEN_CM and loose <= GRIP_TOUCH_CM
         ok = bool(done) and worst is not None and worst <= 3.0 and brace_cm is not None and settled is not None and abs(settled - brace_cm) < 0.5 and grip_ok
         print("BOW %s: %d samples nocked, string within %.1f cm of the fingers at worst; after the loose the string ends at %s cm (brace %s); "
               "the bow hand: %.2f cm into the handle at worst, the loosest finger %.2f cm off it (%s); screenshots %s" % (

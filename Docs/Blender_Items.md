@@ -79,7 +79,11 @@ depth along the draw (the grip's section plus the wrap's thickness and ~0.07 cm 
 - **The data:** `FMOItemHeldVisual::SkeletalMesh` (a held mesh that moves: held in place of `StaticMesh`; the world item keeps
   `WorldVisual.StaticMesh`) and `DrawAnimation` (the clip above). `AMOCharacter::LeftHandBow` / `RightHandBow` hold it on `hand_l` / `hand_r`
   (`UpdateHeldItemMesh`; `GetHeldBow()`). Without a draw clip the bow is held braced and a Warning says why.
-- **The seat** (`bow_hand_fit.py`, refitted Nov 2 after Wes: "her fingers are back to being all fucked up"): the first seat put the grip at
+- **The seat** is the held-item standard since Nov 2 (`Docs/Held_Grip.md` §4): each body seats the bow from its own hand bones
+  (`FMOHandGrip::Seat`); the row gives `GripStyle` Power, `GripTransform` (+X the bow's back, -Y), `GripHalfSize` (the build's `grip_cm`,
+  X / Y swapped into the grip's axes) and `GripHandOffset` 1.61 (the hand along the grip so the nocking point is level with her drawing fingers
+  at full draw: `held_grip.bow_grip`, which `Tools/blender_items.py` calls). The fit that the standard's constants were measured from (before,
+  per bow; `bow_hand_fit.py`, Nov 2 after Wes: "her fingers are back to being all fucked up"): the first seat put the grip at
   the centroid of her finger joints -- inside her fingers -- and squared it to the draw across a fist the retarget had turned 40 deg, so the
   handle ran 2-3 cm into her palm and fingers (measured: the palm -2.8 cm, the open index -2.1). Now: Sparrow's own bow lies along her knuckle
   line in the hollow just behind the knuckles (measured in the source clip, `SPARROW_GRIP` / `SPARROW_AXIS`; the fixed retarget gives the
@@ -90,11 +94,14 @@ depth along the draw (the grip's section plus the wrap's thickness and ~0.07 cm 
   touching it (closed 0.45-0.95 of the way to Sparrow's fist), the string at full draw 0.1-0.4 cm short of her fingers. Relative to `hand_l`
   (the composite): (6.70, -4.26, 1.74) cm, quaternion (-0.6997, 0.6984, -0.0226, 0.1487). The right hand gets the same seat until a
   left-handed draw exists (her clips draw with the right).
-- **The grip** (`FMOItemHeldVisual::GripHalfSize` / `GripPose`; `UMOBodyRetargetAnimInstance`, `Docs/Animation_GASP.md` §7): the bow hand
-  closes on the handle in every clip -- held at rest in her open walk hand, through the draw and the loose -- each finger bending from open
-  toward the full draw's fist until it touches the wrap. A bow's handle (3.7-4.3 cm wrapped) is thicker than Paragon's (Sparrow's fist closes
-  on ~2 cm), so the fist opens to it.
-- **Nock / Release** (Blueprint-callable): nocked, the string waits for her fingers (within 9 cm), then the limbs bend for the fingers'
+- **The grip** (`Docs/Held_Grip.md` §3; `UMOBodyRetargetAnimInstance`): the bow hand closes on the handle in every clip -- held at rest in
+  her open walk hand, through the draw and the loose -- each finger bending from open toward full flexion until it touches the wrap. A bow's
+  handle (3.7-4.3 cm wrapped) is thicker than Paragon's (Sparrow's fist closes on ~2 cm), so the fist opens to it.
+- **A longer arm** (`LimitDraw`, Nov 2): Sparrow's draw is 63.9 cm on Femme and 70.6-85.4 on the other bases; drawn past the bow's full draw
+  (64.1) the drawing hand stops there, so the string stays in the fingers and the bow is never drawn past what it was built for (F57: or build
+  a bow to its archer's draw).
+- **Nock / Release** (Blueprint-callable): nocked, the string waits for her fingers (within 20 cm since Nov 2: Sparrow's draw brings them
+  4.6 cm from the string on Femme but 10.2 on Trey and 16.0 on Harvey, and 9 never nocked the men's bows), then the limbs bend for the fingers'
   distance along the draw and the nocking point goes to the fingers themselves, blended over 0.15 s. Sparrow's draw brings the hand in 7-10 cm
   off the bow's plane (her own rig moves the string sideways too), so following only along the draw left the string 7-10 cm from the fingers
   mid-draw. Released, the string snaps to brace in 0.03 s, swings past it at 11 Hz and settles over ~0.5 s, the swing as deep as the draw.

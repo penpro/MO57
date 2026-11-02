@@ -12,6 +12,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "AnimNodes/AnimNode_RetargetPoseFromMesh.h"
+#include "MOItemDefinitionRow.h"
 #include "MOBodyRetargetAnimInstance.generated.h"
 
 /** A climber's hand or foot on the rock (Wes, Oct 29: "we can probably reuse the hand/foot IK rigging to follow the cliff"): Titan Climbing's
@@ -31,18 +32,26 @@ struct FMOClimbLimbIK
 	float Alpha = 0.0f;
 };
 
-/** A hand closing on what it holds (Nov 2 2026, Wes: "her fingers are back to being all fucked up"): the held item's handle -- an elliptic
- *  cylinder on its mesh's origin along Z (AMOCharacter::FHandGrip, from FMOItemHeldVisual::GripHalfSize) -- in the hand bone's space, and the
- *  fist the fingers close toward (the item's GripPose, its left hand's finger joints). Each finger bends as a tendon closes it: all its joints
- *  together from the open hand (the reference pose) toward the fist, until a phalanx touches the handle; the joints up to that phalanx stop,
- *  the ones past it go on, until the tip touches or the fist is reached. A thick handle opens the fist, a thin one closes it all the way; the
- *  animation's own fingers are replaced, so the hand holds it in every clip (a walk's loose hand too). */
+/** A hand closing on what it holds (Nov 2 2026, Wes: "her fingers are back to being all fucked up"; Docs/Held_Grip.md): the held item's
+ *  handle (AMOCharacter::FHandGrip: the item's GripTransform on its mesh, GripHalfSize, GripStyle) in the hand bone's space, and the fist that
+ *  sets which way each finger joint flexes (the item's GripPose, its left hand's finger joints). Each finger closes as a tendon closes it
+ *  (FMOHandGrip::Wrap): all its joints together from the open hand (the reference pose) toward full flexion, until a phalanx touches the
+ *  handle; the joints up to that phalanx stop, the ones past it go on. The animation's own fingers are replaced, so the hand holds it in every
+ *  clip (a walk's loose hand too).
+ *  A bow also limits the other hand's draw: drawn (nocked) past the bow's full draw -- a longer arm than the one it was built for: Harvey's
+ *  draw is 85 cm, the bows' 64 -- the drawing hand stops there (two-bone IK along the draw), as an archer short-draws a bow too short for him. */
 struct FMOHandGripIK
 {
 	FTransform HandleInHand = FTransform::Identity;
 	FVector HalfSize = FVector::ZeroVector;
+	EMOGripStyle Style = EMOGripStyle::None;
+	float HandScale = 1.0f;   // the hand's knuckle span over FMOHandGrip::RefSpanCm: its fingers' thickness
 	FQuat Fist[15];           // thumb, index, middle, ring, pinky x the 01 / 02 / 03 joints: local rotations
 	float Alpha = 0.0f;       // 0 the animation's fingers .. 1 the grip (blends over GripBlendSeconds)
+	FTransform ItemInHand = FTransform::Identity;   // a bow: the bow (its component, unscaled) in the hand bone's space
+	FVector DrawAxis = FVector::YAxisVector;        // ... its draw, bow space (UMOBowMeshComponent)
+	float MaxDrawCm = 0.0f;                         // ... its full draw (0: not a bow)
+	bool bDrawing = false;                          // ... the string is in the other hand's fingers
 
 	FMOHandGripIK()
 	{
@@ -72,20 +81,6 @@ struct MOFRAMEWORK_API FMOBodyRetargetAnimInstanceProxy : public FAnimInstancePr
 	/** Each hand's grip ([0] left, [1] right), written by the instance before each update. */
 	FMOHandGripIK HandGrips[2];
 
-	/**
-	 * Capsule radii round each phalanx (cm; thumb, index, middle, ring, pinky x proximal, middle, distal): a woman's fingers, 1.4-1.8 cm thick
-	 * at the proximal phalanx and thinner toward the tip. The fingertip lies GripTipFraction of the middle phalanx beyond the last joint.
-	 */
-	static const float GripFingerRadii[5][3];
-	static constexpr float GripTipFraction = 0.85f;
-
-	/** Where each finger stops (0 open .. 1 the fist) for a handle; the joints in hand order. Pure, for the tests and the seat fit. */
-	static void WrapFinger(const FTransform& ParentCS, const FTransform OpenLocal[3], const FQuat FistLocal[3], const float Radii[3],
-		const FTransform& HandleCS, const FVector& HalfSize, float OutBend[3]);
-
-	/** A point's clearance to a handle (cm, negative inside): its distance out from the elliptic cylinder's side, past its ends to them. */
-	static float HandleClearance(const FTransform& HandleCS, const FVector& HalfSize, const FVector& PointCS, float Radius);
-
 protected:
 	virtual FAnimNode_Base* GetCustomRootNode() override { return RetargetNode; }
 	virtual void GetCustomNodes(TArray<FAnimNode_Base*>& OutNodes) override { OutNodes.Add(RetargetNode); }   // its PreUpdate copies the driver's pose
@@ -114,6 +109,9 @@ private:
 
 	/** The holding hands' fingers round their handles (local space, after the slot and the climbing IK). */
 	void ApplyHandGrips(FPoseContext& Output) const;
+
+	/** A drawn bow's drawing hand kept within the bow's full draw (after the grips). */
+	void LimitDraw(FPoseContext& Output) const;
 
 	FAnimNode_RetargetPoseFromMesh* RetargetNode = nullptr;
 

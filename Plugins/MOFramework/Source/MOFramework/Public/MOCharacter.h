@@ -173,6 +173,7 @@
 #include "MOInterruptTypes.h"
 #include "MOVitalsComponent.h"   // EMOSystemicFailure (HandleSystemicDeath)
 #include "MOBodySex.h"
+#include "MOItemDefinitionRow.h"   // EMOGripStyle
 #include "MOCharacter.generated.h"
 
 /**
@@ -1016,17 +1017,29 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|HeldItems")
 	UMOBowMeshComponent* GetHeldBow() const;
 
-	/** What a hand closes on (the held item's HeldVisual.GripHalfSize / GripPose; UMOBodyRetargetAnimInstance bends the fingers round it). */
+	/** What a hand holds and how (the held item's HeldVisual grip: Docs/Held_Grip.md): seated in this body's hand (FMOHandGrip::Seat), its
+	 *  fingers closed on it by UMOBodyRetargetAnimInstance. */
 	struct FHandGrip
 	{
-		TWeakObjectPtr<USceneComponent> Handle;   // the held mesh: the handle is on its origin, along its Z
+		TWeakObjectPtr<USceneComponent> Handle;   // the held mesh
+		FTransform GripTransform = FTransform::Identity;   // the handle on it (cm as held)
+		float HandOffset = 0.0f;                  // the hand's centre on the handle, from its middle along its axis
 		FVector HalfSize = FVector::ZeroVector;
+		EMOGripStyle Style = static_cast<EMOGripStyle>(0);
 		TWeakObjectPtr<UAnimSequence> Fist;       // kept loaded by GripFists
 		float FistTime = 0.0f;
+		FVector HeldScale = FVector::OneVector;   // the mesh as held: the item's real size (WorldVisual's scale)
+		float HandScale = 1.0f;                   // this body's knuckle span over the reference hand's
+		TWeakObjectPtr<const USkeletalMesh> SeatedOn;   // the body the seat was worked out on (a new body re-seats it: Tick)
 	};
 
 	/** The hand's grip, false while it holds nothing it closes on. */
 	bool GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const;
+
+	/** The held item's handle as the hand closes on it: its frame (world, cm), half sizes, style, and this body's hand scale (its knuckle span
+	 *  over the reference hand's). False while the hand grips nothing. For the checks (Tools/check_grip.py, check_bow.py; Docs/Held_Grip.md). */
+	UFUNCTION(BlueprintCallable, Category="MO|HeldItems")
+	bool GetHeldGripShape(bool bLeftHand, FTransform& OutHandleWorld, FVector& OutHalfSize, EMOGripStyle& OutStyle, float& OutHandScale) const;
 
 	/** The bone a Head item (a helmet) hangs from. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
@@ -1844,8 +1857,11 @@ protected:
 	/** The scalp hair hides under a worn helmet (it would poke through it); eyebrows, lashes and beard stay. */
 	void SetScalpHairHiddenForHelmet(bool bHide);
 
-	/** A hand's grip from its item's held visual (cleared when the visual has no GripHalfSize or GripPose). */
-	void SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual);
+	/** A hand's grip from its item's held visual (cleared without a GripStyle, GripHalfSize or GripPose), seated on this body. */
+	void SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual, const FVector& HeldScale);
+
+	/** Puts the hand's item where its handle belongs in this body's hand (FMOHandGrip::Seat); again whenever the body changes (a base). */
+	void SeatHandGrip(int32 Hand);
 
 	FHandGrip HandGrips[2];   // [0] left, [1] right
 

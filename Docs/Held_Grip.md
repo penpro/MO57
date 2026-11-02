@@ -1,0 +1,188 @@
+# Held items: how a hand holds what it holds (the standard)
+
+> Nov 2 2026, Wes: "take what you learned here and make sure it works on the other metahumans and make sure we have a standard for how
+> they grip other items etc". This replaces hand-tuned held transforms (N-207: `RightHandTransform` nudged per item, which Wes had kept for
+> himself on Oct 24; BR31-12: the hammerstone floating beside Trey's hand). Code: `FMOHandGrip` (`MOHandGrip.h/.cpp`), `AMOCharacter::SeatHandGrip`,
+> `UMOBodyRetargetAnimInstance` (the fingers, the short draw). Python mirror and item measuring: `Content/Python/held_grip.py`.
+
+## 1. The rule
+
+**An item says where its handle is and what kind of grip it takes; each body's own hand does the rest.** No per-body numbers and no
+hand-tuned transforms: the five bases' hands differ a lot (knuckle span 5.6 cm on Femme, 7.3 on Harvey, palm 7.9 to 9.0 cm), and a seat
+measured on one hand puts the handle into or off another. Each body works out the seat from its own bones when the item is equipped and
+again whenever the body changes (another base), and its fingers close on the handle in every animation. A new base and a new item both
+work with no extra numbers.
+
+The item's part, `FMOItemHeldVisual`:
+
+| Field | Meaning |
+|---|---|
+| `GripStyle` | `Power` (a handle across the palm, the fingers round it, the thumb over) or `Sphere` (something round in the palm). `None`: the old way, `RightHandTransform` / `LeftHandTransform` and the animation's fingers |
+| `GripTransform` | The handle in the held mesh's space, cm as held (at the item's world scale): its origin is the middle of the part the hand closes on, +Z runs along it toward the item's head (the fist's index and thumb side), and +X is the way the item faces out of the front of the fist (an axe's edge, a hammer's face, a sword's edge, a bow's back). A `Sphere`'s axes: Z its longest, Y its thinnest (against the palm) |
+| `GripHandOffset` | Where the centre of the hand sits on the handle, measured from that origin along +Z. 0 for most items; a bow's is +1.61 (the hand high on the grip, below the arrow pass, its thumb past the grip's top) |
+| `GripHalfSize` | The handle's size in `GripTransform`'s axes, half each way: a `Power` handle's elliptic cylinder (X half-width, Y half-depth, Z half-length), a `Sphere`'s ellipsoid |
+| `GripPose`, `GripPoseTime` | The fist: `/MOFramework/Characters/Bow/RMB_Loop_MH` at 0.33 (Sparrow's bow hand at full draw, a power grip) for every item. Its LEFT hand's local rotations serve either hand, because the MetaHuman's hands are mirrored |
+
+The held mesh shows at the item's world scale (`WorldVisual.RelativeTransform`): a held item is the same size as on the ground.
+
+## 2. The seat (`FMOHandGrip::Seat`; `AMOCharacter::SeatHandGrip` on equip and when the body changes)
+
+1. **The hand in the fist.** The fist's local rotations go on this body's own bone lengths, giving the hand-bone-space positions of each
+   finger's knuckle (01), last joint (03) and metacarpal, and the thumb's metacarpal.
+2. **The knuckles' frame.** e1 runs from the little finger to the index, e2 points toward the curled fingertips (square to e1), and e3 is
+   the same side in either hand (e1 x e2 on the left, e2 x e1 on the right). Span is the knuckle span.
+3. **Power.** The handle's centre, axis and face are fixed in that frame, the centre per cm of span. They were measured from Sparrow's bow
+   in her fist as retargeted onto Femme (`held_grip.derive_standard`, Nov 2):
+
+   | Constant | Value |
+   |---|---|
+   | Centre | (0, 0.5619, 0.2897) |
+   | Axis | (0.9998, 0.0037, -0.019): along the knuckles |
+   | Face | (-0.0191, 0.374, -0.9272) |
+
+   The handle then slides square to its axis, toward the palm, until it touches it. The palm is a capsule along each metacarpal to its
+   knuckle, radius 1.2 cm times the hand's scale, plus the ball of the thumb: the thumb's metacarpal with its 1.0 cm capsule. A big stone or a
+   thick handle rests on the ball of the thumb, not in it.
+4. **Sphere.** The object moves out of the palm's hollow, from the middle of the metacarpals, until it touches the palm.
+5. **The mesh.** `GripTransform⁻¹ × seat`, at the item's world scale. A hand's scale is its knuckle span over Femme's 5.64 cm (Jalena 1.03,
+   Zuri 1.11, Trey 1.17, Harvey 1.29). The fingers' and palm's thickness scale with it.
+
+## 3. The fingers (`FMOHandGrip::Wrap`; `UMOBodyRetargetAnimInstance`, every evaluation, after the slot and the climbing IK)
+
+Each finger closes the way a tendon closes it. All three joints bend together from the open hand (the body's reference pose) toward full
+flexion. When a phalanx touches the handle, it and the joints before it stop, and the rest go on. The animation's own fingers are replaced,
+so the hand holds the item in every clip, a walk's loose hand too. The grip blends in or out over 0.15 s.
+
+- **Which way a joint bends:** the fist's turn from open, about the same axis.
+- **How far it can bend:** a human hand's range, or further if the fist itself goes further.
+
+  | Joint | Full flexion |
+  |---|---|
+  | Finger knuckle | 90° |
+  | Finger middle joint | 110° |
+  | Finger end joint | 80° |
+  | Thumb base | 50° |
+  | Thumb knuckle | 60° |
+  | Thumb end joint | 80° |
+
+  Sparrow's fist bends the fingers only 22-73°. A hand bigger than the one the fist was made for therefore closes on past it, onto a thin
+  handle, instead of stopping in the air. Before Nov 2, Harvey's fingers ended 0.5-1.5 cm off a bow's grip.
+- **An open finger already in the handle's way:**
+  - **A thumb** goes over the handle, along its closing, and closes from the far side.
+  - **A thumb on a handle too thick to go over** swings out at its base, the root joint's abduction, until the whole thumb is clear, up to
+    60°. It then closes onto the handle from outside. Without this, the thumb lay 0.9-2.8 cm inside the club, maul, sickle and wooden spear.
+  - **A finger** straightens off the handle, by up to a quarter of its range. Its base then lies on the handle, and the joints past the
+    phalanx touching it close round it. That is a hand on a thick handle; before, a straightened finger stopped there and pointed down the
+    sickle.
+  - **If nothing clears,** the finger rests wherever along its range it is least in the handle, and the joints past its deepest phalanx
+    still close.
+- **Capsules:** the radii are `FMOHandGrip::FingerRadii` times the hand's scale. The fingertip lies 0.85 of the middle phalanx past the
+  last joint.
+
+## 4. A bow
+
+- **The grip.** The Blender bows (`Docs/Blender_Items.md`) have the grip's centre at the root, the handle along +Z and the draw along +Y.
+  - `GripTransform` turns +X onto the bow's back (-Y).
+  - `GripHalfSize` is the build's `grip_cm` with X and Y swapped, because the grip's X runs along the draw.
+  - `GripHandOffset` is 1.61 for all three bows. That sets the hand along the grip so that at Sparrow's full draw the nocking point is level
+    with the drawing fingers. There the string has 63.6-63.7 cm to go of the bows' 64.1, and lies 0.65-0.75 cm to the side.
+  - `held_grip.bow_grip` works these out, and `Tools/blender_items.py` writes them.
+- **The draw follows the arm.** Draw length grows with the arm: Sparrow's full draw needs 63.9 cm on Femme, 70.6 on Jalena, 76.0 on Zuri,
+  79.3 on Trey and 85.4 on Harvey. The bows were built for Femme's 64.1 (`FULL_DRAW`).
+- **The short draw.** A drawn bow (nocked) stops the drawing hand at the bow's full draw: `FMOBodyRetargetAnimInstanceProxy::LimitDraw`,
+  two-bone IK along the draw, the hand's turn kept. This is what an archer does with a bow too short for his draw. The string stays in his
+  fingers, and the bow is never drawn past what it was built for.
+- **The nock.** Sparrow's draw brings the drawing fingers 4.6 cm from the string on Femme, 10.2 on Trey and 16.0 on Harvey (longer
+  forearms). The string now takes them within 20 cm (`UMOBowMeshComponent::NockReachCm`, was 9, which never nocked the men's bows). On a
+  bigger body the string goes over to the fingers in the 0.15 s nock blend.
+- **Open decision.** Whether a bow should instead be built to its archer's draw (a longer bow for Harvey) is F57 (`Docs/DECISIONS.md`).
+
+## 5. The items (Nov 2: 35 rows, `Docs/RowPatches/2026-11-02-held-grip-DT_Items.json`)
+
+`held_grip.measure_all` measures each item off its mesh at its world scale:
+
+1. **The long axis.** A principal-component axis.
+2. **Cross-sections.** Taken every 0.5 cm along that axis.
+3. **Head and butt.** The thicker end is the head. For a spear, the end that tapers to a point. For a sword, the blade is the long flat part.
+4. **Where the hand goes.** Depends on the item's mode (table below).
+5. **The handle's own line.** Fitted through those sections, then cut again square to it, so a curved handle (the sickle) or a cord beside the
+   handle (the bow drill) does not widen it. Anything more than 4 cm off the line is left out.
+6. **The face.** The head's main direction across the handle, toward where its mass is.
+
+| Mode | Where the hand goes | Items |
+|---|---|---|
+| end | at the butt: the little finger 1 cm in, the hand's centre 5.25 cm in (an 8.5 cm hand); the hand fills a handle shorter than that | the axes, adze, hoe, sickle, smithing hammer, maul, club, torch, atlatl, drop spindle, bow drill |
+| sword | on the grip, the narrow round part between the pommel and the guard; on a long grip, just under the guard | the three swords |
+| shaft | a third of the way up from the butt (a spear's rear hand) | the six spears |
+| middle | at the middle | the fire drill |
+| tongs | both handles in one fist, squeezed together across the palm | the smithing tongs |
+| shield | across the shield, 2.5 cm off the back of the rim at the middle; the face out of the fist | the three shields |
+| sphere | in the palm, thinnest axis against it | hammerstone, chopper, scraper, apple, cooked meat |
+
+**A new held item:**
+
+1. Add its row name and mode to `held_grip.ITEMS`.
+2. In the editor, run
+   `python Tools/ue.py py --timeout 1800 -c "import held_grip as g; out(g.measure_all(only=['NewItem01']))"`.
+3. Run `MSYS_NO_PATHCONV=1 python Tools/ue.py rows set /MOFramework/Data/DT_Items.DT_Items --file Saved/HeldGrip/rows.json`.
+4. Run `python Tools/check_grip.py --items NewItem01`.
+
+For a bow: `held_grip.bow_rows()`, or `Tools/blender_items.py`, which writes it.
+
+Measured sizes worth knowing:
+
+- **Wooden spear and fire-hardened spear** (`/Game/Kitbash/WoodenSpear/SM_WoodenSpear` at world scale 1.5): a kitbashed Megascans
+  trench stick, 5 cm thick, so 7-8 cm as held. That is a log, not a spear (a fire-hardened spear's shaft is about 3 cm), and no hand closes
+  on it. These are the two failures in game (§6).
+- **Stone sickle:** its handle is 5.7 cm thick.
+- **Club:** its grip is 7 cm thick.
+
+Those are the meshes' real sizes: the hand opens round them.
+
+**The hammerstone** was 27 cm across at world scale 1 (its held row scaled it to 0.4). Its world scale is 0.4 now: an 11 x 11 x 7 cm stone,
+on the ground and in the hand.
+
+## 6. Checking
+
+- **`MOFramework.Animation.HandGrip.*`**
+  - `Clearance`: both shapes.
+  - `Wrap`: touching, past the fist's own bend, the thumb going over, a finger straightening, least-in.
+  - `EveryBase`: every base in `UMOSurvivorBaseSettings`, both hands, a bow's grip, an axe's haft and a stone. The four fingers on it, the
+    thumb not in it, the two hands alike. It needs the local Sparrow clip; without it the test warns and skips.
+- **`held_grip.hold_all()`:** the same in Python, offline in the editor.
+- **`python Tools/check_grip.py [--bases ..] [--items ..] [--shots all|first|none]`:** the game itself. Each base holds each item, idle.
+  - Measured: each finger's and the palm's nearest approach to the handle as the game holds it (`AMOCharacter::GetHeldGripShape`).
+  - Fails: a finger more than 0.3 cm into the handle, the palm more than 0.5 (its soft side gives, and an animation's palm is not quite the
+    fist's), or one of the four fingers more than 0.5 off it.
+  - Close-ups: `Saved/Screenshots/grip/<base>_<item>_{out,front}.png`.
+- **`python Tools/check_bow.py --item CompositeBow01 --base Harvey`:** the bow drawn on any base; the string stays on the fingers.
+
+**Measured Nov 2** (`check_grip.py --shots all`, seed 777, the idle hand). 163 of 165 base x item pairs hold:
+
+- Every finger is on the handle, 0.00 cm.
+- Palms are within 0.5 cm.
+- Thumbs are on the handle, or off it on thin handles where the thumb closes over the fingers.
+- The two failures are the wooden spear mesh above, the index finger 2.7 cm into the log on Femme and Jalena. The art fix is a spear at
+  real size.
+
+Close-ups: `Saved/Screenshots/grip/`.
+
+**The bow on three bodies** (`check_bow.py --item CompositeBow01 --base Femme / Trey / Harvey`): each passes.
+
+- 36 samples nocked, with the string 0.0 cm from the fingers through the draw and the hold.
+- After the loose, the string settles at brace (11.5 cm).
+- The bow hand is at most 0.14 cm into the grip, and every finger is on it.
+- Harvey's drawing hand stops at the bow's 64.1 cm full draw. Before the short draw it reached 85.6 cm, and before the 20 cm nock reach his
+  string never caught (0 samples nocked).
+
+## 7. Not done
+
+- **Two-handed holds.** The other hand on a spear's shaft or a maul's haft is as the animation puts it. The spear set's front hand, and a
+  maul or hoe swung two-handed, need a support grip: the other hand closing on the same handle where the clip puts it.
+- **The drawing hand to the string.** Sparrow's draw keeps the hand 7-11 cm off the bow's plane and, on a bigger body, further back at
+  the start; the string goes to the fingers. An IK bringing the fingers onto the string's line from the nock on would make every body draw
+  in the bow's plane, as an archer does.
+- **The wooden spears' mesh** (§5): rebuild them at real size, a 3 cm shaft, for example in Blender (`Docs/Blender_Items.md`).
+- **A precision grip.** Beads, a needle, a flint flake between finger and thumb. No held item needs one yet.
+- **The look is Wes's.** Whether each item sits as it should (the shields' handle above all, and the club, sickle and wooden spear's thick
+  handles) is on the by-eye list in `Docs/BACKLOG.md`.

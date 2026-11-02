@@ -192,6 +192,9 @@
   ready..." for 20 min, started right after a -game instance (that Zen server's owner) was stopped; every bridge call after it failed with
   "bridge not responding" -> read the start's last line, not its exit code; `editor stop` cannot close an editor without a bridge: stop that
   PID (yours: its command line has `-ModelContextProtocolStartServer` and its start time is your call's) and start again. (Nov 2)
+- **A UFUNCTION returning bool with out params gives Python `None` when it returns false** -> UE's Python treats such a bool as the success
+  flag: true returns only the out params as a tuple (no bool in it), false returns `None` -> `r = f(); if not r: ...; a, b = r`
+  (`AMOCharacter.get_held_grip_shape`: unpacking `ok, ...` broke `check_grip.py` silently). (Nov 2)
 - **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
   cancels nothing -> read the first run's output (or MO57.log), never re-send. (Oct 25: a harmless double substrate-pin pass)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
@@ -512,6 +515,11 @@
   to the source's (`IKRetargeterController.auto_align_bones(bones, RetargetAutoAlignMethod.GLOBAL_ROTATION_AXES, TARGET)`; CHAIN_TO_CHAIN and
   MESH_TO_MESH were worse; LOCAL_ROTATION_AXES wrecks it), and measure arms and fingers by ANGLE against the source, not only positions
   (`retarget_weapon_sets.py`'s `arms_and_fingers`). A fix that checks one symptom (the palms) misses the next. (Nov 2)
+- **A held item seated on one body sits wrong on another** -> the bases' hands differ by up to 29 % (knuckle span 5.6 cm on Femme, 7.3 on
+  Harvey) and their arms by 25 % (Sparrow's full draw needs 64 cm on Femme, 85 on Harvey): a seat or draw measured on one hand put a bow's grip
+  into or 1.5 cm off another's fingers, and a bow built for one arm left a longer arm's string 21 cm off his fingers -> never hand-tune a held
+  transform: give the item its handle and let each body seat it (`Docs/Held_Grip.md`), and check every base (`Tools/check_grip.py`,
+  `check_bow.py --base`). Rotations from a clip are the same on every base; positions and sizes are not. (Nov 2)
 - **A batch retarget that overwrites clips stages them in git** -> the editor's git source control `git rm`s the old asset and adds the new
   one ("Updated 1 path from the index" in the log) -> `git restore --staged` those paths before a commit that should not carry them. (Nov 2)
 - **The pelvis repair left the thighs and the legs floated (feet ~95 cm up)** -> `repair_crouch_pelvis.py` counted a pelvis child as carrying

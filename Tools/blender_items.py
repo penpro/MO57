@@ -23,8 +23,6 @@ BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 UE = [sys.executable, os.path.join(ROOT, "Tools", "ue.py")]
 OUT = os.path.join(ROOT, "Saved", "BlenderItems")
 TABLE = "/MOFramework/Data/DT_Items.DT_Items"
-GRIP_POSE = "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH"   # bow_hand_fit.CLIP / CLIP_T: the fist the seat is fitted in
-GRIP_POSE_TIME = 0.33
 
 
 def ue_py(code, timeout=900):
@@ -48,12 +46,6 @@ def blender(item, res):
         sys.exit("blender wrote nothing for " + item)
 
 
-def transform(rel):
-    q, t = rel["rot"], rel["loc"]
-    return {"Rotation": {"X": q[0], "Y": q[1], "Z": q[2], "W": q[3]}, "Translation": {"X": t[0], "Y": t[1], "Z": t[2]},
-            "Scale3D": {"X": 1, "Y": 1, "Z": 1}}
-
-
 def editor(item):
     result = ue_py("import importlib, import_blender_items as b; importlib.reload(b); out(b.run(%r))" % item)
     print("import:", json.dumps(result), flush=True)
@@ -66,14 +58,12 @@ def editor(item):
             grip = json.load(f).get("grip_cm")
         if not grip:
             sys.exit("%s.json has no grip_cm: rebuild the bow in Blender (it predates Nov 2's grip)" % item)
-        fit = ue_py("import importlib, bow_hand_fit as f; importlib.reload(f); out(f.fit(%r, %r))" % (result["draw"].split(".")[0], tuple(grip)))
-        print("fit:", json.dumps(fit), flush=True)
-        hand = transform(fit["relative_to_hand_l"])
-        # a bow belongs in the left hand (her draws are right-handed); the right hand gets the same seat until a left-handed draw exists. Her
-        # fingers close on its handle toward the fist of the full draw the seat came from.
-        row["heldVisual"] = {"SkeletalMesh": result["skeletal_mesh"], "DrawAnimation": result["draw"], "bMirrorForLeftHand": False,
-                             "LeftHandTransform": hand, "RightHandTransform": hand,
-                             "GripHalfSize": {"X": grip[0], "Y": grip[1], "Z": grip[2]}, "GripPose": GRIP_POSE, "GripPoseTime": GRIP_POSE_TIME}
+        fit = ue_py("import importlib, json, held_grip as g; importlib.reload(g); f, c = g.bow_grip(%r, %r); out(json.dumps({'fields': f, 'check': c}))"
+                    % (result["draw"].split(".")[0], tuple(grip)))
+        print("grip:", json.dumps(fit["check"]), flush=True)
+        # the standard grip (Docs/Held_Grip.md): every body's hand seats it from its own bones and closes on its handle; a bow belongs in the
+        # left hand (the draws are right-handed)
+        row["heldVisual"] = dict(fit["fields"], SkeletalMesh=result["skeletal_mesh"], DrawAnimation=result["draw"])
     return row
 
 

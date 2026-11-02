@@ -63,6 +63,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Bow")
 	FVector GetDrawRangeCm() const { return FVector(StartCm, BraceCm, EndCm); }
 
+	/** The draw's direction (bow space: from the forward limit toward full draw), and whether the bow has one (a draw clip that moves the nock). */
+	FVector GetDrawAxis() const { return DrawAxis; }
+	bool HasDraw() const { return DrawClip != nullptr; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Bow")
 	FName NockBone = TEXT("string_nock");
 
@@ -73,9 +77,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Bow")
 	FName DrawFingerBoneB = TEXT("middle_02_r");
 
-	/** Nocking: the fingers take the string once within this of it, and it goes over to them in this long. */
+	/** Nocking: the fingers take the string once within this of it, and it goes over to them in this long. Sparrow's draw brings the fingers
+	 *  4.6 cm from the string on Femme, 10.2 on Trey and 16.0 on Harvey (longer forearms; Nov 2): 9 never nocked the men's bows. Until the
+	 *  drawing hand is brought to the string (Docs/Held_Grip.md section 7), the string goes over to a bigger body's fingers. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Bow")
-	float NockReachCm = 9.0f;
+	float NockReachCm = 20.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Bow")
 	float NockBlendSeconds = 0.15f;

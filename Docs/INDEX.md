@@ -59,6 +59,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/Voxel_Plugin_Reference.md` | Voxel plugin reference (graphs, stamps, materials, PCG, sculpting, determinism) + our integration | Voxel graph / stamp work |
 | `Docs/Item_Art_Pipeline.md` | Fab scan -> item mesh -> tint / kitbash -> icon studio; Fab panel traps | Giving an item art or an icon |
 | `Docs/Blender_Items.md` | Items built in Blender from measurements (bows rigged with their draw, arrows, kits); the held bow whose string follows her fingers | A bow, an arrow, a procedural item |
+| `Docs/Held_Grip.md` | The held-item standard: an item gives its handle, every body's own hand seats it and closes on it (FMOHandGrip); the 35 items' grips, the bow's short draw, the checks | Putting an item in a hand, a grip on another base |
 | `Docs/Technology_History.md` | How technology really advanced (heat ladder, materials, mining) with sources | Progression / heat / mining design |
 | `Docs/ElectricDreams_Lessons.md`, `Docs/ElectricDreams_Migrated.md` | What to take from Epic's Electric Dreams sample; what was migrated | Environment / PCG references |
 | `Docs/DarkRuins_Assets.md` | The Dark Ruins Megascans sample: the cliffs migrated (gitignored, `ede_migrate.py --source darkruins`), the western cliff, candidates for rocks, items and ruins | Environment / PCG references |
