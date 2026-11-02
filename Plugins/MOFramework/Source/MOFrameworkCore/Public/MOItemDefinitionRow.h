@@ -107,6 +107,9 @@
 
 #include "MOItemDefinitionRow.generated.h"
 
+class UAnimSequence;
+class USkeletalMesh;
+
 /**
  * High-level classification for items.
  * Keep this broad and stable. More granular categorization should use Tags.
@@ -282,6 +285,20 @@ struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 	/** Material override for held mesh. If null, uses mesh default or WorldVisual.MaterialOverride. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	TSoftObjectPtr<UMaterialInterface> MaterialOverride;
+
+	/**
+	 * A held mesh that moves: a bow, whose limbs bend and whose string follows the drawing hand (UMOBowMeshComponent). Set, it is held in
+	 * place of StaticMesh (the world item keeps WorldVisual's static mesh).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	TSoftObjectPtr<USkeletalMesh> SkeletalMesh;
+
+	/**
+	 * SkeletalMesh's draw: the string's nocking point travels LINEARLY from its forward limit (the first frame) to full draw (the last),
+	 * the bow braced in the reference pose (Tools/blender_items_blender.py builds them so). Sampled, never played.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	TSoftObjectPtr<UAnimSequence> DrawAnimation;
 
 	/**
 	 * If true, left hand uses a mirrored version of RightHandTransform (flips Y scale).

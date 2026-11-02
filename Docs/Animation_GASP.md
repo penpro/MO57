@@ -209,8 +209,13 @@ the MetaHuman's metacarpal chain as well as its finger chain (the sources have n
 140-177 deg off rest, in all 34 clips. The metacarpal chains now have no source and keep the rest pose (0 deg in every clip, as in the
 crouch and climbing sets); the script checks it (a palm > 12 deg off rest fails the clip). Close-ups: `Saved/Screenshots/weapons_hands/`.
 
-Not done (F53's work, when the attacks are built): **no weapon in her hands** (the hands close on nothing; the bow item, the spear and
-their grip sockets, the bow string following the nock); **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
+**The bow in her hands (Nov 2):** the three bows are built in Blender, rigged with their draw (`Docs/Blender_Items.md`), held in her left hand
+(`UMOBowMeshComponent`) and seated from this set's full draw; nocked, the string's nocking point is on her fingers through the whole of
+`RMB_Drawback` and `RMB_Loop` (0.0 cm, `Tools/check_bow.py`) and the limbs bend for the draw; released, it snaps to brace and settles.
+`MO.Test.BowShot` plays draw / hold / loose.
+
+Not done (F53's work, when the attacks are built): **the spear in her hands** (the hands close on nothing; its grip sockets), the arrow on
+the string, the bow's carry in the idle stances; **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
 the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must
 carry the capsule with it (root motion from the pelvis, as `UpdateTraversalAnimation` fits the GASP moves) or the body leaves it and
 snaps back; the 2H stance is the pack's (back heel up), Sparrow's is Paragon's (wide, stylized); the rest of the spear pack (the other

@@ -18,6 +18,7 @@
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "MOBodyRetargetAnimInstance.h"
+#include "MOBowMeshComponent.h"
 #include "Retargeter/IKRetargeter.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
@@ -243,6 +244,12 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	BackWornMesh->SetupAttachment(GetMesh(), BackWornSocketName);
 	BackWornMesh->SetVisibility(false);
 	BackWornMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Held bows (an item with a skeletal held mesh): hidden and not ticking until one is held
+	LeftHandBow = CreateDefaultSubobject<UMOBowMeshComponent>(TEXT("LeftHandBow"));
+	LeftHandBow->SetupAttachment(GetMesh(), LeftHandSocketName);
+	RightHandBow = CreateDefaultSubobject<UMOBowMeshComponent>(TEXT("RightHandBow"));
+	RightHandBow->SetupAttachment(GetMesh(), RightHandSocketName);
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
@@ -2990,6 +2997,23 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 		return;
 	}
 
+	// A held mesh that moves (a bow) goes in the hand's bow component; the static one stays empty
+	UMOBowMeshComponent* HandBow = EquipSlot == EMOEquipmentSlot::LeftHand ? LeftHandBow.Get() : EquipSlot == EMOEquipmentSlot::RightHand ? RightHandBow.Get() : nullptr;
+	if (HandBow)
+	{
+		USkeletalMesh* BowMesh = ItemDef->HeldVisual.SkeletalMesh.IsNull() ? nullptr : ItemDef->HeldVisual.SkeletalMesh.LoadSynchronous();
+		if (BowMesh)
+		{
+			TargetMesh->SetVisibility(false);
+			TargetMesh->SetStaticMesh(nullptr);
+			HandBow->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
+			HandBow->SetRelativeTransform(ItemDef->HeldVisual.GetTransformForHand(EquipSlot == EMOEquipmentSlot::LeftHand));
+			HandBow->SetBow(BowMesh, ItemDef->HeldVisual.DrawAnimation.LoadSynchronous(), GetMesh(), EquipSlot == EMOEquipmentSlot::LeftHand);
+			return;
+		}
+		HandBow->SetBow(nullptr, nullptr, nullptr, false);
+	}
+
 	// Determine which mesh to use: HeldVisual.StaticMesh first, fall back to WorldVisual.StaticMesh
 	TSoftObjectPtr<UStaticMesh> MeshToLoad = ItemDef->HeldVisual.StaticMesh;
 	if (MeshToLoad.IsNull())
@@ -3054,6 +3078,18 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// 	EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 }
 
+UMOBowMeshComponent* AMOCharacter::GetHeldBow() const
+{
+	for (UMOBowMeshComponent* Bow : {LeftHandBow.Get(), RightHandBow.Get()})
+	{
+		if (Bow && Bow->GetSkeletalMeshAsset() && Bow->IsVisible())
+		{
+			return Bow;
+		}
+	}
+	return nullptr;
+}
+
 bool AMOCharacter::GetItemVisualTarget(EMOEquipmentSlot EquipSlot, UStaticMeshComponent*& OutMesh, FName& OutSocket) const
 {
 	switch (EquipSlot)
@@ -3089,6 +3125,10 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 	if (EquipSlot == EMOEquipmentSlot::Head)
 	{
 		SetScalpHairHiddenForHelmet(false);
+	}
+	if (UMOBowMeshComponent* HandBow = EquipSlot == EMOEquipmentSlot::LeftHand ? LeftHandBow.Get() : EquipSlot == EMOEquipmentSlot::RightHand ? RightHandBow.Get() : nullptr)
+	{
+		HandBow->SetBow(nullptr, nullptr, nullptr, false);
 	}
 
 	if (TargetMesh)

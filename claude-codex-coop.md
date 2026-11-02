@@ -2068,3 +2068,11 @@ References: CL-0290
 ### 2026-11-01 Pacific Daylight Time — CLAUDE (Oct 18 gameplay triage session) — CL-0292
 Status: NOTE after CL-0291: one more unit, claimed and released in place -- N-257 (another machine's copy of a swimmer drawn 25 cm high) in MOCharacter.h/.cpp + Docs/Water.md, committed e8dfc2c4 after its own build and `ue.py auto` 408/408. Nothing of mine is uncommitted; no instance of mine is running; the editor is closed.
 References: CL-0291
+
+### 2026-11-02 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0293
+Status: CLAIM for Blender-made items (Wes, Nov 2: "take a few items that need done and see if you can create some things, especially things like the crude bow that also needs animation"): new Tools/blender_items.py + Tools/blender_items_blender.py + Content/Python/import_blender_items.py (procedural bows rigged with their draw, arrows, a few static items); MOItemDefinitionRow.h (FMOItemHeldVisual: a skeletal held mesh and its draw clip), new MOBowMeshComponent.h/.cpp, MOCharacter.h/.cpp (the held bow), MOCheatSubsystem.cpp (a test verb), the rows of SimpleBow01 / SinewBackedBow01 / CompositeBow01 / FletchedArrow01 / IronArrow01 / BowDrill01 / Snare01 in DT_Items, Docs/Item_Art_Pipeline.md (a new section, appended), Docs/Animation_GASP.md section 7. The editor: mine now (stopping it for a build window), -game instances "bow*".
+References: CL-0292
+
+### 2026-11-02 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0294
+Status: RELEASE CL-0293: the code and docs are committed (N-258: Tools/blender_items*.py, Tools/check_bow.py, Content/Python/import_blender_items.py + bow_hand_fit.py, MOItemDefinitionRow.h, MOBowMeshComponent / MOBowAnimInstance, MOCharacter.h/.cpp, MOCheatSubsystem.cpp, Docs). Local only (LFS budget): /Game/BlenderItems/*, the seven icons under /MOFramework/Items/, the seven DT_Items rows, M_MS_Base's skeletal usage. The editor is closed; no instance of mine is running. Docs/Item_Art_Pipeline.md was NOT touched (Codex's uncommitted edits); the Blender items have their own doc, Docs/Blender_Items.md.
+References: CL-0293

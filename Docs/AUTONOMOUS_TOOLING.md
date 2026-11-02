@@ -425,6 +425,7 @@ The eyes now close the loop with **zero screenshots**. Two pieces:
 | `MO.Test.FindWidget [sub] [in=<owner>] [nth=<n>]` | `[MOQUERY] WIDGET` | live CommonUI widgets matching the substring, with on-screen center/rect — the "where's the button" locator. Top of the screen first, each with `#n` and `in=` (the UserWidget it sits in). A repeated name (every status row's IconImage) is narrowed by `in=` (an enclosing UserWidget's name, class or shown text: `in=Heart Rate`, spaces allowed) and `nth=` (the #n). ClickWidget and HitTest take the same filters (BR31-13, Oct 31 2026) |
 | `MO.Test.DropPickup [item]` | `[MOTEST] PASS/FAIL` | give→drop→pick-up round-trip; GUID identity preserved |
 | `MO.Test.Attack` | `[MOTEST] PASS/FAIL` | StartLightAttack → combat state |
+| `MO.Test.BowShot [hold s] [player]` | `[MOBow] t=...` | the survivor draws the held bow (Sparrow's draw / hold / loose on her body), every 0.1 s the string's draw and its distance from her fingers; `Tools/check_bow.py` runs it slowed with screenshots (`Docs/Blender_Items.md`) |
 | `MO.Test.Craft [recipe]` | `[MOTEST] INFO` | EnqueueCraft (false on a fresh pawn = no recipe/mats — expected) |
 | `MO.Test.MPSuite` | — | runs the three above via ConsoleCommand |
 | `MO.Test.RunAll` / `MO.Test.ValidateData` | `Saved/MOTestResults.txt` | full regression suite / DataTable-integrity gate; results FILE, not log scraping |

@@ -3,6 +3,11 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "MOBodyRetargetAnimInstance.h"
+#include "MOBowMeshComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
+#include "UObject/StrongObjectPtr.h"
 #include "MOCharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "MOInventoryRequest.h"
@@ -393,6 +398,90 @@ namespace
 			}
 		}
 		return Granted;
+	}
+
+	/**
+	 * MO.Test.BowShot: the survivor draws the bow in her hand with Sparrow's clips on the body (draw, hold, loose), the string nocked as the draw
+	 * starts and released as the loose starts, and every 0.1 s a [MOBow] line says where the string is and how far it is from her fingers.
+	 * The body and the bow only: nothing flies (ranged attacks are F53).
+	 */
+	void RunBowShotTest(UWorld* World, float HoldSeconds, int32 PlayerIndex)
+	{
+		AMOCharacter* Archer = Cast<AMOCharacter>(UGameplayStatics::GetPlayerPawn(World, PlayerIndex));
+		UMOBowMeshComponent* Bow = Archer ? Archer->GetHeldBow() : nullptr;
+		UAnimInstance* Anim = Archer && Archer->GetMesh() ? Archer->GetMesh()->GetAnimInstance() : nullptr;
+		// Strong: the timers below fire seconds later (a minute under slomo) and nothing else holds these clips -- with raw pointers a
+		// garbage collection in between freed them and the hold's PlaySlotAnimation called through freed memory (Nov 2, check_bow at slomo 0.06)
+		const TStrongObjectPtr<UAnimSequence> Draw(LoadObject<UAnimSequence>(nullptr, TEXT("/MOFramework/Characters/Bow/RMB_Drawback_MH.RMB_Drawback_MH")));
+		const TStrongObjectPtr<UAnimSequence> Loop(LoadObject<UAnimSequence>(nullptr, TEXT("/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH")));
+		const TStrongObjectPtr<UAnimSequence> Fire(LoadObject<UAnimSequence>(nullptr, TEXT("/MOFramework/Characters/Bow/RMB_Fire_MH.RMB_Fire_MH")));
+		if (!Bow || !Anim || !Draw || !Loop || !Fire)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBow] BowShot FAIL: %s"), !Archer ? TEXT("no survivor") : !Bow ? TEXT("no bow in her hands")
+				: !Anim ? TEXT("no anim instance on the body") : TEXT("a bow clip is missing (/MOFramework/Characters/Bow/RMB_*_MH)"));
+			return;
+		}
+		const float DrawSeconds = Draw->GetPlayLength();
+		const float LooseAt = DrawSeconds + HoldSeconds;
+		const float EndAt = LooseAt + 1.0f;
+		Bow->Nock();
+		Anim->PlaySlotAnimationAsDynamicMontage(Draw.Get(), UMOBodyRetargetAnimInstance::MontageSlot, 0.2f, 0.0f, 1.0f, 1);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBow] BowShot: %s draws %s (draw %.2f s, hold %.2f s, loose at %.2f s); the string runs %s"),
+			*Archer->GetName(), *GetNameSafe(Bow->GetSkeletalMeshAsset()), DrawSeconds, HoldSeconds, LooseAt, *Bow->GetDrawRangeCm().ToCompactString());
+
+		FTimerManager& Timers = World->GetTimerManager();
+		TWeakObjectPtr<UAnimInstance> WeakAnim(Anim);
+		TWeakObjectPtr<UMOBowMeshComponent> WeakBow(Bow);
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		const int32 Loops = FMath::Max(1, FMath::CeilToInt(HoldSeconds / FMath::Max(Loop->GetPlayLength(), 0.05f))) + 1;
+		FTimerHandle HoldTimer, LooseTimer, StopTimer;
+		Timers.SetTimer(HoldTimer, FTimerDelegate::CreateLambda([WeakAnim, Loop, Loops]()
+		{
+			if (UAnimInstance* A = WeakAnim.Get())
+			{
+				A->PlaySlotAnimationAsDynamicMontage(Loop.Get(), UMOBodyRetargetAnimInstance::MontageSlot, 0.0f, 0.0f, 1.0f, Loops);
+			}
+		}), DrawSeconds, false);
+		Timers.SetTimer(LooseTimer, FTimerDelegate::CreateLambda([WeakAnim, WeakBow, Fire]()
+		{
+			if (UAnimInstance* A = WeakAnim.Get())
+			{
+				A->PlaySlotAnimationAsDynamicMontage(Fire.Get(), UMOBodyRetargetAnimInstance::MontageSlot, 0.0f, 0.4f, 1.0f, 1);
+			}
+			if (UMOBowMeshComponent* B = WeakBow.Get())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBow] loose at %.1f cm"), B->GetDrawCm());
+				B->Release();
+			}
+		}), LooseAt, false);
+		// Sparrow's loose goes on to nock and draw again: stop once the follow-through is over
+		Timers.SetTimer(StopTimer, FTimerDelegate::CreateLambda([WeakAnim]()
+		{
+			if (UAnimInstance* A = WeakAnim.Get())
+			{
+				A->Montage_Stop(0.4f);
+			}
+		}), LooseAt + 0.9f, false);
+
+		TSharedRef<float> Clock = MakeShared<float>(0.0f);
+		TSharedRef<FTimerHandle> Sampler = MakeShared<FTimerHandle>();
+		Timers.SetTimer(*Sampler, FTimerDelegate::CreateLambda([WeakBow, WeakWorld, Clock, Sampler, DrawSeconds, LooseAt, EndAt]()
+		{
+			*Clock += 0.1f;
+			UMOBowMeshComponent* B = WeakBow.Get();
+			if (!B || *Clock > EndAt)
+			{
+				if (UWorld* W = WeakWorld.Get())
+				{
+					W->GetTimerManager().ClearTimer(*Sampler);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBow] BowShot done"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBow] t=%.1f %s: string %.1f cm, fingers %.1f cm, string to fingers %.1f cm%s"), *Clock,
+				*Clock < DrawSeconds ? TEXT("draw") : *Clock < LooseAt ? TEXT("hold") : TEXT("loose"), B->GetDrawCm(), B->GetFingerDrawCm(),
+				B->GetNockToFingersCm(), B->IsNocked() ? TEXT(" (nocked)") : TEXT(""));
+		}), 0.1f, true);
 	}
 
 	/** H20 crafting: grant the recipe's ingredients, then enqueue (server-gated). */
@@ -2225,6 +2314,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] HitCreature: %s hit by %s for %.1f: %s"), *GetNameSafe(Nearest), *Attacker->GetName(), Damage,
 					bHit ? TEXT("landed") : TEXT("no creature within 20 m / not damaged"));
 			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.BowShot [HoldSeconds=1] [PlayerIndex=0] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.BowShot"),
+		TEXT("Player PlayerIndex's survivor draws the bow she holds (Sparrow's RMB_Drawback on the body), holds full draw HoldSeconds (RMB_Loop) and looses ")
+		TEXT("(RMB_Fire): the string nocked as the draw starts, released as the loose starts. Every 0.1 s a [MOBow] line: the string's draw, where the ")
+		TEXT("drawing fingers are, and the string's distance from them (cm). Nothing flies (F53). Usage: MO.Test.BowShot [HoldSeconds=1] [PlayerIndex=0]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const float Hold = Args.Num() > 0 ? FMath::Max(0.0f, FCString::Atof(*Args[0])) : 1.0f;
+			const int32 PlayerIndex = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 0;
+			RunOnNextTick(World, [Hold, PlayerIndex](UWorld* W) { RunBowShotTest(W, Hold, PlayerIndex); });
 		}),
 		ECVF_Default));
 

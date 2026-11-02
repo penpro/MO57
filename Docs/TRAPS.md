@@ -183,6 +183,15 @@
   true / -1 -> after placing one, read the linked AnimBP's CDO and `set_pin_value` each pin to it (`Tools/abp_body_jiggle.py`). Also: a
   placed node's `type_id` drops the palette entry's suffix (`...|ABP_Body_PostProcess-LinkedAnimGraph` places as
   `...|ABP_Body_PostProcess`): a re-runnable script that looks for the palette id adds another node every run. (Oct 28, body jiggle)
+- **A build right after a -game instance crashed fails LNK1104 on UnrealEditor-MOFramework.dll, and every launch after it says "Plugin
+  'MOFramework' failed to load because module 'MOFramework' could not be found"** -> the failed link left the DLL deleted (Nov 2) -> build
+  again: a few minutes later it linked (the crashed instance's CrashReportClient was still open, so it was not that lock). (Nov 2)
+- **A raw UObject pointer captured by a timer lambda crashes when the timer fires late** -> nothing held the object and a GC freed it (the
+  `MO.Test.BowShot` clips, fired ~40 s later under slomo 0.06) -> `TStrongObjectPtr`, a UPROPERTY, or load it inside the lambda. (Nov 2)
+- **`ue.py editor start` prints "TIMEOUT waiting for bridge" and still exits 0** -> on Nov 2 the editor sat at "Waiting for ZenServer to be
+  ready..." for 20 min, started right after a -game instance (that Zen server's owner) was stopped; every bridge call after it failed with
+  "bridge not responding" -> read the start's last line, not its exit code; `editor stop` cannot close an editor without a bridge: stop that
+  PID (yours: its command line has `-ModelContextProtocolStartServer` and its start time is your call's) and start again. (Nov 2)
 - **A second `ue.py py --file` "just to read the output" runs the script AGAIN** -> the bridge queues every request; killing the client
   cancels nothing -> read the first run's output (or MO57.log), never re-send. (Oct 25: a harmless double substrate-pin pass)
 - **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
@@ -502,6 +511,14 @@
 - **Retargeted clips move only the root / slide** -> a 5.8 IKRetargeter is an op stack (add_default_ops + auto_map_chains); root motion folds into the pelvis (zero the root on copies). `get_raw_track_data` is empty in 5.8. (animation-retarget)
 - **New MO content disappears from git** -> `Plugins/MOFramework/Content/Characters/MetaHumans/` and `Content/PCG/` are gitignored. (swimming, package-cook-errors)
 - **A case-only rename returns False** -> FName is case-insensitive -> go through a temporary name. (footsteps, animation-retarget)
+- **A skeletal mesh imported from editor Python loads in game with "has no skeleton" / its skeleton "was not available"** -> the
+  `AssetImportTask` had `save = False`: the mesh was saved by hand, its skeleton and its animation were not -> save every asset in the
+  folder after the import (`import_blender_items.py`). (Nov 2)
+- **A skeletal mesh's material set from Python is still empty (the bow grey in game)** -> `for m in sk.get_editor_property("materials"):
+  m.set_editor_property(...)` edits COPIES (iterating an `unreal.Array` of structs hands out copies) -> build new `unreal.SkeletalMaterial`
+  structs, set the whole list, read it back. (Nov 2)
+- **The editor's own source control auto-adds new assets to the git index** (`A` in `git status --short`) -> while the LFS budget refuses
+  uploads, `git restore --staged <paths>` before committing, and check the staged column. (Nov 2)
 
 ## 11. Water
 

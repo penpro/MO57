@@ -281,6 +281,7 @@ class UCameraComponent;
 class USkeletalMesh;
 class UAnimInstance;
 class UStaticMeshComponent;
+class UMOBowMeshComponent;
 class USphereComponent;
 class UNavigationInvokerComponent;
 class UVoxelCollisionInvokerComponent;
@@ -999,6 +1000,20 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
 	TObjectPtr<UStaticMeshComponent> BackWornMesh;
+
+	/**
+	 * A held bow in each hand: an item whose HeldVisual has a SkeletalMesh shows here instead of in Left / RightHandMesh, its limbs bending and
+	 * its string following the other hand while nocked (UMOBowMeshComponent).
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UMOBowMeshComponent> LeftHandBow;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UMOBowMeshComponent> RightHandBow;
+
+	/** The bow in either hand (the left first), or null. */
+	UFUNCTION(BlueprintPure, Category="MO|HeldItems")
+	UMOBowMeshComponent* GetHeldBow() const;
 
 	/** The bone a Head item (a helmet) hangs from. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")

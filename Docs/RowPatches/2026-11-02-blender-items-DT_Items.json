@@ -1,0 +1,160 @@
+{
+ "SimpleBow01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/SimpleBow01/SM_SimpleBow01.SM_SimpleBow01"
+  },
+  "heldVisual": {
+   "SkeletalMesh": "/Game/BlenderItems/SimpleBow01/SK_SimpleBow01.SK_SimpleBow01",
+   "DrawAnimation": "/Game/BlenderItems/SimpleBow01/SK_SimpleBow01_Anim.SK_SimpleBow01_Anim",
+   "bMirrorForLeftHand": false,
+   "LeftHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   },
+   "RightHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "SinewBackedBow01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/SinewBackedBow01/SM_SinewBackedBow01.SM_SinewBackedBow01"
+  },
+  "heldVisual": {
+   "SkeletalMesh": "/Game/BlenderItems/SinewBackedBow01/SK_SinewBackedBow01.SK_SinewBackedBow01",
+   "DrawAnimation": "/Game/BlenderItems/SinewBackedBow01/SK_SinewBackedBow01_Anim.SK_SinewBackedBow01_Anim",
+   "bMirrorForLeftHand": false,
+   "LeftHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   },
+   "RightHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "CompositeBow01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/CompositeBow01/SM_CompositeBow01.SM_CompositeBow01"
+  },
+  "heldVisual": {
+   "SkeletalMesh": "/Game/BlenderItems/CompositeBow01/SK_CompositeBow01.SK_CompositeBow01",
+   "DrawAnimation": "/Game/BlenderItems/CompositeBow01/SK_CompositeBow01_Anim.SK_CompositeBow01_Anim",
+   "bMirrorForLeftHand": false,
+   "LeftHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   },
+   "RightHandTransform": {
+    "Rotation": {
+     "X": -0.501018,
+     "Y": 0.766577,
+     "Z": -0.245754,
+     "W": 0.317719
+    },
+    "Translation": {
+     "X": 6.228,
+     "Y": -1.282,
+     "Z": 0.842
+    },
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "FletchedArrow01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/FletchedArrow01/SM_FletchedArrow01.SM_FletchedArrow01"
+  }
+ },
+ "IronArrow01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/IronArrow01/SM_IronArrow01.SM_IronArrow01"
+  }
+ },
+ "BowDrill01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/BowDrill01/SM_BowDrill01.SM_BowDrill01"
+  }
+ },
+ "Snare01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/Snare01/SM_Snare01.SM_Snare01"
+  }
+ }
+}
