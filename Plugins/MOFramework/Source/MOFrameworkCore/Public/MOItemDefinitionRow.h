@@ -301,6 +301,25 @@ struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 	TSoftObjectPtr<UAnimSequence> DrawAnimation;
 
 	/**
+	 * The handle the holding hand closes on (Nov 2 2026, Wes: "her fingers are back to being all fucked up"): an elliptic cylinder on the held
+	 * mesh's origin along its Z -- X its half-width, Y its half-depth (a bow's: along the draw), Z its half-length, cm, any wrap included. Each
+	 * finger bends from the open hand toward GripPose's fist until a phalanx touches it, whatever the body's animation does with the fingers
+	 * (UMOBodyRetargetAnimInstance). Zero: the hand keeps the animation's fingers.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	FVector GripHalfSize = FVector::ZeroVector;
+
+	/**
+	 * The fist the fingers close toward: GripPose's LEFT hand at GripPoseTime, for either hand (the MetaHuman's left and right finger bones
+	 * are mirrored, so the same local rotations close both). A bow: Sparrow's full draw (/MOFramework/Characters/Bow/RMB_Loop_MH).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	TSoftObjectPtr<UAnimSequence> GripPose;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	float GripPoseTime = 0.0f;
+
+	/**
 	 * If true, left hand uses a mirrored version of RightHandTransform (flips Y scale).
 	 * If false, left hand uses LeftHandTransform for independent positioning.
 	 */

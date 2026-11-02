@@ -3,8 +3,9 @@ things like the crude bow that also needs animation"). Per item:
   1. Blender builds it from measurements and bakes its textures (Tools/blender_items_blender.py) into Saved/BlenderItems/<ItemId>/;
   2. the editor imports it into /Game/BlenderItems/<ItemId>/ (Content/Python/import_blender_items.py);
   3. item_mesh_prepare gives the world mesh Nanite and a hull;
-  4. a bow is fitted to the survivor's left hand at her full draw (Content/Python/bow_hand_fit.py);
-  5. the row patch (world mesh; a bow's held skeletal mesh, draw clip and hand transform) goes to Saved/BlenderItems/rows.json, and with
+  4. a bow is fitted to the survivor's left hand at her full draw (Content/Python/bow_hand_fit.py: the handle in the hollow of her fist,
+     her fingers closing on it as the game closes them);
+  5. the row patch (world mesh; a bow's held skeletal mesh, draw clip, hand transform and grip) goes to Saved/BlenderItems/rows.json, and with
      --rows into DT_Items through `ue.py rows set` (readback-verified). The icon is icon_studio.py's job afterwards.
 
     python Tools/blender_items.py SimpleBow01 [SinewBackedBow01 ...] [--blender-only] [--no-blender] [--rows] [--res N]
@@ -22,6 +23,8 @@ BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 UE = [sys.executable, os.path.join(ROOT, "Tools", "ue.py")]
 OUT = os.path.join(ROOT, "Saved", "BlenderItems")
 TABLE = "/MOFramework/Data/DT_Items.DT_Items"
+GRIP_POSE = "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH"   # bow_hand_fit.CLIP / CLIP_T: the fist the seat is fitted in
+GRIP_POSE_TIME = 0.33
 
 
 def ue_py(code, timeout=900):
@@ -59,13 +62,18 @@ def editor(item):
     print("\n".join(l for l in prep.stdout.splitlines() if "ITEMPREP" in l and not l.startswith("[")), flush=True)
     row = {"worldVisual": {"StaticMesh": result["static_mesh"]}}
     if result.get("skeletal_mesh"):
-        fit = ue_py("import importlib, bow_hand_fit as f; importlib.reload(f); out(f.fit(%r, %r))"
-                    % (result["skeletal_mesh"].split(".")[0], result["draw"].split(".")[0]))
+        with open(os.path.join(OUT, item, item + ".json")) as f:
+            grip = json.load(f).get("grip_cm")
+        if not grip:
+            sys.exit("%s.json has no grip_cm: rebuild the bow in Blender (it predates Nov 2's grip)" % item)
+        fit = ue_py("import importlib, bow_hand_fit as f; importlib.reload(f); out(f.fit(%r, %r))" % (result["draw"].split(".")[0], tuple(grip)))
         print("fit:", json.dumps(fit), flush=True)
         hand = transform(fit["relative_to_hand_l"])
-        # a bow belongs in the left hand (her draws are right-handed); the right hand gets the same seat until a left-handed draw exists
+        # a bow belongs in the left hand (her draws are right-handed); the right hand gets the same seat until a left-handed draw exists. Her
+        # fingers close on its handle toward the fist of the full draw the seat came from.
         row["heldVisual"] = {"SkeletalMesh": result["skeletal_mesh"], "DrawAnimation": result["draw"], "bMirrorForLeftHand": False,
-                             "LeftHandTransform": hand, "RightHandTransform": hand}
+                             "LeftHandTransform": hand, "RightHandTransform": hand,
+                             "GripHalfSize": {"X": grip[0], "Y": grip[1], "Z": grip[2]}, "GripPose": GRIP_POSE, "GripPoseTime": GRIP_POSE_TIME}
     return row
 
 

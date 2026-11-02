@@ -9,15 +9,15 @@
    "bMirrorForLeftHand": false,
    "LeftHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.69633,
+     "Y": 0.706282,
+     "Z": -0.059548,
+     "W": 0.112895
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.86,
+     "Y": -4.273,
+     "Z": 1.926
     },
     "Scale3D": {
      "X": 1,
@@ -27,22 +27,29 @@
    },
    "RightHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.69633,
+     "Y": 0.706282,
+     "Z": -0.059548,
+     "W": 0.112895
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.86,
+     "Y": -4.273,
+     "Z": 1.926
     },
     "Scale3D": {
      "X": 1,
      "Y": 1,
      "Z": 1
     }
-   }
+   },
+   "GripHalfSize": {
+    "X": 1.75,
+    "Y": 2.05,
+    "Z": 5.5
+   },
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33
   }
  },
  "SinewBackedBow01": {
@@ -55,15 +62,15 @@
    "bMirrorForLeftHand": false,
    "LeftHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.700076,
+     "Y": 0.69907,
+     "Z": -0.028872,
+     "W": 0.142693
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.595,
+     "Y": -4.117,
+     "Z": 1.757
     },
     "Scale3D": {
      "X": 1,
@@ -73,22 +80,29 @@
    },
    "RightHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.700076,
+     "Y": 0.69907,
+     "Z": -0.028872,
+     "W": 0.142693
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.595,
+     "Y": -4.117,
+     "Z": 1.757
     },
     "Scale3D": {
      "X": 1,
      "Y": 1,
      "Z": 1
     }
-   }
+   },
+   "GripHalfSize": {
+    "X": 1.82,
+    "Y": 1.87,
+    "Z": 5.0
+   },
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33
   }
  },
  "CompositeBow01": {
@@ -101,15 +115,15 @@
    "bMirrorForLeftHand": false,
    "LeftHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.699695,
+     "Y": 0.698431,
+     "Z": -0.022568,
+     "W": 0.1487
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.701,
+     "Y": -4.263,
+     "Z": 1.741
     },
     "Scale3D": {
      "X": 1,
@@ -119,22 +133,29 @@
    },
    "RightHandTransform": {
     "Rotation": {
-     "X": -0.501018,
-     "Y": 0.766577,
-     "Z": -0.245754,
-     "W": 0.317719
+     "X": -0.699695,
+     "Y": 0.698431,
+     "Z": -0.022568,
+     "W": 0.1487
     },
     "Translation": {
-     "X": 6.228,
-     "Y": -1.282,
-     "Z": 0.842
+     "X": 6.701,
+     "Y": -4.263,
+     "Z": 1.741
     },
     "Scale3D": {
      "X": 1,
      "Y": 1,
      "Z": 1
     }
-   }
+   },
+   "GripHalfSize": {
+    "X": 1.85,
+    "Y": 2.15,
+    "Z": 5.0
+   },
+   "GripPose": "/MOFramework/Characters/Bow/RMB_Loop_MH.RMB_Loop_MH",
+   "GripPoseTime": 0.33
   }
  },
  "FletchedArrow01": {

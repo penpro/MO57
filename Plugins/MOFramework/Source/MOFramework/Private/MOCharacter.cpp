@@ -3009,6 +3009,7 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 			HandBow->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
 			HandBow->SetRelativeTransform(ItemDef->HeldVisual.GetTransformForHand(EquipSlot == EMOEquipmentSlot::LeftHand));
 			HandBow->SetBow(BowMesh, ItemDef->HeldVisual.DrawAnimation.LoadSynchronous(), GetMesh(), EquipSlot == EMOEquipmentSlot::LeftHand);
+			SetHandGrip(EquipSlot, HandBow, &ItemDef->HeldVisual);
 			return;
 		}
 		HandBow->SetBow(nullptr, nullptr, nullptr, false);
@@ -3064,6 +3065,7 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 	// Ensure it's attached to the correct socket, then its offset (attaching with SnapToTarget resets the relative transform)
 	TargetMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
 	TargetMesh->SetRelativeTransform(Offset);
+	SetHandGrip(EquipSlot, TargetMesh, &ItemDef->HeldVisual);
 
 	TargetMesh->SetVisibility(true);
 	if (EquipSlot == EMOEquipmentSlot::Head)
@@ -3088,6 +3090,34 @@ UMOBowMeshComponent* AMOCharacter::GetHeldBow() const
 		}
 	}
 	return nullptr;
+}
+
+void AMOCharacter::SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual)
+{
+	if (EquipSlot != EMOEquipmentSlot::LeftHand && EquipSlot != EMOEquipmentSlot::RightHand)
+	{
+		return;
+	}
+	const int32 Hand = EquipSlot == EMOEquipmentSlot::LeftHand ? 0 : 1;
+	UAnimSequence* Fist = Handle && Visual && Visual->GripHalfSize.GetMin() > 0.0f && !Visual->GripPose.IsNull() ? Visual->GripPose.LoadSynchronous() : nullptr;
+	GripFists[Hand] = Fist;
+	HandGrips[Hand] = Fist ? FHandGrip{Handle, Visual->GripHalfSize, Fist, Visual->GripPoseTime} : FHandGrip();
+	if (Visual && Visual->GripHalfSize.GetMin() > 0.0f && !Fist)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: the %s hand's item has a grip but its fist (%s) did not load: the fingers stay as animated"),
+			*GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Visual->GripPose.ToString());
+	}
+}
+
+bool AMOCharacter::GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const
+{
+	const FHandGrip& Grip = HandGrips[bLeftHand ? 0 : 1];
+	if (!Grip.Handle.IsValid() || !Grip.Fist.IsValid() || !Grip.Handle->IsVisible())
+	{
+		return false;
+	}
+	OutGrip = Grip;
+	return true;
 }
 
 bool AMOCharacter::GetItemVisualTarget(EMOEquipmentSlot EquipSlot, UStaticMeshComponent*& OutMesh, FName& OutSocket) const
@@ -3130,6 +3160,7 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 	{
 		HandBow->SetBow(nullptr, nullptr, nullptr, false);
 	}
+	SetHandGrip(EquipSlot, nullptr, nullptr);
 
 	if (TargetMesh)
 	{

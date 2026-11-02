@@ -7,12 +7,13 @@ Sources (Fab, local only, gitignored; copy them from a project that has them to 
 Made here (tracked): /MOFramework/Characters/Bow|Spear/ -- IK_<Kind>Source (GASP's UE4 mannequin IK rig, on the pack's mesh: both skeletons
 carry every bone it names), RTG_<Kind>ToMetaHuman (the crouch set's RTG_MoverMannyToMetaHuman with that source, chains re-mapped) and the clips
 as <name>_MH. The source's curves are removed (Paragon's crashed a -game process on load). The retargeter puts the pelvis on the floor
-(TRAPS: "her backside drops to the floor"): every clip then gets repair_crouch_pelvis.py. Finally each clip is measured against its source,
-scaled by the bodies' head heights (pelvis, thigh, feet).
+(TRAPS: "her backside drops to the floor"): every clip then gets repair_crouch_pelvis.py. The MetaHuman's retarget pose has its arms and fingers
+turned onto the source's (Nov 2: its A-pose bent her bow arm 33 deg and cocked the wrist 40). Finally each clip is measured against its source,
+scaled by the bodies' head heights (pelvis, thigh, feet), and its arms and hands by angle (elbow, wrist, knuckle line, each finger joint).
 
 Usage (MO57's editor):  python Tools/ue.py py --file Content/Python/retarget_weapon_sets.py --timeout 1800
-Prints "WEAPONS ..." lines; the last says which clips are off their source by more than 12 cm anywhere (Oct 29: the three two-hand thrusts,
-15 cm: a shallower lunge on her body; everything else within 4-11 cm).
+Prints "WEAPONS ..." lines; the last says which clips are off their source by more than 12 cm anywhere, or whose arms / fingers are more than
+ARM_LIMIT_DEG / FINGER_LIMIT_DEG off its (Oct 29: the three two-hand thrusts, 15 cm: a shallower lunge on her body; everything else within 4-11 cm).
 """
 import math
 import os
@@ -36,6 +37,11 @@ UE4_RIG = "/Game/Characters/UE4_Mannequin/Rigs/IK_UE4_Mannequin_Retarget"   # GA
 TEMPLATE_RTG = "/MOFramework/Characters/Crouch/RTG_MoverMannyToMetaHuman"
 TARGET_MESH = "/Game/MetaHumans/MH_F_1/Body/SKM_MH_F_1_BodyMesh"
 REPAIR = os.path.join(unreal.Paths.project_content_dir(), "Python", "repair_crouch_pelvis.py")
+FINGERS = ("thumb", "index", "middle", "ring", "pinky")
+ALIGN_BONES = ["%s_%s" % (b, s) for s in "lr" for b in ("upperarm", "lowerarm", "hand")] + \
+              ["%s_%s_%s" % (f, j, s) for s in "lr" for f in FINGERS for j in ("01", "02", "03")]
+ARM_LIMIT_DEG = 12.0      # elbow, wrist, the knuckle line: off the source's by more fails the clip
+FINGER_LIMIT_DEG = 15.0   # a finger joint's bend (the thumb is reported, not failed: the MetaHuman's thumb_01 is its metacarpal)
 
 
 def log(s):
@@ -65,6 +71,17 @@ def make_rigs(kind, mesh):
         if "Metacarpal" in str(chain):
             c.set_source_chain(unreal.Name("None"), chain)
     log("%s: metacarpal chains unmapped: %s" % (kind, ", ".join("%s<-%s" % (ch, c.get_source_chain(ch)) for ch in target_chains if "Metacarpal" in str(ch))))
+    # The arms and fingers of the MetaHuman's retarget pose turned onto the source's (Nov 2, Wes: "her fingers are back to being all fucked
+    # up"). Both retarget poses were the reference poses, and FK carries the difference between them into every frame: the MetaHuman's A-pose
+    # elbow is bent 37 deg where Sparrow's is 4, and its hand turned ~35 deg, so her bow arm came out bent 33 deg at the elbow with the wrist
+    # cocked 40 deg and the fist turned off the bow it was made round. GLOBAL_ROTATION_AXES lines up each bone's axes with the source bone's
+    # (CHAIN_TO_CHAIN left the wrist 6 deg off, MESH_TO_MESH the elbow 23); the fingers too, or the turned hand bends them 10-20 deg past the
+    # source's. Reset first: the template's offsets were for its own source.
+    target = unreal.RetargetSourceOrTarget.TARGET
+    for bone in ALIGN_BONES:
+        c.set_rotation_offset_for_retarget_pose_bone(bone, unreal.Quat(0.0, 0.0, 0.0, 1.0), target)
+    c.auto_align_bones([unreal.Name(b) for b in ALIGN_BONES], unreal.RetargetAutoAlignMethod.GLOBAL_ROTATION_AXES, target)
+    log("%s: the target retarget pose's arms and fingers aligned to the source (%d bones)" % (kind, len(ALIGN_BONES)))
     unreal.EditorAssetLibrary.save_loaded_asset(rig, False)
     unreal.EditorAssetLibrary.save_loaded_asset(rtg, False)
     return rtg
@@ -131,13 +148,53 @@ def measure(src_path, dst_path):
     palm = max(off_rest("%s_metacarpal_%s" % (f, side)) for f in ("index", "middle", "ring", "pinky") for side in ("l", "r"))
     worst = max(worst, palm)   # a twisted palm fails the clip like a misplaced leg
 
+    # The arms and hands against the source's (angles need no scale): elbow, wrist, the knuckle line's direction, each finger joint's bend
+    arm_dev, finger_dev, thumb_dev = arms_and_fingers(src, dst, Ls * 0.5, Ld * 0.5)
+    if arm_dev > ARM_LIMIT_DEG or finger_dev > FINGER_LIMIT_DEG:
+        worst = max(worst, 12.0 + max(arm_dev - ARM_LIMIT_DEG, finger_dev - FINGER_LIMIT_DEG))
+
     def travel(anim, L, bone):   # how far the bone gets from where it starts, across the ground (cm)
         p0 = world(anim, bone, 0.0)
         return max(((world(anim, bone, L * i / 8.0) - p0) * unreal.Vector(1.0, 1.0, 0.0)).length() for i in range(9))
-    log("%-32s x%.2f | mid pelvis %3.0f (src %3.0f) thigh %3.0f (%3.0f) feet %3.0f/%3.0f (%3.0f/%3.0f) | worst %4.1f | palm %3.0f deg | travel: root %3.0f pelvis %3.0f (src root %3.0f pelvis %3.0f)" % (
-        dst_path.split("/")[-1], k, d[0], s[0] * k, d[1], s[1] * k, d[2], d[3], s[2] * k, s[3] * k, worst, palm,
-        travel(dst, Ld, "root"), travel(dst, Ld, "pelvis"), travel(src, Ls, "root"), travel(src, Ls, "pelvis")))
+    log("%-32s x%.2f | mid pelvis %3.0f (src %3.0f) thigh %3.0f (%3.0f) feet %3.0f/%3.0f (%3.0f/%3.0f) | worst %4.1f | palm %3.0f deg | "
+        "arms %3.0f fingers %3.0f thumb %3.0f deg off the source | travel: root %3.0f pelvis %3.0f (src root %3.0f pelvis %3.0f)" % (
+            dst_path.split("/")[-1], k, d[0], s[0] * k, d[1], s[1] * k, d[2], d[3], s[2] * k, s[3] * k, worst, palm, arm_dev, finger_dev, thumb_dev,
+            travel(dst, Ld, "root"), travel(dst, Ld, "pelvis"), travel(src, Ls, "root"), travel(src, Ls, "pelvis")))
     return worst
+
+
+def arms_and_fingers(src, dst, ts, td):
+    """The largest difference from the source (deg) in the arms (elbow, wrist, the knuckle line's direction), the fingers' joint bends and the
+    thumb's. The bodies face the same way, so directions compare directly."""
+    S = unreal.AnimPoseExtensions.get_anim_pose_at_time(src, ts, unreal.AnimPoseEvaluationOptions())
+    D = unreal.AnimPoseExtensions.get_anim_pose_at_time(dst, td, unreal.AnimPoseEvaluationOptions())
+
+    def at(pose, bone):
+        return unreal.AnimPoseExtensions.get_bone_pose(pose, bone, unreal.AnimPoseSpaces.WORLD).translation
+
+    def ang(a, b):
+        n = a.length() * b.length()
+        return math.degrees(math.acos(max(-1.0, min(1.0, a.dot(b) / n)))) if n > 1e-6 else 0.0
+
+    arm, fing, thumb = 0.0, 0.0, 0.0
+    for s in "lr":
+        def arm_angles(P):
+            fa = at(P, "hand_" + s) - at(P, "lowerarm_" + s)
+            return (ang(at(P, "lowerarm_" + s) - at(P, "upperarm_" + s), fa), ang(at(P, "middle_01_" + s) - at(P, "hand_" + s), fa))
+        a_s, a_d = arm_angles(S), arm_angles(D)
+        knuckles = ang(at(S, "index_01_" + s) - at(S, "pinky_01_" + s), at(D, "index_01_" + s) - at(D, "pinky_01_" + s))
+        arm = max(arm, abs(a_s[0] - a_d[0]), abs(a_s[1] - a_d[1]), knuckles)
+        for f in FINGERS:
+            def bends(P):
+                j = [at(P, "%s_%s_%s" % (f, k, s)) for k in ("01", "02", "03")]
+                return (ang(j[0] - at(P, "hand_" + s), j[1] - j[0]), ang(j[1] - j[0], j[2] - j[1]))
+            b_s, b_d = bends(S), bends(D)
+            dev = max(abs(b_s[0] - b_d[0]), abs(b_s[1] - b_d[1]))
+            if f == "thumb":
+                thumb = max(thumb, dev)
+            else:
+                fing = max(fing, dev)
+    return arm, fing, thumb
 
 
 try:
@@ -151,7 +208,7 @@ try:
     os.environ["REPAIR_CLIPS"] = ",".join(d for _, d in made)
     exec(open(REPAIR, encoding="utf-8").read(), {"__name__": "repair"})
     off = [d.split("/")[-1] for s, d in made if measure(s, d) > 12.0]
-    log("done: %d clips; off their source by more than 12 cm somewhere: %s" % (len(made), off or "none"))
+    log("done: %d clips; off their source by more than 12 cm, or arms / fingers past their limits: %s" % (len(made), off or "none"))
 except Exception:
     import traceback
     log("ERROR " + traceback.format_exc().replace("\n", " | "))

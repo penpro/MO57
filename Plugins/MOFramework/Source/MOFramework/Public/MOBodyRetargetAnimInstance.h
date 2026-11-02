@@ -31,6 +31,28 @@ struct FMOClimbLimbIK
 	float Alpha = 0.0f;
 };
 
+/** A hand closing on what it holds (Nov 2 2026, Wes: "her fingers are back to being all fucked up"): the held item's handle -- an elliptic
+ *  cylinder on its mesh's origin along Z (AMOCharacter::FHandGrip, from FMOItemHeldVisual::GripHalfSize) -- in the hand bone's space, and the
+ *  fist the fingers close toward (the item's GripPose, its left hand's finger joints). Each finger bends as a tendon closes it: all its joints
+ *  together from the open hand (the reference pose) toward the fist, until a phalanx touches the handle; the joints up to that phalanx stop,
+ *  the ones past it go on, until the tip touches or the fist is reached. A thick handle opens the fist, a thin one closes it all the way; the
+ *  animation's own fingers are replaced, so the hand holds it in every clip (a walk's loose hand too). */
+struct FMOHandGripIK
+{
+	FTransform HandleInHand = FTransform::Identity;
+	FVector HalfSize = FVector::ZeroVector;
+	FQuat Fist[15];           // thumb, index, middle, ring, pinky x the 01 / 02 / 03 joints: local rotations
+	float Alpha = 0.0f;       // 0 the animation's fingers .. 1 the grip (blends over GripBlendSeconds)
+
+	FMOHandGripIK()
+	{
+		for (FQuat& Q : Fist)
+		{
+			Q = FQuat::Identity;
+		}
+	}
+};
+
 /** The retarget node is the graph's root; the slot blends the body's montages over what it produces; then a climber's hands and feet go onto the rock. */
 USTRUCT()
 struct MOFRAMEWORK_API FMOBodyRetargetAnimInstanceProxy : public FAnimInstanceProxy
@@ -46,6 +68,23 @@ struct MOFRAMEWORK_API FMOBodyRetargetAnimInstanceProxy : public FAnimInstancePr
 	FMOClimbLimbIK ClimbLimbs[4];
 	FVector AnimatedEndCS[4] = {FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector};
 	bool bClimbIK = false;
+
+	/** Each hand's grip ([0] left, [1] right), written by the instance before each update. */
+	FMOHandGripIK HandGrips[2];
+
+	/**
+	 * Capsule radii round each phalanx (cm; thumb, index, middle, ring, pinky x proximal, middle, distal): a woman's fingers, 1.4-1.8 cm thick
+	 * at the proximal phalanx and thinner toward the tip. The fingertip lies GripTipFraction of the middle phalanx beyond the last joint.
+	 */
+	static const float GripFingerRadii[5][3];
+	static constexpr float GripTipFraction = 0.85f;
+
+	/** Where each finger stops (0 open .. 1 the fist) for a handle; the joints in hand order. Pure, for the tests and the seat fit. */
+	static void WrapFinger(const FTransform& ParentCS, const FTransform OpenLocal[3], const FQuat FistLocal[3], const float Radii[3],
+		const FTransform& HandleCS, const FVector& HalfSize, float OutBend[3]);
+
+	/** A point's clearance to a handle (cm, negative inside): its distance out from the elliptic cylinder's side, past its ends to them. */
+	static float HandleClearance(const FTransform& HandleCS, const FVector& HalfSize, const FVector& PointCS, float Radius);
 
 protected:
 	virtual FAnimNode_Base* GetCustomRootNode() override { return RetargetNode; }
@@ -72,6 +111,9 @@ private:
 
 	/** Each foot back inside the ankle's range (local space, last: after the retarget, the slot and the climbing IK). */
 	void LimitAnkles(FPoseContext& Output) const;
+
+	/** The holding hands' fingers round their handles (local space, after the slot and the climbing IK). */
+	void ApplyHandGrips(FPoseContext& Output) const;
 
 	FAnimNode_RetargetPoseFromMesh* RetargetNode = nullptr;
 
@@ -112,6 +154,9 @@ protected:
 	/** How fast a limb's target follows a new hold (1/s): a step to new rock takes ~0.15 s instead of a jump. */
 	static constexpr float ClimbHoldFollowRate = 20.0f;
 
+	/** A hand closes on a newly held item, or lets its fingers go back to the animation, over this long. */
+	static constexpr float GripBlendSeconds = 0.15f;
+
 private:
 	/** Point the retarget at the owner's driver and retargeter. False while the owner has none (the body then holds its reference pose). */
 	bool BindToOwnerDriver();
@@ -131,6 +176,13 @@ private:
 	};
 	FLimbHold LimbHolds[4];
 	FMOClimbLimbIK ClimbLimbs[4];
+
+	/** The hands' grips (game thread, every update): the owner's held handles in the hand bones' space, the fists sampled once per pose. */
+	void UpdateHandGrips(float DeltaSeconds);
+	FMOHandGripIK HandGrips[2];
+	TWeakObjectPtr<const UAnimSequence> SampledFist[2];
+	float SampledFistTime[2] = {-1.0f, -1.0f};
+
 	/** A foot on the rock: keeps its hold until the clip has moved it ClimbFootStepCm across the face, then finds rock in front of the clip's foot. */
 	void UpdateClimbFoot(FLimbHold& Hold, const FMOClimbLimbIK& Limb, bool bClimbing, const FVector& ClipFoot, const FVector& Out, const AActor* Owner) const;
 	bool bClimbIK = false;

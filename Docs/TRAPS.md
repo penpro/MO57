@@ -505,6 +505,15 @@
   of them") -> leave the target's metacarpal chains with no source (`set_source_chain("None", chain)` after `auto_map_chains`;
   `retarget_weapon_sets.py` does, and fails a clip whose palm is > 10-12 deg off rest). A source WITH metacarpals (UE5 Manny: the crouch,
   climbing sets) maps them 1:1 and reads 0 deg. (Oct 29)
+- **Retargeted arms bent and hands turned against the source (the palms fine)** -> FK carries the difference between the two RETARGET POSES
+  into every frame, and both default to the reference poses: the MetaHuman's A-pose elbow is bent 37 deg (Sparrow's 4) and its hand turned
+  ~35 deg, so the bow arm came out bent 33 deg with the wrist cocked 40 and the fist off the bow it was animated round (Wes, Nov 2: "her
+  fingers are back to being all fucked up"). Turning the arm IK off changes nothing. -> align the target retarget pose's arm and finger bones
+  to the source's (`IKRetargeterController.auto_align_bones(bones, RetargetAutoAlignMethod.GLOBAL_ROTATION_AXES, TARGET)`; CHAIN_TO_CHAIN and
+  MESH_TO_MESH were worse; LOCAL_ROTATION_AXES wrecks it), and measure arms and fingers by ANGLE against the source, not only positions
+  (`retarget_weapon_sets.py`'s `arms_and_fingers`). A fix that checks one symptom (the palms) misses the next. (Nov 2)
+- **A batch retarget that overwrites clips stages them in git** -> the editor's git source control `git rm`s the old asset and adds the new
+  one ("Updated 1 path from the index" in the log) -> `git restore --staged` those paths before a commit that should not carry them. (Nov 2)
 - **The pelvis repair left the thighs and the legs floated (feet ~95 cm up)** -> `repair_crouch_pelvis.py` counted a pelvis child as carrying
   the offset only within 6 cm of spine_01's; Sparrow's and the spear pack's thighs carried it 7-20 cm off and went up a second time with the
   pelvis -> 25 cm now. Measure the legs after any repair (`retarget_weapon_sets.py` prints pelvis / thigh / feet against the source). (Oct 29)
@@ -517,6 +526,11 @@
 - **A skeletal mesh's material set from Python is still empty (the bow grey in game)** -> `for m in sk.get_editor_property("materials"):
   m.set_editor_property(...)` edits COPIES (iterating an `unreal.Array` of structs hands out copies) -> build new `unreal.SkeletalMaterial`
   structs, set the whole list, read it back. (Nov 2)
+- **A re-imported skeletal mesh keeps its old animation and its skeleton's old reference pose** -> the legacy FBX importer's re-import
+  ("atomic reimport") rebuilds the mesh only: the rebuilt bows kept their first draw clip and their 16 cm brace
+  (`update_skeleton_reference_pose` did not move it) -> import the animation on its own (`FBXIT_ANIMATION` onto the skeleton), and when the
+  reference pose must change delete the mesh, skeleton and animation on disk with the editor closed and import fresh
+  (`import_blender_items.py` stops with that message). (Nov 2)
 - **The editor's own source control auto-adds new assets to the git index** (`A` in `git status --short`) -> while the LFS budget refuses
   uploads, `git restore --staged <paths>` before committing, and check the staged column. (Nov 2)
 

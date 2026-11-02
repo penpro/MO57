@@ -263,6 +263,7 @@ class UMOAdrenalineComponent;
 class UMORespirationComponent;
 class UMOFootstepComponent;
 class UAnimSequence;
+struct FMOItemHeldVisual;
 class UAnimMontage;
 class UAnimInstance;
 class UIKRetargeter;
@@ -1014,6 +1015,18 @@ public:
 	/** The bow in either hand (the left first), or null. */
 	UFUNCTION(BlueprintPure, Category="MO|HeldItems")
 	UMOBowMeshComponent* GetHeldBow() const;
+
+	/** What a hand closes on (the held item's HeldVisual.GripHalfSize / GripPose; UMOBodyRetargetAnimInstance bends the fingers round it). */
+	struct FHandGrip
+	{
+		TWeakObjectPtr<USceneComponent> Handle;   // the held mesh: the handle is on its origin, along its Z
+		FVector HalfSize = FVector::ZeroVector;
+		TWeakObjectPtr<UAnimSequence> Fist;       // kept loaded by GripFists
+		float FistTime = 0.0f;
+	};
+
+	/** The hand's grip, false while it holds nothing it closes on. */
+	bool GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const;
 
 	/** The bone a Head item (a helmet) hangs from. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
@@ -1830,4 +1843,13 @@ protected:
 
 	/** The scalp hair hides under a worn helmet (it would poke through it); eyebrows, lashes and beard stay. */
 	void SetScalpHairHiddenForHelmet(bool bHide);
+
+	/** A hand's grip from its item's held visual (cleared when the visual has no GripHalfSize or GripPose). */
+	void SetHandGrip(EMOEquipmentSlot EquipSlot, USceneComponent* Handle, const FMOItemHeldVisual* Visual);
+
+	FHandGrip HandGrips[2];   // [0] left, [1] right
+
+	/** The grips' fists, kept loaded (FHandGrip holds them weakly). */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> GripFists[2];
 };

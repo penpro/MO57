@@ -209,12 +209,36 @@ the MetaHuman's metacarpal chain as well as its finger chain (the sources have n
 140-177 deg off rest, in all 34 clips. The metacarpal chains now have no source and keep the rest pose (0 deg in every clip, as in the
 crouch and climbing sets); the script checks it (a palm > 12 deg off rest fails the clip). Close-ups: `Saved/Screenshots/weapons_hands/`.
 
-**The bow in her hands (Nov 2):** the three bows are built in Blender, rigged with their draw (`Docs/Blender_Items.md`), held in her left hand
-(`UMOBowMeshComponent`) and seated from this set's full draw; nocked, the string's nocking point is on her fingers through the whole of
-`RMB_Drawback` and `RMB_Loop` (0.0 cm, `Tools/check_bow.py`) and the limbs bend for the draw; released, it snaps to brace and settles.
-`MO.Test.BowShot` plays draw / hold / loose.
+**The arms and hands (fixed Nov 2, N-259; Wes: "her fingers are back to being all fucked up", "you supposedly fixed this once already ...
+saying there were extra bones"):** the palms were right, but the retarget poses were not. Both were the reference poses, and FK carries the
+difference between them into every frame: the MetaHuman's A-pose elbow is bent 37 deg where Sparrow's is 4, and its hand is turned ~35 deg
+(the knuckle line 62 deg from vertical against her 97). So her bow arm came out bent 33 deg at the elbow with the wrist cocked 40 (54 deg
+against Sparrow's 15), and the fist that held Sparrow's upright bow closed round nothing: on Sparrow the bow runs along her knuckle line, 6 deg
+from vertical; on the survivor that line stood 43 deg off. Turning the IK off changed nothing (it is the FK chains). The script now turns the
+MetaHuman retarget pose's arms and fingers onto the source's (`auto_align_bones`, `GLOBAL_ROTATION_AXES`: CHAIN_TO_CHAIN left the wrist 6 deg
+off, MESH_TO_MESH the elbow 23; the fingers too, or the turned hand bends them 10-20 deg past the source's), and measures every clip's arms and
+hands against its source by angle: the elbow, the wrist, the knuckle line, each finger joint's bend (`ARM_LIMIT_DEG` 12, `FINGER_LIMIT_DEG` 15;
+the thumb reported, not failed: the MetaHuman's `thumb_01` is its metacarpal, 10-20 deg off in every clip). Measured: the 13 bow clips' arms
+6-12 deg off Sparrow's (the elbow 0 / 1, the wrist 15 / 17 at full draw), the fingers 10-12; the spear set's arms 22-26 deg off its source
+unaligned, 7-20 aligned. Failing (a known gap, not this fix): the three two-hand thrusts (arms 20-26 deg off: the arm reaches differently in
+their lunge, on top of the 15 cm shallower lunge), `A_2H_Block` (arms 14), the one-hand walk and run (fingers 17).
 
-Not done (F53's work, when the attacks are built): **the spear in her hands** (the hands close on nothing; its grip sockets), the arrow on
+**A held item in her hand:** each hand closes on what it holds (`UMOBodyRetargetAnimInstance`, after the slot and the climbing IK): the item's
+handle (`FMOItemHeldVisual::GripHalfSize`, an elliptic cylinder on the held mesh's origin) and a fist to close toward (`GripPose`: a bow,
+`RMB_Loop_MH` at 0.33). Every finger bends as a tendon closes it -- all its joints from the open hand (the reference pose) toward the fist until
+a phalanx touches the handle, the joints up to that phalanx stopping, the rest going on -- so a thick handle opens the fist and a thin one
+closes it, in every clip including a walk's loose hand (blended in over 0.15 s). Paragon's bow grip is thin and stylized (Sparrow's fist closes
+on ~2 cm); ours are 3.7-4.3 cm wrapped, so without it her fingers went into the handle. The closing walks each sweep in 16 steps for the first
+touch before it bisects: testing only the closed fist missed a handle that the finger passes clean through (the test caught it; in her bow hand
+the fist always ended inside the handle, so the game had not shown it). Tests: `MOFramework.Animation.HandGrip.*`.
+
+**The bow in her hands (Nov 2):** the three bows are built in Blender, rigged with their draw (`Docs/Blender_Items.md`), held in her left hand
+(`UMOBowMeshComponent`) with the handle seated in the hollow of her fist where Sparrow's own bow sits, her fingers closed on it (above);
+nocked, the string's nocking point is on her fingers through the whole of `RMB_Drawback` and `RMB_Loop` (`Tools/check_bow.py`) and the
+limbs bend for the draw; released, it snaps to brace and settles. `MO.Test.BowShot` plays draw / hold / loose.
+
+Not done (F53's work, when the attacks are built): **the spear in her hands** (its seat in each hand and its row's `GripHalfSize` /
+`GripPose`: the hands now close on any held handle that has them; a two-hand grip needs the second hand's seat), the arrow on
 the string, the bow's carry in the idle stances; **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
 the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must
 carry the capsule with it (root motion from the pelvis, as `UpdateTraversalAnimation` fits the GASP moves) or the body leaves it and

@@ -20,8 +20,10 @@ solved limb (8 per limb, plus a siyah), the string's three bones sit at the two 
 LINEARLY from the string's forward limit (DRAW_MIN, the release overshoot) at frame 0 to full draw (her measured draw) at the last frame:
 the game picks the frame from where the drawing hand is, and the release swings it about brace (MOBowMeshComponent).
 
-Measured on the survivor (the retargeted Sparrow clips, Nov 2): the drawing fingers stand 16.3 cm from the bow hand's grip at the start of
-RMB_Drawback (the string at brace) and 64.6 cm at full draw (RMB_Loop), at her anchor 6 cm from the head.
+Measured on the survivor (the retargeted Sparrow clips, Nov 2, after the bow arm's retarget was corrected -- its elbow had been bent 33 deg
+and the wrist cocked 40): from the bow's seat in her fist (Content/Python/bow_hand_fit.py) the drawing fingers stand 11.5 cm off the grip at
+the start of RMB_Drawback, where the string is taken (the brace), and 64.1 cm at full draw (RMB_Loop). Sparrow's own bow was braced as low:
+its string 12.2 cm off her grip at the same frame, 10.5 at the survivor's size (the first build's 16 / 64.6 came from the bent arm).
 """
 import json
 import math
@@ -41,8 +43,8 @@ RES = int(ARGS[ARGS.index("--res") + 1]) if "--res" in ARGS else 0
 BAKE = "--no-bake" not in ARGS
 os.makedirs(OUT, exist_ok=True)
 
-BRACE = 16.0        # grip centre -> string at brace (cm)
-FULL_DRAW = 64.6    # grip centre -> string at full draw (cm): her draw
+BRACE = 11.5        # grip centre -> string at brace (cm): where her drawing fingers start the draw
+FULL_DRAW = 64.1    # grip centre -> string at full draw (cm): her draw
 DRAW_MIN = -0.15    # the Draw action's first frame, as a fraction of the brace -> full draw travel: the string's forward overshoot
 NOCK_Z = 2.0        # the nocking point stands this far above the grip centre (the arrow passes over the fist)
 FPS = 60
@@ -489,6 +491,15 @@ BOWS = {
                            string=("sinew", "#cfae74", "#80602f", 0.14), wrap=("cord", "#6a5136", "#3c2c1c", 0.3, 0.3, 0.0)),
 }
 LIMB_BONES = 8
+
+
+def grip_half_size(spec):
+    """The wrapped handle as the hand meets it (cm): half its width across, half its depth along the draw, half the handle's length -- the
+    item row's HeldVisual.GripHalfSize, what her fingers close on (UMOBodyRetargetAnimInstance). The wrap stands its thickness plus ~0.07
+    (its turns ride 0.03-0.07 off the stave) over the grip's section."""
+    kind, _, _, _, thick, _ = spec["wrap"]
+    out = (0.28 if kind == "cord" else thick) + 0.07
+    return [round(spec["grip"][0] / 2.0 + out, 2), round(spec["grip"][1] / 2.0 + out, 2), round(spec["handle"] / 2.0, 2)]
 
 
 class BowSolver:
@@ -1693,7 +1704,7 @@ def run_bow():
     info = {"item": ITEM, "kind": "bow", "size_cm": [round(v, 1) for v in size], "triangles": tri_count(st),
             "length_cm": spec["length"], "string_cm": round(sol.S, 2), "brace_cm": BRACE, "full_draw_cm": FULL_DRAW,
             "draw_min_fraction": DRAW_MIN, "nock_z_cm": NOCK_Z, "fps": FPS, "draw_frames": DRAW_FRAMES,
-            "bones": order, "draw_report": report, "textures": files, "preview": preview}
+            "grip_cm": grip_half_size(spec), "bones": order, "draw_report": report, "textures": files, "preview": preview}
     with open(os.path.join(OUT, "%s.json" % ITEM), "w") as f:
         json.dump(info, f, indent=1)
     log("done: %s, %d triangles, size %s cm" % (preview, info["triangles"], info["size_cm"]))

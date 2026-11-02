@@ -103,6 +103,15 @@ def _static(item, folder, fbx, mi):
     return mesh
 
 
+def _anim_options(ui):
+    for prop, value in (("animation_length", unreal.FBXAnimationLengthImportType.FBXALIT_EXPORTED_TIME), ("import_bone_tracks", True),
+                        ("remove_redundant_keys", False)):
+        try:
+            ui.anim_sequence_import_data.set_editor_property(prop, value)
+        except Exception as e:   # not every engine exposes all of them to Python
+            unreal.log_warning("import_blender_items: anim option %s: %s" % (prop, e))
+
+
 def _skeletal(item, folder, fbx, mi):
     before = set(eal.list_assets(folder, recursive=False))
     ui = unreal.FbxImportUI()
@@ -114,14 +123,20 @@ def _skeletal(item, folder, fbx, mi):
     ui.create_physics_asset = False
     ui.mesh_type_to_import = unreal.FBXImportType.FBXIT_SKELETAL_MESH
     ui.skeletal_mesh_import_data.convert_scene_unit = True
-    for prop, value in (("animation_length", unreal.FBXAnimationLengthImportType.FBXALIT_EXPORTED_TIME), ("import_bone_tracks", True),
-                        ("remove_redundant_keys", False)):
-        try:
-            ui.anim_sequence_import_data.set_editor_property(prop, value)
-        except Exception as e:   # not every engine exposes all of them to Python
-            unreal.log_warning("import_blender_items: anim option %s: %s" % (prop, e))
+    _anim_options(ui)
     _import([_task(fbx, folder, "SK_" + item, ui)])
     sk = unreal.load_asset("%s/SK_%s" % (folder, item))
+    # the draw on its own: re-importing a skeletal mesh re-imports no animation (Nov 2: the rebuilt bows kept their first draw clip)
+    anim_ui = unreal.FbxImportUI()
+    anim_ui.import_mesh = False
+    anim_ui.import_as_skeletal = True
+    anim_ui.import_animations = True
+    anim_ui.import_materials = False
+    anim_ui.import_textures = False
+    anim_ui.mesh_type_to_import = unreal.FBXImportType.FBXIT_ANIMATION
+    anim_ui.skeleton = sk.get_editor_property("skeleton")
+    _anim_options(anim_ui)
+    _import([_task(fbx, folder, "SK_%s_Anim" % item, anim_ui)])
     # new slot structs (iterating the Array hands out copies: setting their material changed nothing -- the first import's bow was grey)
     slots = [unreal.SkeletalMaterial(material_interface=mi, material_slot_name=m.get_editor_property("material_slot_name"))
              for m in sk.get_editor_property("materials")]
@@ -178,4 +193,10 @@ def run(item):
             draw = unreal.load_asset(anims[0])
             result["draw"] = draw.get_path_name()
             result["nock"] = _nock_travel(draw)
+            # A re-import keeps an existing skeleton's reference pose -- the brace (Nov 2: the rebuilt bows kept their 16 cm brace;
+            # update_skeleton_reference_pose did not move it). A bow rebuilt with another brace needs a fresh import.
+            if abs(result["nock"]["brace"][1] - info.get("brace_cm", result["nock"]["brace"][1])) > 0.05:
+                raise RuntimeError("import_blender_items: %s's skeleton is braced at %.2f cm, the bow at %.2f: delete SK_%s, SK_%s_Skeleton and "
+                                   "SK_%s_Anim in Content/BlenderItems/%s/ with the editor closed, then import again"
+                                   % (item, result["nock"]["brace"][1], info["brace_cm"], item, item, item, item))
     return json.dumps(result)
