@@ -52,7 +52,8 @@ def editor(item):
     prep = subprocess.run(UE + ["py", "--timeout", "600", "-c", "import importlib, item_mesh_prepare as p; importlib.reload(p); out(p.prepare([%r]))"
                                 % result["static_mesh"].split(".")[0]], capture_output=True, text=True, cwd=ROOT)
     print("\n".join(l for l in prep.stdout.splitlines() if "ITEMPREP" in l and not l.startswith("[")), flush=True)
-    row = {"worldVisual": {"StaticMesh": result["static_mesh"]}}
+    # built at real size: the world (and so the held) scale is 1 (Nov 2: the wooden spears' old rows scaled a kitbash stick 1.5)
+    row = {"worldVisual": {"StaticMesh": result["static_mesh"], "RelativeTransform": {"Scale3D": {"X": 1, "Y": 1, "Z": 1}}}}
     if result.get("skeletal_mesh"):
         with open(os.path.join(OUT, item, item + ".json")) as f:
             grip = json.load(f).get("grip_cm")
@@ -87,6 +88,15 @@ def main():
             env = dict(os.environ, MSYS_NO_PATHCONV="1")
             proc = subprocess.run(UE + ["rows", "set", TABLE, "--file", path], capture_output=True, text=True, cwd=ROOT, env=env)
             print(proc.stdout[-2000:] + proc.stderr[-1000:], flush=True)
+            # a held item's grip is measured off its new mesh (Docs/Held_Grip.md): the items held_grip.ITEMS knows how to hold (bows have theirs)
+            held = [i for i in rows if not rows[i].get("heldVisual")]
+            if held:
+                proc = subprocess.run(UE + ["py", "--timeout", "900", "-c", "import importlib, held_grip as g; importlib.reload(g); "
+                                            "out(g.measure_all(only=[i for i in %r if i in g.ITEMS]))" % held], capture_output=True, text=True, cwd=ROOT)
+                print("\n".join(l for l in proc.stdout.splitlines() if not l.startswith("[")), flush=True)
+                proc = subprocess.run(UE + ["rows", "set", TABLE, "--file", os.path.join(ROOT, "Saved", "HeldGrip", "rows.json")],
+                                      capture_output=True, text=True, cwd=ROOT, env=env)
+                print(proc.stdout[-600:] + proc.stderr[-600:], flush=True)
 
 
 if __name__ == "__main__":

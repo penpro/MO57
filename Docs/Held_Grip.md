@@ -131,9 +131,9 @@ For a bow: `held_grip.bow_rows()`, or `Tools/blender_items.py`, which writes it.
 
 Measured sizes worth knowing:
 
-- **Wooden spear and fire-hardened spear** (`/Game/Kitbash/WoodenSpear/SM_WoodenSpear` at world scale 1.5): a kitbashed Megascans
-  trench stick, 5 cm thick, so 7-8 cm as held. That is a log, not a spear (a fire-hardened spear's shaft is about 3 cm), and no hand closes
-  on it. These are the two failures in game (§6).
+- **Wooden spear and fire-hardened spear:** they shared `/Game/Kitbash/WoodenSpear/SM_WoodenSpear` at world scale 1.5, a kitbashed
+  Megascans trench stick 7-8 cm thick as held. That is a log, not a spear, and no hand closed on it (the two failures in §6). Rebuilt Nov 2
+  in Blender at real size (`Docs/Blender_Items.md`): 200 cm long, a 3.3-3.5 cm handle.
 - **Stone sickle:** its handle is 5.7 cm thick.
 - **Club:** its grip is 7 cm thick.
 
@@ -162,8 +162,8 @@ on the ground and in the hand.
 - Every finger is on the handle, 0.00 cm.
 - Palms are within 0.5 cm.
 - Thumbs are on the handle, or off it on thin handles where the thumb closes over the fingers.
-- The two failures are the wooden spear mesh above, the index finger 2.7 cm into the log on Femme and Jalena. The art fix is a spear at
-  real size.
+- The two failures were the wooden spear mesh above, the index finger 2.7 cm into the log on Femme and Jalena. Rebuilt at real size, both
+  spears pass on all five bases (10 / 10): the four fingers at 0.00 cm, palms within 0.02 cm, thumbs 0.00-0.41 cm.
 
 Close-ups: `Saved/Screenshots/grip/`.
 
@@ -182,7 +182,6 @@ Close-ups: `Saved/Screenshots/grip/`.
 - **The drawing hand to the string.** Sparrow's draw keeps the hand 7-11 cm off the bow's plane and, on a bigger body, further back at
   the start; the string goes to the fingers. An IK bringing the fingers onto the string's line from the nock on would make every body draw
   in the bow's plane, as an archer does.
-- **The wooden spears' mesh** (§5): rebuild them at real size, a 3 cm shaft, for example in Blender (`Docs/Blender_Items.md`).
 - **A precision grip.** Beads, a needle, a flint flake between finger and thumb. No held item needs one yet.
 - **The look is Wes's.** Whether each item sits as it should (the shields' handle above all, and the club, sickle and wooden spear's thick
   handles) is on the by-eye list in `Docs/BACKLOG.md`.

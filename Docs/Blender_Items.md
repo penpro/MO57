@@ -3,8 +3,9 @@
 Wes: "I saw a video about Claude being able to use blender really well now. Take a few items that need done and see if you can create some
 things, especially things like the crude bow that also needs animation."
 
-Seven items that were on gray placeholders now come out of one Blender script, built from measurements rather than scans or images:
-the three bows (rigged, with their draw), two arrows and two kits. Everything is procedural and re-runnable: change a number, run it again.
+Nine items now come out of one Blender script, built from measurements rather than scans or images: the three bows (rigged, with their
+draw), two arrows, two kits, and (later on Nov 2, Wes: "Yes, rebuild them") the two wooden spears, which had shared a kitbashed trench stick
+7-8 cm thick as held. Everything is procedural and re-runnable: change a number, run it again.
 
 | Item | What it is | Size, triangles |
 |---|---|---|
@@ -15,6 +16,8 @@ the three bows (rigged, with their draw), two arrows and two kits. Everything is
 | IronArrow01 | a planed shaft with red-ochre / black cresting, grey goose fletching, a socketed leaf-bladed iron head (rust in patches) | 78 cm + 5.6 cm head, 6.7k |
 | BowDrill01 | the kit as it lies: the bow (a bent branch, bark on) with its cord turned once round the spindle, a fireboard with three burnt sockets and their notches, the bearing block | 62 x 29 cm, 3.8k |
 | Snare01 | an anchor stake (sharpened, bark on) with the cord tied round its head, run out to an 11 cm noose and its slip knot | 36 x 19 cm, 1.8k |
+| WoodenSpear01 | a sharpened sapling: peeled, bark left in patches, wandering a few mm, thickest a third back from the point (as Schoningen's spears: point-forward balance) and tapering to the butt, the point carved over 22 cm | 200 cm, 2.9 cm at the butt, 3.3 at its thickest, 4.8k |
+| FireHardenedSpear01 | the same, its point (24 cm) held in the embers: charred black over the last 14 cm, browning off to 34 | 200 cm, 4.8k |
 
 ## 1. Running it
 
@@ -35,9 +38,9 @@ python Tools/check_bow.py --item SimpleBow01                                    
   It gave `M_MS_Base` "used with skeletal meshes" (a held bow is skinned). The draw clip is imported on its own as well (a skeletal mesh's
   re-import brings no animation), and a re-import keeps an existing skeleton's reference pose, so a bow rebuilt with another brace stops the
   import with a message: delete its `SK_<Id>`, `SK_<Id>_Skeleton` and `SK_<Id>_Anim` with the editor closed and import again.
-- `Content/Python/bow_hand_fit.py` seats a bow in her left hand (below); `Tools/blender_items.py --rows` writes the row patch
-  (`Saved/BlenderItems/rows.json`: the world mesh; a bow's `HeldVisual.SkeletalMesh`, `DrawAnimation`, hand transform and grip --
-  `GripHalfSize` from the bow's `grip_cm`, `GripPose` its fist) and applies it with `ue.py rows set`. Icons: `Tools/icon_studio.py --items ...`
+- `Tools/blender_items.py --rows` writes the row patch (`Saved/BlenderItems/rows.json`: the world mesh at world scale 1 -- these are built at
+  real size --; a bow's `HeldVisual.SkeletalMesh`, `DrawAnimation` and grip from `held_grip.bow_grip`) and applies it with `ue.py rows set`;
+  any other item `held_grip.ITEMS` holds gets its grip measured off the new mesh (`held_grip.measure_all`) and set too (`Docs/Held_Grip.md`). Icons: `Tools/icon_studio.py --items ...`
   as for any item (`--replace` after a rebuild).
 
 How each part is made: everything is a `Part` (vertices in cm, faces, a natural "proc" UV per island and per-vertex attributes); lofts

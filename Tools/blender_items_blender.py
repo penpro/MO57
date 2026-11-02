@@ -1378,6 +1378,63 @@ def build_snare():
     return parts, None
 
 
+# The wooden spears (Nov 2, N-260: the kitbash SM_WoodenSpear they shared was a trench stick 7-8 cm thick as held -- no hand closes on that).
+# A peeled sapling, sharpened: a real one (Schoningen's are 2.3 m, 3-5 cm at their thickest) is thickest about a third of the way back from
+# the point, so it flies and balances point-forward, and tapers to the butt; the point is carved over the last ~22 cm. A fire-hardened
+# spear's point was held in the embers: charred black at the tip, browning off over ~30 cm.
+SPEARS = {
+    "WoodenSpear01": {"length": 200.0, "butt_r": 1.45, "max_r": 1.65, "max_at": 0.62, "point": 22.0, "char": 0.0, "seed": 31},
+    "FireHardenedSpear01": {"length": 200.0, "butt_r": 1.45, "max_r": 1.65, "max_at": 0.62, "point": 24.0, "char": 34.0, "seed": 57},
+}
+
+
+def build_spear(spec):
+    """The spear along +X, the point at +X, its middle at the origin: a slightly wandering sapling, peeled, its point carved (and charred)."""
+    rnd = random.Random(spec["seed"])
+    L, point, char_len = spec["length"], spec["point"], spec["char"]
+    ph = [rnd.uniform(0.0, 2.0 * math.pi) for _ in range(4)]
+    n = int(L / 1.0)
+    pts, radii, attrs = [], [], []
+    for i in range(n + 1):
+        t = i / n                       # 0 butt .. 1 tip
+        x = -L / 2 + L * t
+        from_tip = L * (1.0 - t)
+        # the sapling's wander, a few millimetres
+        y = 0.45 * math.sin(2 * math.pi * 1.2 * t + ph[0]) + 0.2 * math.sin(2 * math.pi * 3.3 * t + ph[1])
+        z = 0.35 * math.sin(2 * math.pi * 0.9 * t + ph[2]) + 0.15 * math.sin(2 * math.pi * 4.1 * t + ph[3])
+        # thickest a third back from the point, tapering to the butt
+        if t <= spec["max_at"]:
+            r = spec["butt_r"] + (spec["max_r"] - spec["butt_r"]) * math.sin(0.5 * math.pi * t / spec["max_at"])
+        else:
+            r = spec["max_r"] - 0.1 * (t - spec["max_at"]) / (1.0 - spec["max_at"])
+        cut = 0.0
+        if from_tip < point:            # the carved point: a hollow taper to a near-sharp tip
+            u = 1.0 - from_tip / point
+            r = max(0.06, r * (1.0 - u) ** 1.25)
+            cut = 1.0
+        if i == 0:
+            cut = 1.0                   # the cut butt
+        r *= 1.0 + 0.03 * math.sin(7.0 * t * math.pi * 2 + ph[1])
+        ch = 0.0
+        if char_len > 0.0:
+            ch = 1.0 - smoothstep(14.0, char_len, from_tip)   # black over the last 14 cm, browning off to char_len
+        pts.append(Vector((x, y, z)))
+        radii.append(r)
+        attrs.append({"cut": cut, "char": ch})
+    shaft = Part("shaft", mat_stick("M_%s_Shaft" % ITEM, bark="#5a4836", wood="#c4a47a", peeled=0.4))   # peeled, bark left in patches
+    tube(shaft, pts, radii, sides=12, attrs=lambda i: attrs[i], island_len=40.0)
+    return [shaft], None
+
+
+def run_spear():
+    spec = SPEARS[ITEM]
+    tip = spec["length"] / 2
+    run_static(lambda: build_spear(spec), [
+        ("whole", (0, 0, 0), (0.3, -1.0, 0.6), 210.0), ("side", (0, 0, 0), (0.0, -1.0, 0.0), 210.0), ("top", (0, 0, 0), (0.0, -0.05, 1.0), 210.0),
+        ("point", (tip - 14, 0, 0), (0.4, -1.0, 0.6), 34.0), ("grip", (-tip + 60, 0, 0), (0.3, -1.0, 0.7), 16.0),
+        ("butt", (-tip + 2, 0, 0), (-0.6, -1.0, 0.5), 8.0)])
+
+
 def run_bowdrill():
     run_static(build_bowdrill, [("whole", (0, 4, 0), (0.6, -1.0, 1.1), 70.0), ("top", (0, 4, 0), (0.0, -0.08, 1.0), 70.0),
                                 ("side", (0, 4, 0), (0.0, -1.0, 0.25), 70.0), ("wrap", (0, 12, 1), (0.8, -1.0, 0.9), 9.0),
@@ -1390,7 +1447,7 @@ def run_snare():
                              ("knot", (16, 6, 0.2), (0.5, -1.0, 1.0), 6.0), ("point", (-13, 0, 1.2), (0.8, -1.0, 0.9), 8.0)])
 
 
-KITS = {"BowDrill01": run_bowdrill, "Snare01": run_snare}
+KITS = {"BowDrill01": run_bowdrill, "Snare01": run_snare, "WoodenSpear01": run_spear, "FireHardenedSpear01": run_spear}
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------------
