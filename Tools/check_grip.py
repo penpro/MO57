@@ -4,10 +4,16 @@ the hand -- as the game poses it, idle -- is measured against the item's handle 
 finger's nearest approach and the palm's. Close-ups of the hand: Saved/Screenshots/grip/<base>_<item>_<view>.png.
 
     python Tools/check_grip.py [--bases Femme,Harvey] [--items Torch01,HaftedAxe01] [--shots all|first|none] [--keep] [--reuse]
+                               [--clip A_2H_Idle_01_MH [--support] [--samples 6]]
 
 Prints a line per base and item and "GRIP PASS" when every item is seated on every base, no finger is more than PEN_CM into a handle (the
 palm PALM_PEN_CM), and each of the four fingers is within TOUCH_CM of it. --shots first: close-ups on the first base only (the default; all: every base).
 The editor may stay open (the instance builds its own world).
+
+--clip plays a clip on the body (a name under /MOFramework/Characters/Spear/ or a full path) instead of the idle, looping, and measures
+--samples times through it (the worst counts). --support also measures the OTHER hand on the same handle (Docs/Held_Grip.md, two hands: a
+spear's front hand in the two-hand stance): the game must hold it fully (AMOCharacter::GetHeldGripSupport 1), its four fingers within
+TOUCH_CM of the shaft, none past PEN_CM into it, the palm not past PALM_PEN_CM. Close-ups of that hand: <base>_<item>_support_<view>.png.
 """
 import argparse
 import glob
@@ -55,17 +61,19 @@ ok = eq.equip_from_inventory(inv, g, unreal.MOEquipmentSlot.SLOT)
 out('EQUIP added=%s equipped=%s' % (added, ok))
 """
 
-# The hand against the handle: FMOHandGrip's finger capsules and palm (metacarpal -> knuckle), scaled by the body's hand, off the body's bones
+# The hand against the handle: FMOHandGrip's finger capsules and palm (metacarpal -> knuckle), scaled by the body's hand, off the body's bones.
+# HELD: which hand's item (its handle as the game holds it, turned through the other hand on a long handle); SIDE: which hand is measured;
+# SHAFT: the handle as a long shaft (the other hand's grip is past the carrying hand's GripHalfSize.Z, on the same shaft).
 MEASURE = """import math
 p = unreal.GameplayStatics.get_player_pawn(world, 0)
 m = p.get_editor_property('mesh')
-r = p.get_held_grip_shape(LEFT)   # None while the hand grips nothing (a bool return is Python's success flag)
+r = p.get_held_grip_shape(HELD)   # None while the hand grips nothing (a bool return is Python's success flag)
 if not r:
     out('GRIPM none')
 else:
     T, half, style, scale = r[-4:]
     sphere = style == unreal.MOGripStyle.SPHERE
-    h = (half.x, half.y, half.z)
+    h = (half.x, half.y, 1.0e6 if SHAFT else half.z)
     def clear(pt, rad):
         q = T.inverse_transform_location(pt)
         x, y, z = q.x, q.y, q.z
@@ -80,7 +88,7 @@ else:
         if abs(z) > h[2]:
             d = max(d, abs(z) - h[2])
         return d - rad
-    S = 'l' if LEFT else 'r'
+    S = 'SIDE'
     R = {'thumb': (1.0, 0.92, 0.8), 'index': (0.85, 0.78, 0.68), 'middle': (0.86, 0.8, 0.7), 'ring': (0.8, 0.74, 0.65), 'pinky': (0.72, 0.66, 0.58)}
     res = []
     for f in ('thumb', 'index', 'middle', 'ring', 'pinky'):
@@ -98,7 +106,16 @@ else:
         for i in range(5):
             palm = min(palm, clear(a + (b - a) * (i / 4.0), 1.2 * scale))
     c = T.translation
-    out('GRIPM %s palm=%.2f scale=%.2f style=%s at=%.1f,%.1f,%.1f' % (' '.join(res), palm, scale, 'Sphere' if sphere else 'Power', c.x, c.y, c.z))
+    q = T.inverse_transform_location(m.get_socket_location('middle_01_' + S))
+    out('GRIPM %s palm=%.2f support=%.2f along=%.1f scale=%.2f style=%s at=%.1f,%.1f,%.1f' % (' '.join(res), palm, p.get_held_grip_support(HELD), q.z,
+        scale, 'Sphere' if sphere else 'Power', c.x, c.y, c.z))
+"""
+
+PLAY = """p = unreal.GameplayStatics.get_player_pawn(world, 0)
+seq = unreal.load_asset('CLIP')
+ai = p.get_editor_property('mesh').get_anim_instance()
+mt = ai.play_slot_animation_as_dynamic_montage(seq, 'DefaultSlot', 0.2, 0.2, 1.0, 100000) if seq else None
+out('PLAY %s %s %.2f' % (seq.get_name() if seq else 'missing', mt is not None, seq.get_play_length() if seq else 0.0))
 """
 
 HANDPOS = """p = unreal.GameplayStatics.get_player_pawn(world, 0)
@@ -145,16 +162,49 @@ def hand_shots(label, left):
     ui.console(NAME, "MO.Cam.Reset")
 
 
+def measure(held_left, side_left, shaft):
+    """One hand against one hand's held handle, as the game shows it: ({finger: cm}, palm cm, support weight, along cm, the raw row)."""
+    row = q(MEASURE.replace("HELD", "True" if held_left else "False").replace("SIDE", "l" if side_left else "r")
+            .replace("SHAFT", "True" if shaft else "False"), "GRIPM")
+    vals = dict(kv.split("=") for kv in row.split() if "=" in kv) if row and row != "none" else {}
+    fingers = {k: float(vals[k]) for k in ("thumb", "index", "middle", "ring", "pinky") if k in vals}
+    return fingers, float(vals.get("palm", 99)), float(vals.get("support", 0)), float(vals.get("along", 0)), row
+
+
+def judge(samples, support=False):
+    """The worst of the samples: each finger's deepest and the four fingers' farthest, the palm's deepest; ok against PEN_CM, TOUCH_CM,
+    PALM_PEN_CM (and, for the other hand, the game holding it fully in every sample)."""
+    if not samples or any(not s[0] for s in samples):
+        return False, "no answer (%s)" % (samples[-1][4] if samples else "")
+    deepest = min(min(s[0].values()) for s in samples)
+    farthest = max(max(s[0][k] for k in ("index", "middle", "ring", "pinky")) for s in samples)
+    palm = min(s[1] for s in samples)
+    weight = min(s[2] for s in samples)
+    ok = deepest >= -PEN_CM and farthest <= TOUCH_CM and palm >= -PALM_PEN_CM and (not support or weight >= 0.99)
+    fingers = " ".join("%s=%.2f..%.2f" % (k, min(s[0][k] for s in samples), max(s[0][k] for s in samples))
+                       for k in ("thumb", "index", "middle", "ring", "pinky"))
+    along = " along=%.0f..%.0f" % (min(s[3] for s in samples), max(s[3] for s in samples)) if support else ""
+    return ok, "%s palm>=%.2f support>=%.2f%s" % (fingers, palm, weight, along)
+
+
 def main():
+    global NAME
     ap = argparse.ArgumentParser()
     ap.add_argument("--bases", default=",".join(BASES))
     ap.add_argument("--items", default=",".join(ITEMS))
     ap.add_argument("--shots", choices=["all", "first", "none"], default="first")
     ap.add_argument("--seed", type=int, default=777)
+    ap.add_argument("--clip", default="", help="a clip on the body (a name under /MOFramework/Characters/Spear/ or a full path), looping")
+    ap.add_argument("--support", action="store_true", help="also the other hand on the same handle (a two-hand clip)")
+    ap.add_argument("--samples", type=int, default=0, help="measurements through the clip (default 6 with --clip, else 1)")
+    ap.add_argument("--name", default=NAME, help="the instance's name (two sessions can check at once)")
     ap.add_argument("--keep", action="store_true")
     ap.add_argument("--reuse", action="store_true")
     a = ap.parse_args()
+    NAME = a.name
     bases, items = a.bases.split(","), a.items.split(",")
+    clip = a.clip if not a.clip or a.clip.startswith("/") else "/MOFramework/Characters/Spear/" + a.clip
+    samples = a.samples or (6 if clip else 1)
     try:
         if not a.reuse:
             ui.start(NAME, ue.UPROJECT, ue.EDITOR_EXE, creator=True, res=(1280, 720), nosteam=True)
@@ -179,23 +229,38 @@ def main():
                 off = ui.log_size(NAME)
                 eq = q(EQUIP.replace("ITEM", item).replace("SLOT", "LEFT_HAND" if left else "RIGHT_HAND"), "EQUIP")
                 seated = ui.wait_log(NAME, r"seated [^\r\n]* hand of [^\r\n]*|cannot be seated[^\r\n]*", since=off, timeout=12)
-                time.sleep(0.6)   # the fingers close over 0.15 s
-                row = q(MEASURE.replace("LEFT", "True" if left else "False"), "GRIPM")
-                vals = dict(kv.split("=") for kv in row.split() if "=" in kv) if row and row != "none" else {}
-                fingers = {k: float(vals[k]) for k in ("thumb", "index", "middle", "ring", "pinky") if k in vals}
-                palm = float(vals.get("palm", 99))
-                ok = bool(fingers) and min(fingers.values()) >= -PEN_CM and palm >= -PALM_PEN_CM and \
-                    max(fingers[k] for k in ("index", "middle", "ring", "pinky")) <= TOUCH_CM
-                line = "%-7s %-20s %s | %s | %s" % (base, item, "ok  " if ok else "FAIL", row or "no answer",
-                                                     seated.group(0)[-90:] if seated else "no seat line (%s)" % eq)
+                interval = 0.0
+                if clip:
+                    played = q(PLAY.replace("CLIP", clip), "PLAY").split()
+                    if len(played) < 3 or played[1] != "True":
+                        print("FAIL: %s did not play (%s)" % (clip, " ".join(played)), flush=True)
+                        return 1
+                    interval = max(0.1, float(played[2]) / samples)
+                time.sleep(0.6)   # the fingers close over 0.15 s (the clip blends in over 0.2)
+                held, other = [], []
+                for _ in range(samples):
+                    held.append(measure(left, left, False))
+                    if a.support:
+                        other.append(measure(left, not left, True))
+                    time.sleep(interval)
+                ok, text = judge(held)
+                seat = seated.group(0)[-110:] if seated else "no seat line (%s)" % eq
+                line = "%-7s %-20s %s | %s | %s" % (base, item, "ok  " if ok else "FAIL", text, seat)
+                if a.support:
+                    sok, stext = judge(other, support=True)
+                    line += "\n%-7s %-20s %s | the other hand: %s" % ("", "", "ok  " if sok else "FAIL", stext)
+                    ok = ok and sok
                 print(line, flush=True)
                 results.append(line)
                 if not ok:
                     failures.append("%s %s" % (base, item))
                 if a.shots == "all" or (a.shots == "first" and bi == 0):
                     hand_shots("%s_%s" % (base, item), left)
-        print("GRIP %s: %d base x item pairs, %d failing%s; close-ups %s" % (
-            "PASS" if not failures else "FAIL", len(results), len(failures), (": " + ", ".join(failures)) if failures else "", SHOTS), flush=True)
+                    if a.support:
+                        hand_shots("%s_%s_support" % (base, item), not left)
+        print("GRIP %s: %d base x item pairs%s, %d failing%s; close-ups %s" % (
+            "PASS" if not failures else "FAIL", len(results), " in %s" % clip if clip else "", len(failures),
+            (": " + ", ".join(failures)) if failures else "", SHOTS), flush=True)
         return 0 if not failures else 1
     finally:
         if not a.keep:

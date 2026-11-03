@@ -481,6 +481,122 @@ bool FMOHandGrip::Hold(const USkeletalMesh* Body, const UAnimSequence* Fist, flo
 	return true;
 }
 
+float FMOHandGrip::PalmClearance(const FPalm& Palm, const FShape& Shape)
+{
+	float Min = 99.0f;
+	for (int32 i = 0; i < 4; ++i)
+	{
+		for (int32 s = 0; s <= 4; ++s)
+		{
+			Min = FMath::Min(Min, Clearance(Shape, FMath::Lerp(Palm.Metacarpal[i], Palm.Knuckle[i], s / 4.0f), Palm.Radius));
+		}
+	}
+	return Min;
+}
+
+float FMOHandGrip::Support(FShape& Handle, const FTransform& SeatCS, const FPalm* Carrying, const FPalm* Free, const FVector2D& Run, float Weight,
+	FShape& OutStretch)
+{
+	if (Handle.Style != EMOGripStyle::Power || Run.Y <= Run.X || Weight <= 0.0f)
+	{
+		return 0.0f;
+	}
+	auto Ramp = [](float X, float Full, float None) { return FMath::Clamp((None - X) / (None - Full), 0.0f, 1.0f); };
+	auto Deg = [](const FVector& A, const FVector& B) { return FMath::RadiansToDegrees(FMath::Acos(FMath::Min(FMath::Abs(FVector::DotProduct(A, B)), 1.0f))); };
+	const FVector Seat = SeatCS.GetLocation();
+	const FVector SeatZ = SeatCS.GetUnitAxis(EAxis::Z);
+
+	// The aim: the line from the carrying hand's grip to the free hand's seat, the handle turned onto it (its end toward that hand)
+	const FVector Centre = Handle.Frame.GetLocation();
+	const FVector Axis = Handle.Frame.GetUnitAxis(EAxis::Z);
+	const FQuat Seated = Handle.Frame.GetRotation();
+	const FVector Line = Seat - Centre;
+	const float Apart = Line.Size();
+	const float Beside = Ramp(-Apart, -SupportApartFullCm, -SupportApartNoneCm);   // 0: the free hand in the carrying hand's place
+	if (Beside > 0.0f)
+	{
+		const FVector Dir = Line / Apart;
+		const bool bHeadward = FVector::DotProduct(Dir, Axis) >= 0.0f;
+		const float Along = bHeadward ? Apart : -Apart;
+		const float Aim = Ramp(Deg(Dir, Axis), SupportAimFullDeg, SupportAimNoneDeg) * Ramp(Deg(SeatZ, Dir), SupportTurnFullDeg, SupportTurnNoneDeg)
+			* Beside * Ramp(FMath::Max(Run.X - Along, Along - Run.Y), -SupportEndCm, 0.0f) * Weight;
+		if (Aim > 0.0f)
+		{
+			// The line through both grips, slid square to itself out of each palm until it only touches (a few passes: each slide turns it a
+			// little), then the handle on it
+			FVector Through[2] = {Centre, Seat};
+			const FPalm* Palms[2] = {Carrying, Free};
+			FQuat OnLine = Seated;
+			for (int32 Pass = 0; Pass < 3; ++Pass)
+			{
+				const FVector Now = (Through[1] - Through[0]).GetSafeNormal();
+				OnLine = (FQuat::FindBetweenNormals(bHeadward ? Axis : -Axis, Now) * Seated).GetNormalized();
+				for (int32 h = 0; h < 2; ++h)
+				{
+					if (!Palms[h])
+					{
+						continue;
+					}
+					FShape Here;
+					Here.Frame = FTransform(OnLine, Through[h]);
+					Here.HalfSize = FVector(Handle.HalfSize.X, Handle.HalfSize.Y, SupportReachCm);
+					Here.Style = Handle.Style;
+					if (PalmClearance(*Palms[h], Here) >= 0.0f)
+					{
+						continue;   // on it or clear of it: never drawn into a palm
+					}
+					FVector PalmCentre = FVector::ZeroVector;
+					for (int32 i = 0; i < 4; ++i)
+					{
+						PalmCentre += (Palms[h]->Metacarpal[i] + Palms[h]->Knuckle[i]) * 0.125f;
+					}
+					FVector Out = Through[h] - PalmCentre;
+					Out = (Out - Now * FVector::DotProduct(Out, Now)).GetSafeNormal();
+					if (Out.IsNearlyZero())
+					{
+						continue;
+					}
+					float In = 0.0f, Clear = SupportSlideCm;
+					Here.Frame.SetLocation(Through[h] + Out * Clear);
+					if (PalmClearance(*Palms[h], Here) >= 0.0f)
+					{
+						for (int32 It = 0; It < 16; ++It)
+						{
+							const float Mid = 0.5f * (In + Clear);
+							Here.Frame.SetLocation(Through[h] + Out * Mid);
+							(PalmClearance(*Palms[h], Here) >= 0.0f ? Clear : In) = Mid;
+						}
+					}
+					Through[h] += Out * Clear;
+				}
+			}
+			OnLine = (FQuat::FindBetweenNormals(bHeadward ? Axis : -Axis, (Through[1] - Through[0]).GetSafeNormal()) * Seated).GetNormalized();
+			Handle.Frame.SetRotation(FQuat::Slerp(Seated, OnLine, Aim).GetNormalized());
+			Handle.Frame.SetLocation(FMath::Lerp(Centre, Through[0], Aim));
+		}
+	}
+
+	// The fingers: the free hand's seat against the handle as turned
+	const FVector Grip0 = Handle.Frame.GetLocation();
+	const FVector Turned = Handle.Frame.GetUnitAxis(EAxis::Z);
+	const FVector Rel = Seat - Grip0;
+	const float At = FVector::DotProduct(Rel, Turned);
+	const float Off = (Rel - Turned * At).Size();
+	const float Grip = Ramp(Off, SupportFullCm, SupportNoneCm) * Ramp(Deg(SeatZ, Turned), SupportTurnFullDeg, SupportTurnNoneDeg) * Beside
+		* Ramp(FMath::Max(Run.X - At, At - Run.Y), -SupportEndCm, 0.0f) * Weight;
+	if (Grip <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// The handle's section where the hand is, as far either way as the fingers reach, cut at the item's ends (a finger may lie over the butt)
+	const float Lo = FMath::Max(Run.X, At - SupportReachCm);
+	const float Hi = FMath::Min(Run.Y, At + SupportReachCm);
+	OutStretch.Frame = FTransform(Handle.Frame.GetRotation(), Grip0 + Turned * (0.5f * (Lo + Hi)));
+	OutStretch.HalfSize = FVector(Handle.HalfSize.X, Handle.HalfSize.Y, 0.5f * (Hi - Lo));
+	OutStretch.Style = Handle.Style;
+	return Grip;
+}
+
 float FMOHandGrip::FingerClearance(const FTransform& ParentCS, const FFinger& Finger, const FShape& Shape, const float Bend[3])
 {
 	FVector J[4];

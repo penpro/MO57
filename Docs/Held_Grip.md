@@ -3,7 +3,8 @@
 > Nov 2 2026, Wes: "take what you learned here and make sure it works on the other metahumans and make sure we have a standard for how
 > they grip other items etc". This replaces hand-tuned held transforms (N-207: `RightHandTransform` nudged per item, which Wes had kept for
 > himself on Oct 24; BR31-12: the hammerstone floating beside Trey's hand). Code: `FMOHandGrip` (`MOHandGrip.h/.cpp`), `AMOCharacter::SeatHandGrip`,
-> `UMOBodyRetargetAnimInstance` (the fingers, the short draw). Python mirror and item measuring: `Content/Python/held_grip.py`.
+> `UMOBodyRetargetAnimInstance` (the fingers, the second hand, the short draw), `AMOCharacter::AimHandGrip` (the item between two hands).
+> Python mirror (the seat and the fingers) and item measuring: `Content/Python/held_grip.py`.
 
 ## 1. The rule
 
@@ -79,6 +80,39 @@ so the hand holds the item in every clip, a walk's loose hand too. The grip blen
 - **Capsules:** the radii are `FMOHandGrip::FingerRadii` times the hand's scale. The fingertip lies 0.85 of the middle phalanx past the
   last joint.
 
+### Two hands (`FMOHandGrip::Support`; Nov 2, N-261)
+
+The hand that carries nothing holds a long handle where the animation puts it: a spear's front hand, a maul or hoe swung two-handed. A
+rigid shaft in two hands lies on the line through both grips, so the item turns to that line. Neither hand moves.
+
+1. **The other hand's seat.** On equip and when the body changes, `AMOCharacter::SeatHandGrip` also seats the handle in the other hand
+   (`SupportInHand`), the same way (§2). It also works out how far the item runs along the handle's axis, from its mesh's bounds as held
+   (`Run`). A bow has neither: its other hand draws the string.
+2. **The aim.** Every evaluation the handle turns about the carrying hand's grip until it runs through the other hand's seat. The turned
+   shaft would cross a cupped palm at one edge, so the line then slides square to itself out of each palm until it only touches. That is
+   the seat's own rule: never into a palm, at most 3 cm.
+3. **The fingers.** The other hand closes on the turned handle, with the item's fist (§3). The carrying hand closes on it as turned.
+4. **The item.** The anim instance hands the turned handle to `AMOCharacter::AimHandGrip` in `NativePostEvaluateAnimation`, before the
+   attachments update, so the mesh shows in the same frame the fingers closed on.
+
+**When the other hand holds it** (each gate ramps from full to none):
+
+| Gate | Full | None |
+|---|---|---|
+| The line between the two seats, off the handle's axis | 20° | 30° |
+| The other hand's own axis, off that line (either way round) | 25° | 45° |
+| The two seats apart | 10 cm | 6 cm |
+| The other hand's centre in from the item's end | 4 cm | 0 |
+| The other hand's seat off the turned axis (its fingers) | 2 cm | 5 cm |
+
+**Why the item turns.** Closing the fingers alone was the first plan. Measured Nov 2 (Femme and Harvey, FlintSpear01) before the change,
+the clips put the front hand too far off for that:
+
+- **Two-hand idle, walk, run and crouch:** the front hand is 8-18 cm off the shaft as the rear hand's seat aims it, 54-75 cm up it. The
+  seat aims the shaft 8.5-14° off the line through the clip's two hands, the line the source's spear lay on. The front hand's own axis
+  lies 5-16° off that line.
+- **One-hand idle and walk:** the free hand is 39-46° off, turned 54-87°, toward the butt. It never grips.
+
 ## 4. A bow
 
 - **The grip.** The Blender bows (`Docs/Blender_Items.md`) have the grip's centre at the root, the handle along +Z and the draw along +Y.
@@ -149,12 +183,21 @@ on the ground and in the hand.
   - `Wrap`: touching, past the fist's own bend, the thumb going over, a finger straightening, least-in.
   - `EveryBase`: every base in `UMOSurvivorBaseSettings`, both hands, a bow's grip, an axe's haft and a stone. The four fingers on it, the
     thumb not in it, the two hands alike. It needs the local Sparrow clip; without it the test warns and skips.
+  - `Support`: the other hand on a shaft. The shaft turns through its seat either way round, toward the head or the butt, half way at half
+    the blend. It stays as it was where no hand holds it: a one-hand clip's angles, past the head, beside the carrying hand, no run, a stone.
+  - `TwoHands`: every base, either hand as the other hand, its seat 55 cm up a shaft held 12° off the line, its own axis 0° or 12° off.
+    The four fingers on the shaft, the thumb not in it, the palm on it and not in it. Before the palm slide, the 12° case put the palm
+    0.56-0.78 cm into the shaft on every base and the index finger 0.04-0.06.
 - **`held_grip.hold_all()`:** the same in Python, offline in the editor.
 - **`python Tools/check_grip.py [--bases ..] [--items ..] [--shots all|first|none]`:** the game itself. Each base holds each item, idle.
   - Measured: each finger's and the palm's nearest approach to the handle as the game holds it (`AMOCharacter::GetHeldGripShape`).
   - Fails: a finger more than 0.3 cm into the handle, the palm more than 0.5 (its soft side gives, and an animation's palm is not quite the
     fist's), or one of the four fingers more than 0.5 off it.
   - Close-ups: `Saved/Screenshots/grip/<base>_<item>_{out,front}.png`.
+  - **Two hands:** `--clip A_2H_Idle_01_MH --support [--samples 8]`. It plays a clip on the body (a name under
+    `/MOFramework/Characters/Spear/` or a full path), measures through it, and measures the other hand on the same shaft too. It fails
+    unless the game holds it fully (`AMOCharacter::GetHeldGripSupport` 1) with the same finger and palm limits. Close-ups of that hand:
+    `<base>_<item>_support_{out,front}.png`. `--name` runs a second instance beside another session's.
 - **`python Tools/check_bow.py --item CompositeBow01 --base Harvey`:** the bow drawn on any base; the string stays on the fingers.
 
 **Measured Nov 2** (`check_grip.py --shots all`, seed 777, the idle hand). 163 of 165 base x item pairs hold:
@@ -167,6 +210,18 @@ on the ground and in the hand.
 
 Close-ups: `Saved/Screenshots/grip/`.
 
+**Two hands, measured Nov 2** (`check_grip.py --bases Femme,Harvey --clip A_2H_Idle_01_MH | A_2H_walk_01_MH --support`, the six spears;
+6 samples through the idle, 8 through the walk): GRIP PASS 12 / 12 in each.
+
+- **The front hand:** held fully in every sample (support 1.00). Its four fingers are at 0.00 cm on the shaft and its palm is on it
+  (0.00). It holds the shaft 55-57 cm up from the rear hand on Femme and 74-76 cm on Harvey.
+- **The thumbs:** 0.00-0.32 cm off on Femme, 0.47-0.95 on Harvey (it closes over the fingers on a thin shaft).
+- **The rear hand,** holding the turned shaft: its fingers at 0.00 cm and its palm 0.04-0.07 cm clear.
+- **The one-hand idle and walk** (FlintSpear01, WoodenSpear01): the free hand is left alone (support 0.00, 24-64 cm off the shaft), and
+  the carrying hand still holds it.
+
+Close-ups of the front hand on Femme: `Saved/Screenshots/grip/Femme_<spear>_support_{out,front}.png`.
+
 **The bow on three bodies** (`check_bow.py --item CompositeBow01 --base Femme / Trey / Harvey`): each passes.
 
 - 36 samples nocked, with the string 0.0 cm from the fingers through the draw and the hold.
@@ -177,8 +232,14 @@ Close-ups: `Saved/Screenshots/grip/`.
 
 ## 7. Not done
 
-- **Two-handed holds.** The other hand on a spear's shaft or a maul's haft is as the animation puts it. The spear set's front hand, and a
-  maul or hoe swung two-handed, need a support grip: the other hand closing on the same handle where the clip puts it.
+- **Two hands beyond the spear set's stances** (§3, two hands). The support grip is checked in game on the spear set's two-hand idle and
+  walk, and its angles were measured in the run and crouch.
+  - **Not yet measured:** the two-hand thrusts, jab, swings and block. Their retargeted arms are 20-26° off the source
+    (`Docs/Animation_GASP.md` section 7), so the front hand may fall outside the gates there.
+  - **Not testable yet:** no clip swings a maul, hoe or axe two-handed (F53's attacks), so hands side by side on a haft are covered by the
+    tests only.
+  - **The 1H to 2H changes:** they pass through the 20-30° ramp; not looked at.
+  - **The Python mirror:** `held_grip.py` has no copy of `Support`.
 - **The drawing hand to the string.** Sparrow's draw keeps the hand 7-11 cm off the bow's plane and, on a bigger body, further back at
   the start; the string goes to the fingers. An IK bringing the fingers onto the string's line from the nock on would make every body draw
   in the bow's plane, as an archer does.

@@ -238,9 +238,11 @@ missed a handle that the finger passes clean through. A drawn bow also stops a l
 nocked, the string's nocking point is on her fingers through the whole of `RMB_Drawback` and `RMB_Loop` (`Tools/check_bow.py`) and the
 limbs bend for the draw; released, it snaps to brace and settles. `MO.Test.BowShot` plays draw / hold / loose.
 
-Not done (F53's work, when the attacks are built): **the spear in her hands** (its seat in each hand and its row's `GripHalfSize` /
-`GripPose`: the hands now close on any held handle that has them; a two-hand grip needs the second hand's seat), the arrow on
-the string, the bow's carry in the idle stances; **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
+**The spear in both hands (Nov 2, N-261):** in the two-hand stance the front hand holds the shaft too. The spear turns about the rear
+hand's grip onto the line through the front hand's own seat, and the front hand's fingers close on it (`Docs/Held_Grip.md` section 3, two
+hands). This is checked in the two-hand idle and walk on Femme and Harvey; the thrusts, swings and block are not measured yet.
+
+Not done (F53's work, when the attacks are built): the arrow on the string, the bow's carry in the idle stances; **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
 the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must
 carry the capsule with it (root motion from the pelvis, as `UpdateTraversalAnimation` fits the GASP moves) or the body leaves it and
 snaps back; the 2H stance is the pack's (back heel up), Sparrow's is Paragon's (wide, stylized); the rest of the spear pack (the other

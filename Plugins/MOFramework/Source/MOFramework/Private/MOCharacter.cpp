@@ -3144,6 +3144,8 @@ void AMOCharacter::SeatHandGrip(int32 Hand)
 		return;
 	}
 	Grip.SeatedOn = Body;   // once per body, whether or not it seats
+	Grip.Run = FVector2D::ZeroVector;
+	Grip.SupportWeight = 0.0f;
 	FTransform HandleInHand;
 	FString Why;
 	if (!FMOHandGrip::Seat(Body, Grip.Fist.Get(), Grip.FistTime, Hand == 0, Grip.Style, Grip.HalfSize, Grip.HandOffset, HandleInHand, Grip.HandScale, &Why))
@@ -3158,9 +3160,48 @@ void AMOCharacter::SeatHandGrip(int32 Hand)
 	FTransform MeshInHand = GripTransform.Inverse() * HandleInHand;
 	MeshInHand.SetScale3D(Grip.HeldScale);
 	Handle->SetRelativeTransform(MeshInHand);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: seated %s in the %s hand of %s (hand x%.2f): handle at %s"),
+	Grip.HandleInHand = HandleInHand;
+
+	// A second hand on a long handle (Docs/Held_Grip.md, two hands): where the other hand's palm would hold it, and how far the item runs along
+	// the handle (its mesh's bounds as held, from the handle's centre). Not a bow: its other hand draws the string (LimitDraw).
+	float OtherScale = 1.0f;
+	if (Grip.Style == EMOGripStyle::Power && !Handle->IsA<UMOBowMeshComponent>()
+		&& FMOHandGrip::Seat(Body, Grip.Fist.Get(), Grip.FistTime, Hand != 0, Grip.Style, Grip.HalfSize, 0.0f, Grip.SupportInHand, OtherScale))
+	{
+		const FBoxSphereBounds Bounds = Handle->CalcBounds(FTransform::Identity);
+		const FVector Lo = Bounds.Origin - Bounds.BoxExtent;
+		const FVector Hi = Bounds.Origin + Bounds.BoxExtent;
+		FVector2D Run(UE_BIG_NUMBER, -UE_BIG_NUMBER);
+		for (int32 Corner = 0; Corner < 8; ++Corner)
+		{
+			const FVector P((Corner & 1) ? Hi.X : Lo.X, (Corner & 2) ? Hi.Y : Lo.Y, (Corner & 4) ? Hi.Z : Lo.Z);
+			const float Z = GripTransform.InverseTransformPositionNoScale(P * Grip.HeldScale).Z;
+			Run = FVector2D(FMath::Min(Run.X, Z), FMath::Max(Run.Y, Z));
+		}
+		Grip.Run = Run;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: seated %s in the %s hand of %s (hand x%.2f): handle at %s, the item along it %.0f..%.0f cm"),
 		*GetName(), *Handle->GetName(), Hand == 0 ? TEXT("left") : TEXT("right"), *Body->GetName(), Grip.HandScale,
-		*HandleInHand.GetLocation().ToCompactString());
+		*HandleInHand.GetLocation().ToCompactString(), Grip.Run.X, Grip.Run.Y);
+}
+
+void AMOCharacter::AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight)
+{
+	FHandGrip& Grip = HandGrips[Hand];
+	USceneComponent* Handle = Grip.Handle.Get();
+	Grip.SupportWeight = SupportWeight;
+	if (!Handle || Grip.Run.Y <= Grip.Run.X)
+	{
+		return;   // only a long handle a second hand can hold is ever turned from its seat
+	}
+	FTransform GripTransform = Grip.GripTransform;
+	GripTransform.SetScale3D(FVector::OneVector);
+	FTransform MeshInHand = GripTransform.Inverse() * HandleInHand;
+	MeshInHand.SetScale3D(Grip.HeldScale);
+	if (!MeshInHand.Equals(Handle->GetRelativeTransform(), 1.0e-3))
+	{
+		Handle->SetRelativeTransform(MeshInHand);
+	}
 }
 
 bool AMOCharacter::GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const

@@ -1031,10 +1031,23 @@ public:
 		FVector HeldScale = FVector::OneVector;   // the mesh as held: the item's real size (WorldVisual's scale)
 		float HandScale = 1.0f;                   // this body's knuckle span over the reference hand's
 		TWeakObjectPtr<const USkeletalMesh> SeatedOn;   // the body the seat was worked out on (a new body re-seats it: Tick)
+		FTransform HandleInHand = FTransform::Identity;   // the seat: the handle in this hand bone's space (the item may be turned from it: Run)
+		FTransform SupportInHand = FTransform::Identity;   // the handle as the OTHER hand would hold it (its own seat), in that hand bone's space
+		FVector2D Run = FVector2D::ZeroVector;    // the item along the handle's axis from its centre (cm: butt, head); zero: no second hand on it
+		float SupportWeight = 0.0f;               // how far the other hand holds it now (UMOBodyRetargetAnimInstance, each evaluation)
 	};
 
 	/** The hand's grip, false while it holds nothing it closes on. */
 	bool GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const;
+
+	/** The held item as the hands left it after an evaluation (UMOBodyRetargetAnimInstance): its handle in the carrying hand's bone space -- the
+	 *  seat, or turned through the other hand on a long handle (FMOHandGrip::Support) -- and how far the other hand holds it. */
+	void AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight);
+
+	/** How far the other hand holds this hand's item (0..1: FMOHandGrip::Support; Docs/Held_Grip.md, two hands). For the checks
+	 *  (Tools/check_grip.py --clip). */
+	UFUNCTION(BlueprintCallable, Category="MO|HeldItems")
+	float GetHeldGripSupport(bool bLeftHand) const { return HandGrips[bLeftHand ? 0 : 1].SupportWeight; }
 
 	/** The held item's handle as the hand closes on it: its frame (world, cm), half sizes, style, and this body's hand scale (its knuckle span
 	 *  over the reference hand's). False while the hand grips nothing. For the checks (Tools/check_grip.py, check_bow.py; Docs/Held_Grip.md). */

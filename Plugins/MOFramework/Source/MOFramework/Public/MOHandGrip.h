@@ -17,6 +17,8 @@ class USkeletalMesh;
  *  - Fingers (UMOBodyRetargetAnimInstance, every evaluation): each closes from the open hand toward full flexion -- along the way the fist
  *    flexes it, on to a human joint's range -- until a phalanx touches the handle (a tendon's closing: the joints up to the touching phalanx
  *    stop, the rest go on). A hand bigger than the fist was made for closes further round a thin handle instead of stopping in the air.
+ *  - Support (UMOBodyRetargetAnimInstance, every evaluation): the other hand, carrying nothing, on a long handle where the clip puts it -- the
+ *    handle turned through that hand's own seat, its fingers closed on it (a spear's front hand).
  * Pure functions: the tests and Content/Python/held_grip.py (the same numbers offline) use them as the game does.
  */
 struct MOFRAMEWORK_API FMOHandGrip
@@ -112,6 +114,56 @@ struct MOFRAMEWORK_API FMOHandGrip
 	/** The whole grip in the fist's palm, as the game closes it: the seat, then each finger wrapped (thumb .. pinky), its bends and clearance. */
 	static bool Hold(const USkeletalMesh* Body, const UAnimSequence* Fist, float FistTime, bool bLeftHand, EMOGripStyle Style, const FVector& HalfSize,
 		float HandOffset, FTransform& OutHandleInHand, float OutClearance[5], float OutBend[5][3], FString* OutWhy = nullptr);
+
+	/**
+	 * A second hand on the same handle (Docs/Held_Grip.md, two hands): the hand that carries nothing holds a long Power handle where the
+	 * animation puts it -- a spear's front hand, a maul's or hoe's upper hand. A rigid shaft in two hands lies on the line through both grips,
+	 * so the handle turns about the carrying hand's grip until it runs through the free hand's own seat (SeatInHand for that hand: where its
+	 * palm would hold it), and that hand's fingers close on it. Neither hand moves. Measured Nov 2 on Femme and Harvey: the spear set's
+	 * two-hand clips put the front hand's seat 8-14 deg off the handle as the rear hand's seat holds it (8-18 cm off its axis), its own axis
+	 * 5-16 deg off the line between the hands; the one-hand clips' free hand lies 39-46 deg off, turned 54-87 deg.
+	 *  - Aim: the line between the two seats within SupportAimFullDeg of the handle's axis turns it fully, past SupportAimNoneDeg not at all;
+	 *    the free hand's own axis within SupportTurnFullDeg of that line (either way round: a spear's two hands face the same way, a staff's may
+	 *    not), past SupportTurnNoneDeg not at all; the free hand on the item (Run), its centre SupportEndCm in from an end.
+	 *  - Fingers: the free hand's seat within SupportFullCm of the turned handle's axis closes them fully, past SupportNoneCm not at all.
+	 *  - Both: the seats SupportApartFullCm apart or more (two hands side by side on a haft, a hand's width), none under SupportApartNoneCm
+	 *    (one hand in the other's place).
+	 */
+	static constexpr float SupportAimFullDeg = 20.0f;
+	static constexpr float SupportAimNoneDeg = 30.0f;
+	static constexpr float SupportTurnFullDeg = 25.0f;
+	static constexpr float SupportTurnNoneDeg = 45.0f;
+	static constexpr float SupportApartFullCm = 10.0f;
+	static constexpr float SupportApartNoneCm = 6.0f;
+	static constexpr float SupportEndCm = 4.0f;
+	static constexpr float SupportFullCm = 2.0f;
+	static constexpr float SupportNoneCm = 5.0f;
+	/** The stretch of the handle the free hand closes on runs this far either way from its seat (cut at the item's ends). */
+	static constexpr float SupportReachCm = 10.0f;
+
+	/** A palm as it lies under a handle: its four metacarpals to their knuckles (index .. pinky) and the soft side's radius round them
+	 *  (PalmRadius times the hand's scale) -- what SeatInHand slides a handle against and Tools/check_grip.py measures. */
+	struct FPalm
+	{
+		FVector Metacarpal[4];
+		FVector Knuckle[4];
+		float Radius = PalmRadius;
+	};
+	/** The palm's nearest approach to a handle (cm, negative inside). */
+	static float PalmClearance(const FPalm& Palm, const FShape& Shape);
+
+	/** A turned handle crosses a cupped palm at one edge (Nov 2: 0.6-0.8 cm into it, the shaft 12 deg across the seat's axis), so the line
+	 *  through the two hands slides square to itself out of each palm until it only touches (the seat's own rule), never into one, at most
+	 *  this far. */
+	static constexpr float SupportSlideCm = 3.0f;
+
+	/** A free hand on a long handle: Handle (the carrying hand's seat of it, in the space SeatCS is in) turned through the free hand's seat and
+	 *  slid out of either palm (Carrying, Free: null leaves that hand out), by how far that hand lies along it times Weight (the grip's own
+	 *  blend); returns how far the free hand's fingers close (0..1, Weight included) on OutStretch, the part of the turned handle in its reach.
+	 *  SeatCS: the free hand's seat; Run: how far the item runs along the handle's axis from its centre (cm: X toward the butt, negative; Y
+	 *  toward the head). */
+	static float Support(FShape& Handle, const FTransform& SeatCS, const FPalm* Carrying, const FPalm* Free, const FVector2D& Run, float Weight,
+		FShape& OutStretch);
 
 	/** The standard Power seat in the four knuckles' frame (e1 little finger -> index, e2 toward the fist's curled fingertips, e3 their cross;
 	 *  per cm of knuckle span): the handle's centre, its axis and its face. Measured Nov 2 2026 from Sparrow's bow in her fist (RMB_Loop at

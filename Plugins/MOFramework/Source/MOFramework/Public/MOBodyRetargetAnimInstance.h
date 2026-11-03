@@ -38,6 +38,9 @@ struct FMOClimbLimbIK
  *  (FMOHandGrip::Wrap): all its joints together from the open hand (the reference pose) toward full flexion, until a phalanx touches the
  *  handle; the joints up to that phalanx stop, the ones past it go on. The animation's own fingers are replaced, so the hand holds it in every
  *  clip (a walk's loose hand too).
+ *  The other hand, carrying nothing, holds the same handle where the clip puts it (a spear's front hand, a maul's upper hand): the handle turns
+ *  through that hand's own seat of it (SupportInHand) and out of both palms (FMOHandGrip::Support), its fingers close on it, and the item
+ *  follows after the evaluation (AMOCharacter::AimHandGrip). Neither hand moves.
  *  A bow also limits the other hand's draw: drawn (nocked) past the bow's full draw -- a longer arm than the one it was built for: Harvey's
  *  draw is 85 cm, the bows' 64 -- the drawing hand stops there (two-bone IK along the draw), as an archer short-draws a bow too short for him. */
 struct FMOHandGripIK
@@ -48,6 +51,8 @@ struct FMOHandGripIK
 	float HandScale = 1.0f;   // the hand's knuckle span over FMOHandGrip::RefSpanCm: its fingers' thickness
 	FQuat Fist[15];           // thumb, index, middle, ring, pinky x the 01 / 02 / 03 joints: local rotations
 	float Alpha = 0.0f;       // 0 the animation's fingers .. 1 the grip (blends over GripBlendSeconds)
+	FTransform SupportInHand = FTransform::Identity;   // the other hand's own seat of this handle, in that hand bone's space
+	FVector2D Run = FVector2D::ZeroVector;            // the item along the handle's axis from its centre (cm); zero: no second hand on it
 	FTransform ItemInHand = FTransform::Identity;   // a bow: the bow (its component, unscaled) in the hand bone's space
 	FVector DrawAxis = FVector::YAxisVector;        // ... its draw, bow space (UMOBowMeshComponent)
 	float MaxDrawCm = 0.0f;                         // ... its full draw (0: not a bow)
@@ -81,6 +86,12 @@ struct MOFRAMEWORK_API FMOBodyRetargetAnimInstanceProxy : public FAnimInstancePr
 	/** Each hand's grip ([0] left, [1] right), written by the instance before each update. */
 	FMOHandGripIK HandGrips[2];
 
+	/** Each hand's held item as the last evaluation left it, read by the instance after it (NativePostEvaluateAnimation): the handle in that
+	 *  hand bone's space -- its seat, or turned through the other hand (FMOHandGrip::Support) -- and how far the other hand holds it. */
+	FTransform AimedHandleInHand[2];
+	float SupportWeight[2] = {0.0f, 0.0f};
+	bool bAimed[2] = {false, false};
+
 protected:
 	virtual FAnimNode_Base* GetCustomRootNode() override { return RetargetNode; }
 	virtual void GetCustomNodes(TArray<FAnimNode_Base*>& OutNodes) override { OutNodes.Add(RetargetNode); }   // its PreUpdate copies the driver's pose
@@ -107,8 +118,9 @@ private:
 	/** Each foot back inside the ankle's range (local space, last: after the retarget, the slot and the climbing IK). */
 	void LimitAnkles(FPoseContext& Output) const;
 
-	/** The holding hands' fingers round their handles (local space, after the slot and the climbing IK). */
-	void ApplyHandGrips(FPoseContext& Output) const;
+	/** The holding hands' fingers round their handles, and a free hand's round the other hand's long handle where the clip puts it (local
+	 *  space, after the slot and the climbing IK). */
+	void ApplyHandGrips(FPoseContext& Output);
 
 	/** A drawn bow's drawing hand kept within the bow's full draw (after the grips). */
 	void LimitDraw(FPoseContext& Output) const;
@@ -137,6 +149,7 @@ protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override { return new FMOBodyRetargetAnimInstanceProxy(this, &RetargetNode); }
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+	virtual void NativePostEvaluateAnimation() override;
 
 	/** Titan Climbing's rig profile defaults: a hand reaches for the rock past the first, stays on its hold past the second. */
 	static constexpr float ClimbIKTraceThreshold = 0.6f;

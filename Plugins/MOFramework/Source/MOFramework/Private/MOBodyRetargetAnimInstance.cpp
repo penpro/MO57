@@ -41,8 +41,10 @@ void FMOBodyRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, 
 	}
 }
 
-void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output) const
+void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output)
 {
+	bAimed[0] = bAimed[1] = false;
+	SupportWeight[0] = SupportWeight[1] = 0.0f;
 	if (HandGrips[0].Alpha <= ZERO_ANIMWEIGHT_THRESH && HandGrips[1].Alpha <= ZERO_ANIMWEIGHT_THRESH)
 	{
 		return;
@@ -71,18 +73,9 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output) cons
 	};
 	FCSPose<FCompactPose> Pose;
 	Pose.InitPose(Output.Pose);
-	for (int32 Hand = 0; Hand < 2; ++Hand)
+	// A hand's fingers closed on a handle (component space), blended over the animation's by Weight
+	auto CloseFingers = [&](int32 Hand, const FMOHandGripIK& Grip, const FMOHandGrip::FShape& Handle, float Weight)
 	{
-		const FMOHandGripIK& Grip = HandGrips[Hand];
-		const FCompactPoseBoneIndex HandIndex = Compact(Hand == 0 ? TEXT("hand_l") : TEXT("hand_r"));
-		if (Grip.Alpha <= ZERO_ANIMWEIGHT_THRESH || !HandIndex.IsValid() || Grip.HalfSize.GetMin() <= 0.0f)
-		{
-			continue;
-		}
-		FMOHandGrip::FShape Handle;
-		Handle.Frame = Grip.HandleInHand * Pose.GetComponentSpaceTransform(HandIndex);
-		Handle.HalfSize = Grip.HalfSize;
-		Handle.Style = Grip.Style;
 		for (int32 f = 0; f < 5; ++f)
 		{
 			FCompactPoseBoneIndex Joint[3];
@@ -104,9 +97,69 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output) cons
 			for (int32 k = 0; k < 3; ++k)
 			{
 				FTransform& Local = Output.Pose[Joint[k]];
-				Local.SetRotation(FQuat::Slerp(Local.GetRotation(), FMOHandGrip::JointRotation(Finger, k, Bend[k]), Grip.Alpha).GetNormalized());
+				Local.SetRotation(FQuat::Slerp(Local.GetRotation(), FMOHandGrip::JointRotation(Finger, k, Bend[k]), Weight).GetNormalized());
 			}
 		}
+	};
+	// A hand's palm (its metacarpals to their knuckles, component space: the fingers do not move them), as the seat and Tools/check_grip.py see it
+	auto ReadPalm = [&](int32 Hand, float HandScale, FMOHandGrip::FPalm& Out)
+	{
+		static const FName PalmBones[2][8] = {
+			{TEXT("index_metacarpal_l"), TEXT("middle_metacarpal_l"), TEXT("ring_metacarpal_l"), TEXT("pinky_metacarpal_l"),
+				TEXT("index_01_l"), TEXT("middle_01_l"), TEXT("ring_01_l"), TEXT("pinky_01_l")},
+			{TEXT("index_metacarpal_r"), TEXT("middle_metacarpal_r"), TEXT("ring_metacarpal_r"), TEXT("pinky_metacarpal_r"),
+				TEXT("index_01_r"), TEXT("middle_01_r"), TEXT("ring_01_r"), TEXT("pinky_01_r")}};
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const FCompactPoseBoneIndex Metacarpal = Compact(PalmBones[Hand][i]);
+			const FCompactPoseBoneIndex Knuckle = Compact(PalmBones[Hand][4 + i]);
+			if (!Metacarpal.IsValid() || !Knuckle.IsValid())
+			{
+				return false;
+			}
+			Out.Metacarpal[i] = Pose.GetComponentSpaceTransform(Metacarpal).GetLocation();
+			Out.Knuckle[i] = Pose.GetComponentSpaceTransform(Knuckle).GetLocation();
+		}
+		Out.Radius = FMOHandGrip::PalmRadius * HandScale;
+		return true;
+	};
+	const FCompactPoseBoneIndex HandIndex[2] = {Compact(TEXT("hand_l")), Compact(TEXT("hand_r"))};
+	for (int32 Hand = 0; Hand < 2; ++Hand)
+	{
+		const FMOHandGripIK& Grip = HandGrips[Hand];
+		if (Grip.Alpha <= ZERO_ANIMWEIGHT_THRESH || !HandIndex[Hand].IsValid() || Grip.HalfSize.GetMin() <= 0.0f)
+		{
+			continue;
+		}
+		const FTransform HandCS = Pose.GetComponentSpaceTransform(HandIndex[Hand]);
+		FMOHandGrip::FShape Handle;
+		Handle.Frame = Grip.HandleInHand * HandCS;
+		Handle.HalfSize = Grip.HalfSize;
+		Handle.Style = Grip.Style;
+
+		// The other hand, carrying nothing, on a long handle where the clip puts it (a spear's front hand): the handle turned through that
+		// hand's own seat and out of both palms, its fingers closed on it. Neither hand moves; the item follows them (AMOCharacter::AimHandGrip,
+		// after this).
+		const int32 Other = 1 - Hand;
+		const float Free = 1.0f - HandGrips[Other].Alpha;
+		if (Free > ZERO_ANIMWEIGHT_THRESH && HandIndex[Other].IsValid() && Grip.Run.Y > Grip.Run.X)
+		{
+			FMOHandGrip::FPalm Palms[2];
+			const bool bPalms[2] = {ReadPalm(Hand, Grip.HandScale, Palms[0]), ReadPalm(Other, Grip.HandScale, Palms[1])};
+			FMOHandGrip::FShape Stretch;
+			SupportWeight[Hand] = FMOHandGrip::Support(Handle, Grip.SupportInHand * Pose.GetComponentSpaceTransform(HandIndex[Other]),
+				bPalms[0] ? &Palms[0] : nullptr, bPalms[1] ? &Palms[1] : nullptr, Grip.Run, Grip.Alpha * Free, Stretch);
+			if (SupportWeight[Hand] > 0.0f)
+			{
+				CloseFingers(Other, Grip, Stretch, SupportWeight[Hand]);
+			}
+		}
+		if (Grip.Run.Y > Grip.Run.X)
+		{
+			AimedHandleInHand[Hand] = Handle.Frame.GetRelativeTransform(HandCS);
+			bAimed[Hand] = true;
+		}
+		CloseFingers(Hand, Grip, Handle, Grip.Alpha);
 	}
 }
 
@@ -308,6 +361,23 @@ void UMOBodyRetargetAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateHandGrips(DeltaSeconds);
 }
 
+void UMOBodyRetargetAnimInstance::NativePostEvaluateAnimation()
+{
+	Super::NativePostEvaluateAnimation();
+	// A long handle turned through the other hand this evaluation: the item goes where the hands hold it, before the attachments update
+	if (AMOCharacter* Owner = Cast<AMOCharacter>(GetOwningActor()))
+	{
+		const FMOBodyRetargetAnimInstanceProxy& Proxy = GetProxyOnGameThread<FMOBodyRetargetAnimInstanceProxy>();
+		for (int32 Hand = 0; Hand < 2; ++Hand)
+		{
+			if (Proxy.bAimed[Hand])
+			{
+				Owner->AimHandGrip(Hand, Proxy.AimedHandleInHand[Hand], Proxy.SupportWeight[Hand]);
+			}
+		}
+	}
+}
+
 void UMOBodyRetargetAnimInstance::UpdateHandGrips(float DeltaSeconds)
 {
 	const AMOCharacter* Owner = Cast<AMOCharacter>(GetOwningActor());
@@ -324,7 +394,10 @@ void UMOBodyRetargetAnimInstance::UpdateHandGrips(float DeltaSeconds)
 			ItemInHand.SetScale3D(FVector::OneVector);   // GripTransform is in cm as held
 			FTransform GripTransform = Held.GripTransform;
 			GripTransform.SetScale3D(FVector::OneVector);
-			Grip.HandleInHand = GripTransform * ItemInHand;
+			// Where the item hangs; a long handle from its seat (the item itself may be turned through the other hand: AimHandGrip)
+			Grip.HandleInHand = Held.Run.Y > Held.Run.X ? Held.HandleInHand : GripTransform * ItemInHand;
+			Grip.SupportInHand = Held.SupportInHand;
+			Grip.Run = Held.Run;
 			Grip.HalfSize = Held.HalfSize;
 			Grip.Style = Held.Style;
 			Grip.HandScale = Held.HandScale;
