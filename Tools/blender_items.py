@@ -91,8 +91,10 @@ def main():
             # a held item's grip is measured off its new mesh (Docs/Held_Grip.md): the items held_grip.ITEMS knows how to hold (bows have theirs)
             held = [i for i in rows if not rows[i].get("heldVisual")]
             if held:
+                # only the items it holds; none -> nothing (an empty `only` is every item to measure_all: Nov 3, the fish trap and loom re-measured all 32)
                 proc = subprocess.run(UE + ["py", "--timeout", "900", "-c", "import importlib, held_grip as g; importlib.reload(g); "
-                                            "out(g.measure_all(only=[i for i in %r if i in g.ITEMS]))" % held], capture_output=True, text=True, cwd=ROOT)
+                                            "ids = [i for i in %r if i in g.ITEMS]; out(g.measure_all(only=ids) if ids else 'no held items')" % held],
+                                      capture_output=True, text=True, cwd=ROOT)
                 print("\n".join(l for l in proc.stdout.splitlines() if not l.startswith("[")), flush=True)
                 proc = subprocess.run(UE + ["rows", "set", TABLE, "--file", os.path.join(ROOT, "Saved", "HeldGrip", "rows.json")],
                                       capture_output=True, text=True, cwd=ROOT, env=env)

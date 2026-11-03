@@ -1,0 +1,50 @@
+{
+ "FishTrap01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/FishTrap01/SM_FishTrap01.SM_FishTrap01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "FishNet01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/FishNet01/SM_FishNet01.SM_FishNet01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "SimpleLoom01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/SimpleLoom01/SM_SimpleLoom01.SM_SimpleLoom01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "IronHelmet01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/IronHelmet01/SM_IronHelmet01.SM_IronHelmet01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ }
+}

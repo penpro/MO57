@@ -18,6 +18,15 @@ draw), two arrows, two kits, and (later on Nov 2, Wes: "Yes, rebuild them") the 
 | Snare01 | an anchor stake (sharpened, bark on) with the cord tied round its head, run out to an 11 cm noose and its slip knot | 36 x 19 cm, 1.8k |
 | WoodenSpear01 | a sharpened sapling: peeled, bark left in patches, wandering a few mm, thickest a third back from the point (as Schoningen's spears: point-forward balance) and tapering to the butt, the point carved over 22 cm | 200 cm, 2.9 cm at the butt, 3.3 at its thickest, 4.8k |
 | FireHardenedSpear01 | the same, its point (24 cm) held in the embers: charred black over the last 14 cm, browning off to 34 | 200 cm, 4.8k |
+| FishTrap01 (Nov 3) | a woven fish trap on its side: sixteen rods from the mouth hoop back to a tied tail, eight withy hoops, the funnel of rods inside the mouth narrowing to the throat | 91 x 41 cm, 15.8k |
+| FishNet01 (Nov 3) | a net folded into a bundle, a fold of diamond mesh hanging loose with its knots, wooden floats on the head rope, notched stone sinkers | 46 x 50 cm, 10.0k |
+| SimpleLoom01 (Nov 3) | a backstrap loom laid out: the warp beam and its cord, 36 warp threads, the shed rod and the heddle rod with its loops, cloth woven and rolled on the breast beam, the sword, the leather back strap | 138 x 68 cm, 8.0k |
+| IronHelmet01 (Nov 3) | a conical nasal helmet raised from one plate, a riveted brow band, the nasal bar; dark iron, a little rust | 25 x 22 x 25 cm, 5.4k |
+
+Nov 3 (Wes: "what else we need that you can build in blender and start filling up the items list debt"): the four above were the
+placeholders made of sticks, cord and iron; the 11 left are the clothing and armour (they need fitting to the bodies), the chariot and the
+water measures. The building pieces have their own pipeline (the same idea, tiling surfaces instead of a baked atlas: `Docs/Building.md`
+section 7), which also makes the Moss01 item's mesh.
 
 ## 1. Running it
 

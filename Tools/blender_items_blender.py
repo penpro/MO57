@@ -1061,12 +1061,13 @@ def mat_flint(name):
     return nb.finish(col, nb.m("ADD", 0.3, nb.m("MULTIPLY", mott, 0.1)), nb.bump(height, 0.45, 0.04))
 
 
-def mat_iron(name):
-    """Forged iron: dark grey metal, rust in the hollows and patches (not metallic where rusted)."""
+def mat_iron(name, scale=1.2, rust_edge=0.56):
+    """Forged iron: dark grey metal, rust in the hollows and patches (not metallic where rusted). scale: the rust patches' frequency (per cm;
+    a large piece wants larger patches), rust_edge: higher = less rust."""
     nb = NB(name)
     tc = nb.new("ShaderNodeTexCoord")
     p = tc.outputs["Object"]
-    rust = nb.step(nb.noise(p, 1.2, detail=6.0, rough=0.65), 0.56, 0.05)
+    rust = nb.step(nb.noise(p, scale, detail=6.0, rough=0.65), rust_edge, 0.05)
     grain = nb.noise(p, 12.0, detail=4.0)
     metal_col = nb.ramp(grain, [(0.3, srgb("#2e2e30")), (0.7, srgb("#5a5a5e"))])
     rust_col = nb.ramp(grain, [(0.3, srgb("#5a2e16")), (0.7, srgb("#8a4a24"))])
@@ -1447,7 +1448,253 @@ def run_snare():
                              ("knot", (16, 6, 0.2), (0.5, -1.0, 1.0), 6.0), ("point", (-13, 0, 1.2), (0.8, -1.0, 0.9), 8.0)])
 
 
-KITS = {"BowDrill01": run_bowdrill, "Snare01": run_snare, "WoodenSpear01": run_spear, "FireHardenedSpear01": run_spear}
+# ------------------------------------------------------------------------------------------------------------------------------------------
+# The art debt (Nov 3; Wes: "what else we need that you can build in blender and start filling up the items list debt"): the items still on
+# the graybox placeholders that are made of sticks, cord and iron.
+# ------------------------------------------------------------------------------------------------------------------------------------------
+
+def mat_netting(name, light="#9a8460", dark="#4a3a26", mesh_cm=4.0):
+    """A bundle of knotted netting seen from outside: cords in a diamond mesh over the dark gaps of the folds beneath, knots at the crossings."""
+    nb = NB(name)
+    u, v, _ = nb.sep(nb.uv("proc"))
+    a = nb.m("MULTIPLY", nb.m("ADD", u, v), 1.0 / mesh_cm)
+    b = nb.m("MULTIPLY", nb.m("SUBTRACT", u, v), 1.0 / mesh_cm)
+    wob = nb.m("MULTIPLY", nb.noise(nb.xyz(nb.m("MULTIPLY", u, 0.2), nb.m("MULTIPLY", v, 0.2), 0.0), 1.0, detail=2.0), 0.6)
+    ca = nb.m("ABSOLUTE", nb.m("SINE", nb.m("MULTIPLY", nb.m("ADD", a, wob), math.pi)))
+    cb = nb.m("ABSOLUTE", nb.m("SINE", nb.m("MULTIPLY", nb.m("ADD", b, wob), math.pi)))
+    cord = nb.m("MAXIMUM", nb.m("SUBTRACT", 1.0, nb.step(ca, 0.18, 0.06)), nb.m("SUBTRACT", 1.0, nb.step(cb, 0.18, 0.06)))
+    knot = nb.m("MULTIPLY", nb.m("SUBTRACT", 1.0, nb.step(ca, 0.3, 0.06)), nb.m("SUBTRACT", 1.0, nb.step(cb, 0.3, 0.06)))
+    depth = nb.noise(nb.xyz(u, v, 0.0), 0.15, detail=3.0)
+    under = nb.ramp(depth, [(0.3, srgb("#1a140e")), (0.7, srgb(dark))])
+    fib = nb.noise(nb.xyz(nb.m("MULTIPLY", u, 4.0), nb.m("MULTIPLY", v, 4.0), 0.0), 3.0, detail=4.0)
+    over = nb.ramp(fib, [(0.2, srgb(dark)), (0.8, srgb(light))])
+    col = nb.mix(nb.m("MAXIMUM", cord, knot), under, over)
+    h = nb.m("ADD", nb.m("MULTIPLY", cord, 0.8), nb.m("MULTIPLY", knot, 0.6))
+    return nb.finish(col, 0.8, nb.bump(h, 0.6, 0.15))
+
+
+def mat_weave(name, warp="#b8a47c", weft="#8f7a56", pick_cm=0.18):
+    """Plain-weave cloth (u across, v along the warp): warp and weft over and under, a little slub."""
+    nb = NB(name)
+    u, v, _ = nb.sep(nb.uv("proc"))
+    wu = nb.m("SINE", nb.m("MULTIPLY", u, math.pi / pick_cm))
+    wv = nb.m("SINE", nb.m("MULTIPLY", v, math.pi / pick_cm))
+    over = nb.step(nb.m("MULTIPLY", wu, wv), 0.0, 0.25)
+    slub = nb.noise(nb.xyz(nb.m("MULTIPLY", u, 0.6), nb.m("MULTIPLY", v, 6.0), 0.0), 2.0, detail=3.0)
+    col = nb.mix(over, srgb(weft), srgb(warp))
+    col = nb.mix(nb.m("MULTIPLY", slub, 0.25), col, srgb("#5a4a34"), "MULTIPLY")
+    h = nb.m("ADD", nb.m("MULTIPLY", nb.m("ABSOLUTE", nb.m("MULTIPLY", wu, wv)), 0.8), nb.m("MULTIPLY", slub, 0.2))
+    return nb.finish(col, 0.85, nb.bump(h, 0.5, 0.05))
+
+
+def build_fishtrap():
+    """A woven fish trap lying on its side (axis along X, the mouth at -X): sixteen rods from the mouth hoop running back to a tied tail, hoops
+    of withy lashed round them, and the funnel of rods inside the mouth narrowing to the throat the fish swim through and cannot find again."""
+    rods = Part("rods", mat_stick("M_%s_Rods" % ITEM, bark="#4a3c30", wood="#b89a72", peeled=0.5))
+    L, R0, n = 86.0, 19.0, 16
+    x0 = -L / 2
+
+    def rad(x):
+        t = (x - x0) / L
+        return R0 if t < 0.45 else 3.2 + (R0 - 3.2) * (1.0 - smoothstep(0.45, 1.0, t)) ** 0.8
+
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        pts = [Vector((x0 + L * i / 40, rad(x0 + L * i / 40) * math.cos(a), R0 + rad(x0 + L * i / 40) * math.sin(a))) for i in range(41)]
+        pts.append(pts[-1] + Vector((5.0, 0.0, 0.0)))   # the ends gathered past the tie
+        tube(rods, pts, 0.42, sides=6, attrs=lambda i: {"cut": 1.0 if i in (0, 41) else 0.0, "char": 0.0})
+    funnel = Part("funnel", rods.material)
+    for k in range(n):
+        a = 2 * math.pi * (k + 0.5) / n
+        pts = [Vector((x0 + 30.0 * i / 20, (R0 - 0.8 - 14.5 * i / 20) * math.cos(a), R0 + (R0 - 0.8 - 14.5 * i / 20) * math.sin(a))) for i in range(21)]
+        tube(funnel, pts, 0.36, sides=6, attrs=lambda i: {"cut": 1.0 if i == 20 else 0.0, "char": 0.0})
+    hoops = Part("hoops", mat_stick("M_%s_Hoops" % ITEM, bark="#5a3a28", wood="#b08a64", peeled=0.1))
+    for x in [x0 + 1.0 + 11.5 * i for i in range(8)]:
+        r = rad(x) + 0.75
+        ring = [Vector((x, r * math.cos(2 * math.pi * j / 32), R0 + r * math.sin(2 * math.pi * j / 32))) for j in range(33)]
+        tube(hoops, ring, 0.55, sides=6, cap_start=False, cap_end=False)
+    tie = Part("tie", mat_cord("M_%s_Tie" % ITEM, "#a8946c", "#5a4a32", plies=2, pitch=0.3))
+    xt = x0 + L + 1.5
+    turns = [Vector((xt + 2.4 * t / 48, 4.0 * math.cos(2 * math.pi * t / 12), R0 + 4.0 * math.sin(2 * math.pi * t / 12))) for t in range(49)]
+    tube(tie, turns, 0.18, sides=6)
+    return [rods, funnel, hoops, tie], None
+
+
+def build_fishnet():
+    """A net as it is carried: folded into a bundle, a fold of it hanging loose over the side, wooden floats on the head rope and notched
+    stone sinkers on the foot rope."""
+    rnd = random.Random(11)
+    bundle = Part("bundle", mat_netting("M_%s_Bundle" % ITEM))
+    sx, sy, sz = 42.0, 30.0, 11.0
+    rings, us, vs = [], [], []
+    nx, ns = 24, 28
+    for i in range(nx + 1):
+        x = -sx / 2 + sx * i / nx
+        ring = []
+        for j in range(ns):
+            a = 2 * math.pi * j / ns
+            c, s = math.cos(a), math.sin(a)
+            yy = 0.5 * sy * math.copysign(abs(c) ** 0.5, c)
+            zz = 0.5 * sz * math.copysign(abs(s) ** 0.6, s)
+            bump = 1.0 + 0.08 * math.sin(0.62 * x + 2.0 * a) + 0.05 * math.sin(1.7 * x - 3.0 * a + 1.0)
+            taper = 1.0 - 0.25 * (abs(x) / (sx / 2)) ** 3
+            ring.append(bundle.add_vert(Vector((x, yy * bump * taper, sz / 2 + zz * bump * taper)), None))
+        rings.append(ring)
+        us.append([(sy + sz) * 2.0 * j / ns for j in range(ns + 1)])
+        vs.append(x + sx / 2)
+    loft(bundle, rings, us, vs, closed=True, cap_start=True, cap_end=True, island_len=60.0)
+    # the loose fold: real meshes of cord hanging over the side (4 cm squares as diamonds)
+    hang = Part("hang", mat_cord("M_%s_Cord" % ITEM, "#9a8460", "#4a3a26", plies=2, pitch=0.25))
+    cell, cols, rows = 4.0, 9, 7
+    def drape(c, r):
+        x = -12.0 + c * cell
+        t = r * cell
+        y = sy / 2 + 1.0 + t * 0.55
+        z = sz - 1.5 - t * 0.85 + 0.6 * math.sin(c * 0.9)
+        return Vector((x, y, max(0.3, z)))
+    # diamond meshes: the cords run on the diagonals, knotted where they cross
+    for k in range(-rows, cols + 1):
+        for sgn in (1, -1):
+            pts = []
+            for i in range(0, rows * 4 + 1):
+                r = i * 0.25
+                c = k + sgn * r if sgn > 0 else k + rows - r
+                if 0.0 <= c <= cols:
+                    pts.append(drape(c, r))
+            if len(pts) > 2:
+                tube(hang, pts, 0.11, sides=5)
+    knots = Part("knots", hang.material)
+    for c in range(cols + 1):
+        for r in range(rows + 1):
+            if (c + r) % 2 == 0:
+                p = drape(c, r)
+                tube(knots, [p - Vector((0.25, 0, 0)), p + Vector((0.25, 0, 0))], 0.24, sides=6)
+    floats = Part("floats", mat_stick("M_%s_Floats" % ITEM, bark="#6a5a46", wood="#cdb48e", peeled=0.9))
+    for i, x in enumerate((-14.0, 0.0, 14.0)):
+        p0 = Vector((x - 4.0, -sy / 2 - 2.0, 3.0 + 0.4 * i))
+        tube(floats, [p0 + Vector((8.0 * k / 10, 0, 0)) for k in range(11)], [1.6 * math.sin(math.pi * (0.15 + 0.7 * k / 10)) for k in range(11)],
+             sides=10, attrs=lambda k: {"cut": 1.0, "char": 0.0})
+    sinkers = Part("sinkers", mat_plain("M_%s_Sinkers" % ITEM, "#6e675c", 0.85))
+    for i, x in enumerate((-16.0, -5.0, 6.0, 17.0)):   # flat river stones, notched at the sides for the tie
+        pts = [Vector((x - 2.8 + 5.6 * k / 12, sy / 2 + 2.6, 1.2)) for k in range(13)]
+        tube(sinkers, pts, [(1.1 * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6, 2.1 * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6
+                             * (0.75 if k == 6 else 1.0)) for k in range(13)], sides=12, up=Vector((0.0, 0.0, 1.0)))
+    rope = Part("rope", hang.material)
+    tube(rope, [Vector((-22.0 + 44.0 * i / 30, -sy / 2 - 0.6, 3.2 + 0.8 * math.sin(i * 0.5))) for i in range(31)], 0.3, sides=6)
+    return [bundle, hang, knots, floats, sinkers, rope], None
+
+
+def build_loom():
+    """A backstrap loom laid out on the ground: the warp beam (its cord to a tree at the far end), the warp threads, the shed rod and the heddle
+    rod with its string loops, a hand's length of cloth woven and rolled on the breast beam, the sword (beater) lying across, and the leather
+    strap that goes round the weaver's back."""
+    rnd = random.Random(5)
+    wood = mat_stick("M_%s_Wood" % ITEM, bark="#5a4836", wood="#c9ac80", peeled=0.85)
+    beams = Part("beams", wood)
+    W = 52.0
+    for x, r in ((-40.0, 1.6), (45.0, 1.7)):
+        tube(beams, [Vector((x, -W / 2 - 6.0 + (W + 12.0) * i / 20, r)) for i in range(21)], r, sides=10, attrs=lambda i: {"cut": 1.0 if i in (0, 20) else 0.0, "char": 0.0})
+    rods = Part("rods", wood)
+    tube(rods, [Vector((-12.0, -W / 2 - 3.0 + (W + 6.0) * i / 16, 2.6)) for i in range(17)], 1.0, sides=8, attrs=lambda i: {"cut": 1.0 if i in (0, 16) else 0.0, "char": 0.0})
+    tube(rods, [Vector((-2.0, -W / 2 - 3.0 + (W + 6.0) * i / 16, 3.4)) for i in range(17)], 0.7, sides=8, attrs=lambda i: {"cut": 1.0 if i in (0, 16) else 0.0, "char": 0.0})
+    warp = Part("warp", mat_cord("M_%s_Warp" % ITEM, "#c4b088", "#8a7650", plies=2, pitch=0.2))
+    nthreads = 36
+    for k in range(nthreads):
+        y = -W / 2 + 1.0 + (W - 2.0) * k / (nthreads - 1)
+        up = k % 2 == 0
+        pts = [Vector((-40.0, y, 3.0)), Vector((-12.0, y, 3.6 if up else 1.6)), Vector((-2.0, y, 2.4 if up else 4.1)), Vector((14.0, y, 2.6)), Vector((20.0, y, 1.8))]
+        tube(warp, pts, 0.09, sides=4)
+    heddles = Part("heddles", warp.material)
+    for k in range(1, nthreads, 2):
+        y = -W / 2 + 1.0 + (W - 2.0) * k / (nthreads - 1)
+        ring = [Vector((-2.0 + 0.9 * math.cos(2 * math.pi * j / 10), y, 3.4 + 0.9 * math.sin(2 * math.pi * j / 10))) for j in range(11)]
+        tube(heddles, ring, 0.06, sides=4, cap_start=False, cap_end=False)
+    cloth = Part("cloth", mat_weave("M_%s_Cloth" % ITEM))
+    # the woven cloth: flat from the fell (x 20) to the breast beam, then wound round it
+    rounded_box(cloth, (23.0, W, 0.35), (31.5, 0.0, 1.9))
+    roll = Part("roll", cloth.material)
+    tube(roll, [Vector((45.0, -W / 2 + W * i / 12, 1.7)) for i in range(13)], 2.6, sides=14, cap_start=True, cap_end=True, island_len=80.0)
+    sword = Part("sword", wood)
+    rounded_box(sword, (44.0, 4.2, 0.9), (2.0, 34.0, 0.45), attrs={"cut": 1.0, "char": 0.0})
+    strap = Part("strap", mat_hide("M_%s_Strap" % ITEM, "#8a6a46", "#4e3a26"))
+    loop = [Vector((45.0 + 20.0 * math.sin(math.pi * i / 30), (-W / 2 - 4.0) + (W + 8.0) * i / 30, 0.6)) for i in range(31)]
+    tube(strap, loop, (0.25, 2.6), sides=8, attrs=lambda i: {"edge": 0.0})
+    cordtree = Part("cordtree", warp.material)
+    tube(cordtree, [Vector((-40.0 - 30.0 * i / 12, 2.0 * math.sin(i * 0.7), 1.0)) for i in range(13)], 0.22, sides=6)
+    return [beams, rods, warp, heddles, cloth, roll, sword, strap, cordtree], None
+
+
+def build_iron_helmet():
+    """An iron nasal helmet: a conical bowl raised from one plate (a little longer front to back than across), a riveted brow band, a nasal
+    bar down the front; dark iron, rust in the seams. The opening at Z 0, its front toward +X."""
+    iron = mat_iron("M_%s_Iron" % ITEM, scale=0.22, rust_edge=0.64)
+    bowl = Part("bowl", iron)
+    nz, ns, H, Rx, Ry, t = 22, 40, 16.5, 11.8, 10.6, 0.25
+
+    def prof(f):   # 0 rim .. 1 apex: a rounded cone, full at the shoulders, drawn to a low point
+        return math.sqrt(max(0.0, 1.0 - f ** 1.6)) * (1.0 - 0.35 * f)
+
+    outer, inner = [], []
+    for i in range(nz + 1):
+        f = i / nz
+        r = prof(f) if i < nz else 0.0
+        z = H * f
+        outer.append([bowl.add_vert(Vector((Rx * r * math.cos(2 * math.pi * j / ns), Ry * r * math.sin(2 * math.pi * j / ns), z)), None) for j in range(ns)])
+        inner.append([bowl.add_vert(Vector((max(Rx * r - t, 0.0) * math.cos(2 * math.pi * j / ns), max(Ry * r - t, 0.0) * math.sin(2 * math.pi * j / ns),
+                                            z - t * 1.2)), None) for j in range(ns)])
+    circ = math.pi * (Rx + Ry)
+    loft(bowl, outer, [circ * j / ns for j in range(ns + 1)], [H * i / nz * 1.2 for i in range(nz + 1)], closed=True, island_len=60.0)
+    rev = [list(reversed(r)) for r in inner]
+    loft(bowl, rev, [circ * j / ns for j in range(ns + 1)], [H * i / nz * 1.2 for i in range(nz + 1)], closed=True, island_len=60.0)
+    for j in range(ns):   # the rim
+        j1 = (j + 1) % ns
+        a, b, c, d = outer[0][j], outer[0][j1], inner[0][j1], inner[0][j]
+        bowl.add_face((d, c, b, a), [(0, 0), (0.3, 0), (0.3, 0.3), (0, 0.3)], "rim")
+    band = Part("band", iron)
+    br = [Vector(((Rx + 0.2) * prof(0.04) * math.cos(2 * math.pi * j / 48), (Ry + 0.2) * prof(0.04) * math.sin(2 * math.pi * j / 48), 1.3)) for j in range(49)]
+    tube(band, br, (1.4, 0.18), sides=8, cap_start=False, cap_end=False, up=Vector((0.0, 0.0, 1.0)))
+    nasal = Part("nasal", iron)
+    xn = (Rx + 0.2) * prof(0.04) + 0.25
+    rounded_box(nasal, (11.0, 2.6, 0.5), (0.0, 0.0, 0.0))   # built along X: length 11, width 2.6, 0.5 thick
+    for k in range(len(nasal.verts)):
+        v = nasal.verts[k]
+        down = (v.x + 5.5) / 11.0   # 0 at the band .. 1 at the nose's tip
+        nasal.verts[k] = Vector((xn + v.z + 0.6 * down, v.y * (1.0 - 0.22 * down), 2.8 - 11.0 * down))
+    rivets = Part("rivets", iron)
+    for j in range(16):
+        a = 2 * math.pi * (j + 0.5) / 16
+        p = Vector(((Rx + 0.45) * prof(0.04) * math.cos(a), (Ry + 0.45) * prof(0.04) * math.sin(a), 1.3))
+        n = Vector((math.cos(a), math.sin(a), 0.0))
+        tube(rivets, [p - n * 0.15, p + n * 0.25], [0.45, 0.3], sides=8)
+    return [bowl, band, nasal, rivets], None
+
+
+def run_fishtrap():
+    run_static(build_fishtrap, [("whole", (0, 0, 19), (0.5, -1.0, 0.7), 100.0), ("mouth", (-43, 0, 19), (-1.0, -0.4, 0.3), 48.0),
+                                ("side", (0, 0, 19), (0.0, -1.0, 0.1), 100.0), ("top", (0, 0, 19), (0.0, -0.05, 1.0), 100.0),
+                                ("tail", (40, 0, 19), (0.6, -1.0, 0.5), 26.0), ("hoop", (-20, 0, 37), (0.3, -0.7, 1.0), 20.0)])
+
+
+def run_fishnet():
+    run_static(build_fishnet, [("whole", (0, 3, 5), (0.6, -1.0, 0.9), 60.0), ("top", (0, 3, 5), (0.0, -0.05, 1.0), 60.0),
+                               ("side", (0, 3, 5), (0.0, 1.0, 0.25), 60.0), ("hang", (0, 22, 6), (0.3, 1.0, 0.6), 30.0),
+                               ("floats", (0, -17, 3), (0.2, -1.0, 0.7), 34.0), ("sinkers", (-5, 17, 1), (0.4, 1.0, 0.8), 24.0)])
+
+
+def run_loom():
+    run_static(build_loom, [("whole", (2, 3, 2), (0.4, -1.0, 1.4), 120.0), ("top", (2, 3, 2), (0.0, -0.05, 1.0), 120.0),
+                            ("side", (2, 3, 2), (0.0, -1.0, 0.25), 120.0), ("heddles", (-6, 0, 3), (0.5, -0.8, 0.9), 26.0),
+                            ("fell", (28, 0, 2), (0.4, -0.8, 1.0), 30.0), ("strap", (55, 0, 1), (0.6, -0.6, 1.0), 50.0)])
+
+
+def run_iron_helmet():
+    run_static(build_iron_helmet, [("whole", (0, 0, 9), (1.0, -0.8, 0.5), 30.0), ("front", (0, 0, 7), (1.0, 0.0, 0.1), 30.0),
+                                   ("side", (0, 0, 9), (0.0, -1.0, 0.1), 30.0), ("top", (0, 0, 9), (0.0, -0.05, 1.0), 30.0),
+                                   ("under", (0, 0, 6), (0.3, -0.5, -1.0), 30.0), ("rivets", (8, -6, 1.5), (0.7, -0.7, 0.3), 9.0)])
+
+
+KITS = {"BowDrill01": run_bowdrill, "Snare01": run_snare, "WoodenSpear01": run_spear, "FireHardenedSpear01": run_spear,
+        "FishTrap01": run_fishtrap, "FishNet01": run_fishnet, "SimpleLoom01": run_loom, "IronHelmet01": run_iron_helmet}
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------------
