@@ -67,6 +67,7 @@
 #include "GameFramework/Actor.h"
 #include "MOBuildingTypes.h"
 #include "MOIdentifiableInterface.h"
+#include "MOShelterPorosityInterface.h"
 
 #include "MOBuildableActor.generated.h"
 
@@ -216,8 +217,31 @@ enum class EMOStagedPartStyle : uint8
 	Hidden UMETA(DisplayName="Hidden (appears when built)")            // a stick wall: the sticks go up one after another
 };
 
+/**
+ * How a piece is placed against the pieces already standing (UMOBuildingComponent::TryAttachSnap; Wes, Nov 2 2026: "add moss dobbing", "wooden
+ * 'framing' where some branches snap to the edges of the wall panels", "adding thatch to the roof wattle framing").
+ */
+UENUM(BlueprintType)
+enum class EMOPieceAttach : uint8
+{
+	None UMETA(DisplayName="None (snaps by its own shape)"),         // floors, walls, roofs, shelters
+	Face UMETA(DisplayName="Face (lies on a host panel)"),          // a wall's daub, a roof's thatch: the host's own transform (the same frame)
+	Edge UMETA(DisplayName="Edge (a frame member on a host edge)")  // a post on a wall's side, a rail on its top or bottom, a beam under a floor's edge
+};
+
+/** Which edges of a host panel a frame member (EMOPieceAttach::Edge) runs along. */
+UENUM(BlueprintType)
+enum class EMOMemberAxis : uint8
+{
+	Vertical UMETA(DisplayName="Vertical (a post: a wall's sides)"),
+	Horizontal UMETA(DisplayName="Horizontal (a rail or beam: a wall's top and bottom, a floor's edges)")
+};
+
+/** Component tag: a part that never collides (a building piece's visual parts, its snap box). AMOBuildableActor's collision passes leave it off. */
+#define MO_NO_COLLISION_TAG TEXT("MO_NoCollision")
+
 UCLASS()
-class MOFRAMEWORK_API AMOBuildableActor : public AActor, public IMOIdentifiableInterface
+class MOFRAMEWORK_API AMOBuildableActor : public AActor, public IMOIdentifiableInterface, public IMOShelterPorosity
 {
 	GENERATED_BODY()
 
@@ -301,6 +325,39 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
 	bool bSnapAsRoof = false;
+
+	/** What this piece is, for the pieces that attach to it (AttachHostTags): "Wall", "Roof", "Floor", "Wattle", "Cobble", "Timber" ... */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Snapping")
+	TArray<FName> PieceTags;
+
+	/** How this piece is placed: by its own shape, on a host panel's face, or along a host panel's edge (EMOPieceAttach). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Snapping")
+	EMOPieceAttach Attach = EMOPieceAttach::None;
+
+	/** An attaching piece goes only on a host carrying one of these PieceTags (moss daub on a "Wattle" wall, thatch on a "Roof"). Empty = any. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Snapping", meta=(EditCondition="Attach != EMOPieceAttach::None"))
+	TArray<FName> AttachHostTags;
+
+	/** A frame member's direction (Attach Edge): along the host's vertical edges (a post) or its horizontal ones (a rail, a beam). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Snapping", meta=(EditCondition="Attach == EMOPieceAttach::Edge"))
+	EMOMemberAxis MemberAxis = EMOMemberAxis::Vertical;
+
+	/** Other pieces may snap to this one (attaching pieces -- a daub, a frame member -- are not snap targets: they would steal the aim from their host). */
+	bool CanBeSnapTarget() const { return Attach == EMOPieceAttach::None; }
+
+	/**
+	 * What the finished piece lets through of rain and of wind (0 = tight .. 1 = nothing stopped), read by the shelter rays (IMOShelterPorosity,
+	 * UMOWeatherBlueprintLibrary::TestExposureShelter). A bare wattle or stick wall lets the wind through its gaps; daub or moss packed into it
+	 * stops it (Wes, Nov 2 2026: "add moss dobbing for insulation"); a roof frame lets the rain through until it is thatched.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Shelter", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float RainPass = 0.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Shelter", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float WindPass = 0.0f;
+
+	//~ IMOShelterPorosity
+	virtual void GetShelterPass(const UPrimitiveComponent* HitComponent, float& OutRainPass, float& OutWindPass) const override;
 
 	/** The tint a placed building wears until it is finished (the ghost material's inner glow / rim): a plan, not a structure -- it cannot be walked on.
 	 *  Dimmed Oct 24 2026 (Wes: "make the building ghosts less bright"; was alpha 0.45). */
@@ -565,6 +622,18 @@ private:
 	TMap<TObjectPtr<UPrimitiveComponent>, TEnumAsByte<ECollisionEnabled::Type>> CachedGhostCollisionStates;
 
 
+protected:
+	/**
+	 * A subclass that adds or removes parts at run time (AMOBuildPieceActor: its parts, its supports) calls this after: the staged parts are resolved
+	 * again from StagedBuildParts, and every part gets the collision and the look of the current state (the placement preview's, a plan's, a finished
+	 * building's).
+	 */
+	void RefreshAfterPartsChanged();
+
+	/** The unbuilt collision on every part (see below); protected for RefreshAfterPartsChanged's callers. */
+	void ApplyUnbuiltCollision();
+
+private:
 	// ============================================================================
 	// INTERNAL
 	// ============================================================================
@@ -631,12 +700,12 @@ private:
 	 */
 	void ApplyStructuralCollisionProfile(FName ProfileName);
 
-	/**
-	 * Unbuilt collision (ApplyUnbuiltCollisionTo) on EVERY part of the building (GetBuildingMeshes), not only MeshComponent's subtree: the stick
-	 * walls' staged sticks hang off the root and still blocked pawns while unbuilt (BR25-7, PIE Oct 25 2026). Completion (EnterCompletedState) makes
-	 * the MeshComponent subtree BlockAll and gives every other part its own Blueprint collision back (RestoreAuthoredCollision).
+	/*
+	 * ApplyUnbuiltCollision (protected, above): unbuilt collision (ApplyUnbuiltCollisionTo) on EVERY part of the building (GetBuildingMeshes), not
+	 * only MeshComponent's subtree: the stick walls' staged sticks hang off the root and still blocked pawns while unbuilt (BR25-7, PIE Oct 25 2026).
+	 * Completion (EnterCompletedState) makes the MeshComponent subtree BlockAll and gives every other part its own Blueprint collision back
+	 * (RestoreAuthoredCollision). A part tagged MO_NO_COLLISION_TAG never collides.
 	 */
-	void ApplyUnbuiltCollision();
 
 	/** Every part of the building: MeshComponent and every static-mesh component on the actor with a mesh (the set the visuals tint and stage). */
 	void GetBuildingMeshes(TArray<UStaticMeshComponent*>& OutMeshes) const;

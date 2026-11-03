@@ -135,7 +135,10 @@ void UMOBuildProgressComponent::InitializeFromRecipe(const FMORecipeDefinitionRo
 {
 	RecipeId = Recipe.RecipeId;
 	BuildParts = Recipe.BuildParts;
-	Progress.TotalBuildTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, Recipe.TotalBuildTime);   // this world's building pace (MOWorldCreationTypes.h)
+	BuildParts.Append(ExtraParts);   // this placement's extra work (SetExtraWork): a floor's posts
+	RecipeBuildSeconds = Recipe.TotalBuildTime;
+	bHasRecipe = true;
+	Progress.TotalBuildTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, Recipe.TotalBuildTime + ExtraSeconds);   // this world's building pace (MOWorldCreationTypes.h)
 	Progress.GatherRange = Recipe.BuildRange;
 	Progress.State = EMOBuildState::Ghost;
 	Progress.ElapsedTime = 0.0f;
@@ -163,6 +166,31 @@ void UMOBuildProgressComponent::InitializeFromRecipe(const FMORecipeDefinitionRo
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Initialized with %d parts, total time: %.1fs"),
 		BuildParts.Num(), Progress.TotalBuildTime);
+}
+
+void UMOBuildProgressComponent::SetExtraWork(const TArray<FMOBuildPart>& InExtraParts, float InExtraSeconds)
+{
+	const bool bStarted = Progress.State != EMOBuildState::Ghost || Progress.ElapsedTime > 0.0f;
+	if (bStarted && bHasRecipe)
+	{
+		return;   // the work is under way (or done): its list and time stay as they were
+	}
+	const int32 RecipeParts = bHasRecipe ? BuildParts.Num() - ExtraParts.Num() : 0;
+	ExtraParts = InExtraParts;
+	ExtraSeconds = FMath::Max(0.0f, InExtraSeconds);
+	if (!bHasRecipe)
+	{
+		return;   // InitializeFromRecipe appends it
+	}
+	BuildParts.SetNum(RecipeParts);
+	BuildParts.Append(ExtraParts);
+	Progress.ConsumedPerPart.SetNumZeroed(BuildParts.Num());
+	Progress.TotalBuildTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Building, RecipeBuildSeconds + ExtraSeconds);
+	CalculateTotalWeight();
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		PublishRepState();
+	}
 }
 
 void UMOBuildProgressComponent::CalculateTotalWeight()

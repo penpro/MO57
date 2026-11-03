@@ -59,6 +59,24 @@ UMOCoverForageSettings::UMOCoverForageSettings()
 		Snag.bRemovesInstance = false;
 		Entries.Add(Snag);
 	}
+	// A mossy rock: moss stripped off it by the armful -- the chinking of log and wattle walls (Wes, Nov 2 2026: "add moss dobbing for insulation"), bedding.
+	// The rock stays (and its moss grows back slowly; not modelled).
+	{
+		FMOCoverForage Moss = Cover(TEXT("Mossy"), LOCTEXT("StripMoss", "Strip moss"), { Yield(TEXT("Moss01"), 1, 2) }, 10.0f);
+		Moss.MoreMeshNamesContaining = { TEXT("MossyRocks"), TEXT("Mossy_Forest") };
+		Moss.bRemovesInstance = false;
+		Entries.Add(Moss);
+	}
+	// A boulder: a building stone (a field stone, ~12 kg) levered and knocked off it with a hammerstone, the chips with it -- what cobble footings and
+	// walls are laid from. The boulder stays. (Mossy boulders give moss: the entry above matches first.)
+	{
+		FMOCoverForage Boulder = Cover(TEXT("Boulder"), LOCTEXT("BreakFieldStone", "Break off a building stone"),
+			{ Yield(TEXT("FieldStone01"), 1, 1), Yield(TEXT("Stone01"), 1, 2, 0.5f) }, 45.0f);
+		Boulder.bRemovesInstance = false;
+		Boulder.RequiredTool = EMOToolType::Hammer;
+		Boulder.MinToolQuality = 0.3f;
+		Entries.Add(Boulder);
+	}
 	// Sandstone ground and outcrops: a block broken off with a hammerstone (a grinding stone, a whetstone). The rock stays.
 	for (const TCHAR* Sandstone : { TEXT("SandstoneRockyGround"), TEXT("SandstoneCliff") })
 	{

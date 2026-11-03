@@ -154,7 +154,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
 | Technology history (research) | `Docs/Technology_History.md` |
 | Item art and icons | `Docs/Item_Art_Pipeline.md` |
 | Held items: how every body's hand grips them | `Docs/Held_Grip.md` |
-| Building / terraform and excavation | `Docs/Building.md` / `Docs/Terraform_Excavation_Plan.md` |
+| Building (pieces: section 7) / terraform and excavation | `Docs/Building.md` / `Docs/Terraform_Excavation_Plan.md` |
 | AI, survivors, colony | `Docs/AI_And_Colony.md` |
 | Co-op, sessions, RPC, interaction | `Docs/Coop_And_Networking.md` |
 | UI architecture / building UI | `Docs/UI.md` / `Docs/UI_TOOLING.md` |

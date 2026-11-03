@@ -32,7 +32,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/Medical_And_Survival.md` | Medical cascade, death path, survival meters, thermal model, breath, illness, treatment | Medical / survival work |
 | `Docs/Crafting_And_Progression.md` | Recipes, queue, stations, tool gate, harvesting, item state / liquids / action registries, discovery, progression checks | Crafting / harvesting / items code |
 | `Docs/PROGRESSION_ROADMAP.md` | **The design authority** for technology progression: eras, heat ladder, materials, discovery precursors, gaps | Before adding or changing any item, recipe, station or knowledge |
-| `Docs/Building.md` | Placement, server-driven construction, build-state look, building mode, creative instant building | Building work |
+| `Docs/Building.md` | Placement, server-driven construction, build-state look, building mode, creative instant building; the building pieces (wattle, daub, framing, stone, thatch, doors, shelters: section 7) | Building work |
 | `Docs/Farming_And_Husbandry.md` | Crops (seed, field, growth, harvest) and domestic animals (capture, pens, taming, breeding, products): design and build order | Farming, livestock |
 | `Docs/Animation_GASP.md` | The survivor's locomotion from Epic's Game Animation Sample: the hidden mannequin driver, the native retarget + slot on the body, the pawn interface, the imported content and config | Survivor animation, GASP |
 | `Docs/Movement_And_Traversal.md` | Vault / hop up / pull-up and climbing (cliffs, rocks, trees): the rules, the co-op prediction, the costs | Movement, traversal, climbing |

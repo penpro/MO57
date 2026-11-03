@@ -168,4 +168,103 @@ menu's kit spec is `Content/Python/ui_specs/kit_build_context.py`.
 ## 6. Saves
 
 Loaded buildings repopulate their recipe BuildParts (a July fix: restore once left materials vacuously satisfied = free build).
-Deposited build materials are part of the save payload. Persistence patterns: `Docs/Persistence.md`.
+Deposited build materials are part of the save payload. Persistence patterns: `Docs/Persistence.md`. A building piece also saves its
+posts' lengths and whether its door stands open (section 7).
+
+## 7. Building pieces: wattle and daub, framing, stone, thatch, doors, shelters (Nov 2-3)
+
+Wes, Nov 2: "take the wattle walls we have and add moss dobbing for insulation", "wooden 'framing' where some branches snap to the edges
+of the wall panels so we can create a framed in look", "wooden floors that don't have anything in between them and the ground get wooden
+supports like the framing above", "cobblestone foundations and walls", "thatch to the roof wattle framing", "doors", "hardwood framing and
+cobble and dob", "hide lean to and tent and wattle and thatch lean to ... remember to have the assets 'pop in' as building goes on so it looks
+like it's actually finishing".
+
+### The one abstraction: a piece is data
+
+`AMOBuildPieceActor` (MOBuildPieceActor.h) is a building made of **parts in build order**. Its Blueprint holds data only: `Parts` (a mesh,
+once or instanced), `Colliders` (hidden boxes: solid once built, clickable as a plan), `SnapBox` (what snapping measures, tag
+`MO_SnapBounds`), a door, supports, and the snapping / shelter flags on `AMOBuildableActor`. The actor makes the components when it is
+constructed, on every machine alike, and hands the parts to the staging (section 3): part i of N appears when the work reaches (i + 1) / N,
+the unbuilt ones hidden. A new piece is one entry in `Tools/building_pieces.py` and one builder in the Blender script, not new code.
+
+| Step | Where |
+|---|---|
+| What each piece is (frame, cost, time, skill, snapping, colliders, porosity) | `Tools/building_pieces.py` `PIECES` |
+| The parts, built procedurally in build order (Unreal's frame, world-scaled UVs) | `Tools/blender_buildings_blender.py` (`GEOMETRY`) |
+| Ten tiling surfaces baked seamless (4D noise on a torus): Bark, Rod, Hewn, Plank, Moss, Daub, Thatch, Hide, Mortar, Cord | the same script, job `surfaces` -> `/Game/BlenderBuildings/Surfaces/MI_Surf_*` |
+| Import, the scanned stones laid in courses, `BP_Piece_<Piece>`, the recipe row | `Content/Python/import_blender_buildings.py` |
+| All of it | `python Tools/blender_buildings.py [Piece ...] [--surfaces] [--rows]` |
+| In a game | `python Tools/check_buildings.py [--shots]` (verbs `MO.Test.PlacePiece / PieceProgress / PieceInfo / PieceDoor / ShelterHere`) |
+
+Frames are the stick pieces' (measured Nov 2): a wall's panel centred at X -50 (Y +-50, Z +-50) as the stick wall's, a roof's eave at X 0,
+Z -50 rising to the ridge at X -100, Z +50 as the stick roof's, a floor centred with its top at Z +5. So a daub or a thatch takes its host's
+transform and fits the old stick pieces and the new ones alike.
+
+### Attaching pieces (`EMOPieceAttach`, `UMOBuildingComponent::TryAttachSnap`)
+
+- **Face**: a moss or clay daub on a wall tagged `Wattle` (the stick walls and the wattle wall), a thatch on a `Roof`, a timber brace on any
+  `Wall`. It takes the host's transform; the host's panel must be its size (a full wall's daub does not go on a half wall).
+- **Edge**: a frame member centred on the host edge nearest the aim that runs its way and is its length: a post (`Vertical`) on a wall's
+  side, a rail or beam (`Horizontal`) on a wall's top or bottom, or hung under a floor's edge. A post where two walls meet covers both.
+- An attaching piece never stands alone (no host = invalid), is never a snap target itself (it would steal the aim from its host), and is
+  one of a kind per place (a second daub on the same wall is refused).
+- `PieceTags` say what a piece is for these: the stick walls `Wall, Wattle` (the half wall also `Half`), the stick roof `Roof` (its peak
+  `RoofPeak`: no thatch fits it yet), floors `Floor` (`Content/Python/tag_stick_builds.py` sets the stick pieces').
+
+### Supports under floors
+
+A floor with `bGrowsSupports` measures, when it is placed (on the server), the drop under each support point to whatever solid is below --
+the ground or a finished building (a plan does not count); 6 cm or less needs no post, more than 3 m finds none. The lengths replicate and
+are saved (`FMOPersistedBuildingRecord::SupportLengthsCm`). Each becomes a post (`SupportMesh`, 100 cm tall, scaled to its length; solid
+once built) that goes up **first**, and its material and time join the build (`UMOBuildProgressComponent::SetExtraWork`: one `SupportItem`
+per `SupportCmPerItem` of its length, one lashing each, `SupportSecondsPerPost`). A corner a neighbour's post already carries (within 20 cm)
+gets none of its own: two floors side by side share their common edge's posts. The placement preview shows the posts as it moves. The stick
+floor is reparented onto `AMOBuildPieceActor` for this and keeps its own sticks and staging (pole posts of straight branches); the plank
+floor's posts are hewn timber.
+
+### Doors
+
+A door piece is a wall two panels high (posts, lintel, sill) and a leaf (its parts and collider marked `bDoorLeaf`) hung on `DoorHinge`.
+E on the finished door opens and closes it on the server (`SetDoorOpen`: replicated, saved); the leaf swings over `DoorSwingSeconds` and its
+collider with it. Flip the piece while placing it to hang the door the other way.
+
+### What a piece lets through: draughts and leaks (`IMOShelterPorosity`)
+
+The shelter rays (`UMOWeatherBlueprintLibrary::TestExposureShelter`) trace on through a porous solid carrying what passed: each ray's cover
+is 1 - the product of what everything along it lets through (`RainPass` for the overhead rays, `WindPass` for the wall and wind rays), and
+the hit counts keep the rays that stop at least half. A bare wattle or stick wall lets the wind through (0.45-0.5), moss daub (0.05) or clay
+daub (0) stops it; a stick roof lets the rain through (0.85) until it is thatched (0). Wind chill inside follows (the vitals read the wind
+channel of the exposure). A plan or a site under way stops nothing.
+
+### The pieces
+
+| Piece (recipe) | Frame | Build order (parts) | Cost | Time | Lets through |
+|---|---|---|---|---|---|
+| Wattle Wall (`BuildWattleWall`) | wall | 5 stakes, then 46 rods woven, in 8 courses | 5 straight branches, 24 green rods | 40 min | wind 0.45 |
+| Moss Daubing (`DaubWallMoss`) | on a Wattle wall | 8 bands of moss, bottom up | 12 moss | 25 min | wind 0.05 |
+| Clay Daubing (`DaubWallClay`) | on a Wattle wall | 8 bands of daub, both faces | 10 mud, 4 clay, 4 dried grass | 45 min | wind 0 |
+| Pole Post / Pole Rail (`BuildPolePost`, `BuildPoleRail`) | a wall's side / its top or bottom, a floor's edge | pole, lashings | 1 straight branch, 2 cord | 10 min | -- |
+| Timber Post / Beam (`BuildTimberPost`, `BuildTimberBeam`) | the same | hewn oak, pegs | 1 log, 1 hardwood; an axe | 1 h | -- |
+| Timber Brace (`BuildTimberBrace`) | on a wall | brace, pegs | 4 hardwood; an axe | 40 min | -- |
+| Cobble Foundation (`BuildCobbleFoundation`) | floor, 40 cm deep | mortar core, rammed top, 3 courses of stones on four sides | 55 building stones, 15 mud | 4 h | -- |
+| Cobble Wall (`BuildCobbleWall`) | wall, 40 cm thick | mortar core, 6 courses of stones on both faces | 55 building stones, 15 mud | 4 h | nothing |
+| Cobble and Daub Infill (`BuildCobbleInfill`) | wall, 14 cm | core, 9 courses of small stones, the daub over them | 18 building stones, 8 mud, 3 clay, 3 dried grass | 2 h | wind 0 |
+| Grass Thatch (`ThatchRoof`) | on a stick Roof | 7 courses from the eaves up, ridge roll, sways | 40 dried grass, 4 rods, 6 cord | 1 h | rain 0 |
+| Plank Floor (`BuildPlankFloor`) | floor; timber posts below | joists, 5 boards | 5 planks, 1 log, 1 hardwood; an axe | 1 h | -- |
+| Wattle Door (`BuildWattleDoor`) | wall, 2 m | posts, sill, lintel, the hurdle's stakes, its weave, rawhide hinges | 8 straight branches, 30 rods, 2 branches, 1 scraped hide, 4 cord | 80 min | -- |
+| Plank Door (`BuildPlankDoor`) | wall, 2 m | posts, sill, lintel, planks, battens, pegs | 2 logs, 4 planks, 3 hardwood; an axe | 3 h | -- |
+| Lean-To Shelter (`BuildLeanTo`) | shelter | uprights, ridge, rafters, lattice, 7 thatch courses | 2 branches, 6 straight branches, 10 rods, 50 dried grass, 6 cord | 90 min | rain 0 |
+| Hide Lean-To (`BuildHideLeanTo`) | shelter | uprights, ridge, rafters, 3 hides, lashings | 2 branches, 6 straight branches, 3 scraped hides, 10 cord | 1 h | rain 0 |
+| Hide Tent (`BuildHideTent`) | shelter, 3.2 m across | 8 poles in two lifts, the tie, 3 courses of hide cover, the door flap, pegs and stones | 16 straight branches, 8 scraped hides, 14 cord, 12 rods | 6 h | rain 0.05 |
+
+Times are real work at a builder's pace (Principle 11); the building skill doubles them and spoils a quarter of the material with none.
+Two new materials: **Moss01** (an armful, 0.5 kg: "Strip moss" on a mossy rock) and **FieldStone01** (a building stone, 12 kg: "Break off a
+building stone" on a boulder with a hammerstone; the boulder stays) -- `UMOCoverForageSettings`.
+
+### Not done yet
+
+- A thatch for the roof peak piece, a half-wall daub, wattle half walls, hurdle fences, a smoke hood.
+- A cobble piece's stones are three scans at building-stone size; more scans (flat field stones, slabs) would vary them.
+- Look-and-feel (the moss lumps, the daub, the stone courses, the thatch's colour) is on Wes's by-eye list (`Docs/BACKLOG.md`).
+- The pieces' assets (`/Game/BlenderBuildings`) and the changed stick Blueprints stay local until the LFS budget allows (as the Blender
+  items): `python Tools/blender_buildings.py --surfaces --rows` remakes all of them on another machine.

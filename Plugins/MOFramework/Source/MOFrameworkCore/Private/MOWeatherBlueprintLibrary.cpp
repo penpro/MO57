@@ -1,5 +1,6 @@
 #include "MOWeatherBlueprintLibrary.h"
 #include "MOAmbientEnvironmentProvider.h"
+#include "MOShelterPorosityInterface.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -107,27 +108,50 @@ namespace MOShelter
 		return Params;
 	}
 
-	/** One shelter ray: the first hit that is shelter (UMOWeatherBlueprintLibrary::IsWeatherShelterHit), tracing on past what is not. */
-	static bool TraceShelter(UWorld* World, const FVector& Start, const FVector& End, FCollisionQueryParams Params, FHitResult& OutHit)
+	/** Which weather a shelter ray stands for: the overhead rays the rain, the wall and wind rays the wind. */
+	enum class EShelterChannel : uint8 { Rain, Wind };
+
+	/**
+	 * One shelter ray: how much of the weather it stands for the solids along it stop (0..1). It traces on past what is not shelter
+	 * (UMOWeatherBlueprintLibrary::IsWeatherShelterHit) and through a porous solid (IMOShelterPorosity: a bare wattle wall, an unthatched roof
+	 * frame), carrying what passed; OutHit is the first solid that stopped any of it (its Distance weighs a windbreak). 0 = nothing stopped it.
+	 */
+	static float TraceShelter(UWorld* World, const FVector& Start, const FVector& End, FCollisionQueryParams Params, FHitResult& OutHit,
+		EShelterChannel Channel = EShelterChannel::Rain)
 	{
-		for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+		float Passing = 1.0f;
+		bool bFirst = true;
+		FHitResult Hit;
+		for (int32 Attempt = 0; Attempt < 8 && Passing > 0.01f; ++Attempt)
 		{
-			if (!World->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params))
+			if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
 			{
-				return false;
+				break;
 			}
-			if (UMOWeatherBlueprintLibrary::IsWeatherShelterHit(OutHit))
+			UPrimitiveComponent* Component = Hit.GetComponent();
+			if (UMOWeatherBlueprintLibrary::IsWeatherShelterHit(Hit))
 			{
-				return true;
+				float RainPass = 0.0f;
+				float WindPass = 0.0f;
+				if (const IMOShelterPorosity* Porous = Cast<IMOShelterPorosity>(Hit.GetActor()))
+				{
+					Porous->GetShelterPass(Component, RainPass, WindPass);
+				}
+				const float Pass = FMath::Clamp(Channel == EShelterChannel::Rain ? RainPass : WindPass, 0.0f, 1.0f);
+				if (Pass < 1.0f && bFirst)
+				{
+					OutHit = Hit;
+					bFirst = false;
+				}
+				Passing *= Pass;
 			}
-			UPrimitiveComponent* Component = OutHit.GetComponent();
 			if (!Component)
 			{
-				return false;
+				break;
 			}
 			Params.AddIgnoredComponent(Component);
 		}
-		return false;
+		return 1.0f - Passing;
 	}
 }
 
@@ -220,6 +244,17 @@ UObject* UMOWeatherBlueprintLibrary::LoadObjectFromSoftPath(const FSoftObjectPat
 	return Path.TryLoad();
 }
 
+float UMOWeatherBlueprintLibrary::TraceShelterBlock(const UObject* WorldContextObject, FVector Start, FVector End, bool bWind, AActor* IgnoreActor)
+{
+	UWorld* World = MOShelter::GetWorldFromContext(WorldContextObject);
+	if (!World)
+	{
+		return 0.0f;
+	}
+	FHitResult Hit;
+	return MOShelter::TraceShelter(World, Start, End, MOShelter::MakeParams(IgnoreActor), Hit, bWind ? MOShelter::EShelterChannel::Wind : MOShelter::EShelterChannel::Rain);
+}
+
 bool UMOWeatherBlueprintLibrary::IsWeatherShelterHit(const FHitResult& Hit)
 {
 	const UPrimitiveComponent* Component = Hit.GetComponent();
@@ -291,35 +326,37 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 	// 1) Overhead — 9 long rays. Count all hits AND count hits within
 	//    "close" range (those contribute to enclosure as a low roof / ceiling).
 	// --------------------------------------------------------------------
-	int32 OverheadCloseHits = 0;
+	// Each ray's cover is what the solids along it stop (a roof frame without its thatch lets most rain through); the counts keep the rays that
+	// stop at least half.
+	float OverheadCoverSum = 0.0f;
+	float OverheadCloseSum = 0.0f;
 	for (const FVector& Dir : MOShelter::OverheadDirs)
 	{
 		const FVector End = Location + Dir * MOShelter::OverheadRange;
 		FHitResult Hit;
-		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
+		const float Block = MOShelter::TraceShelter(World, Location, End, Params, Hit, MOShelter::EShelterChannel::Rain);
+		OverheadCoverSum += Block;
+		Result.OverheadHits += Block >= 0.5f ? 1 : 0;
+		if (Block > 0.0f && Hit.Distance <= MOShelter::IndoorCloseRange)
 		{
-			++Result.OverheadHits;
-			if (Hit.Distance <= MOShelter::IndoorCloseRange)
-			{
-				++OverheadCloseHits;
-			}
+			OverheadCloseSum += Block;
 		}
 	}
 	Result.OverheadCover = Result.OverheadRayCount > 0
-		? static_cast<float>(Result.OverheadHits) / static_cast<float>(Result.OverheadRayCount)
+		? OverheadCoverSum / static_cast<float>(Result.OverheadRayCount)
 		: 0.0f;
 
 	// --------------------------------------------------------------------
-	// 2) Walls — 4 short horizontal rays. Hits = close vertical surfaces.
+	// 2) Walls — 4 short horizontal rays. Hits = close vertical surfaces (a gappy wall counts for what it stops of the wind).
 	// --------------------------------------------------------------------
+	float WallSum = 0.0f;
 	for (const FVector& Dir : MOShelter::WallDirs)
 	{
 		const FVector End = Location + Dir * MOShelter::WallRange;
 		FHitResult Hit;
-		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
-		{
-			++Result.WallHits;
-		}
+		const float Block = MOShelter::TraceShelter(World, Location, End, Params, Hit, MOShelter::EShelterChannel::Wind);
+		WallSum += Block;
+		Result.WallHits += Block >= 0.5f ? 1 : 0;
 	}
 
 	// --------------------------------------------------------------------
@@ -339,10 +376,11 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 		{
 			const FVector End = Location + Dir * MOShelter::WindRange;
 			FHitResult Hit;
-			if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
+			const float Block = MOShelter::TraceShelter(World, Location, End, Params, Hit, MOShelter::EShelterChannel::Wind);
+			if (Block > 0.0f)
 			{
 				const float DistFrac = FMath::Clamp(Hit.Distance / MOShelter::WindRange, 0.0f, 1.0f);
-				WindScoreSum += (1.0f - DistFrac);
+				WindScoreSum += Block * (1.0f - DistFrac);
 			}
 		}
 		Result.WindShelter = WindRays.Num() > 0
@@ -355,10 +393,10 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestExposureShelter(
 	// overhead slightly (roof matters more than walls for "indoors" feel).
 	// --------------------------------------------------------------------
 	const float OverheadCloseFrac = Result.OverheadRayCount > 0
-		? static_cast<float>(OverheadCloseHits) / static_cast<float>(Result.OverheadRayCount)
+		? OverheadCloseSum / static_cast<float>(Result.OverheadRayCount)
 		: 0.0f;
 	const float WallFrac = Result.WallRayCount > 0
-		? static_cast<float>(Result.WallHits) / static_cast<float>(Result.WallRayCount)
+		? WallSum / static_cast<float>(Result.WallRayCount)
 		: 0.0f;
 	Result.Enclosure = (OverheadCloseFrac * 0.6f) + (WallFrac * 0.4f);
 
@@ -391,18 +429,18 @@ FMOExposureShelter UMOWeatherBlueprintLibrary::TestOverheadCover(
 
 	const FCollisionQueryParams Params = MOShelter::MakeParams(IgnoreActor);
 
+	float CoverSum = 0.0f;
 	for (const FVector& Dir : MOShelter::OverheadDirs)
 	{
 		const FVector End = Location + Dir * MOShelter::OverheadRange;
 		FHitResult Hit;
-		if (MOShelter::TraceShelter(World, Location, End, Params, Hit))
-		{
-			++Result.OverheadHits;
-		}
+		const float Block = MOShelter::TraceShelter(World, Location, End, Params, Hit, MOShelter::EShelterChannel::Rain);
+		CoverSum += Block;
+		Result.OverheadHits += Block >= 0.5f ? 1 : 0;
 	}
 
 	Result.OverheadCover = Result.OverheadRayCount > 0
-		? static_cast<float>(Result.OverheadHits) / static_cast<float>(Result.OverheadRayCount)
+		? CoverSum / static_cast<float>(Result.OverheadRayCount)
 		: 0.0f;
 	Result.bIsCovered = Result.OverheadCover >= 0.5f;
 

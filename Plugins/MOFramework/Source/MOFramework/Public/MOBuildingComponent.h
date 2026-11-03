@@ -304,6 +304,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void UpdateGhostPosition();
 
+	/** Everything UpdateGhostPosition does once its trace has hit: the snap (edges, attaching pieces), a floor's posts, the validity and its tint.
+	 *  MO.Test.PlacePiece feeds it an aim point instead of the camera's trace, so a test places through the same code a player does. */
+	void ApplyGhostAtHit(const FHitResult& Hit);
+
+	/** The placement preview, while placing (null otherwise). */
+	AMOBuildableActor* GetCurrentGhost() const { return CurrentGhost; }
+
 	/**
 	 * Rotate the ghost around the Z axis (yaw).
 	 * @param DeltaDegrees - Degrees to rotate (positive = clockwise from above)
@@ -508,6 +515,15 @@ private:
 	 * (e.g. for visual feedback). Pass nullptr if not needed.
 	 */
 	FTransform TryEdgeSnap(const FVector& RawLocation, const FRotator& RawRotation, bool* bOutDidSnap = nullptr) const;
+
+	/**
+	 * An attaching piece (AMOBuildableActor::Attach, Nov 2 2026) on the host nearest the aim: a Face piece (a daub, a thatch) takes the host's own
+	 * transform -- its geometry is authored in the host's frame -- on a host the same size (its box's two long sides within 8 cm); an Edge piece (a
+	 * frame member) lies centred on the host edge nearest the aim that runs its way and is its length (within 10 %): a post on a wall's sides, a rail
+	 * on its top or bottom, a beam under a floor's edge. The host must be a snap target carrying one of the piece's AttachHostTags, and no piece of
+	 * the same kind may stand there already. bOutDidSnap false = nothing to attach to (the placement is invalid: an attaching piece never stands alone).
+	 */
+	FTransform TryAttachSnap(const FVector& RawLocation, const FRotator& RawRotation, bool* bOutDidSnap = nullptr) const;
 
 	/**
 	 * Return half-extents (cm) of an actor's XY footprint by walking its

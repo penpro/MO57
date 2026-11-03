@@ -1,0 +1,854 @@
+{
+ "DaubWallMoss": {
+  "recipeId": "DaubWallMoss",
+  "displayName": "Moss Daubing",
+  "description": "Moss pressed into the weave from both sides and packed hard, the way log and wattle walls were chinked in the north: it stops the draught that blows through a bare wattle wall. Goes on a wattle or stick wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 1500,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 12,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Moss01",
+    "Quantity": 12,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/MossDaub/BP_Piece_MossDaub.BP_Piece_MossDaub_C'"
+  }
+ },
+ "DaubWallClay": {
+  "recipeId": "DaubWallClay",
+  "displayName": "Clay Daubing",
+  "description": "Wet earth and clay trodden together with chopped grass, thrown onto the weave by the handful and pressed in from both sides. Dried, it is a tight wall: no draught, and it does not burn the way bare wattle does. Goes on a wattle or stick wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 2700,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 22,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Mud01",
+    "Quantity": 10,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Clay01",
+    "Quantity": 4,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 4,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/ClayDaub/BP_Piece_ClayDaub.BP_Piece_ClayDaub_C'"
+  }
+ },
+ "BuildPolePost": {
+  "recipeId": "BuildPolePost",
+  "displayName": "Pole Post",
+  "description": "A straight pole set upright at the end of a wall panel and lashed to it: the frame that holds a run of wattle straight. Snaps to a wall's side.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 5,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 1,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 2,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/PolePost/BP_Piece_PolePost.BP_Piece_PolePost_C'"
+  }
+ },
+ "BuildPoleRail": {
+  "recipeId": "BuildPoleRail",
+  "displayName": "Pole Rail",
+  "description": "A pole lashed along the top or the foot of a wall panel, or under the edge of a floor: it ties the frame together. Snaps to a wall's top or bottom edge, or under a floor's edge.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 5,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 1,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 2,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/PoleRail/BP_Piece_PoleRail.BP_Piece_PoleRail_C'"
+  }
+ },
+ "BuildTimberPost": {
+  "recipeId": "BuildTimberPost",
+  "displayName": "Timber Post",
+  "description": "An oak post hewn square with the axe from a log section, pegged into the frame: the timber frame's upright. Snaps to a wall's side.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 3600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 3,
+  "skillXPReward": 30,
+  "requiredTools": [
+   {
+    "ToolType": "Axe",
+    "MinQuality": 0.2,
+    "DurabilityConsumed": 2,
+    "bIsRequired": true,
+    "MissingToolTimeMultiplier": 1,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Log01",
+    "Quantity": 1,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Hardwood01",
+    "Quantity": 1,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/TimberPost/BP_Piece_TimberPost.BP_Piece_TimberPost_C'"
+  }
+ },
+ "BuildTimberBeam": {
+  "recipeId": "BuildTimberBeam",
+  "displayName": "Timber Beam",
+  "description": "A hewn oak beam: a sill under a wall, a plate along its top, a joist under a floor's edge. Snaps to a wall's top or bottom edge, or under a floor's edge.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 3600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 3,
+  "skillXPReward": 30,
+  "requiredTools": [
+   {
+    "ToolType": "Axe",
+    "MinQuality": 0.2,
+    "DurabilityConsumed": 2,
+    "bIsRequired": true,
+    "MissingToolTimeMultiplier": 1,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Log01",
+    "Quantity": 1,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Hardwood01",
+    "Quantity": 1,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/TimberBeam/BP_Piece_TimberBeam.BP_Piece_TimberBeam_C'"
+  }
+ },
+ "BuildTimberBrace": {
+  "recipeId": "BuildTimberBrace",
+  "displayName": "Timber Brace",
+  "description": "A hewn oak brace set corner to corner across a wall panel and pegged at both ends: it keeps the frame from racking. Goes on a wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 2400,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 3,
+  "skillXPReward": 20,
+  "requiredTools": [
+   {
+    "ToolType": "Axe",
+    "MinQuality": 0.2,
+    "DurabilityConsumed": 2,
+    "bIsRequired": true,
+    "MissingToolTimeMultiplier": 1,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Hardwood01",
+    "Quantity": 4,
+    "Weight": 2,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/TimberBrace/BP_Piece_TimberBrace.BP_Piece_TimberBrace_C'"
+  }
+ },
+ "BuildCobbleFoundation": {
+  "recipeId": "BuildCobbleFoundation",
+  "displayName": "Cobble Foundation",
+  "description": "A footing of field stones laid in earth mortar, 40 cm deep, its top levelled with flat stones and rammed earth: it keeps a building's sills off the wet ground. Walls stand on its edges; foundations join side by side.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 14400,
+  "buildRange": 300,
+  "requiredSkillId": "Stoneworking",
+  "requiredSkillLevel": 2,
+  "skillXPReward": 120,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "FieldStone01",
+    "Quantity": 55,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Mud01",
+    "Quantity": 15,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/CobbleFoundation/BP_Piece_CobbleFoundation.BP_Piece_CobbleFoundation_C'"
+  }
+ },
+ "BuildCobbleWall": {
+  "recipeId": "BuildCobbleWall",
+  "displayName": "Cobble Wall",
+  "description": "Field stones laid in courses in earth mortar, the faces chosen flat outward and the heart filled with rubble, 40 cm thick. Tight, fireproof and slow: a day's hard work for a metre of it.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 14400,
+  "buildRange": 300,
+  "requiredSkillId": "Stoneworking",
+  "requiredSkillLevel": 2,
+  "skillXPReward": 120,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "FieldStone01",
+    "Quantity": 55,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Mud01",
+    "Quantity": 15,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/CobbleWall/BP_Piece_CobbleWall.BP_Piece_CobbleWall_C'"
+  }
+ },
+ "BuildCobbleInfill": {
+  "recipeId": "BuildCobbleInfill",
+  "displayName": "Cobble and Daub Infill",
+  "description": "A thin panel of small field stones bedded in clay daub, the daub smoothed over the faces: the infill of a timber frame (frame it with timber posts and beams).",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 7200,
+  "buildRange": 300,
+  "requiredSkillId": "Stoneworking",
+  "requiredSkillLevel": 2,
+  "skillXPReward": 60,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "FieldStone01",
+    "Quantity": 18,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Mud01",
+    "Quantity": 8,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Clay01",
+    "Quantity": 3,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 3,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/CobbleInfill/BP_Piece_CobbleInfill.BP_Piece_CobbleInfill_C'"
+  }
+ },
+ "ThatchRoof": {
+  "recipeId": "ThatchRoof",
+  "displayName": "Grass Thatch",
+  "description": "Bundles of dried grass laid butt-down in courses from the eaves up, each course tied to the battens and covering the last, a hand thick: rain runs down the stems and off. Goes on a stick roof.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 3600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 30,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 40,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 4,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 6,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/Thatch/BP_Piece_Thatch.BP_Piece_Thatch_C'"
+  }
+ },
+ "BuildPlankFloor": {
+  "recipeId": "BuildPlankFloor",
+  "displayName": "Plank Floor",
+  "description": "Riven oak boards pegged across two joists. Where the ground falls away under it, hewn posts carry it down to the ground.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 3600,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 2,
+  "skillXPReward": 30,
+  "requiredTools": [
+   {
+    "ToolType": "Axe",
+    "MinQuality": 0.2,
+    "DurabilityConsumed": 2,
+    "bIsRequired": true,
+    "MissingToolTimeMultiplier": 1,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Plank01",
+    "Quantity": 5,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Log01",
+    "Quantity": 1,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Hardwood01",
+    "Quantity": 1,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/PlankFloor/BP_Piece_PlankFloor.BP_Piece_PlankFloor_C'"
+  }
+ },
+ "BuildWattleDoor": {
+  "recipeId": "BuildWattleDoor",
+  "displayName": "Wattle Door",
+  "description": "A doorway two panels high: two posts, a lintel and a sill, and a wattle hurdle hung on rawhide loops that swings inward. Stands in a run of walls like a wall panel; E opens and closes it.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 4800,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 40,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 8,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 30,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Branch01",
+    "Quantity": 2,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "ScrapedHide01",
+    "Quantity": 1,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 4,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/WattleDoor/BP_Piece_WattleDoor.BP_Piece_WattleDoor_C'"
+  }
+ },
+ "BuildPlankDoor": {
+  "recipeId": "BuildPlankDoor",
+  "displayName": "Plank Door",
+  "description": "A doorway two panels high in hewn oak -- posts, lintel and sill pegged together -- and a door of riven planks on two battens, hung on wooden pintles. E opens and closes it.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 10800,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 3,
+  "skillXPReward": 90,
+  "requiredTools": [
+   {
+    "ToolType": "Axe",
+    "MinQuality": 0.2,
+    "DurabilityConsumed": 2,
+    "bIsRequired": true,
+    "MissingToolTimeMultiplier": 1,
+    "MissingToolQualityMultiplier": 1
+   }
+  ],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Log01",
+    "Quantity": 2,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Plank01",
+    "Quantity": 4,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Hardwood01",
+    "Quantity": 3,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/PlankDoor/BP_Piece_PlankDoor.BP_Piece_PlankDoor_C'"
+  }
+ },
+ "BuildLeanTo": {
+  "recipeId": "BuildLeanTo",
+  "displayName": "Lean-To Shelter",
+  "description": "Two forked uprights and a ridge pole, rafters slanting back to the ground, a lattice of rods across them and grass thatch laid in courses from the bottom up: a dry place to sleep out of the wind, open at the front to the fire.",
+  "category": "Shelter",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 5400,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 45,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Branch01",
+    "Quantity": 2,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 6,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 10,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 50,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 6,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/ThatchLeanTo/BP_Piece_ThatchLeanTo.BP_Piece_ThatchLeanTo_C'"
+  },
+  "housingCapacity": 2
+ },
+ "BuildHideLeanTo": {
+  "recipeId": "BuildHideLeanTo",
+  "displayName": "Hide Lean-To",
+  "description": "Forked uprights, a ridge pole and slanting rafters with scraped hides lashed over them: quick to raise where hides are plentiful, and they shed rain completely.",
+  "category": "Shelter",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 3600,
+  "buildRange": 300,
+  "requiredSkillId": "Leatherworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 30,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Branch01",
+    "Quantity": 2,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 6,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "ScrapedHide01",
+    "Quantity": 3,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 10,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/HideLeanTo/BP_Piece_HideLeanTo.BP_Piece_HideLeanTo_C'"
+  },
+  "housingCapacity": 2
+ },
+ "BuildHideTent": {
+  "recipeId": "BuildHideTent",
+  "displayName": "Hide Tent",
+  "description": "Eight poles tied at the top and spread in a circle three metres across, covered with scraped hides sewn into a cone and pegged down at the foot, a smoke hole at the top and a flap for a door: a home that can be taken down and carried.",
+  "category": "Shelter",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 21600,
+  "buildRange": 300,
+  "requiredSkillId": "Leatherworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 180,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 16,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "ScrapedHide01",
+    "Quantity": 8,
+    "Weight": 3,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 14,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 12,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/HideTent/BP_Piece_HideTent.BP_Piece_HideTent_C'"
+  },
+  "housingCapacity": 4
+ },
+ "BuildWattleWall": {
+  "recipeId": "BuildWattleWall",
+  "displayName": "Wattle Wall",
+  "description": "Five stakes driven in a row and green rods woven between them, in front of one and behind the next, packed down course by course. A wattle panel stands by itself and keeps out animals, but the wind blows through it: daub it with moss or clay.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 2400,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 20,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 5,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 24,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/WattleWall/BP_Piece_WattleWall.BP_Piece_WattleWall_C'"
+  }
+ }
+}

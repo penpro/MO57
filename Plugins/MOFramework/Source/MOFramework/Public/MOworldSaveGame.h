@@ -327,6 +327,14 @@ struct MOFRAMEWORK_API FMOPersistedBuildingRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     bool bIsActive = false;
 
+    /** A building piece's posts down to the ground (AMOBuildPieceActor: cm under each support point, 0 = none), measured when it was placed. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    TArray<float> SupportLengthsCm;
+
+    /** A door piece stands open (AMOBuildPieceActor). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    bool bDoorOpen = false;
+
     /** A field plot's crop (AMOCropPlotActor; DT_Crops row), None = fallow. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     FName CropId;

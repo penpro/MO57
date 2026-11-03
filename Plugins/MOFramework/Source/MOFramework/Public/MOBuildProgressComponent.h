@@ -280,6 +280,13 @@ public:
 	 */
 	void InitializeFromRecipe(const FMORecipeDefinitionRow& Recipe);
 
+	/**
+	 * Work this placement adds to its recipe (AMOBuildPieceActor: the posts that carry a floor down to the ground, Wes Nov 2 2026): their material
+	 * after the recipe's parts and their time on top of its time. Every machine sets the same from the piece's replicated supports, before or after
+	 * the recipe; a plan that has not started takes it at once, so its material list and time include it. Never changed once the work started.
+	 */
+	void SetExtraWork(const TArray<FMOBuildPart>& InExtraParts, float InExtraSeconds);
+
 	// ============================================================================
 	// CONSTRUCTION CONTROL
 	// ============================================================================
@@ -480,9 +487,15 @@ private:
 	UPROPERTY()
 	FName RecipeId = NAME_None;
 
-	/** Build parts from the recipe. */
+	/** Build parts from the recipe, then this placement's extra work (SetExtraWork). */
 	UPROPERTY()
 	TArray<FMOBuildPart> BuildParts;
+
+	/** This placement's extra work (SetExtraWork) and the recipe's own build time, so the two can be summed whichever arrives first. */
+	TArray<FMOBuildPart> ExtraParts;
+	float ExtraSeconds = 0.0f;
+	float RecipeBuildSeconds = 0.0f;
+	bool bHasRecipe = false;
 
 	/** Cached total weight for time distribution. */
 	int32 TotalWeight = 0;

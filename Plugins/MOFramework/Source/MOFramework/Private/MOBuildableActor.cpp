@@ -750,6 +750,11 @@ void AMOBuildableActor::RestoreAuthoredCollision(UPrimitiveComponent* Primitive)
 	{
 		return;
 	}
+	if (Primitive->ComponentHasTag(MO_NO_COLLISION_TAG))
+	{
+		Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		return;
+	}
 	const UPrimitiveComponent* Authored = Cast<UPrimitiveComponent>(Primitive->GetArchetype());
 	if (!Authored || Authored == Primitive)
 	{
@@ -771,6 +776,11 @@ void AMOBuildableActor::ApplyUnbuiltCollisionTo(UPrimitiveComponent* Primitive)
 {
 	if (!IsValid(Primitive))
 	{
+		return;
+	}
+	if (Primitive->ComponentHasTag(MO_NO_COLLISION_TAG))
+	{
+		Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		return;
 	}
 	Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
@@ -851,7 +861,7 @@ void AMOBuildableActor::ApplyStructuralCollisionProfile(FName ProfileName)
 	for (USceneComponent* Child : Descendants)
 	{
 		UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Child);
-		if (!IsValid(SMC) || !SMC->GetStaticMesh())
+		if (!IsValid(SMC) || !SMC->GetStaticMesh() || SMC->ComponentHasTag(MO_NO_COLLISION_TAG))
 		{
 			continue;
 		}
@@ -891,6 +901,50 @@ void AMOBuildableActor::RestoreOriginalMaterialsOn(UMeshComponent* Mesh)
 	if (UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
 	{
 		StaticMesh->SetForceDisableNanite(Saved->bForceDisableNanite);   // built: Nanite again (the ghost had forced the fallback)
+	}
+}
+
+void AMOBuildableActor::GetShelterPass(const UPrimitiveComponent* HitComponent, float& OutRainPass, float& OutWindPass) const
+{
+	// A plan or a site under way stops nothing (its parts block no pawn, so the shelter rays pass them anyway).
+	const bool bBuilt = IsComplete();
+	OutRainPass = bBuilt ? RainPass : 1.0f;
+	OutWindPass = bBuilt ? WindPass : 1.0f;
+}
+
+void AMOBuildableActor::RefreshAfterPartsChanged()
+{
+	bStagedPartsResolved = false;
+	StagedPartComponents.Reset();
+	ShownBuiltStagedParts = -1;
+	if (bIsGhost)
+	{
+		// The placement preview: every part in the ghost material (the same tinted instance), none colliding (SetGhostMode's rule).
+		ApplyGhostMaterialToAllMeshes();
+		TArray<UPrimitiveComponent*> Prims;
+		GetComponents<UPrimitiveComponent>(Prims);
+		for (UPrimitiveComponent* Prim : Prims)
+		{
+			if (IsValid(Prim) && !CachedGhostCollisionStates.Contains(Prim))
+			{
+				CachedGhostCollisionStates.Add(Prim, Prim->GetCollisionEnabled());
+				Prim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+		}
+		return;
+	}
+	if (!HasActorBegunPlay() && RecipeId.IsNone())
+	{
+		return;   // not placed yet: BeginPlay / InitializeBuilding give every part its state
+	}
+	if (IsComplete())
+	{
+		EnterCompletedState();
+	}
+	else
+	{
+		ApplyUnbuiltCollision();
+		RefreshBuildStateVisual();
 	}
 }
 

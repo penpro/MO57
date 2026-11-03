@@ -1,0 +1,42 @@
+{
+ "Moss01": {
+  "itemId": "Moss01",
+  "displayName": "Moss",
+  "shortDescription": "An armful of moss.",
+  "description": "Moss stripped from a rock by the armful, damp and springy. Packed into the gaps of a wattle or log wall it stops the draught -- the chinking of northern houses for thousands of years -- and it makes a soft bed.",
+  "itemType": "Material",
+  "weight": 0.5,
+  "maxStackSize": 20,
+  "baseValue": 1,
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderBuildings/Moss01/SM_Moss01.SM_Moss01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "FieldStone01": {
+  "itemId": "FieldStone01",
+  "displayName": "Building Stone",
+  "shortDescription": "A heavy field stone, good for walling.",
+  "description": "A stone the size of a loaf, about twelve kilograms, knocked off a boulder or picked from a field: what dry walls, cobble footings and stone walls are laid from. One at a time is all anyone carries far.",
+  "itemType": "Material",
+  "weight": 12.0,
+  "maxStackSize": 4,
+  "baseValue": 1,
+  "worldVisual": {
+   "StaticMesh": "/Game/Fab/Megascans/3D/Forest_Boulder_wgosajs/Medium/wgosajs_tier_2/StaticMeshes/wgosajs_tier_2.wgosajs_tier_2",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 0.12,
+     "Y": 0.12,
+     "Z": 0.12
+    }
+   }
+  }
+ }
+}

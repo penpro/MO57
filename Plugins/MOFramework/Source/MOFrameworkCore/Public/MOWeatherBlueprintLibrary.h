@@ -269,4 +269,10 @@ public:
 	 * a pawn in an open meadow in the rain read covered, wind-sheltered and indoors, and no one ever got the feels-like wet-cold or wind chill.
 	 */
 	static bool IsWeatherShelterHit(const FHitResult& Hit);
+
+	/**
+	 * One shelter ray, the kind the tests above cast: how much of the rain (bWind false) or the wind it stands for the solids between Start and End
+	 * stop (0..1). A porous solid (IMOShelterPorosity: a bare wattle wall, an unthatched roof frame) passes part of it and the ray goes on.
+	 */
+	static float TraceShelterBlock(const UObject* WorldContextObject, FVector Start, FVector End, bool bWind, AActor* IgnoreActor = nullptr);
 };

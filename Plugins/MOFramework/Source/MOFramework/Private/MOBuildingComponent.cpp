@@ -59,6 +59,8 @@
 #include "MOTerrainModificationSubsystem.h"
 #include "MOUIManagerComponent.h"
 #include "MOBuildableActor.h"
+#include "MOBuildPieceActor.h"
+#include "Algo/Sort.h"
 #include "MOBuildProgressComponent.h"
 #include "MOWorldCreationTypes.h"
 #include "MOInventoryComponent.h"
@@ -351,6 +353,30 @@ void UMOBuildingComponent::UpdateGhostPosition()
 
 	if (bHit)
 	{
+		ApplyGhostAtHit(Hit);
+	}
+	else
+	{
+		// No hit - place at max distance but invalid
+		FVector PlacementPoint = CameraLocation + CameraDirection * MaxPlacementDistance;
+		CurrentGhost->SetActorLocation(PlacementPoint);
+
+		if (bCurrentPlacementValid)
+		{
+			bCurrentPlacementValid = false;
+			ApplyGhostMaterial(false);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement INVALID (no ground within %.0f cm of the aim, nor under the end of the reach)"), MaxPlacementDistance);
+		}
+	}
+}
+
+void UMOBuildingComponent::ApplyGhostAtHit(const FHitResult& Hit)
+{
+	if (!IsValid(CurrentGhost))
+	{
+		return;
+	}
+	{
 		LastPlacementHit = Hit;
 
 		// Determine surface orientation
@@ -395,6 +421,18 @@ void UMOBuildingComponent::UpdateGhostPosition()
 		CurrentGhost->SetActorLocation(SnappedXform.GetLocation());
 		CurrentGhost->SetActorRotation(SnappedXform.GetRotation());
 
+		// A floor's posts down to the ground follow the preview (AMOBuildPieceActor supports).
+		if (AMOBuildPieceActor* Piece = Cast<AMOBuildPieceActor>(CurrentGhost))
+		{
+			Piece->UpdatePreviewSupports();
+		}
+
+		// An attaching piece (a daub, a thatch, a frame member) stands only on its host: no host, no placement.
+		if (CurrentGhost->Attach != EMOPieceAttach::None)
+		{
+			bValidSurface = false;
+		}
+
 		// Validity gating:
 		//   - If the snap fired, the cursor's hit-surface type is irrelevant.
 		//     The snap already vouched geometrically (cursor is near a known
@@ -420,19 +458,6 @@ void UMOBuildingComponent::UpdateGhostPosition()
 			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement %s (surface ok=%d normalZ=%.2f, snapped=%d, blocked=%d) on %s"),
 				bValidPlacement ? TEXT("VALID") : TEXT("INVALID"), bValidSurface ? 1 : 0, SurfaceNormal.Z, bDidSnap ? 1 : 0, bBlocked ? 1 : 0,
 				*GetNameSafe(Hit.GetComponent()));
-		}
-	}
-	else
-	{
-		// No hit - place at max distance but invalid
-		FVector PlacementPoint = CameraLocation + CameraDirection * MaxPlacementDistance;
-		CurrentGhost->SetActorLocation(PlacementPoint);
-
-		if (bCurrentPlacementValid)
-		{
-			bCurrentPlacementValid = false;
-			ApplyGhostMaterial(false);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement INVALID (no ground within %.0f cm of the aim, nor under the end of the reach)"), MaxPlacementDistance);
 		}
 	}
 }
@@ -1105,6 +1130,156 @@ FBox UMOBuildingComponent::GetActorLocalBox(const AActor* Actor) const
 	return Final;
 }
 
+FTransform UMOBuildingComponent::TryAttachSnap(const FVector& RawLocation, const FRotator& RawRotation, bool* bOutDidSnap) const
+{
+	if (bOutDidSnap) { *bOutDidSnap = false; }
+	FTransform Result(RawRotation.Quaternion(), RawLocation);
+	UWorld* World = GetWorld();
+	if (!World || !IsValid(CurrentGhost))
+	{
+		return Result;
+	}
+	const FBox GhostBox = GetActorLocalBox(CurrentGhost);
+	if (!GhostBox.IsValid)
+	{
+		return Result;
+	}
+	const FVector GhostExt = GhostBox.GetExtent();
+	const bool bFace = CurrentGhost->Attach == EMOPieceAttach::Face;
+	const bool bVerticalMember = CurrentGhost->MemberAxis == EMOMemberAxis::Vertical;
+	// A frame member is authored along its local Z (a post) or Y (a rail), its section centred on its origin: its length and the half of its
+	// section that sits under a floor's edge.
+	const float MemberLength = bVerticalMember ? GhostExt.Z * 2.0f : GhostExt.Y * 2.0f;
+	const float MemberHalfDepth = GhostExt.Z;
+
+	// The two long sides of a box, sorted: what "the same panel size" compares.
+	auto LongSides = [](const FVector& E)
+	{
+		double S[3] = { E.X, E.Y, E.Z };
+		Algo::Sort(S);
+		return FVector2D(S[1], S[2]);
+	};
+	const FVector2D GhostSides = LongSides(GhostExt);
+
+	float BestDistSq = FMath::Square(EdgeSnapDistance);
+	bool bFound = false;
+	FTransform Best = Result;
+	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+	{
+		AMOBuildableActor* Host = *It;
+		if (!IsValid(Host) || Host == CurrentGhost || !Host->CanBeSnapTarget() || Host->IsGhostMode())
+		{
+			continue;
+		}
+		if (FVector::DistSquared2D(Host->GetActorLocation(), RawLocation) > FMath::Square(EdgeSnapSearchRadius))
+		{
+			continue;
+		}
+		if (CurrentGhost->AttachHostTags.Num() > 0
+			&& !CurrentGhost->AttachHostTags.ContainsByPredicate([Host](const FName& Tag) { return Host->PieceTags.Contains(Tag); }))
+		{
+			continue;
+		}
+		const FBox HostBox = GetActorLocalBox(Host);
+		if (!HostBox.IsValid)
+		{
+			continue;
+		}
+		const FTransform HostXf(Host->GetActorQuat(), Host->GetActorLocation());
+		const FVector C = HostBox.GetCenter();
+		const FVector E = HostBox.GetExtent();
+		const FVector CursorLocal = HostXf.InverseTransformPosition(RawLocation);
+
+		if (bFace)
+		{
+			const FVector2D HostSides = LongSides(E);
+			if (!HostSides.Equals(GhostSides, 8.0f))
+			{
+				continue;   // a full wall's daub does not fit a half wall
+			}
+			const FVector Closest(FMath::Clamp(CursorLocal.X, C.X - E.X, C.X + E.X), FMath::Clamp(CursorLocal.Y, C.Y - E.Y, C.Y + E.Y),
+				FMath::Clamp(CursorLocal.Z, C.Z - E.Z, C.Z + E.Z));
+			const float DistSq = FVector::DistSquared(Closest, CursorLocal);
+			if (DistSq < BestDistSq)
+			{
+				BestDistSq = DistSq;
+				Best = HostXf;
+				bFound = true;
+			}
+			continue;
+		}
+
+		// Edge: the host's edges that run the member's way. A wall (thin across X or Y) has two vertical sides, a top and a bottom; a floor
+		// (thin in Z) has four horizontal edges, the member hung under each.
+		const bool bHostFlat = E.Z < 0.5f * FMath::Max(E.X, E.Y);
+		const bool bThinX = E.X <= E.Y;
+		struct FEdge { FVector Mid; FVector Dir; double Length; };
+		TArray<FEdge, TInlineAllocator<4>> Edges;
+		if (bHostFlat)
+		{
+			if (!bVerticalMember)
+			{
+				const float Z = C.Z - E.Z - MemberHalfDepth;
+				Edges.Add({ FVector(C.X + E.X, C.Y, Z), FVector::YAxisVector, E.Y * 2.0f });
+				Edges.Add({ FVector(C.X - E.X, C.Y, Z), FVector::YAxisVector, E.Y * 2.0f });
+				Edges.Add({ FVector(C.X, C.Y + E.Y, Z), FVector::XAxisVector, E.X * 2.0f });
+				Edges.Add({ FVector(C.X, C.Y - E.Y, Z), FVector::XAxisVector, E.X * 2.0f });
+			}
+		}
+		else if (bVerticalMember)
+		{
+			const FVector Side = bThinX ? FVector(0, E.Y, 0) : FVector(E.X, 0, 0);
+			Edges.Add({ C + Side, FVector::ZAxisVector, E.Z * 2.0f });
+			Edges.Add({ C - Side, FVector::ZAxisVector, E.Z * 2.0f });
+		}
+		else
+		{
+			const FVector Along = bThinX ? FVector::YAxisVector : FVector::XAxisVector;
+			const float Len = (bThinX ? E.Y : E.X) * 2.0f;
+			Edges.Add({ C + FVector(0, 0, E.Z), Along, Len });
+			Edges.Add({ C - FVector(0, 0, E.Z), Along, Len });
+		}
+		for (const FEdge& Edge : Edges)
+		{
+			if (FMath::Abs(Edge.Length - MemberLength) > 0.1f * MemberLength)
+			{
+				continue;
+			}
+			// The aim's distance to the edge segment.
+			const float T = FMath::Clamp(FVector::DotProduct(CursorLocal - Edge.Mid, Edge.Dir), -Edge.Length * 0.5f, Edge.Length * 0.5f);
+			const float DistSq = FVector::DistSquared(Edge.Mid + Edge.Dir * T, CursorLocal);
+			if (DistSq >= BestDistSq)
+			{
+				continue;
+			}
+			// The member's own axis (Z for a post, Y for a rail) onto the edge: a rail along the host's X turns a quarter.
+			const FQuat Turn = (!bVerticalMember && FMath::Abs(Edge.Dir.X) > 0.5f) ? FQuat(FVector::UpVector, UE_HALF_PI) : FQuat::Identity;
+			const FQuat Rot = HostXf.GetRotation() * Turn;
+			// The member's box centre lands on the edge midpoint.
+			const FVector Loc = HostXf.TransformPosition(Edge.Mid) - Rot.RotateVector(GhostBox.GetCenter());
+			BestDistSq = DistSq;
+			Best = FTransform(Rot, Loc);
+			bFound = true;
+		}
+	}
+	if (!bFound)
+	{
+		return Result;
+	}
+	// One of a kind per place: a second daub on the same wall, a second post on the same corner.
+	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+	{
+		if (*It != CurrentGhost && It->GetClass() == CurrentGhost->GetClass() && !It->IsGhostMode()
+			&& FVector::DistSquared(It->GetActorLocation(), Best.GetLocation()) < 4.0f
+			&& It->GetActorQuat().AngularDistance(Best.GetRotation()) < FMath::DegreesToRadians(2.0f))
+		{
+			return Result;
+		}
+	}
+	if (bOutDidSnap) { *bOutDidSnap = true; }
+	return Best;
+}
+
 FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const FRotator& RawRotation, bool* bOutDidSnap) const
 {
 	if (bOutDidSnap) { *bOutDidSnap = false; }
@@ -1118,6 +1293,10 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 	if (!bEnableEdgeSnapping || !IsValid(CurrentGhost))
 	{
 		return Result;
+	}
+	if (CurrentGhost->Attach != EMOPieceAttach::None)
+	{
+		return TryAttachSnap(RawLocation, RawRotation, bOutDidSnap);
 	}
 	UWorld* World = GetWorld();
 	if (!World)
@@ -1202,7 +1381,7 @@ FTransform UMOBuildingComponent::TryEdgeSnap(const FVector& RawLocation, const F
 	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
 	{
 		AMOBuildableActor* Other = *It;
-		if (!IsValid(Other) || Other == CurrentGhost) continue;
+		if (!IsValid(Other) || Other == CurrentGhost || !Other->CanBeSnapTarget()) continue;
 
 		const FVector OtherLoc = Other->GetActorLocation();
 

@@ -38,6 +38,15 @@ bool FMOCoverForage_Lookup::RunTest(const FString& Parameters)
 	TestTrue(TEXT("... and is broken up (taken)"), Log && Log->bRemovesInstance);
 	const FMOCoverForage* Snag = UMOCoverForageSettings::FindForMeshName(TEXT("SM_DeadTree_02"));
 	TestTrue(TEXT("a dead tree gives branches and stays standing"), Gives(Snag, false, TEXT("Branch01")) && !Snag->bRemovesInstance);
+
+	// Nov 2 2026: the building pieces' materials. Moss off a mossy rock; a building stone knocked off a plain boulder with a hammerstone.
+	const FMOCoverForage* MossyRock = UMOCoverForageSettings::FindForMeshName(TEXT("SM_MossyForestBoulder_04"));
+	TestTrue(TEXT("a mossy boulder gives moss and stays"), Gives(MossyRock, false, TEXT("Moss01")) && !MossyRock->bRemovesInstance);
+	TestTrue(TEXT("the scanned mossy boulder too"), Gives(UMOCoverForageSettings::FindForMeshName(TEXT("S_Mossy_Forest_Boulder_wc2hbjw_lod3_Var1")), false, TEXT("Moss01")));
+	const FMOCoverForage* Boulder = UMOCoverForageSettings::FindForMeshName(TEXT("S_Forest_Boulder_wc2hbjw_lod3_Var1"));
+	TestTrue(TEXT("a plain boulder gives a building stone"), Gives(Boulder, false, TEXT("FieldStone01")));
+	TestTrue(TEXT("... with a hammer, and stays"), Boulder && Boulder->RequiredTool == EMOToolType::Hammer && !Boulder->bRemovesInstance);
+	TestFalse(TEXT("a mossy boulder gives moss, not a building stone (one entry per mesh)"), Gives(MossyRock, false, TEXT("FieldStone01")));
 	const FMOCoverForage* Sandstone = UMOCoverForageSettings::FindForMeshName(TEXT("SM_SandstoneRockyGround_01"));
 	TestTrue(TEXT("sandstone ground gives sandstone"), Gives(Sandstone, false, TEXT("Sandstone01")));
 	FText Reason;
