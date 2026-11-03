@@ -5,7 +5,7 @@ Tools/blender_buildings.py:
     python Tools/ue.py py --timeout 1800 -c "import import_blender_buildings as b; out(b.run(['WattleWall']))"
 
 From Saved/BlenderBuildings/ into /Game/BlenderBuildings/:
-  Surfaces/T_Surf_<Name>_BaseColor / _Normal / _ORM, MI_Surf_<Name>   the tiling surfaces (M_MS_Base, like the Blender items' materials)
+  Surfaces/T_Surf_<Name>_BaseColor / _Normal / _ORM, MI_Surf_<Name>   the tiling surfaces, on M_Surf_Base (made here: it reads each primitive's tint)
   <Piece>/SM_<Piece>_<NN>_<Part>                                       each part, Nanite, its slots on MI_Surf_<surface>
   <Piece>/SM_<Support>                                                  a floor's support post (simple box collision: it is solid once built)
   <Piece>/BP_Piece_<Piece>                                              an AMOBuildPieceActor Blueprint: the parts in build order, the colliders,
@@ -15,7 +15,9 @@ Returns JSON: what was made, and the recipe rows (Saved/BlenderBuildings/recipes
 
 A cobble piece's stones are the scans already in the project (Tools/building_pieces.py STONES), laid here in courses -- each stone turned so
 its long side runs along the face and its flat side down, sized to a building stone, bonded over the joints below -- one instanced part per
-course and stone, so the wall rises course by course as the work goes on.
+course and stone, so the wall rises course by course as the work goes on. Laid as a waller lays them (Nov 3, natural variation): each course
+its own height and built of three of the eleven walling stones, short, middle and long stones mixed, each a little shy of the course and
+bedded at its own height, standing proud or back, turned whichever face out, with a pinning stone knocked into a joint now and then.
 """
 import importlib
 import json
@@ -36,7 +38,6 @@ eal = unreal.EditorAssetLibrary
 mel = unreal.MaterialEditingLibrary
 SRC = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), "BlenderBuildings")
 DEST = "/Game/BlenderBuildings"
-MASTER = "/Game/Materials/FabOverrides/M_MS_Base"
 WX = -50.0
 
 
@@ -48,9 +49,90 @@ def log(msg):
 # Surfaces and meshes
 # ---------------------------------------------------------------------------------------------------------------------------------------
 
+SURF_BASE_VERSION = 2   # bump with any change to surface_master's graph (2: the weather read as 1 - V)
+
+
+def surface_master():
+    """M_Surf_Base: the surfaces' parent (Nov 3, natural variation). M_MS_Base's three textures (BaseColor, Normal, ORM in glTF order), and
+    each primitive's tint from the mesh's second UV channel (Tools/blender_buildings_blender.py Vary): base colour x lerp(LightMin, LightMax,
+    tint.x), then toward WeatherColor x its own brightness by tint.y x WeatherAmount -- one stick lighter, one silvered, a clump of moss gone
+    yellow. The weather reads 1 - V: the FBX import flips V.
+
+    Built once, tagged with SURF_BASE_VERSION. It is never rebuilt in place: delete_all_material_expressions leaves half the nodes behind, and
+    deleting them one by one on a material loaded from disk asserts (!IsRooted) and takes the editor down (Nov 3). So a graph change bumps the
+    version, and an older material stops the run: delete its .uasset on disk with the editor closed and run again."""
+    path = DEST + "/Surfaces/M_Surf_Base"
+    if eal.does_asset_exist(path):
+        m = unreal.load_asset(path)
+        have = eal.get_metadata_tag(m, "MOSurfBaseVersion")
+        if have != str(SURF_BASE_VERSION):
+            raise RuntimeError("M_Surf_Base is version %r, the script builds %d: delete Content/BlenderBuildings/Surfaces/M_Surf_Base.uasset "
+                               "with the editor closed and run again" % (have, SURF_BASE_VERSION))
+        return m
+    m = unreal.AssetToolsHelpers.get_asset_tools().create_asset("M_Surf_Base", DEST + "/Surfaces", unreal.Material, unreal.MaterialFactoryNew())
+    eal.set_metadata_tag(m, "MOSurfBaseVersion", str(SURF_BASE_VERSION))
+    m.set_editor_property("used_with_nanite", True)
+    m.set_editor_property("used_with_instanced_static_meshes", True)
+
+    def node(cls, x, y, **props):
+        n = mel.create_material_expression(m, cls, x, y)
+        for k, v in props.items():
+            n.set_editor_property(k, v)
+        return n
+
+    def tex(name, sampler, default, y):
+        # a default of the sampler's own kind (the bark's), or the node does not compile
+        return node(unreal.MaterialExpressionTextureSampleParameter2D, -900, y, parameter_name=name, sampler_type=sampler,
+                    texture=unreal.load_asset("%s/Surfaces/T_Surf_Bark_%s" % (DEST, default)))
+
+    def scalar(name, v, x, y):
+        return node(unreal.MaterialExpressionScalarParameter, x, y, parameter_name=name, default_value=v)
+
+    col = tex("BaseColorTexture", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "BaseColor", -300)
+    nrm = tex("NormalTexture", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, "Normal", 400)
+    orm = tex("MetallicRoughnessTexture", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, "ORM", 750)   # M_MS_Base's name: the icon studio reads it
+    uv1 = node(unreal.MaterialExpressionTextureCoordinate, -1300, 100, coordinate_index=1)
+    light = node(unreal.MaterialExpressionComponentMask, -1100, 50, r=True, g=False, b=False, a=False)
+    weather_v = node(unreal.MaterialExpressionComponentMask, -1100, 200, r=False, g=True, b=False, a=False)
+    mel.connect_material_expressions(uv1, "", light, "")
+    mel.connect_material_expressions(uv1, "", weather_v, "")
+    # the FBX import flips V (v -> 1 - v, measured Nov 3: a tint written 0.1 read 0.9), so the weather comes back as 1 - V
+    weather = node(unreal.MaterialExpressionOneMinus, -950, 200)
+    mel.connect_material_expressions(weather_v, "", weather, "")
+    gain = node(unreal.MaterialExpressionLinearInterpolate, -700, 0)
+    mel.connect_material_expressions(scalar("LightMin", 0.75, -900, -60), "", gain, "A")
+    mel.connect_material_expressions(scalar("LightMax", 1.25, -900, 10), "", gain, "B")
+    mel.connect_material_expressions(light, "", gain, "Alpha")
+    lit = node(unreal.MaterialExpressionMultiply, -500, -200)
+    mel.connect_material_expressions(col, "RGB", lit, "A")
+    mel.connect_material_expressions(gain, "", lit, "B")
+    lum = node(unreal.MaterialExpressionDotProduct, -350, -50)
+    mel.connect_material_expressions(lit, "", lum, "A")
+    mel.connect_material_expressions(node(unreal.MaterialExpressionConstant3Vector, -500, 0, constant=unreal.LinearColor(0.3, 0.59, 0.11, 1.0)), "", lum, "B")
+    aged = node(unreal.MaterialExpressionMultiply, -200, -50)
+    mel.connect_material_expressions(lum, "", aged, "A")
+    mel.connect_material_expressions(node(unreal.MaterialExpressionVectorParameter, -350, 100, parameter_name="WeatherColor",
+                                          default_value=unreal.LinearColor(1.08, 1.06, 1.02, 1.0)), "", aged, "B")
+    amount = node(unreal.MaterialExpressionMultiply, -500, 250)
+    mel.connect_material_expressions(weather, "", amount, "A")
+    mel.connect_material_expressions(scalar("WeatherAmount", 0.6, -700, 300), "", amount, "B")
+    base = node(unreal.MaterialExpressionLinearInterpolate, -50, -150)
+    mel.connect_material_expressions(lit, "", base, "A")
+    mel.connect_material_expressions(aged, "", base, "B")
+    mel.connect_material_expressions(amount, "", base, "Alpha")
+    mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(nrm, "RGB", unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(orm, "R", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
+    mel.connect_material_property(orm, "G", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(orm, "B", unreal.MaterialProperty.MP_METALLIC)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m, False)
+    return m
+
+
 def surfaces():
     folder = DEST + "/Surfaces"
-    master = unreal.load_asset(MASTER)
+    master = surface_master()
     mis = {}
     for name in BP.SURFACES:
         keys = ("BaseColor", "Normal", "ORM")
@@ -67,20 +149,38 @@ def surfaces():
         mi = unreal.load_asset(mi_path) if eal.does_asset_exist(mi_path) else unreal.AssetToolsHelpers.get_asset_tools().create_asset(
             "MI_Surf_" + name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
         mel.set_material_instance_parent(mi, master)
-        mel.set_material_instance_texture_parameter_value(mi, "BaseColorTexture", tex["BaseColor"])
-        mel.set_material_instance_texture_parameter_value(mi, "NormalTexture", tex["Normal"])
-        mel.set_material_instance_texture_parameter_value(mi, "MetallicRoughnessTexture", tex["ORM"])
-        mel.set_material_instance_static_switch_parameter_value(mi, "Enable Material AO", True)
-        mel.set_material_instance_scalar_parameter_value(mi, "Min Roughness", 0.0)
-        mel.set_material_instance_scalar_parameter_value(mi, "Max Roughness", 1.0)
-        mel.update_material_instance(mi)
+        set_surface_params(mi, name, tex)
         eal.save_loaded_asset(mi, False)
         mis[name] = mi
     return mis
 
 
+def set_surface_params(mi, name, tex):
+    """An MI_Surf_<Name> on M_Surf_Base: its three textures and its tint (Tools/building_pieces.py SURFACES light / weather)."""
+    spec = BP.SURFACES[name]
+    mel.clear_all_material_instance_parameters(mi)   # the old M_MS_Base overrides
+    mel.set_material_instance_texture_parameter_value(mi, "BaseColorTexture", tex["BaseColor"])
+    mel.set_material_instance_texture_parameter_value(mi, "NormalTexture", tex["Normal"])
+    mel.set_material_instance_texture_parameter_value(mi, "MetallicRoughnessTexture", tex["ORM"])
+    mel.set_material_instance_scalar_parameter_value(mi, "LightMin", spec["light"][0])
+    mel.set_material_instance_scalar_parameter_value(mi, "LightMax", spec["light"][1])
+    mel.set_material_instance_vector_parameter_value(mi, "WeatherColor", unreal.LinearColor(*spec["weather"], 1.0))
+    mel.set_material_instance_scalar_parameter_value(mi, "WeatherAmount", spec["weather_amount"])
+    mel.update_material_instance(mi)
+
+
 def surface_mis():
-    return {name: unreal.load_asset("%s/Surfaces/MI_Surf_%s" % (DEST, name)) for name in BP.SURFACES}
+    """The surfaces as they are (textures not re-imported), each MI put on the current M_Surf_Base with its current tint."""
+    master = surface_master()
+    folder = DEST + "/Surfaces"
+    mis = {}
+    for name in BP.SURFACES:
+        mi = unreal.load_asset("%s/MI_Surf_%s" % (folder, name))
+        mel.set_material_instance_parent(mi, master)
+        set_surface_params(mi, name, {k: unreal.load_asset("%s/T_Surf_%s_%s" % (folder, name, k)) for k in ("BaseColor", "Normal", "ORM")})
+        eal.save_loaded_asset(mi, False)
+        mis[name] = mi
+    return mis
 
 
 def import_mesh(fbx, folder, name, mis, collision=False):
@@ -153,40 +253,57 @@ def stone_info(key):
     return _STONE_INFO[key]
 
 
-def place_stone(key, centre, size, rng, tilt=6.0):
-    """A transform that puts the scan's centre at centre with world extents size (x, y, z), turned a little off square."""
+# half turns about each axis: the same stone with another face out (each keeps the long side along the face, the flat side level)
+FLIPS = [unreal.Rotator(roll=0.0, pitch=0.0, yaw=0.0), unreal.Rotator(roll=180.0, pitch=0.0, yaw=0.0),
+         unreal.Rotator(roll=0.0, pitch=180.0, yaw=0.0), unreal.Rotator(roll=0.0, pitch=0.0, yaw=180.0)]
+
+
+def place_stone(key, centre, size, rng, tilt=8.0):
+    """A transform that puts the scan's centre at centre with world extents size (x, y, z), a random face out, turned a little off square."""
     mesh, native, ncentre, base, land = stone_info(key)
     scale = [1.0, 1.0, 1.0]
     for i in range(3):
         scale[i] = size[land[i]] / max(native[i], 0.01)
-    jitter = unreal.Rotator(roll=rng.uniform(-tilt, tilt), pitch=rng.uniform(-tilt, tilt), yaw=rng.uniform(-8.0, 8.0))
-    q = jitter.quaternion() * base.quaternion()
+    jitter = unreal.Rotator(roll=rng.uniform(-tilt, tilt), pitch=rng.uniform(-tilt, tilt), yaw=rng.uniform(-12.0, 12.0))
+    q = jitter.quaternion() * rng.choice(FLIPS).quaternion() * base.quaternion()
     s = unreal.Vector(*scale)
     off = q.rotate_vector(unreal.Vector(ncentre.x * s.x, ncentre.y * s.y, ncentre.z * s.z))
     loc = unreal.Vector(centre[0] - off.x, centre[1] - off.y, centre[2] - off.z)
     return unreal.Transform(loc, q.rotator(), s)
 
 
-def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, keys, start_stage=0):
-    """Stones on one vertical face (plane_x: the face, outward +-1 along X), in courses from z0 up to z1: (course, key) -> [transforms]."""
+def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, start_stage=0):
+    """Stones on one vertical face (plane_x: the face, outward +-1 along X), in courses from z0 up to z1: (course, key) -> [transforms]. Each
+    course is its own height and built of three walling stones (BP.WALLING) and one pinning stone (BP.PINNING), so the parts stay a few per
+    course while the wall shows them all."""
     out = {}
-    hs = [rng.uniform(*courses) for _ in range(40)]
     z = z0
     k = 0
     while z < z1 - 3.0:
-        h = min(hs[k], z1 - z)
+        h = min(rng.uniform(*courses), z1 - z)
         if z1 - (z + h) < courses[0] * 0.6:
             h = z1 - z
-        y = y0 - rng.uniform(0.0, 12.0) if k % 2 else y0
+        keys = rng.sample(BP.WALLING, 3)
+        pin = rng.choice(BP.PINNING)
+        y = y0 - (rng.uniform(0.0, 14.0) if k % 2 else rng.uniform(0.0, 5.0))
         while y < y1 - 2.0:
-            L = rng.uniform(17.0, 28.0)
+            L = rng.choice((rng.uniform(11.0, 17.0), rng.uniform(17.0, 25.0), rng.uniform(24.0, 34.0)))   # short, middle and long stones mixed
             ya, yb = max(y, y0), min(y + L, y1)
             if yb - ya > 6.0:
-                d = depth * rng.uniform(0.85, 1.1)
-                c = (plane_x - outward * (d * 0.5 - 2.0), (ya + yb) * 0.5, z + h * 0.5)
-                key = keys[rng.randrange(len(keys))]
+                hs = h * rng.uniform(0.72, 1.04)                        # a little shy of the course, bedded at its own height
+                zc = z + hs * 0.5 + rng.uniform(0.0, max(0.0, h - hs) * 0.7)
+                d = depth * rng.uniform(0.75, 1.1)
+                proud = rng.uniform(-1.0, 1.6)                          # standing proud of the face or set back
+                c = (plane_x - outward * (d * 0.5 - 2.0 - proud), (ya + yb) * 0.5 + rng.uniform(-1.0, 1.0), zc)
+                key = rng.choice(keys)
                 # a scan fills ~2/3 of its box: sized up so neighbours meet and the joints stay narrow (they may touch: laid stones do)
-                out.setdefault((start_stage + k, key), []).append(place_stone(key, c, (d, (yb - ya) * 1.3, h * 1.4), rng))
+                size = (d, (yb - ya) * rng.uniform(1.12, 1.36), hs * rng.uniform(1.25, 1.45))
+                out.setdefault((start_stage + k, key), []).append(place_stone(key, c, size, rng))
+                if rng.random() < 0.35 and yb < y1 - 4.0:
+                    # a pinning stone knocked into the joint after it, where two rounded ends leave a hollow
+                    ps = rng.uniform(4.5, 7.5)
+                    pc = (plane_x - outward * (ps * 0.4 - 1.5), yb + rng.uniform(-1.0, 1.0), z + h * rng.uniform(0.25, 0.75))
+                    out.setdefault((start_stage + k, pin), []).append(place_stone(pin, pc, (ps * 0.8, ps, ps * 0.75), rng, tilt=25.0))
             y += L
         z += h
         k += 1
@@ -194,7 +311,6 @@ def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, keys, start_
 
 
 def stone_parts(piece, rng):
-    keys = ["RiverCobble", "Rounded", "BeachRock"]
     lay = {}
 
     def add(d):
@@ -202,15 +318,15 @@ def stone_parts(piece, rng):
             lay.setdefault(k, []).extend(v)
     if piece == "CobbleWall":
         for side in (1, -1):
-            add(lay_face(rng, WX + side * 20.0, side, -50.0, 50.0, -50.0, 50.0, 19.0, (13.0, 19.0), keys))
+            add(lay_face(rng, WX + side * 20.0, side, -50.0, 50.0, -50.0, 50.0, 19.0, (11.0, 21.0)))
     elif piece == "CobbleInfill":
-        add(lay_face(rng, WX + 7.0, 1, -50.0, 50.0, -50.0, 50.0, 14.0, (9.0, 13.0), keys))
+        add(lay_face(rng, WX + 7.0, 1, -50.0, 50.0, -50.0, 50.0, 14.0, (8.0, 14.0)))
     elif piece == "CobbleFoundation":
         # the four sides: a face along Y at X +-50 and one along X at Y +-50 (laid in its own frame, then turned a quarter)
         for side in (1, -1):
-            add(lay_face(rng, side * 50.0, side, -50.0, 50.0, -35.0, 4.0, 22.0, (12.0, 16.0), keys))
+            add(lay_face(rng, side * 50.0, side, -50.0, 50.0, -35.0, 4.0, 22.0, (10.0, 18.0)))
         for side in (1, -1):
-            d = lay_face(rng, side * 50.0, side, -45.0, 45.0, -35.0, 4.0, 22.0, (12.0, 16.0), keys)
+            d = lay_face(rng, side * 50.0, side, -45.0, 45.0, -35.0, 4.0, 22.0, (10.0, 18.0))
             turn = unreal.Rotator(roll=0.0, pitch=0.0, yaw=90.0).quaternion()
             for k, v in d.items():
                 for t in v:

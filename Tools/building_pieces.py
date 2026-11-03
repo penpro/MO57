@@ -18,18 +18,21 @@ ScrapedHide01 1.5 kg, Moss01 0.5 kg (an armful, new), FieldStone01 12 kg (a buil
 """
 
 # The tiling surfaces every piece is made of (Blender bakes each once, seamless: T_Surf_<Name>_*; MI_Surf_<Name> in the editor). tile_cm: the
-# size one repeat of the texture covers on a piece.
+# size one repeat of the texture covers on a piece. Each primitive's tint (the mesh's second UV channel: light, weather; Nov 3) moves it
+# within light (the base colour's multiplier at tint 0 .. 1; 0.5 is the bake) and toward weather (the colour it goes with age, times its own
+# brightness: bark silvers, moss yellows, hide darkens with smoke) by up to weather_amount. M_Surf_Base does it in the game, surf_mat in the
+# Blender previews.
 SURFACES = {
-    "Bark":   dict(tile_cm=60.0),    # a pole's bark: grey-brown, fine fissures along it, lenticels across
-    "Rod":    dict(tile_cm=40.0),    # hazel / willow rods: smooth red-brown bark, pale lenticels
-    "Hewn":   dict(tile_cm=100.0),   # axe-hewn oak: scalloped facets across, grain along
-    "Plank":  dict(tile_cm=100.0),   # riven oak boards
-    "Moss":   dict(tile_cm=50.0),    # packed moss: green clumps, brown dead stems
-    "Daub":   dict(tile_cm=100.0),   # clay daub with chopped straw, hand-smoothed, hairline cracks
-    "Thatch": dict(tile_cm=60.0),    # dried grass / reed laid down the slope
-    "Hide":   dict(tile_cm=120.0),   # scraped, smoked hide
-    "Mortar": dict(tile_cm=80.0),    # earth mortar, gritty
-    "Cord":   dict(tile_cm=10.0),    # lashing cord / rawhide thong
+    "Bark":   dict(tile_cm=60.0, light=(0.72, 1.28), weather=(1.10, 1.08, 1.02), weather_amount=0.75),   # a pole's bark: grey-brown, fine fissures along it, lenticels across
+    "Rod":    dict(tile_cm=40.0, light=(0.68, 1.32), weather=(1.00, 0.95, 0.80), weather_amount=0.65),   # hazel / willow rods: smooth red-brown bark, pale lenticels
+    "Hewn":   dict(tile_cm=100.0, light=(0.80, 1.20), weather=(1.08, 1.06, 1.02), weather_amount=0.70),  # axe-hewn oak: scalloped facets across, grain along
+    "Plank":  dict(tile_cm=100.0, light=(0.78, 1.22), weather=(1.08, 1.06, 1.02), weather_amount=0.70),  # riven oak boards
+    "Moss":   dict(tile_cm=50.0, light=(0.70, 1.30), weather=(1.45, 1.15, 0.45), weather_amount=0.70),   # packed moss: green clumps, brown dead stems
+    "Daub":   dict(tile_cm=100.0, light=(0.85, 1.15), weather=(1.15, 1.10, 1.02), weather_amount=0.50),  # clay daub with chopped straw, hand-smoothed, hairline cracks
+    "Thatch": dict(tile_cm=60.0, light=(0.78, 1.22), weather=(0.95, 0.95, 0.95), weather_amount=0.70),   # dried grass / reed laid down the slope
+    "Hide":   dict(tile_cm=120.0, light=(0.75, 1.20), weather=(0.62, 0.52, 0.42), weather_amount=0.60),  # scraped, smoked hide
+    "Mortar": dict(tile_cm=80.0, light=(0.85, 1.15), weather=(1.05, 1.05, 1.05), weather_amount=0.40),   # earth mortar, gritty
+    "Cord":   dict(tile_cm=10.0, light=(0.80, 1.20), weather=(1.05, 1.02, 0.95), weather_amount=0.50),   # lashing cord / rawhide thong
 }
 
 # Building stones from the scans already in the project (ISM parts): the river cobble and the rounded cobble at building-stone size.
@@ -37,7 +40,16 @@ STONES = {
     "RiverCobble": "/Game/Fab/Megascans/3D/Beach_Rock_wd5mbhd/Medium/wd5mbhd_tier_2/StaticMeshes/wd5mbhd_tier_2.wd5mbhd_tier_2",
     "Rounded": "/Game/Fab/Megascans/3D/Rounded_Cobble_wffnehvs/Medium/wffnehvs_tier_2/StaticMeshes/wffnehvs_tier_2.wffnehvs_tier_2",
     "BeachRock": "/Game/Fab/Megascans/3D/Beach_Rock_wc2hbfr/Medium/wc2hbfr_tier_2/StaticMeshes/wc2hbfr_tier_2.wc2hbfr_tier_2",
+    # Nov 3 (natural variation): seven field stones of the small-stones pack (10-18 cm scans, so near their own size in a wall) and a scatter
+    # rock; and the pebble pack's seven for the pinning stones knocked into the joints
+    **{"Field%d" % i: "/Game/Fab/Megascans/3D/Small_Stones_Pack_vcljbb1iw/Medium/vcljbb1iw_tier_2/StaticMeshes/vcljbb1iw_LOD0_TIER2_00%d."
+                      "vcljbb1iw_LOD0_TIER2_00%d" % (i, i) for i in range(7)},
+    "Scatter": "/Game/Fab/Megascans/3D/Military_Trenches_Scatter_Rock_S_03_ydzsbbr/Medium/SM_ydzsbbr_tier_2/StaticMeshes/SM_ydzsbbr_tier_2.SM_ydzsbbr_tier_2",
+    **{"Pebble%d" % i: "/Game/Fab/Megascans/3D/Stones_and_Pebbles_Pack_ukhkbediw/Medium/ukhkbediw_tier_2/StaticMeshes/ukhkbediw_LOD0_TIER2_00%d."
+                       "ukhkbediw_LOD0_TIER2_00%d" % (i, i) for i in range(7)},
 }
+WALLING = [k for k in STONES if not k.startswith("Pebble")]   # the stones a course is built of
+PINNING = [k for k in STONES if k.startswith("Pebble")]       # the small stones wedged into its joints
 
 WALL_SNAP = dict(center=(-50.0, 0.0, 0.0), half=(5.0, 50.0, 50.0))
 ROOF_SNAP = dict(center=(-50.0, 0.0, 0.0), half=(53.5, 50.0, 53.5))

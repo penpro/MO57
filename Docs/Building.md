@@ -191,10 +191,32 @@ the unbuilt ones hidden. A new piece is one entry in `Tools/building_pieces.py` 
 |---|---|
 | What each piece is (frame, cost, time, skill, snapping, colliders, porosity) | `Tools/building_pieces.py` `PIECES` |
 | The parts, built procedurally in build order (Unreal's frame, world-scaled UVs) | `Tools/blender_buildings_blender.py` (`GEOMETRY`) |
-| Ten tiling surfaces baked seamless (4D noise on a torus): Bark, Rod, Hewn, Plank, Moss, Daub, Thatch, Hide, Mortar, Cord | the same script, job `surfaces` -> `/Game/BlenderBuildings/Surfaces/MI_Surf_*` |
+| Ten tiling surfaces baked seamless (4D noise on a torus): Bark, Rod, Hewn, Plank, Moss, Daub, Thatch, Hide, Mortar, Cord | the same script, job `surfaces` -> `/Game/BlenderBuildings/Surfaces/MI_Surf_*` on `M_Surf_Base` |
 | Import, the scanned stones laid in courses, `BP_Piece_<Piece>`, the recipe row | `Content/Python/import_blender_buildings.py` |
 | All of it | `python Tools/blender_buildings.py [Piece ...] [--surfaces] [--rows]` |
 | In a game | `python Tools/check_buildings.py [--shots]` (verbs `MO.Test.PlacePiece / PieceProgress / PieceInfo / PieceDoor / ShelterHere`) |
+
+### Natural variation: no two sticks alike (Nov 3)
+
+Wes, Nov 3: "give all the assets you made in blender some natural variation so they're not so uniform". One chokepoint, not per-piece
+fixes: the Blender script's primitives (`tube`, `beam`, `blob`, `sheet`, `daub_slab`) each draw their own look from the piece's one seeded
+source (`Vary`, seeded by the piece's name, so a rebuild is the same piece):
+
+- **Tint.** Each primitive's light and weathering ride in the mesh's second UV channel ("Tint", plus a slow field across the whole piece).
+  `/Game/BlenderBuildings/Surfaces/M_Surf_Base` (made by the import script) scales the base colour by the surface's `light` range and moves
+  it toward its `weather` colour (bark silvers, moss yellows, hide darkens with smoke; `Tools/building_pieces.py` `SURFACES`). Each
+  primitive also starts at its own place on the tiling texture. M_Surf_Base reads the weather as 1 - V (the FBX import flips V); it is built once and
+  version-tagged; a graph change bumps `SURF_BASE_VERSION`, and the old one is deleted on disk with the editor closed (`Docs/TRAPS.md` §12).
+- **Shape.** A straight-ish stick bows a little (0.7% of its length), swells and narrows along it and is cut on a slant at its ends; a
+  timber bows, twists and is not quite square. A hoop, a helix of cord or a fork keeps the shape it was given.
+- **Layout.** Stakes set out by eye and leaning; wattle courses packed by each rod's own thickness, every rod tapering from its own butt;
+  moss pressed on as cushions of every size; thatch laid in bundles whose butts stagger and fullness varies (`Bundles`), the gauge
+  uneven; hides with an animal's outline and their own sag; the tent's seams wandering (shared by the two hides they join, so the overlaps
+  stay closed), each pole its own length and thickness; boards of random widths filling the span.
+- **Stones.** Eighteen scans (`STONES`): the three cobbles, seven field stones of the small-stones pack and a scatter rock (`WALLING`), and
+  the pebble pack's seven (`PINNING`). Each course is its own height and built of three walling stones (a few ISM parts per course).
+  Short, middle and long stones are mixed. Each stone is a little shy of the course and bedded at its own height. It stands proud or
+  set back, turned any face out, and now and then a pinning stone is knocked into a joint.
 
 Frames are the stick pieces' (measured Nov 2): a wall's panel centred at X -50 (Y +-50, Z +-50) as the stick wall's, a roof's eave at X 0,
 Z -50 rising to the ridge at X -100, Z +50 as the stick roof's, a floor centred with its top at Z +5. So a daub or a thatch takes its host's
@@ -264,7 +286,6 @@ building stone" on a boulder with a hammerstone; the boulder stays) -- `UMOCover
 ### Not done yet
 
 - A thatch for the roof peak piece, a half-wall daub, wattle half walls, hurdle fences, a smoke hood.
-- A cobble piece's stones are three scans at building-stone size; more scans (flat field stones, slabs) would vary them.
 - Look-and-feel (the moss lumps, the daub, the stone courses, the thatch's colour) is on Wes's by-eye list (`Docs/BACKLOG.md`).
 - The pieces' assets (`/Game/BlenderBuildings`) and the changed stick Blueprints stay local until the LFS budget allows (as the Blender
   items): `python Tools/blender_buildings.py --surfaces --rows` remakes all of them on another machine.

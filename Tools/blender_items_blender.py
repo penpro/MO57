@@ -34,7 +34,7 @@ import sys
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, noise
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ITEM = ARGS[0] if ARGS else "SimpleBow01"
@@ -941,16 +941,17 @@ def key_draw(arm_ob, sol, edges, order):
 # Tubes, lenses and the arrows
 # ------------------------------------------------------------------------------------------------------------------------------------------
 
-def tube(part, pts, radius, sides=8, cap_start=True, cap_end=True, weights=None, attrs=None, up=Vector((0.0, 0.0, 1.0)), island_len=24.0):
+def tube(part, pts, radius, sides=8, cap_start=True, cap_end=True, weights=None, attrs=None, up=Vector((0.0, 0.0, 1.0)), island_len=24.0, v0=0.0):
     """A tube along the polyline pts (parallel-transport frames). radius: a number, or one per point (a number or (r_normal, r_binormal)).
-    attrs(i) -> dict of vertex attributes for ring i."""
+    attrs(i) -> dict of vertex attributes for ring i. v0: where along the procedural texture it starts (cm): give each of a bundle of like
+    sticks its own, or they all wear the same bark."""
     n = len(pts)
     tang = [(pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized() for i in range(n)]
     nrm = up - tang[0] * up.dot(tang[0])
     if nrm.length < 1e-4:
         nrm = Vector((0.0, 1.0, 0.0)) - tang[0] * tang[0].y
     nrm.normalize()
-    rings, us, vs, v = [], [], [], 0.0
+    rings, us, vs, v = [], [], [], v0
     for i in range(n):
         if i:
             nrm = (nrm - tang[i] * nrm.dot(tang[i])).normalized()
@@ -1080,7 +1081,28 @@ def mat_iron(name, scale=1.2, rust_edge=0.56):
 def mat_plain(name, hexc, rough):
     nb = NB(name)
     n = nb.noise(nb.new("ShaderNodeTexCoord").outputs["Object"], 6.0, detail=4.0)
-    return nb.finish(nb.mix(nb.m("MULTIPLY", n, 0.3), srgb(hexc), srgb("#000000")), rough, nb.bump(n, 0.2, 0.02))
+    return nb.finish(toned(nb, nb.mix(nb.m("MULTIPLY", n, 0.3), srgb(hexc), srgb("#000000"))), rough, nb.bump(n, 0.2, 0.02))
+
+
+def toned(nb, col):
+    """A part's own tone (Nov 3, natural variation): the vertex attribute 'tone' scales its colour by 1 + tone (about -0.25 .. 0.25; none or 0
+    = as made), so one rod of a trap is a little darker or paler than the next."""
+    s = nb.new("ShaderNodeVectorMath", operation="SCALE")
+    nb.feed(s.inputs[0], col)
+    nb.feed(s.inputs["Scale"], nb.m("ADD", nb.attr("tone"), 1.0))
+    return s.outputs["Vector"]
+
+
+def natural(rng, pts, amp, freq=0.12):
+    """A hand-made run of points a little off true: each point moved up to amp cm by slow noise along the run (its own for every call)."""
+    seed = rng.uniform(0.0, 100.0)
+    out, l = [], 0.0
+    for i, p in enumerate(pts):
+        if i:
+            l += (p - pts[i - 1]).length
+        out.append(p + Vector((noise.noise(Vector((l * freq, seed, 0.3))), noise.noise(Vector((l * freq, seed, 5.1))),
+                               noise.noise(Vector((l * freq, seed, 9.7))))) * amp)
+    return out
 
 
 ARROWS = {
@@ -1254,7 +1276,7 @@ def mat_stick(name, bark="#4e4236", wood="#c2a27a", peeled=0.25):
     col = nb.mix(peel, bark_col, wood_col)
     col = nb.mix(nb.m("MULTIPLY", nb.attr("char"), 0.95), col, srgb("#141010"))
     height = nb.mixf(peel, nb.m("MULTIPLY", cracks, 1.2), 0.2)
-    return nb.finish(col, nb.mixf(peel, 0.82, 0.6), nb.bump(height, 0.5, 0.05))
+    return nb.finish(toned(nb, col), nb.mixf(peel, 0.82, 0.6), nb.bump(height, 0.5, 0.05))
 
 
 def mat_board(name, sockets, notch_edge_y, light="#cdb48e", dark="#8e7452"):
@@ -1489,30 +1511,44 @@ def mat_weave(name, warp="#b8a47c", weft="#8f7a56", pick_cm=0.18):
 
 def build_fishtrap():
     """A woven fish trap lying on its side (axis along X, the mouth at -X): sixteen rods from the mouth hoop running back to a tied tail, hoops
-    of withy lashed round them, and the funnel of rods inside the mouth narrowing to the throat the fish swim through and cannot find again."""
+    of withy lashed round them, and the funnel of rods inside the mouth narrowing to the throat the fish swim through and cannot find again.
+    Made by hand: every rod its own thickness, tone and line, set round the hoop by eye; the hoops bent, not turned (Nov 3)."""
+    rnd = random.Random(17)
     rods = Part("rods", mat_stick("M_%s_Rods" % ITEM, bark="#4a3c30", wood="#b89a72", peeled=0.5))
     L, R0, n = 86.0, 19.0, 16
     x0 = -L / 2
 
-    def rad(x):
+    def rad(x, k=1.0):
         t = (x - x0) / L
-        return R0 if t < 0.45 else 3.2 + (R0 - 3.2) * (1.0 - smoothstep(0.45, 1.0, t)) ** 0.8
+        return R0 * k if t < 0.45 else 3.2 + (R0 * k - 3.2) * (1.0 - smoothstep(0.45, 1.0, t)) ** 0.8
+
+    def hoop_r(x, a):
+        """The mouth and the body are bent round by hand: an egg, not a circle."""
+        return rad(x) * (1.0 + 0.035 * math.cos(2 * a + 0.7) + 0.02 * math.sin(3 * a + 1.9))
 
     for k in range(n):
-        a = 2 * math.pi * k / n
-        pts = [Vector((x0 + L * i / 40, rad(x0 + L * i / 40) * math.cos(a), R0 + rad(x0 + L * i / 40) * math.sin(a))) for i in range(41)]
-        pts.append(pts[-1] + Vector((5.0, 0.0, 0.0)))   # the ends gathered past the tie
-        tube(rods, pts, 0.42, sides=6, attrs=lambda i: {"cut": 1.0 if i in (0, 41) else 0.0, "char": 0.0})
+        a = 2 * math.pi * k / n + rnd.uniform(-0.07, 0.07)
+        tone, r = rnd.uniform(-0.2, 0.2), 0.42 * rnd.uniform(0.8, 1.2)
+        pts = [Vector((x0 + L * i / 40, hoop_r(x0 + L * i / 40, a) * math.cos(a), R0 + hoop_r(x0 + L * i / 40, a) * math.sin(a))) for i in range(41)]
+        pts = natural(rnd, pts, 0.35)
+        pts.append(pts[-1] + Vector((rnd.uniform(3.0, 7.0), rnd.uniform(-0.8, 0.8), rnd.uniform(-0.8, 0.8))))   # the ends gathered past the tie
+        tube(rods, pts, r, sides=6, v0=rnd.uniform(0.0, 400.0), attrs=lambda i, tone=tone: {"cut": 1.0 if i in (0, 41) else 0.0, "char": 0.0, "tone": tone})
     funnel = Part("funnel", rods.material)
     for k in range(n):
-        a = 2 * math.pi * (k + 0.5) / n
-        pts = [Vector((x0 + 30.0 * i / 20, (R0 - 0.8 - 14.5 * i / 20) * math.cos(a), R0 + (R0 - 0.8 - 14.5 * i / 20) * math.sin(a))) for i in range(21)]
-        tube(funnel, pts, 0.36, sides=6, attrs=lambda i: {"cut": 1.0 if i == 20 else 0.0, "char": 0.0})
+        a = 2 * math.pi * (k + 0.5) / n + rnd.uniform(-0.08, 0.08)
+        tone, r, reach = rnd.uniform(-0.2, 0.2), 0.36 * rnd.uniform(0.8, 1.2), 30.0 * rnd.uniform(0.92, 1.06)
+        pts = [Vector((x0 + reach * i / 20, (R0 - 0.8 - 14.5 * i / 20) * math.cos(a), R0 + (R0 - 0.8 - 14.5 * i / 20) * math.sin(a))) for i in range(21)]
+        tube(funnel, natural(rnd, pts, 0.3), r, sides=6, v0=rnd.uniform(0.0, 400.0),
+             attrs=lambda i, tone=tone: {"cut": 1.0 if i == 20 else 0.0, "char": 0.0, "tone": tone})
     hoops = Part("hoops", mat_stick("M_%s_Hoops" % ITEM, bark="#5a3a28", wood="#b08a64", peeled=0.1))
-    for x in [x0 + 1.0 + 11.5 * i for i in range(8)]:
-        r = rad(x) + 0.75
-        ring = [Vector((x, r * math.cos(2 * math.pi * j / 32), R0 + r * math.sin(2 * math.pi * j / 32))) for j in range(33)]
-        tube(hoops, ring, 0.55, sides=6, cap_start=False, cap_end=False)
+    for x in [x0 + 1.0 + 11.5 * i + (rnd.uniform(-1.5, 1.5) if i else 0.0) for i in range(8)]:
+        tone, th, tilt = rnd.uniform(-0.2, 0.2), 0.55 * rnd.uniform(0.85, 1.15), rnd.uniform(-1.0, 1.0)
+        ring = []
+        for j in range(33):
+            a = 2 * math.pi * j / 32
+            r = hoop_r(x, a) + 0.75
+            ring.append(Vector((x + tilt * math.sin(a), r * math.cos(a), R0 + r * math.sin(a))))
+        tube(hoops, ring, th, sides=6, cap_start=False, cap_end=False, v0=rnd.uniform(0.0, 400.0), attrs=lambda i, tone=tone: {"tone": tone})
     tie = Part("tie", mat_cord("M_%s_Tie" % ITEM, "#a8946c", "#5a4a32", plies=2, pitch=0.3))
     xt = x0 + L + 1.5
     turns = [Vector((xt + 2.4 * t / 48, 4.0 * math.cos(2 * math.pi * t / 12), R0 + 4.0 * math.sin(2 * math.pi * t / 12))) for t in range(49)]
@@ -1568,17 +1604,26 @@ def build_fishnet():
         for r in range(rows + 1):
             if (c + r) % 2 == 0:
                 p = drape(c, r)
-                tube(knots, [p - Vector((0.25, 0, 0)), p + Vector((0.25, 0, 0))], 0.24, sides=6)
+                w = 0.25 * rnd.uniform(0.8, 1.3)
+                tube(knots, [p - Vector((w, 0, 0)), p + Vector((w, 0, 0))], 0.24 * rnd.uniform(0.85, 1.2), sides=6)
+    # floats: each whittled from its own bit of wood, sinkers: each its own stone (Nov 3)
     floats = Part("floats", mat_stick("M_%s_Floats" % ITEM, bark="#6a5a46", wood="#cdb48e", peeled=0.9))
     for i, x in enumerate((-14.0, 0.0, 14.0)):
-        p0 = Vector((x - 4.0, -sy / 2 - 2.0, 3.0 + 0.4 * i))
-        tube(floats, [p0 + Vector((8.0 * k / 10, 0, 0)) for k in range(11)], [1.6 * math.sin(math.pi * (0.15 + 0.7 * k / 10)) for k in range(11)],
-             sides=10, attrs=lambda k: {"cut": 1.0, "char": 0.0})
+        fl, fr, tone = 8.0 * rnd.uniform(0.85, 1.12), 1.6 * rnd.uniform(0.85, 1.15), rnd.uniform(-0.2, 0.15)
+        p0 = Vector((x - fl / 2 + rnd.uniform(-1.0, 1.0), -sy / 2 - 2.0, 3.0 + 0.4 * i))
+        d = Vector((math.cos(rnd.uniform(-0.12, 0.12)), math.sin(rnd.uniform(-0.12, 0.12)), 0.0))
+        tube(floats, [p0 + d * (fl * k / 10) for k in range(11)], [fr * math.sin(math.pi * (0.15 + 0.7 * k / 10)) ** rnd.choice((0.8, 1.0)) for k in range(11)],
+             sides=10, v0=rnd.uniform(0.0, 200.0), attrs=lambda k, tone=tone: {"cut": 1.0, "char": 0.0, "tone": tone})
     sinkers = Part("sinkers", mat_plain("M_%s_Sinkers" % ITEM, "#6e675c", 0.85))
     for i, x in enumerate((-16.0, -5.0, 6.0, 17.0)):   # flat river stones, notched at the sides for the tie
-        pts = [Vector((x - 2.8 + 5.6 * k / 12, sy / 2 + 2.6, 1.2)) for k in range(13)]
-        tube(sinkers, pts, [(1.1 * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6, 2.1 * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6
-                             * (0.75 if k == 6 else 1.0)) for k in range(13)], sides=12, up=Vector((0.0, 0.0, 1.0)))
+        sl, sw, st, tone = 5.6 * rnd.uniform(0.8, 1.2), rnd.uniform(0.85, 1.2), rnd.uniform(0.8, 1.2), rnd.uniform(-0.25, 0.2)
+        yaw = rnd.uniform(-0.35, 0.35)
+        d = Vector((math.cos(yaw), math.sin(yaw), 0.0))
+        c = Vector((x + rnd.uniform(-1.0, 1.0), sy / 2 + 2.6, 1.2 * st))
+        pts = [c + d * (-sl / 2 + sl * k / 12) for k in range(13)]
+        tube(sinkers, pts, [(1.1 * st * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6, 2.1 * sw * math.sin(math.pi * (0.08 + 0.84 * k / 12)) ** 0.6
+                             * (0.75 if k == 6 else 1.0) * (1.0 + 0.12 * math.sin(k * 0.9 + i))) for k in range(13)], sides=12, up=Vector((0.0, 0.0, 1.0)),
+             attrs=lambda k, tone=tone: {"tone": tone})
     rope = Part("rope", hang.material)
     tube(rope, [Vector((-22.0 + 44.0 * i / 30, -sy / 2 - 0.6, 3.2 + 0.8 * math.sin(i * 0.5))) for i in range(31)], 0.3, sides=6)
     return [bundle, hang, knots, floats, sinkers, rope], None
@@ -1592,22 +1637,33 @@ def build_loom():
     wood = mat_stick("M_%s_Wood" % ITEM, bark="#5a4836", wood="#c9ac80", peeled=0.85)
     beams = Part("beams", wood)
     W = 52.0
+    def stick(part, x, z, r, half, n):
+        """A loom bar: a peeled stick, never quite straight, its own length past the warp and its own tone (Nov 3)."""
+        a, b = -half - rnd.uniform(0.0, 3.0), half + rnd.uniform(0.0, 3.0)
+        tone = rnd.uniform(-0.15, 0.15)
+        pts = natural(rnd, [Vector((x, a + (b - a) * i / n, z)) for i in range(n + 1)], 0.25 * r)
+        tube(part, pts, r * rnd.uniform(0.9, 1.1), sides=10 if r > 1.2 else 8, v0=rnd.uniform(0.0, 200.0),
+             attrs=lambda i: {"cut": 1.0 if i in (0, n) else 0.0, "char": 0.0, "tone": tone})
     for x, r in ((-40.0, 1.6), (45.0, 1.7)):
-        tube(beams, [Vector((x, -W / 2 - 6.0 + (W + 12.0) * i / 20, r)) for i in range(21)], r, sides=10, attrs=lambda i: {"cut": 1.0 if i in (0, 20) else 0.0, "char": 0.0})
+        stick(beams, x, r, r, W / 2 + 6.0, 20)
     rods = Part("rods", wood)
-    tube(rods, [Vector((-12.0, -W / 2 - 3.0 + (W + 6.0) * i / 16, 2.6)) for i in range(17)], 1.0, sides=8, attrs=lambda i: {"cut": 1.0 if i in (0, 16) else 0.0, "char": 0.0})
-    tube(rods, [Vector((-2.0, -W / 2 - 3.0 + (W + 6.0) * i / 16, 3.4)) for i in range(17)], 0.7, sides=8, attrs=lambda i: {"cut": 1.0 if i in (0, 16) else 0.0, "char": 0.0})
+    stick(rods, -12.0, 2.6, 1.0, W / 2 + 3.0, 16)
+    stick(rods, -2.0, 3.4, 0.7, W / 2 + 3.0, 16)
     warp = Part("warp", mat_cord("M_%s_Warp" % ITEM, "#c4b088", "#8a7650", plies=2, pitch=0.2))
     nthreads = 36
+    ys = [-W / 2 + 1.0 + (W - 2.0) * k / (nthreads - 1) + (rnd.uniform(-0.3, 0.3) if 0 < k < nthreads - 1 else 0.0) for k in range(nthreads)]
     for k in range(nthreads):
-        y = -W / 2 + 1.0 + (W - 2.0) * k / (nthreads - 1)
+        y = ys[k]
         up = k % 2 == 0
-        pts = [Vector((-40.0, y, 3.0)), Vector((-12.0, y, 3.6 if up else 1.6)), Vector((-2.0, y, 2.4 if up else 4.1)), Vector((14.0, y, 2.6)), Vector((20.0, y, 1.8))]
-        tube(warp, pts, 0.09, sides=4)
+        slack = rnd.uniform(-0.25, 0.25)   # each thread tensioned by hand: a little slacker or tighter
+        pts = [Vector((-40.0, y, 3.0)), Vector((-12.0, y, (3.6 if up else 1.6) + slack * 0.4)), Vector((-2.0, y, (2.4 if up else 4.1) + slack * 0.4)),
+               Vector((14.0, y + rnd.uniform(-0.15, 0.15), 2.6 + slack)), Vector((20.0, y, 1.8))]
+        tube(warp, pts, 0.09 * rnd.uniform(0.85, 1.15), sides=4)
     heddles = Part("heddles", warp.material)
     for k in range(1, nthreads, 2):
-        y = -W / 2 + 1.0 + (W - 2.0) * k / (nthreads - 1)
-        ring = [Vector((-2.0 + 0.9 * math.cos(2 * math.pi * j / 10), y, 3.4 + 0.9 * math.sin(2 * math.pi * j / 10))) for j in range(11)]
+        y = ys[k]
+        hr = 0.9 * rnd.uniform(0.85, 1.15)
+        ring = [Vector((-2.0 + hr * math.cos(2 * math.pi * j / 10), y, 3.4 + hr * math.sin(2 * math.pi * j / 10))) for j in range(11)]
         tube(heddles, ring, 0.06, sides=4, cap_start=False, cap_end=False)
     cloth = Part("cloth", mat_weave("M_%s_Cloth" % ITEM))
     # the woven cloth: flat from the fell (x 20) to the breast beam, then wound round it
@@ -1629,19 +1685,29 @@ def build_iron_helmet():
     bar down the front; dark iron, rust in the seams. The opening at Z 0, its front toward +X."""
     iron = mat_iron("M_%s_Iron" % ITEM, scale=0.22, rust_edge=0.64)
     bowl = Part("bowl", iron)
-    nz, ns, H, Rx, Ry, t = 22, 40, 16.5, 11.8, 10.6, 0.25
+    nz, ns, H, Rx, Ry, t = 30, 64, 16.5, 11.8, 10.6, 0.25
 
     def prof(f):   # 0 rim .. 1 apex: a rounded cone, full at the shoulders, drawn to a low point
         return math.sqrt(max(0.0, 1.0 - f ** 1.6)) * (1.0 - 0.35 * f)
+
+    def raised(f, a):
+        """Raised by hand over a stake (Nov 3): a little lopsided, the hammer's courses faintly showing as it rises."""
+        hammer = 0.007 * noise.noise(Vector((math.cos(a) * 4.0, math.sin(a) * 4.0, f * 7.0)))   # the blows, each a shallow dent
+        return 1.0 + 0.012 * math.sin(a + 0.8) + 0.008 * math.sin(2 * a + 2.1) + 0.004 * math.sin(9.0 * f * math.pi) * (1.0 - f) + hammer * f * (1.0 - f) * 4.0
 
     outer, inner = [], []
     for i in range(nz + 1):
         f = i / nz
         r = prof(f) if i < nz else 0.0
         z = H * f
-        outer.append([bowl.add_vert(Vector((Rx * r * math.cos(2 * math.pi * j / ns), Ry * r * math.sin(2 * math.pi * j / ns), z)), None) for j in range(ns)])
-        inner.append([bowl.add_vert(Vector((max(Rx * r - t, 0.0) * math.cos(2 * math.pi * j / ns), max(Ry * r - t, 0.0) * math.sin(2 * math.pi * j / ns),
-                                            z - t * 1.2)), None) for j in range(ns)])
+        ring_o, ring_i = [], []
+        for j in range(ns):
+            a = 2 * math.pi * j / ns
+            k = raised(f, a)
+            ring_o.append(bowl.add_vert(Vector((Rx * r * k * math.cos(a), Ry * r * k * math.sin(a), z)), None))
+            ring_i.append(bowl.add_vert(Vector((max(Rx * r * k - t, 0.0) * math.cos(a), max(Ry * r * k - t, 0.0) * math.sin(a), z - t * 1.2)), None))
+        outer.append(ring_o)
+        inner.append(ring_i)
     circ = math.pi * (Rx + Ry)
     loft(bowl, outer, [circ * j / ns for j in range(ns + 1)], [H * i / nz * 1.2 for i in range(nz + 1)], closed=True, island_len=60.0)
     rev = [list(reversed(r)) for r in inner]
@@ -1651,7 +1717,8 @@ def build_iron_helmet():
         a, b, c, d = outer[0][j], outer[0][j1], inner[0][j1], inner[0][j]
         bowl.add_face((d, c, b, a), [(0, 0), (0.3, 0), (0.3, 0.3), (0, 0.3)], "rim")
     band = Part("band", iron)
-    br = [Vector(((Rx + 0.2) * prof(0.04) * math.cos(2 * math.pi * j / 48), (Ry + 0.2) * prof(0.04) * math.sin(2 * math.pi * j / 48), 1.3)) for j in range(49)]
+    br = [Vector(((Rx + 0.2) * prof(0.04) * raised(0.04, 2 * math.pi * j / 48) * math.cos(2 * math.pi * j / 48),
+                  (Ry + 0.2) * prof(0.04) * raised(0.04, 2 * math.pi * j / 48) * math.sin(2 * math.pi * j / 48), 1.3)) for j in range(49)]
     tube(band, br, (1.4, 0.18), sides=8, cap_start=False, cap_end=False, up=Vector((0.0, 0.0, 1.0)))
     nasal = Part("nasal", iron)
     xn = (Rx + 0.2) * prof(0.04) + 0.25
@@ -1661,11 +1728,13 @@ def build_iron_helmet():
         down = (v.x + 5.5) / 11.0   # 0 at the band .. 1 at the nose's tip
         nasal.verts[k] = Vector((xn + v.z + 0.6 * down, v.y * (1.0 - 0.22 * down), 2.8 - 11.0 * down))
     rivets = Part("rivets", iron)
+    rnd = random.Random(23)
     for j in range(16):
-        a = 2 * math.pi * (j + 0.5) / 16
-        p = Vector(((Rx + 0.45) * prof(0.04) * math.cos(a), (Ry + 0.45) * prof(0.04) * math.sin(a), 1.3))
+        a = 2 * math.pi * (j + 0.5) / 16 + rnd.uniform(-0.05, 0.05)   # set out by eye
+        p = Vector(((Rx + 0.45) * prof(0.04) * raised(0.04, a) * math.cos(a), (Ry + 0.45) * prof(0.04) * raised(0.04, a) * math.sin(a),
+                    1.3 + rnd.uniform(-0.12, 0.12)))
         n = Vector((math.cos(a), math.sin(a), 0.0))
-        tube(rivets, [p - n * 0.15, p + n * 0.25], [0.45, 0.3], sides=8)
+        tube(rivets, [p - n * 0.15, p + n * rnd.uniform(0.2, 0.3)], [0.45 * rnd.uniform(0.85, 1.12), 0.3 * rnd.uniform(0.8, 1.15)], sides=8)
     return [bowl, band, nasal, rivets], None
 
 

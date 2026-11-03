@@ -630,6 +630,14 @@
 - **Grass glows, pale, self-lit, shadows don't show on the blades** -> Megascans Two Sided Foliage `Translucency Controls*` G = strength,
   B = exponent: shipped at 5 x the base colour with a square root, the transmitted light out-shines the lit side -> cap strength <= 0.5,
   exponent >= 1 (`Content/Python/fix_foliage_transmission.py`, rerun after importing plants; test FoliageTransmissionCapped). (Oct 25)
+- **A mesh carrying data in a UV channel reads it wrong** -> the FBX import flips V (v -> 1 - v) on every channel, the data ones too (a tint
+  written 0.1 in Blender read 0.9 in UE, so every building piece came out weathered grey) -> read 1 - V in the material (M_Surf_Base). The
+  lightmap UVs go to the next free channel (a mesh with two channels gets them in 2), so they leave a data channel alone. (Nov 3)
+- **Rebuilding a material's graph from editor Python** -> `delete_all_material_expressions` leaves about half the nodes behind (old
+  parameters of the same name then shadow the new ones and the node fails to compile). Deleting them one by one
+  (`delete_material_expression`) on a material loaded from disk asserts `!IsRooted()` and takes the editor down. -> Build a script's
+  material once, tag its version (`EditorAssetLibrary.set_metadata_tag`), and when the graph changes delete the .uasset on disk with the
+  editor closed (`import_blender_buildings.surface_master`). (Nov 3)
 
 ## 13. UI (CommonUI / UMG)
 

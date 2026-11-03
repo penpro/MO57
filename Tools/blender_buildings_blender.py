@@ -18,6 +18,12 @@ reversed) as it is made, and the FBX export carries it back, so a vertex at Unre
 UVs are world-scaled: one texture repeat covers the surface's tile_cm, so a wall and a tent read at the same texel density. A material slot is
 named Surf_<Name>; the editor gives it MI_Surf_<Name>.
 
+Natural variation (Nov 3; Wes: "give all the assets you made in blender some natural variation so they're not so uniform"): every primitive
+(a stick, a timber, a lump, a sheet) draws its own look from the piece's one seeded source (Vary): where the tiling texture starts on it, how
+light and how weathered it is (a second UV channel, "Tint", that M_Surf_Base reads), its seed for the noise that shapes it. A straight-ish
+stick also bows a little, swells and narrows along its length and is cut on a slant; a timber bows, twists and is not quite square. The
+builders lay things out unevenly on top of that (stakes spaced by eye, courses packed by the rods' own thickness, thatch in bundles).
+
 Stones are not built here: a cobble piece's mortar and its flat top are; the editor lays the scanned stones (import_blender_buildings.py).
 """
 import json
@@ -297,27 +303,74 @@ def run_surfaces():
 # Geometry in Unreal's frame
 # ------------------------------------------------------------------------------------------------------------------------------------------
 
+class Vary:
+    """The piece's one source of natural variation, seeded by its name: each primitive draws its look in build order, so a rebuild is the same
+    piece. look() -> (light, weather, du, dv): light 0..1 (0.5 is the surface as baked), weather 0..1 (greyed, sun-bleached), and where the
+    tiling texture starts on it (in tiles)."""
+
+    def __init__(self, key):
+        self.rng = random.Random(zlib.crc32(key.encode()) & 0xFFFFFF)
+        self.field_seed = self.rng.uniform(0.0, 100.0)
+
+    def look(self, spread=1.0):
+        r = self.rng
+        light = min(1.0, max(0.0, 0.5 + r.gauss(0.0, 0.21 * spread)))
+        weather = min(1.0, (r.random() ** 2.2) * (0.9 * spread + 0.1))
+        return light, weather, r.random(), r.random()
+
+    def seed(self):
+        return self.rng.uniform(0.0, 50.0)
+
+    def uniform(self, a, b):
+        return self.rng.uniform(a, b)
+
+    def field(self, p):
+        """A slow change across the whole piece (one end of a wall a little darker, a patch more weathered) on top of each primitive's own."""
+        s = self.field_seed
+        return (0.10 * noise.noise(p * 0.011 + Vector((s, 0.0, 0.0))), 0.16 * noise.noise(p * 0.017 + Vector((0.0, s, 3.0))))
+
+
+VARY = Vary("default")   # run_piece / run_item / run_supports set the job's own
+
+
 class Mesh:
-    """Vertices in Unreal's frame (cm); faces with per-corner UVs and a surface."""
+    """Vertices in Unreal's frame (cm); faces with per-corner UVs and a surface. Each vertex carries its tint (light, weather): the primitive
+    being made sets it with begin() and the piece-wide field adds to it."""
 
     def __init__(self):
-        self.v, self.f, self.uv, self.surf, self.smooth = [], [], [], [], []
+        self.v, self.f, self.uv, self.surf, self.smooth, self.t = [], [], [], [], [], []
+        self.look = (0.5, 0.0)
+        self.uvoff = (0.0, 0.0)
+
+    def begin(self, spread=1.0):
+        """A new primitive: its own tint and its own start on the tiling texture (spread 0 keeps the surface as baked, a sheet wants little)."""
+        light, weather, du, dv = VARY.look(spread)
+        self.look = (light, weather)
+        self.uvoff = (du, dv)
 
     def vert(self, p):
-        self.v.append(Vector(p))
+        p = Vector(p)
+        fa, fb = VARY.field(p)
+        self.v.append(p)
+        self.t.append((min(1.0, max(0.0, self.look[0] + fa)), min(1.0, max(0.0, self.look[1] + fb))))
         return len(self.v) - 1
 
     def face(self, idx, uvs, surf, smooth=True):
+        du, dv = self.uvoff
         self.f.append(tuple(idx))
-        self.uv.append([tuple(u) for u in uvs])
+        self.uv.append([(u[0] + du, u[1] + dv) for u in uvs])
         self.surf.append(surf)
         self.smooth.append(smooth)
 
     def extend(self, other):
         base = len(self.v)
         self.v += other.v
+        self.t += other.t
         for f, uv, s, sm in zip(other.f, other.uv, other.surf, other.smooth):
-            self.face([base + i for i in f], uv, s, sm)
+            self.f.append(tuple(base + i for i in f))
+            self.uv.append(list(uv))
+            self.surf.append(s)
+            self.smooth.append(sm)
 
     def tris(self):
         return sum(len(f) - 2 for f in self.f)
@@ -331,14 +384,41 @@ def frame_of(d):
     return a, d.cross(a).normalized()
 
 
-def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, caps=(True, True), twist=0.0):
-    """A round stick along pts (Unreal cm): radius(t) or a number; bark UVs: u around (cm / tile), v along. Cut ends in cap_surf."""
+def natural_stick(pts, lengths, seed, bow):
+    """A straight-ish run of points bowed a little sideways (a cut stick is never true): bow cm at its middle, None = 0.7% of its length.
+    Only when the run is near straight -- a hoop, a helix of cord or a bent fork keeps the shape it was given."""
+    L = lengths[-1]
+    if len(pts) < 2 or L < 12.0 or (pts[-1] - pts[0]).length < 0.9 * L:
+        return pts
+    bow = 0.007 * L * (0.4 + 0.8 * abs(noise.noise(Vector((seed, 1.7, 0.3))))) if bow is None else bow
+    if bow <= 0.0:
+        return pts
+    d = (pts[-1] - pts[0]).normalized()
+    a, b = frame_of(d)
+    ang = TAU * (0.5 + 0.5 * noise.noise(Vector((seed, 5.1, 2.2))))
+    side = a * math.cos(ang) + b * math.sin(ang)
+    # mostly one curve, a little S in some
+    return [p + side * bow * (math.sin(math.pi * l / L) + 0.3 * math.sin(TAU * l / L + seed)) for p, l in zip(pts, lengths)]
+
+
+def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, caps=(True, True), twist=0.0, bow=None, swell=0.07, cut=None):
+    """A round stick along pts (Unreal cm): radius(t) or a number; bark UVs: u around (cm / tile), v along. Cut ends in cap_surf.
+    Natural by default: bowed (natural_stick), swelling and narrowing along its length (swell, of the radius), each cut end on a slant (cut
+    degrees; None = 5..30 on a bark or rod stick, square on anything else), its own seed when none is given."""
+    m.begin()
+    if not seed:
+        seed = VARY.seed()
     rfn = radius if callable(radius) else (lambda t, r=radius: r)
     T = tile(surf)
     lengths = [0.0]
     for i in range(1, len(pts)):
         lengths.append(lengths[-1] + (pts[i] - pts[i - 1]).length)
     L = max(lengths[-1], 1e-3)
+    pts = natural_stick(pts, lengths, seed, bow)
+    base_rfn = rfn
+    rfn = lambda t: base_rfn(t) * (1.0 + swell * noise.noise(Vector((t * L * 0.045, seed, 2.0))))   # noqa: E731
+    if cut is None:
+        cut = VARY.uniform(5.0, 30.0) if surf in ("Bark", "Rod") else 0.0
     rings = []
     prev_a = None
     for i, p in enumerate(pts):
@@ -357,6 +437,21 @@ def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, cap
             wob = 1.0 + wobble * noise.noise(Vector((math.cos(ang) * 0.7 + seed, math.sin(ang) * 0.7, lengths[i] * 0.06)))
             ring.append(m.vert(p + (a * math.cos(ang) + b * math.sin(ang)) * r * wob))
         rings.append((ring, r))
+    if cut > 0.0:
+        # the end rings slanted across the stick (each end its own way); the faces next to them keep their length
+        tc = math.tan(math.radians(cut))
+        for which, i in ((0, 0), (1, len(rings) - 1)):
+            if not caps[which] or len(rings) < 3:
+                continue
+            ring, r = rings[i]
+            d = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+            c = sum((m.v[j] for j in ring), Vector()) / len(ring)
+            a, b = frame_of(d)
+            phi = seed * 2.3 + which * 1.9
+            tilt = a * math.cos(phi) + b * math.sin(phi)
+            reach = min(r * tc, 0.45 * (pts[1] - pts[0]).length if which == 0 else 0.45 * (pts[-1] - pts[-2]).length)
+            for j in ring:
+                m.v[j] = m.v[j] + d * ((m.v[j] - c).dot(tilt) / max(r, 1e-3)) * reach
     for i in range(len(rings) - 1):
         (ra, rr0), (rb, rr1) = rings[i], rings[i + 1]
         circ = TAU * (rr0 + rr1) * 0.5
@@ -393,8 +488,15 @@ def path(p0, p1, n, bend=None, seed=0.0, wander=0.0):
     return pts
 
 
-def beam(m, p0, p1, w, h, surf="Hewn", chamfer=1.2, seg=6, seed=0.0, wobble=0.4, up=None):
-    """A hewn timber from p0 to p1: a w x h section with chamfered arrises, its faces a little uneven (the axe)."""
+def beam(m, p0, p1, w, h, surf="Hewn", chamfer=1.2, seg=6, seed=0.0, wobble=0.4, up=None, bow=None, twist=None):
+    """A hewn timber from p0 to p1: a w x h section with chamfered arrises, its faces a little uneven (the axe). Natural by default: the
+    section 3% off its nominal size, bowed (bow cm at the middle, None = 0.25% of its length) and twisted (twist degrees end to end, None =
+    up to 2.5) as a timber dries, each in its own direction."""
+    m.begin(0.8)
+    if not seed:
+        seed = VARY.seed()
+    w *= 1.0 + 0.03 * noise.noise(Vector((seed, 0.4, 7.0)))
+    h *= 1.0 + 0.03 * noise.noise(Vector((seed, 2.4, 7.0)))
     d = (p1 - p0)
     L = d.length
     d.normalize()
@@ -403,6 +505,9 @@ def beam(m, p0, p1, w, h, surf="Hewn", chamfer=1.2, seg=6, seed=0.0, wobble=0.4,
     else:
         b = (up - d * up.dot(d)).normalized()
         a = b.cross(d).normalized()
+    bow = 0.0025 * L * noise.noise(Vector((seed, 3.3, 1.1))) * 2.0 if bow is None else bow
+    twist = math.radians(2.5 * noise.noise(Vector((seed, 6.1, 4.4)))) if twist is None else math.radians(twist)
+    bow_dir = a * math.cos(seed) + b * math.sin(seed)
     hw, hh, c = w * 0.5, h * 0.5, chamfer
     sec = [(hw, hh - c), (hw - c, hh), (-hw + c, hh), (-hw, hh - c), (-hw, -hh + c), (-hw + c, -hh), (hw - c, -hh), (hw, -hh + c)]
     perim = [0.0]
@@ -415,9 +520,12 @@ def beam(m, p0, p1, w, h, surf="Hewn", chamfer=1.2, seg=6, seed=0.0, wobble=0.4,
     for i in range(seg + 1):
         t = i / seg
         ring = []
+        ca, sa = math.cos(twist * (t - 0.5)), math.sin(twist * (t - 0.5))
+        at, bt = a * ca + b * sa, b * ca - a * sa
+        mid = p0 + d * (L * t) + bow_dir * (bow * math.sin(math.pi * t))
         for k, (x, y) in enumerate(sec):
             n = noise.noise(Vector((x * 0.15 + seed, y * 0.15, t * L * 0.04))) * wobble
-            ring.append(m.vert(p0 + d * (L * t) + a * (x + n * (1 if x > 0 else -1)) + b * (y + n * (1 if y > 0 else -1))))
+            ring.append(m.vert(mid + at * (x + n * (1 if x > 0 else -1)) + bt * (y + n * (1 if y > 0 else -1))))
         rings.append(ring)
     k_n = len(sec)
     for i in range(seg):
@@ -436,8 +544,10 @@ def beam(m, p0, p1, w, h, surf="Hewn", chamfer=1.2, seg=6, seed=0.0, wobble=0.4,
     return m
 
 
-def blob(m, centre, radii, surf, rot=None, seed=0.0, rough=0.25, rings=6, segs=10):
-    """A lump (moss, a clod, a stone): a squashed sphere pushed about by noise."""
+def blob(m, centre, radii, surf, rot=None, seed=0.0, rough=0.25, rings=6, segs=10, freq=1.7, spread=0.8):
+    """A lump (moss, a clod, a stone): a squashed sphere pushed about by noise (freq: how many bumps round it -- a stone a few, a moss
+    cushion many). spread: how far its tint strays from its neighbours' (Vary.look)."""
+    m.begin(spread)
     rot = rot or Matrix.Identity(3)
     T = tile(surf)
     idx = []
@@ -447,7 +557,7 @@ def blob(m, centre, radii, surf, rot=None, seed=0.0, rough=0.25, rings=6, segs=1
         for j in range(segs):
             lon = TAU * j / segs
             dvec = Vector((math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat)))
-            k = 1.0 + rough * noise.noise(dvec * 1.7 + Vector((seed, seed * 0.7, seed * 1.3)))
+            k = 1.0 + rough * noise.noise(dvec * freq + Vector((seed, seed * 0.7, seed * 1.3)))
             p = Vector((dvec.x * radii[0], dvec.y * radii[1], dvec.z * radii[2])) * k
             row.append(m.vert(centre + rot @ p))
         idx.append(row)
@@ -463,7 +573,8 @@ def blob(m, centre, radii, surf, rot=None, seed=0.0, rough=0.25, rings=6, segs=1
 
 def sheet(m, fn, s0, s1, t0, t1, ns, nt, thick, surf, back=True, rim=True):
     """A slab over a parametric surface: fn(s, t) -> (point, outward normal); the outer face, an inner one thick cm in, and its rim. UVs in cm
-    along s and t."""
+    along s and t. A sheet varies little in itself (the piece-wide field does the rest): the courses of a roof do not stripe."""
+    m.begin(0.35)
     T = tile(surf)
     first = len(m.f)
     outer, inner = [], []
@@ -526,33 +637,60 @@ def lashing(m, centre, axis, radius, turns=5, width=4.0, cord=0.35, seed=0.0):
 WX = -50.0   # a wall panel's centre plane (the stick wall's frame)
 
 
+def by_eye(ys, rng, jitter):
+    """Positions set out by eye, not measured: each moved up to jitter cm, the ends kept inside where they were."""
+    out = [y + rng.uniform(-jitter, jitter) for y in ys]
+    out[0], out[-1] = max(out[0], ys[0] - jitter * 0.3), min(out[-1], ys[-1] + jitter * 0.3)
+    return sorted(out)
+
+
 def stakes_row(ys, z0, z1, r, rng, seed=0, x=WX):
+    """Stakes driven in a row: each its own thickness, leaning a little, cut off at its own height."""
     m = Mesh()
     for i, y in enumerate(ys):
-        rr = r * rng.uniform(0.85, 1.15)
-        tube(m, path(Vector((x, y, z0)), Vector((x, y + rng.uniform(-1, 1), z1)), 10, seed=seed + i * 3.1, wander=0.8),
+        rr = r * rng.uniform(0.8, 1.2)
+        top = Vector((x + rng.uniform(-1.2, 1.2), y + rng.uniform(-1.8, 1.8), z1 + rng.uniform(-4.0, 1.5)))
+        tube(m, path(Vector((x, y, z0)), top, 10, seed=seed + i * 3.1, wander=0.8),
              lambda t, rr=rr: rr * (1.0 - 0.12 * t), "Bark", sides=9, wobble=0.06, seed=seed + i)
     return m
 
 
-def weave_courses(ys, zs, rod_r, stake_r, rng, seed=0, x=WX, y_end=51.0):
-    """One rod per course, passing in front of one stake and behind the next; alternate courses in opposite phase."""
+def packed_courses(z0, z1, rod_r, rng, spread=(0.65, 1.35)):
+    """Rods beaten down on each other: each course rests on the one below by both rods' thickness, so a thick rod lifts the rest -> [(z, r)]."""
+    out = []
+    r = rod_r * rng.uniform(*spread)
+    z = z0 + r
+    while z + r < z1:
+        out.append((z, r))
+        r2 = rod_r * rng.uniform(*spread)
+        z += r + r2 + rng.uniform(0.0, 0.35)
+        r = r2
+    return out
+
+
+def weave_courses(ys, courses, stake_r, rng, seed=0, x=WX, y_end=51.0):
+    """One rod per course, passing in front of one stake and behind the next; alternate courses in opposite phase. ys may be uneven (the weave
+    turns at each stake); courses [(z, r)]; each rod tapers from its butt (either end), runs a little uphill or down and ends where it ends."""
     rods = []
-    span = ys[1] - ys[0]
-    for k, z in enumerate(zs):
+    ext = [ys[0] - (ys[1] - ys[0])] + list(ys) + [ys[-1] + (ys[-1] - ys[-2])]
+    for k, (z, r) in enumerate(courses):
         m = Mesh()
-        phase = 0.0 if k % 2 == 0 else math.pi
-        amp = stake_r + rod_r * 0.95
-        y0 = -y_end - rng.uniform(0, 2)
-        y1 = y_end + rng.uniform(0, 2)
-        r = rod_r * rng.uniform(0.85, 1.15)
+        amp = stake_r + r * 0.95
+        y0 = -y_end - rng.uniform(0.0, 5.0)
+        y1 = y_end + rng.uniform(0.0, 5.0)
+        slope = rng.uniform(-0.008, 0.008)
+        butt_left = rng.random() < 0.5
         pts = []
-        n = 44
+        n = 48
         for i in range(n + 1):
             y = y0 + (y1 - y0) * i / n
-            off = amp * math.cos(math.pi * (y - ys[0]) / span + phase)
-            pts.append(Vector((x + off, y, z + noise.noise(Vector((y * 0.05, k * 1.7, seed))) * 0.35)))
-        tube(m, pts, lambda t, r=r: r * (1.0 - 0.2 * t), "Rod", sides=7, wobble=0.05, seed=seed + k * 1.9)
+            j = max(0, min(len(ext) - 2, next((q for q in range(len(ext) - 1) if y < ext[q + 1]), len(ext) - 2)))
+            t = (y - ext[j]) / (ext[j + 1] - ext[j])
+            sign = 1.0 if (j + k) % 2 == 0 else -1.0
+            off = amp * sign * math.cos(math.pi * t)
+            pts.append(Vector((x + off, y, z + slope * y + noise.noise(Vector((y * 0.05, k * 1.7, seed))) * 0.35)))
+        taper = (lambda t, r=r: r * (1.0 - 0.3 * t)) if butt_left else (lambda t, r=r: r * (0.7 + 0.3 * t))
+        tube(m, pts, taper, "Rod", sides=7, wobble=0.05, seed=seed + k * 1.9)
         rods.append(m)
     return rods
 
@@ -570,46 +708,45 @@ def group(meshes, n):
 
 
 def geo_wattle_wall(rng):
-    ys = [-40.0, -20.0, 0.0, 20.0, 40.0]
+    ys = by_eye([-40.0, -20.0, 0.0, 20.0, 40.0], rng, 3.0)
     parts = [("Stakes", stakes_row(ys, -58.0, 57.0, 1.9, rng, seed=1))]
-    rod_r = 1.2
-    zs = [-48.5 + i * 2.15 for i in range(46)]
-    rods = weave_courses(ys, zs, rod_r, 1.9, rng, seed=3)
+    rods = weave_courses(ys, packed_courses(-49.7, 49.5, 1.1, rng), 1.9, rng, seed=3)
     for i, g in enumerate(group(rods, 8)):
         parts.append(("Weave%d" % (i + 1), g))
     return parts
 
 
-def daub_lumps(rng, surf, faces=(1, -1), band_h=12.5, lumps_y=13, base_r=(1.6, 4.6, 3.4), depth=2.2, seed=0):
-    """Lumps pressed onto both faces of the panel in horizontal bands from the bottom up."""
-    bands = []
-    nb = int(round(100.0 / band_h))
-    for bi in range(nb):
-        m = Mesh()
-        z0 = -50.0 + bi * band_h
-        for side in faces:
-            rows = 3
-            for r in range(rows):
-                z = z0 + band_h * (r + 0.5) / rows
-                for j in range(lumps_y):
-                    y = -50.0 + 100.0 * (j + 0.5 + rng.uniform(-0.25, 0.25)) / lumps_y
-                    zz = z + rng.uniform(-2.0, 2.0)
-                    if abs(y) > 49.0 or abs(zz) > 49.0:
-                        continue
-                    rad = (base_r[0] * rng.uniform(0.8, 1.2), base_r[1] * rng.uniform(0.8, 1.25), base_r[2] * rng.uniform(0.8, 1.25))
-                    c = Vector((WX + side * (depth + rng.uniform(-0.6, 0.8)), y, zz))
-                    blob(m, c, rad, surf, seed=seed + bi * 13.1 + j * 1.7 + r * 0.3 + side, rough=0.3, rings=5, segs=9)
-        bands.append(m)
-    return bands
-
-
-def geo_moss_daub(rng):
-    return [("Moss%d" % (i + 1), b) for i, b in enumerate(daub_lumps(rng, "Moss", seed=2))]
+def geo_moss_daub(rng, bands=8):
+    """Moss stuffed into the weave by the handful from the bottom up: clumps of every size packed edge to edge over both faces (many small,
+    a few big mats), each turned its own way, standing proud by its own amount, a few wisps hanging; staged in bands from the bottom."""
+    out = [Mesh() for _ in range(bands)]
+    for side in (1, -1):
+        placed = []
+        for _ in range(5000):
+            r = 2.4 + 6.0 * rng.random() ** 2.0
+            y, z = rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4), rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4)
+            if any((y - py) ** 2 + (z - pz) ** 2 < ((r + pr) * 0.48) ** 2 for py, pz, pr in placed):
+                continue
+            placed.append((y, z, r))
+        for i, (y, z, r) in enumerate(placed):
+            m = out[min(bands - 1, int((z + 50.0) / (100.0 / bands)))]
+            # a soft cushion, its surface all small bumps (the moss's own tufts), overlapping its neighbours into one stuffed mass that stands
+            # proud of the weave (the rods reach ~4.5 cm off the panel's plane: none may show through); clumps of one gathering, so their
+            # tints stay close
+            rad = (r * rng.uniform(0.3, 0.45), r * rng.uniform(0.95, 1.3), r * rng.uniform(0.8, 1.15))
+            c = Vector((WX + side * (3.6 + rad[0] * 0.5 + rng.uniform(-0.3, 0.6)), y, z))
+            rot = Matrix.Rotation(rng.uniform(0.0, math.pi), 3, "X") @ Matrix.Rotation(rng.uniform(-0.2, 0.2), 3, "Z")
+            blob(m, c, rad, "Moss", rot=rot, seed=side * 7.0 + i * 1.37, rough=0.2, rings=7, segs=14, freq=4.5, spread=0.4)
+            if r > 4.5 and rng.random() < 0.3:   # a wisp hanging from a big clump
+                blob(m, c + Vector((side * 0.6, rng.uniform(-1.5, 1.5), -r * 0.8)), (0.7, 1.0, rng.uniform(2.5, 4.5)), "Moss",
+                     rot=Matrix.Rotation(rng.uniform(-0.3, 0.3), 3, "X"), seed=i * 2.9, rough=0.3, rings=4, segs=6)
+    return [("Moss%d" % (i + 1), m) for i, m in enumerate(out)]
 
 
 def daub_slab(m, z0, z1, offset, surf, y0=-50.0, y1=50.0, ny=24, nz=4, close_bottom=False, close_top=False, x=WX):
     """Daub over both faces of a panel between heights z0 and z1: offset(side, y, z) is how far it stands off the panel's centre plane; the
     two faces meet round the panel's ends (and its foot / head when asked), so it reads as one plastered thickness from any side."""
+    m.begin(0.25)
     T = tile(surf)
     grids = {}
     for side in (1, -1):
@@ -683,8 +820,10 @@ def geo_pole_rail(rng):
 
 
 def pegs(m, centres, axis, r=1.1, length=4.0):
+    """Treenails: each whittled to its own thickness, driven to its own depth."""
     for i, c in enumerate(centres):
-        tube(m, [c - axis * length * 0.5, c + axis * length * 0.5], r, "Hewn", sides=7, caps=(True, True))
+        rr, out = r * VARY.uniform(0.85, 1.15), VARY.uniform(-0.15, 0.25) * length
+        tube(m, [c - axis * length * 0.5, c + axis * (length * 0.5 + out)], rr, "Hewn", sides=7, caps=(True, True))
 
 
 def geo_timber_post(rng):
@@ -780,6 +919,37 @@ def roof_point(s, y, off):
     return ROOF_EAVE + ROOF_UP * s + Vector((0, y, 0)) + ROOF_N * off
 
 
+class Bundles:
+    """A course of thatch as it is laid: bundles (yealms) side by side across y, each its own width, set a little up or down the slope and a
+    little fuller or thinner than its neighbours; their butts ragged where the straws end."""
+
+    def __init__(self, rng, y0, y1, width=(9.0, 16.0), stagger=3.5, full=(0.82, 1.15)):
+        self.edges = [y0 - rng.uniform(0.0, width[0])]
+        while self.edges[-1] < y1:
+            self.edges.append(self.edges[-1] + rng.uniform(*width))
+        n = len(self.edges) - 1
+        self.shift = [rng.uniform(-stagger, stagger) for _ in range(n)]
+        self.full = [rng.uniform(*full) for _ in range(n)]
+        self.seed = rng.uniform(0.0, 40.0)
+
+    def at(self, y):
+        """(butt shift down the slope cm, fullness x) at y: each bundle rounded across its width, its neighbours blended at the seam."""
+        e = self.edges
+        j = max(0, min(len(e) - 2, next((q for q in range(len(e) - 1) if y < e[q + 1]), len(e) - 2)))
+        t = (y - e[j]) / (e[j + 1] - e[j])
+        k = j + 1 if t > 0.5 else j - 1
+        k = max(0, min(len(e) - 2, k))
+        w = 0.5 - 0.5 * math.cos(math.pi * min(1.0, abs(t - 0.5) * 2.0))   # 0 mid-bundle .. 1 at its edge
+        blend = 0.5 * w
+        shift = self.shift[j] * (1.0 - blend) + self.shift[k] * blend
+        full = (self.full[j] * (1.0 - blend) + self.full[k] * blend) * (0.9 + 0.1 * math.sin(math.pi * t))
+        return shift, full
+
+    def ragged(self, y):
+        """The straws' ends: a short ragged line along the butt."""
+        return 1.4 * noise.noise(Vector((y * 0.45, self.seed, 0.0))) + 0.6 * noise.noise(Vector((y * 1.7, self.seed, 3.0)))
+
+
 def geo_thatch(rng):
     parts = []
     gauge = 22.0
@@ -789,20 +959,22 @@ def geo_thatch(rng):
     s = s_start
     while s < ROOF_LEN - 10.0:
         courses.append(s)
-        s += gauge
+        s += gauge + rng.uniform(-3.0, 3.0)
     for k, sb in enumerate(courses):
         m = Mesh()
         top = min(sb + 64.0, ROOF_LEN + 8.0)
+        bun = Bundles(rng, -53.0, 53.0)
 
-        def fn(sv, y, k=k, sb=sb, top=top):
-            # a wedge: thick at the butts (sv = sb), thin where the next course covers it
+        def fn(sv, y, k=k, sb=sb, top=top, bun=bun):
+            # a wedge: thick at the butts (sv = sb), thin where the next course covers it; the butts staggered bundle by bundle
             frac = (sv - sb) / max(top - sb, 1.0)
-            thick = 19.0 * (1.0 - 0.65 * frac)
-            jag = 2.2 * noise.noise(Vector((y * 0.35, k * 3.1, 0.0))) if frac < 0.08 else 0.0
+            shift, full = bun.at(y)
+            butt = (shift + (bun.ragged(y) if frac < 0.08 else 0.0)) * (1.0 - frac)
+            thick = 19.0 * (1.0 - 0.65 * frac) * (1.0 + (full - 1.0) * (1.0 - frac))
             off = base_off + k * 0.8 + thick + 1.2 * noise.noise(Vector((y * 0.06, sv * 0.06, k)))
             yy = y * (1.0 + 0.05 * (1.0 - frac))
-            return roof_point(sv - jag, yy, off), ROOF_N
-        sheet(m, fn, sb, top, -53.0, 53.0, 8, 26, lambda sv, y, sb=sb, top=top: 19.0 * (1.0 - 0.65 * (sv - sb) / max(top - sb, 1.0)),
+            return roof_point(sv - butt, yy, off), ROOF_N
+        sheet(m, fn, sb, top, -53.0, 53.0, 8, 56, lambda sv, y, sb=sb, top=top: 19.0 * (1.0 - 0.65 * (sv - sb) / max(top - sb, 1.0)),
               "Thatch", back=True, rim=True)
         courses_name = "Course%d" % (k + 1)
         parts.append((courses_name, m))
@@ -820,19 +992,31 @@ def geo_thatch(rng):
     return parts
 
 
+def board_widths(rng, total, lo, hi):
+    """Riven boards as they came off the log: each its own width, together filling the span."""
+    ws = []
+    while sum(ws) < total - lo:
+        ws.append(rng.uniform(lo, hi))
+    k = total / sum(ws)
+    return [w * k for w in ws]
+
+
 def geo_plank_floor(rng):
     joists = Mesh()
-    for x in (-32.0, 32.0):
+    jx = [x + rng.uniform(-1.5, 1.5) for x in (-32.0, 32.0)]
+    for x in jx:
         beam(joists, Vector((x, -50.0, -6.5)), Vector((x, 50.0, -6.5)), 9.0, 9.0, seed=x, up=Vector((0, 0, 1)))
     parts = [("Joists", joists)]
-    widths = [21.0, 19.0, 22.0, 18.0, 20.0]
     y = -50.0
-    for i, w in enumerate(widths):
+    for i, w in enumerate(board_widths(rng, 100.0, 15.0, 25.0)):
         m = Mesh()
-        y0, y1 = y + 0.3, y + w - 0.3
-        beam(m, Vector((-50.0, (y0 + y1) * 0.5, 3.4)), Vector((50.0, (y0 + y1) * 0.5, 3.4)), (y1 - y0), 3.2, surf="Plank", chamfer=0.5,
-             seed=i * 3.7, wobble=0.25, up=Vector((0, 0, 1)))
-        pegs(m, [Vector((-32.0, (y0 + y1) * 0.5, 5.1)), Vector((32.0, (y0 + y1) * 0.5, 5.1))], Vector((0, 0, 1)), r=0.9, length=0.6)
+        y0, y1 = y + rng.uniform(0.15, 0.5), y + w - rng.uniform(0.15, 0.5)
+        th = 3.2 * rng.uniform(0.9, 1.08)
+        z = 5.0 - th * 0.5 - rng.uniform(0.0, 0.25)   # the top at Z +5 (the floor's frame), a board a hair proud or low
+        beam(m, Vector((-50.0 - rng.uniform(0.0, 0.8), (y0 + y1) * 0.5, z)), Vector((50.0 + rng.uniform(0.0, 0.8), (y0 + y1) * 0.5, z)), (y1 - y0), th,
+             surf="Plank", chamfer=rng.uniform(0.3, 0.7), seed=i * 3.7, wobble=0.25, up=Vector((0, 0, 1)))
+        pegs(m, [Vector((x + rng.uniform(-0.8, 0.8), (y0 + y1) * 0.5 + rng.uniform(-2.0, 2.0), z + th * 0.5 + 0.1)) for x in jx], Vector((0, 0, 1)),
+             r=0.9, length=0.6)
         parts.append(("Plank%d" % (i + 1), m))
         y += w
     return parts
@@ -849,9 +1033,9 @@ def geo_wattle_door(rng):
     sill = Mesh()
     tube(sill, path(Vector((WX, -50.0, -46.0)), Vector((WX, 50.0, -46.0)), 10, seed=6.0, wander=0.3), 3.6, "Bark", sides=10)
     # the hurdle: four stakes and rods woven through, hung from the left post on two rawhide loops
-    ys = [-34.0, -12.0, 12.0, 34.0]
+    ys = by_eye([-34.0, -12.0, 12.0, 34.0], rng, 2.5)
     leaf_stakes = stakes_row(ys, -45.0, 134.0, 1.6, rng, seed=8)
-    rods = weave_courses(ys, [-42.0 + i * 2.4 for i in range(72)], 1.05, 1.6, rng, seed=9, y_end=37.0)
+    rods = weave_courses(ys, packed_courses(-43.0, 131.0, 1.0, rng), 1.6, rng, seed=9, y_end=37.0)
     hinges = Mesh()
     for z in (110.0, -20.0):
         pts = [Vector((WX + 4.0 * math.cos(a), -40.0 + 4.0 * math.sin(a), z)) for a in [TAU * i / 16 for i in range(17)]]
@@ -872,11 +1056,10 @@ def geo_plank_door(rng):
     sill = Mesh()
     beam(sill, Vector((WX, -50.0, -46.0)), Vector((WX, 50.0, -46.0)), 14.0, 8.0, seed=5.0, up=Vector((0, 0, 1)))
     leaf = Mesh()
-    widths = [19.0, 18.0, 20.0, 18.0]
     y = -37.0
-    for i, w in enumerate(widths):
-        beam(leaf, Vector((WX, y + w * 0.5, -45.0)), Vector((WX, y + w * 0.5, 133.0)), 3.0, w - 0.4, surf="Plank", chamfer=0.4, seed=i * 2.1,
-             wobble=0.2, up=Vector((0, 1, 0)))
+    for i, w in enumerate(board_widths(rng, 75.0, 14.0, 23.0)):
+        beam(leaf, Vector((WX, y + w * 0.5, -45.0 + rng.uniform(0.0, 1.0))), Vector((WX, y + w * 0.5, 133.0 - rng.uniform(0.0, 1.5))), 3.0,
+             w - rng.uniform(0.3, 0.7), surf="Plank", chamfer=0.4, seed=i * 2.1, wobble=0.2, up=Vector((0, 1, 0)))
         y += w
     battens = Mesh()
     for z in (-25.0, 112.0):
@@ -899,9 +1082,10 @@ def leanto_frame(rng, half_w):
     rafters = Mesh()
     n = 6
     for i in range(n):
-        y = -half_w + 2.0 * half_w * i / (n - 1)
-        tube(rafters, path(Vector((12.0, y, 160.0)), Vector((-190.0, y + rng.uniform(-3, 3), -8.0)), 14, seed=i * 1.3, wander=1.2),
-             lambda t: 2.8 * (1.0 - 0.3 * t), "Bark", sides=8)
+        y = -half_w + 2.0 * half_w * i / (n - 1) + (rng.uniform(-6.0, 6.0) if 0 < i < n - 1 else 0.0)
+        r = 2.8 * rng.uniform(0.8, 1.2)
+        tube(rafters, path(Vector((12.0 + rng.uniform(-4, 4), y, 160.0 + rng.uniform(-3, 4))), Vector((-190.0 + rng.uniform(-8, 8), y + rng.uniform(-3, 3), -8.0)),
+                           14, seed=i * 1.3, wander=1.2), lambda t, r=r: r * (1.0 - 0.3 * t), "Bark", sides=8)
     return up, ridge, rafters
 
 
@@ -918,40 +1102,58 @@ def geo_thatch_leanto(rng):
     lattice = Mesh()
     L = Vector((180.0, 0, 150.0)).length
     for k in range(7):
-        s = 15.0 + k * (L - 25.0) / 6.0
-        pts = [slope_point(s, y, 4.0)[0] for y in [-118.0 + 236.0 * i / 16 for i in range(17)]]
-        tube(lattice, pts, 1.2, "Rod", sides=6)
+        s = 15.0 + k * (L - 25.0) / 6.0 + (rng.uniform(-4.0, 4.0) if 0 < k < 6 else 0.0)
+        y0, y1 = -118.0 - rng.uniform(0.0, 6.0), 118.0 + rng.uniform(0.0, 6.0)
+        pts = [slope_point(s, y, 4.0)[0] for y in [y0 + (y1 - y0) * i / 16 for i in range(17)]]
+        tube(lattice, pts, 1.2 * rng.uniform(0.8, 1.2), "Rod", sides=6)
     parts = [("Uprights", up), ("Ridge", ridge), ("Rafters", rafters), ("Lattice", lattice)]
     gauge = 26.0
     courses = []
     s = L + 12.0
     while s > 10.0:
         courses.append(s)
-        s -= gauge
+        s -= gauge + rng.uniform(-3.0, 3.0)
     for k, sb in enumerate(courses):
         m = Mesh()
         top = max(sb - 70.0, -14.0)
+        bun = Bundles(rng, -120.0, 120.0)
 
-        def fn(sv, y, k=k, sb=sb, top=top):
+        def fn(sv, y, k=k, sb=sb, top=top, bun=bun):
             frac = (sb - sv) / max(sb - top, 1.0)
-            thick = 16.0 * (1.0 - 0.6 * frac)
-            jag = 2.4 * noise.noise(Vector((y * 0.3, k * 2.9, 1.0))) if frac < 0.08 else 0.0
-            p, n = slope_point(sv + jag, y * (1.0 + 0.04 * (1.0 - frac)), 6.0 + k * 0.6 + thick + 1.2 * noise.noise(Vector((y * 0.05, sv * 0.05, k))))
+            shift, full = bun.at(y)
+            butt = (shift + (bun.ragged(y) if frac < 0.08 else 0.0)) * (1.0 - frac)
+            thick = 16.0 * (1.0 - 0.6 * frac) * (1.0 + (full - 1.0) * (1.0 - frac))
+            p, n = slope_point(sv + butt, y * (1.0 + 0.04 * (1.0 - frac)), 6.0 + k * 0.6 + thick + 1.2 * noise.noise(Vector((y * 0.05, sv * 0.05, k))))
             return p, n
         sm = Mesh()
-        sheet(sm, fn, top, sb, -120.0, 120.0, 8, 30, lambda sv, y, sb=sb, top=top: 16.0 * (1.0 - 0.6 * (sb - sv) / max(sb - top, 1.0)), "Thatch")
+        sheet(sm, fn, top, sb, -120.0, 120.0, 8, 110, lambda sv, y, sb=sb, top=top: 16.0 * (1.0 - 0.6 * (sb - sv) / max(sb - top, 1.0)), "Thatch")
         m.extend(sm)
         parts.append(("Thatch%d" % (k + 1), m))
     return parts
 
 
+def hide_outline(u, seed, amp):
+    """How far a hide's edge stands in or out at u (0..1 along it): the animal's outline -- a slow wave, a leg or two, a ragged trim."""
+    leg = sum(math.exp(-((u - c) / 0.06) ** 2) for c in (0.18 + 0.1 * math.sin(seed), 0.8 + 0.08 * math.cos(seed)))
+    return amp * (noise.noise(Vector((u * 2.2, seed, 0.5))) + 0.6 * leg + 0.25 * noise.noise(Vector((u * 11.0, seed, 4.0))))
+
+
 def hide_panel(m, s0, s1, y0, y1, rng, seed=0.0, lift=5.0, sag=2.5):
-    """A hide stretched over the rafters, sagging between them, its edge irregular (the animal's outline)."""
+    """A hide stretched over the rafters, sagging between them by its own amount, wrinkled where it was stretched unevenly, its edge the
+    animal's outline (hide_outline) rather than a cut rectangle."""
+    sag *= rng.uniform(0.7, 1.4)
+    amp = 0.6 + rng.uniform(0.3, 1.0)
+
     def fn(s, y):
+        u, v = (s - s0) / (s1 - s0), (y - y0) / (y1 - y0)
+        # the outline: the ends (s0 / s1) and the sides (y0 / y1) each pushed in or out along their length
+        s = s + (1.0 - u) * hide_outline(v, seed, 3.5) - u * hide_outline(v, seed + 3.3, 3.5)   # the overlaps stay closed
+        y = y + (1.0 - v) * hide_outline(u, seed + 6.1, 4.0) - v * hide_outline(u, seed + 8.7, 4.0)
         between = abs(math.sin(math.pi * (y + 110.0) / 44.0))
-        p, n = slope_point(s, y, lift - sag * between + 0.6 * noise.noise(Vector((s * 0.05, y * 0.05, seed))))
+        wrinkle = amp * noise.noise(Vector((s * 0.05, y * 0.05, seed))) + 0.35 * noise.noise(Vector((s * 0.16, y * 0.04, seed + 2.0)))
+        p, n = slope_point(s, y, lift - sag * between + wrinkle)
         return p, n
-    sheet(m, fn, s0, s1, y0, y1, 12, 22, 0.6, "Hide")
+    sheet(m, fn, s0, s1, y0, y1, 16, 30, 0.6, "Hide")
     return m
 
 
@@ -976,28 +1178,41 @@ def geo_hide_leanto(rng):
 TENT_R = 160.0
 TENT_H = 270.0
 TENT_POLES = 8
+TENT_SAG = [random.Random(31 + i).uniform(0.6, 1.45) for i in range(TENT_POLES)]   # each span between two poles sags its own amount
 
 
 def tent_cone(theta, z, off=0.0):
-    """The cover's surface at angle theta and height z (sagging inward between the poles); outward normal."""
+    """The cover's surface at angle theta and height z (sagging inward between the poles, each span its own amount, lumpy where the hides
+    were pulled unevenly); outward normal."""
     r = TENT_R * (1.0 - z / TENT_H)
-    sag = 1.0 - 0.07 * abs(math.sin(TENT_POLES * theta * 0.5))   # 0 at the poles (theta = i * tau / 8), deepest between
-    rr = r * sag + off
+    gap = int((theta % TAU) / (TAU / TENT_POLES)) % TENT_POLES
+    sag = 1.0 - 0.07 * TENT_SAG[gap] * abs(math.sin(TENT_POLES * theta * 0.5))   # 0 at the poles (theta = i * tau / 8), deepest between
+    lumps = 1.4 * noise.noise(Vector((math.cos(theta) * 1.6, math.sin(theta) * 1.6, z * 0.018))) * min(1.0, (TENT_H - z) / 60.0)
+    rr = r * sag + off + lumps
     p = Vector((rr * math.cos(theta), rr * math.sin(theta), z))
     n = Vector((math.cos(theta), math.sin(theta), TENT_R / TENT_H)).normalized()
     return p, n
+
+
+def tent_seam(key, x, amp):
+    """How far a seam between two hides wanders (cm, or radians round the cone) at x: one function per seam, so the two hides it joins follow
+    the same line and their overlap stays closed."""
+    return amp * (noise.noise(Vector((x, key * 3.7, 1.3))) + 0.35 * noise.noise(Vector((x * 4.0, key * 3.7, 6.1))))
 
 
 def geo_hide_tent(rng):
     poles_a, poles_b = Mesh(), Mesh()
     for i in range(TENT_POLES):
         th = TAU * i / TENT_POLES
-        # under the cover: its line runs 5 cm inside the cover's radius, through the apex and out past it where they cross
-        rf = TENT_R * (1.0 + 12.0 / TENT_H) - 5.0
+        # under the cover: its line runs 5 cm inside the cover's radius, through the apex and out past it where they cross, each pole its own
+        # length past the crossing and its own thickness
+        rf = TENT_R * (1.0 + 12.0 / TENT_H) - 5.0 - rng.uniform(0.0, 5.0)
         foot = Vector((rf * math.cos(th), rf * math.sin(th), -12.0))
-        tip = Vector((-TENT_R * 30.0 / TENT_H * math.cos(th), -TENT_R * 30.0 / TENT_H * math.sin(th), TENT_H + 30.0))
+        e = rng.uniform(14.0, 48.0)
+        tip = Vector((-TENT_R * e / TENT_H * math.cos(th), -TENT_R * e / TENT_H * math.sin(th), TENT_H + e))
         target = poles_a if i % 2 == 0 else poles_b
-        tube(target, path(foot, tip, 18, seed=i * 2.7, wander=0.8), lambda t: 3.6 * (1.0 - 0.45 * t), "Bark", sides=9)
+        r = 3.6 * rng.uniform(0.82, 1.18)
+        tube(target, path(foot, tip, 18, seed=i * 2.7, wander=0.8), lambda t, r=r: r * (1.0 - 0.45 * t), "Bark", sides=9)
     tie = Mesh()
     lashing(tie, Vector((0.0, 0.0, TENT_H - 6.0)), Vector((0, 0, 1)), 9.0, turns=7, width=8.0)
     parts = [("Poles1", poles_a), ("Poles2", poles_b), ("Tie", tie)]
@@ -1012,7 +1227,12 @@ def geo_hide_tent(rng):
                 a0 = TAU * seg / 4.0 - 0.02
                 a1 = TAU * (seg + 1) / 4.0 + 0.02
 
-            def fn(z, th, bi=bi):
+            def fn(z, th, bi=bi, seg=seg, z0=z0, z1=z1, a0=a0, a1=a1):
+                # the hide's edges: the seams above and below it and either side wander, shared with the hide on the other side of each
+                fz, fa = (z - z0) / (z1 - z0), (th - a0) / (a1 - a0)
+                z = z + (1.0 - fz) * tent_seam(bi, th * 1.3, 5.0 if bi else 2.0) + fz * tent_seam(bi + 1, th * 1.3, 5.0 if bi < 2 else 1.0)
+                right = (seg + 1) % 4 if bi else seg + 1
+                th = th + (1.0 - fa) * tent_seam(10 + bi * 5 + seg, z * 0.02, 0.035) + fa * tent_seam(10 + bi * 5 + right, z * 0.02, 0.035)
                 p, n = tent_cone(th, z, 2.0 + bi * 0.5 + 0.5 * noise.noise(Vector((th * 3.0, z * 0.05, bi))))
                 return p, n
             sm = Mesh()
@@ -1035,8 +1255,11 @@ def geo_hide_tent(rng):
         if door[0] - 0.05 < th < door[1] + 0.05:
             continue
         p, n = tent_cone(th, 10.0, 6.0)
-        tube(pegs_m, [p + Vector((0, 0, 8.0)) + n * 2.0, p + Vector((0, 0, -12.0)) + n * 6.0], 1.2, "Hewn", sides=6)
-        blob(pegs_m, p + n * 10.0 + Vector((0, 0, 4.0)), (8.0, 7.0, 5.0), "Mortar", seed=i * 1.9, rough=0.2, rings=4, segs=8)
+        lean = Vector((rng.uniform(-1.5, 1.5), rng.uniform(-1.5, 1.5), 0.0))
+        tube(pegs_m, [p + Vector((0, 0, rng.uniform(5.0, 10.0))) + n * 2.0 + lean, p + Vector((0, 0, -12.0)) + n * 6.0], 1.2 * rng.uniform(0.8, 1.2),
+             "Hewn", sides=6)
+        blob(pegs_m, p + n * rng.uniform(8.0, 12.0) + Vector((0, 0, 3.0)), (rng.uniform(5.5, 10.0), rng.uniform(5.0, 8.5), rng.uniform(3.5, 6.0)),
+             "Mortar", rot=Matrix.Rotation(rng.uniform(0, TAU), 3, "Z"), seed=i * 1.9, rough=0.25, rings=4, segs=8)
     parts.append(("Pegs", pegs_m))
     return parts
 
@@ -1102,8 +1325,47 @@ def surf_mat(name):
         bsdf.inputs["Base Color"].default_value = BI.srgb({"Moss": "#4d6a22", "Daub": "#87705a", "Thatch": "#8f7c50", "Hide": "#9a7a52",
                                                            "Mortar": "#6e6052", "Cord": "#7a6448"}.get(name, "#6a5a48"))
         bsdf.inputs["Roughness"].default_value = 0.8
+    tint_preview(nt, bsdf, name)
     _SURF_MATS[name] = mat
     return mat
+
+
+def tint_preview(nt, bsdf, name):
+    """The tint as M_Surf_Base applies it: base colour x lerp(light range, tint.x), then toward its weather colour x its brightness by
+    tint.y x weather_amount."""
+    spec = BP.SURFACES[name]
+    src = bsdf.inputs["Base Color"].links[0].from_socket if bsdf.inputs["Base Color"].links else None
+    if src is None:
+        rgb = nt.nodes.new("ShaderNodeRGB")
+        rgb.outputs[0].default_value = bsdf.inputs["Base Color"].default_value
+        src = rgb.outputs[0]
+    uv = nt.nodes.new("ShaderNodeUVMap")
+    uv.uv_map = "Tint"
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(uv.outputs["UV"], sep.inputs[0])
+    lf = nt.nodes.new("ShaderNodeMapRange")
+    nt.links.new(sep.outputs[0], lf.inputs["Value"])
+    lf.inputs["To Min"].default_value, lf.inputs["To Max"].default_value = spec["light"]
+    lit = nt.nodes.new("ShaderNodeVectorMath")
+    lit.operation = "SCALE"
+    nt.links.new(src, lit.inputs[0])
+    nt.links.new(lf.outputs["Result"], lit.inputs["Scale"])
+    bw = nt.nodes.new("ShaderNodeRGBToBW")
+    nt.links.new(lit.outputs["Vector"], bw.inputs[0])
+    aged = nt.nodes.new("ShaderNodeVectorMath")
+    aged.operation = "SCALE"
+    aged.inputs[0].default_value = spec["weather"]
+    nt.links.new(bw.outputs[0], aged.inputs["Scale"])
+    amt = nt.nodes.new("ShaderNodeMath")
+    amt.operation = "MULTIPLY"
+    nt.links.new(sep.outputs[1], amt.inputs[0])
+    amt.inputs[1].default_value = spec["weather_amount"]
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    nt.links.new(amt.outputs[0], mix.inputs["Factor"])
+    nt.links.new(lit.outputs["Vector"], mix.inputs[6])
+    nt.links.new(aged.outputs["Vector"], mix.inputs[7])
+    nt.links.new(mix.outputs[2], bsdf.inputs["Base Color"])
 
 
 def to_object(name, mesh):
@@ -1116,6 +1378,9 @@ def to_object(name, mesh):
     me.update()
     layer = me.uv_layers.new(name="UVMap")
     layer.data.foreach_set("uv", [c for face in uvs for uv in face for c in uv])
+    # the second channel: each corner's tint (light, weather), read by M_Surf_Base
+    tint = me.uv_layers.new(name="Tint")
+    tint.data.foreach_set("uv", [c for face in faces for vi in face for c in mesh.t[vi]])
     surfs = []
     for s in mesh.surf:
         if s not in surfs:
@@ -1138,7 +1403,9 @@ def export_part(ob, path_):
 
 
 def run_piece(piece):
+    global VARY
     spec = BP.PIECES[piece]
+    VARY = Vary(piece)
     BI.setup_scene()
     out_dir = os.path.join(OUT)
     os.makedirs(out_dir, exist_ok=True)
@@ -1188,9 +1455,12 @@ def item_moss():
     """Moss01: an armful of moss torn from a rock, about 30 x 25 x 12 cm (0.5 kg damp), its underside darker with soil."""
     m = Mesh()
     rng = random.Random(77)
-    for i in range(9):
-        c = Vector((rng.uniform(-9, 9), rng.uniform(-7, 7), rng.uniform(3.0, 6.0)))
-        blob(m, c, (rng.uniform(5, 9), rng.uniform(4, 8), rng.uniform(2.5, 4.5)), "Moss", seed=i * 3.3, rough=0.35, rings=6, segs=11)
+    for i in range(14):   # tufted cushions torn off together, as the moss daub's (Nov 3)
+        c = Vector((rng.uniform(-10, 10), rng.uniform(-8, 8), rng.uniform(3.0, 5.5)))
+        # the blob's poles turned sideways (its local X up), so no pinch shows on top
+        rot = Matrix.Rotation(rng.uniform(0.0, TAU), 3, "Z") @ Matrix.Rotation(rng.uniform(-0.3, 0.3), 3, "X") @ Matrix.Rotation(math.pi / 2, 3, "Y")
+        blob(m, c, (rng.uniform(2.0, 3.8), rng.uniform(3.5, 7), rng.uniform(4, 8)), "Moss", rot=rot, seed=i * 3.3, rough=0.2, rings=7, segs=14,
+             freq=4.5)
     return m
 
 
@@ -1198,6 +1468,8 @@ ITEMS = {"Moss01": item_moss}
 
 
 def run_item(item):
+    global VARY
+    VARY = Vary(item)
     BI.setup_scene()
     os.makedirs(OUT, exist_ok=True)
     mesh = ITEMS[item]()
@@ -1213,6 +1485,8 @@ def run_item(item):
 
 def run_supports():
     """The support posts every floor shares (AMOBuildPieceActor::SupportMesh): <out_dir>/<Name>.fbx."""
+    global VARY
+    VARY = Vary("supports")
     BI.setup_scene()
     os.makedirs(OUT, exist_ok=True)
     for name, make in SUPPORTS.items():

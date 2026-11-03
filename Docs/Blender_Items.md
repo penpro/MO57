@@ -23,6 +23,13 @@ draw), two arrows, two kits, and (later on Nov 2, Wes: "Yes, rebuild them") the 
 | SimpleLoom01 (Nov 3) | a backstrap loom laid out: the warp beam and its cord, 36 warp threads, the shed rod and the heddle rod with its loops, cloth woven and rolled on the breast beam, the sword, the leather back strap | 138 x 68 cm, 8.0k |
 | IronHelmet01 (Nov 3) | a conical nasal helmet raised from one plate, a riveted brow band, the nasal bar; dark iron, a little rust | 25 x 22 x 25 cm, 5.4k |
 
+Nov 3, natural variation (Wes: "give all the assets you made in blender some natural variation so they're not so uniform"): a part can
+carry a `tone` vertex attribute (the colour x 1 + tone, read by `toned()` in `mat_stick` and `mat_plain`; none = as made) and `tube(v0=)`
+starts it at its own place on the procedural texture, so like sticks no longer wear the same bark; `natural()` puts a hand-made run of
+points a little off true. The fish trap's rods are each set by eye with their own thickness, tone and line, and its hoops are bent egg-shaped. Each of the net's
+floats and sinkers is its own; the loom's bars bow and its warp is spaced and tensioned by hand; the helmet is a little lopsided, with
+shallow hammer dents and rivets set by eye.
+
 Nov 3 (Wes: "what else we need that you can build in blender and start filling up the items list debt"): the four above were the
 placeholders made of sticks, cord and iron; the 11 left are the clothing and armour (they need fitting to the bodies), the chariot and the
 water measures. The building pieces have their own pipeline (the same idea, tiling surfaces instead of a baked atlas: `Docs/Building.md`

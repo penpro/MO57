@@ -91,6 +91,14 @@
   - The surfaces are procedural and tiling (seamless 4D noise), the stones the project's scans laid in courses; moss and building stones come
     from mossy rocks and boulders (cover gathering).
   - BuildLeanTo (a row with no building until now) is the grass-thatch lean-to.
+- **Natural variation is seeded and built in** (Wes, Nov 3: "give all the assets you made in blender some natural variation so they're not so
+  uniform"; N-264). Claude's small calls, noted:
+  - One seeded source per piece (its name): a rebuild is the same piece, so a change to one builder does not reshuffle the others.
+  - The tint rides in a second UV channel read by a parent of our own, `M_Surf_Base` (M_MS_Base, the Fab master, has no input for a
+    per-primitive tint and is shared with every Fab asset); the same three textures, so nothing else changes.
+  - A cobble course uses three of the eleven walling stones and one pinning stone, which keeps a wall at a few instanced parts per course
+    while the wall as a whole shows all of them.
+  - Moss daub became ~190k triangles (tufted cushions); Nanite carries it. Cheaper if it ever shows in a profile.
 
 ### 2026-11-02
 - **How a hand holds an item is one standard** (Wes: "take what you learned here and make sure it works on the other metahumans and make sure
