@@ -135,6 +135,17 @@ void UMOVoxelSculptSaveDomain::ApplySaveDomain(const UMOWorldSaveGame& Save)
 			}
 		}
 
+		if (!FoundActor && Record.bIsVolumeSculpt && Actors.Num() == 0)
+		{
+			// The volume sculpt the game made under rock (N-256): no level holds one, so make it again before its record loads into it.
+			FoundActor = MOVoxel::EnsureVolumeSculptActor(World);
+			if (FoundActor && FoundActor->GetName() != Record.ActorName)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxelSave] volume record '%s' loads into the made sculpt '%s'"), *Record.ActorName,
+					*FoundActor->GetName());
+			}
+		}
+
 		if (!FoundActor)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxelSave] Sculpt actor '%s' not found in world"),

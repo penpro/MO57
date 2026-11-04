@@ -13,6 +13,8 @@
 #include "Sculpt/Volume/VoxelSculptVolume.h"               // AVoxelSculptVolume (was AVoxelVolumeSculptActor)
 #include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
 
+#include "MOFramework.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Serialization/MemoryWriter.h"
@@ -57,6 +59,38 @@ namespace MOVoxel
 		TArray<AActor*> Actors;
 		GetVolumeSculptActors(World, Actors);
 		return Actors.Num() > 0 ? Actors[0] : nullptr;
+	}
+
+	AActor* EnsureVolumeSculptActor(UWorld* World)
+	{
+		if (AActor* Found = FindVolumeSculptActor(World))
+		{
+			return Found;
+		}
+		if (!World)
+		{
+			return nullptr;
+		}
+		FActorSpawnParameters Params;
+		Params.Name = FName(VolumeSculptName);
+		Params.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.bDeferConstruction = true;
+		AVoxelSculptVolume* Volume = World->SpawnActor<AVoxelSculptVolume>(AVoxelSculptVolume::StaticClass(), FTransform::Identity, Params);
+		if (!Volume)
+		{
+			return nullptr;
+		}
+		Volume->SetReplicates(false);            // each machine's own, as the level's height sculpt is
+		Volume->bReplicateSculptData = false;    // the plugin refuses it on a spawned sculpt
+		{
+			const FVoxelVolumeSculptStampRef Stamp = Volume->GetStamp();
+			Stamp->Scale = 25.0f;        // its samples every 25 cm (default 100): a dig's scoop takes the 50 cm voxel world's shape, not a metre grid's
+			Stamp->bIsInfinite = true;   // "for runtime stamps": an empty sculpt has no bounds, so its first edit would not reach the chunks
+		}
+		Volume->FinishSpawning(FTransform::Identity);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxel] spawned the volume sculpt %s (the level has none)"), *Volume->GetName());
+		return Volume;
 	}
 
 	bool IsHeightSculptActor(const AActor* Actor) { return Actor && Actor->IsA<AVoxelSculptHeight>(); }

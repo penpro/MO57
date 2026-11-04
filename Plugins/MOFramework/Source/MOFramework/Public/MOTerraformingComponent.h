@@ -216,8 +216,13 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 	FVector FlattenFillPoint = FVector::ZeroVector;
 	bool bFlattenFill = false;
 
+	/** This action works the volume sculpt (UMOTerraformingComponent::UsesVolumeAt: under rock, or the component set to it): its time, its
+	 *  steps and its yield follow. */
+	bool bVolume = false;
+
 	void Reset()
 	{
+		bVolume = false;
 		bActive = false;
 		Mode = EMOTerraformMode::Dig;
 		TargetLocation = FVector::ZeroVector;
@@ -369,8 +374,8 @@ public:
 	 * ground lowers/rises gradually rather than snapping at the end, and an
 	 * interruption keeps whatever fraction was already moved. Bounds the sculpt
 	 * count per action (one voxel edit per step), so a multi-hour dig is still
-	 * only ~this many edits total. Height-sculpt modes only; flatten/smooth and
-	 * volume-sphere sculpts stay atomic-at-completion.
+	 * only ~this many edits total. Dig and raise on either sculpt (a volume dig's sphere grows step by step, GetVolumeBiteRadius) and
+	 * a height flatten's bite; smooth and a volume flatten stay atomic-at-completion.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="1", ClampMax="200"))
 	int32 TerraformIncrementSteps = 20;
@@ -637,8 +642,27 @@ public:
 	bool FindTerraformTarget(FVector& OutLocation, FVector& OutNormal) const;
 
 	/** Is there terrain over this point (a cave's roof, an overhang, the rest of a wall it is on)? The height sculpt would work that surface, not the
-	 *  point: BeginTerraform refuses there (BR1101-7). Voxel terrain only (a canopy or a roof is no rock). */
+	 *  point (BR1101-7): the volume sculpt works it there (UsesVolumeAt). Voxel terrain only (a canopy or a roof is no rock). */
 	bool HasRockOverhead(const FVector& At) const;
+
+	/** The volume sculpt for this spot (N-256): everywhere when bUseVolumeSculpting, else under rock -- the world's volume sculpt made if the
+	 *  level has none (MOVoxel::EnsureVolumeSculptActor). The timed action decides once (PendingAction.bVolume); a joiner's dig applied on
+	 *  the host decides here from the spot. */
+	bool UsesVolumeAt(const FVector& At);
+
+	/** The volume sculpt actor, made if the level has none. */
+	bool EnsureVolumeSculptActor();
+
+	/** The volume sculpt's sphere for one Dig or Raise (N-256): the half-sphere holding the earth one height bite moves
+	 *  (ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength), ~0.3 m3: a 52 cm scoop), but never smaller than the voxel world
+	 *  can draw: 1.5 voxels (75 cm at the generator's 50 cm; a 52 cm sphere falls between the samples and leaves nothing). Not a sphere of the
+	 *  2.5 m brush (~33 m3 at once). */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	float GetVolumeBiteRadius() const;
+
+	/** The earth one volume bite moves (m3): the half of its sphere behind the hit point. Its time and yield (BeginTerraform, GrantDigYield). */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	float GetVolumeBiteM3() const;
 
 	/** A line on the owning player's screen (why an action was refused); nothing for a pawn no player controls. */
 	void NotifyOwner(const FText& Message) const;
@@ -739,14 +763,14 @@ private:
 	 */
 	bool ApplyPendingTerraform();
 
-	/** True for modes applied incrementally (height dig/raise): the strength can
-	 *  be fractioned across steps. Flatten/smooth and volume-sphere sculpts are
-	 *  atomic. Requires height-sculpt mode (!bUseVolumeSculpting). */
+	/** True for modes applied incrementally: a dig or raise on either sculpt (the height strength fractioned, the volume sphere grown) and a
+	 *  height flatten's bite. Smooth and a volume flatten are atomic. */
 	bool IsIncrementalTerraformMode(EMOTerraformMode Mode) const;
 
-	/** Apply one of TotalSteps fractional height sculpts for the pending dig/raise
-	 *  at the pending target — moves 1/TotalSteps of the brush's displacement. */
-	void ApplyTerraformHeightIncrement(int32 TotalSteps);
+	/** Apply step Step (1-based) of TotalSteps for the pending action at the pending target and return the earth it dug (m3; 0 for a raise):
+	 *  a height dig / raise moves 1/TotalSteps of the brush's displacement, a flatten 1/TotalSteps of its bite, a volume dig / raise grows its
+	 *  sphere to the radius holding Step/TotalSteps of the bite (the union of the steps is the whole sphere). */
+	float ApplyTerraformIncrement(int32 Step, int32 TotalSteps);
 
 	/** Register the pending target/radius as worked ground with the terrain-mod
 	 *  subsystem (persistence + foliage sweep). Called once at completion, or on

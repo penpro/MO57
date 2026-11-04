@@ -532,6 +532,27 @@ bool FMOTerraform_Duration_VolumeScaling::RunTest(const FString& Parameters)
 	return true;
 }
 
+// N-256: under rock the volume sculpt digs a sphere. Its earth (the half behind the hit point) is what its time and yield count; it holds at
+// least one open-ground bite, it is never smaller than the voxel world draws (1.5 voxels: a 52 cm sphere fell between the samples and left
+// nothing, Nov 3), and it is not a sphere of the 2.5 m brush (~33 m3 at once).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOTerraform_VolumeBite_Earth,
+	"MOFramework.Terraform.VolumeBite.Earth",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOTerraform_VolumeBite_Earth::RunTest(const FString& Parameters)
+{
+	UMOTerraformingComponent* Terraform = NewObject<UMOTerraformingComponent>();
+	const float OpenM3 = UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(Terraform->Config.Radius, Terraform->Config.RaiseLowerStrength);
+	const double R = Terraform->GetVolumeBiteRadius();
+	const double HalfSphereM3 = 0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * R * R * R / 1.0e6;
+	TestTrue(FString::Printf(TEXT("the open bite moves earth (%.3f m3)"), OpenM3), OpenM3 > 0.01f);
+	TestEqual(FString::Printf(TEXT("a volume bite's earth is half its sphere (r %.1f cm)"), R), Terraform->GetVolumeBiteM3(), (float)HalfSphereM3, 0.001f);
+	TestTrue(FString::Printf(TEXT("a volume bite holds at least an open bite (%.3f >= %.3f m3)"), Terraform->GetVolumeBiteM3(), OpenM3),
+		Terraform->GetVolumeBiteM3() >= OpenM3 * 0.99f);
+	TestTrue(FString::Printf(TEXT("the sphere is at least 1.5 voxels of the 50 cm world (%.1f cm)"), R), R >= 74.9);
+	TestTrue(TEXT("the sphere is far smaller than the brush"), R < Terraform->Config.Radius * 0.5);
+	return true;
+}
+
 //=============================================================================
 // Game clock: offline advance is capped (no starvation / no year-of-work bank)
 //=============================================================================

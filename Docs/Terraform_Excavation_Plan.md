@@ -40,10 +40,29 @@ Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd8
   part done, balanced). Its time is that earth dug (at the rock's hardness) and laid. No low ground in the brush: the cut earth is spoil on
   the pile. Nothing over the feet: nothing to cut ("the Raise tool builds low ground up"). A joiner's flatten is the same bite, applied on
   the server.
-- **Nothing is worked under rock** (BR1101-7: "lighting problems when using flatten in a cave"). The height sculpt edits the ground's top
-  surface over (X, Y); in a cave that is the hill above, so a flatten at the cave floor levelled the hillside down to it and opened the roof
-  (square patches of sun). Every height-sculpt mode is refused where voxel terrain stands over the aimed spot (`HasRockOverhead`), with a
-  line on screen. Working a cave floor or a wall needs the volume sculpt, and no level has its sculpt actor yet (BACKLOG N-256).
+- **Under rock the volume sculpt works the spot itself** (BR1101-7: "lighting problems when using flatten in a cave"; N-256, Nov 3). The
+  height sculpt edits the ground's top surface over (X, Y); in a cave that is the hill above, so a flatten at the cave floor levelled the
+  hillside down to it and opened the roof (square patches of sun). Where voxel terrain stands over the aimed spot (`HasRockOverhead`: the
+  generator's cave field a metre up, or any voxel surface over the column) the action works the volume sculpt instead: a Dig takes a sphere
+  out of the floor or wall at the aimed point, a Raise adds one, Flatten and Smooth work the volume brush there. The action decides once,
+  at its start (`PendingAction.bVolume`); a joiner's dig applied on the host decides from the spot there.
+  - **The bite:** a sphere at the aimed point, the half-sphere holding one open-ground bite's earth (~0.3 m3, 52 cm) but never smaller
+    than the voxel world draws -- 1.5 of the generator's voxels, 75 cm at 50 cm (a 52 cm sphere fell between the samples and left
+    nothing). `GetVolumeBiteRadius` / `GetVolumeBiteM3` (0.88 m3 behind the hit point); its time, hardness and yield count that earth,
+    by the open-ground rules. Not a sphere of the 2.5 m brush (~33 m3 at once). Test `MOFramework.Terraform.VolumeBite.Earth`.
+  - **In steps, like an open dig:** the sphere grows over the timer (`ApplyTerraformIncrement`: step k of N reaches the radius holding
+    k/N of the bite), so an interrupted dig keeps the scoop it made and its earth. A joiner's dig is applied whole on the host.
+  - **The sculpt actor is made at run time:** no level holds a volume sculpt (a `.umap` change waits on the LFS budget), so
+    `MOVoxel::EnsureVolumeSculptActor` spawns one named `MO_VolumeSculpt` the first time it is needed -- samples every 25 cm (the
+    plugin's 100 cm default draws a metre grid) and `bIsInfinite` (the plugin's flag for run-time sculpts) -- and the save domain
+    (`MOVoxelSculptSaveDomain`) makes it again before its record loads. It is each machine's own, as the level's height sculpt is: neither
+    replicates its sculpt data to a joiner (the plugin refuses a spawned sculpt's; the map's height sculpt has it off -- the #132 gap).
+  - Refused only if no volume sculpt can be made (no world), with the old line on screen.
+  - **Verified (Nov 3, seed 777, developer mode's 1 s timers, scratch `probe_rockdig.py` / `probe_rockload.py`):** a 75 cm rock added
+    3 m over the aimed ground (`bUseVolumeSculpting` for one Raise) makes the spot "under rock"; the dig under it is not refused, the
+    volume sculpt is made, the ground there drops 622 -> 564 cm and the rock over it stays (980 cm); CONTROL: a dig turned 120 deg away
+    in the open stays the height sculpt. Saved, then loaded from the main menu in a fresh process: the sculpt is made again, its record
+    loads, the hole (564) and the rock (980) are there.
 - **What lay on the ground falls with it** (BR1101-1): every terraform's zone wakes the world items over it and they fall onto the ground
   that is there now (`AMOWorldItem::WakeItemsOver`, from `UMOTerrainModificationSubsystem::RegisterModifiedZone`; `MOWorldItem.h` pitfall 3b).
 - **Verified (Nov 1, seed 777 / 19173, developer mode's short timers, scratch `br1101_probe.py` / `cave_check.py`):** a second press 5 s into

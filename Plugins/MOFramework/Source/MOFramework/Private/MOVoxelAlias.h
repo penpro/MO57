@@ -39,6 +39,11 @@ namespace MOVoxel
 	/** First sculpt actor of each kind, or nullptr (terraforming caches these). */
 	AActor* FindHeightSculptActor(UWorld* World);
 	AActor* FindVolumeSculptActor(UWorld* World);
+	/** The world's volume sculpt: the level's, else one spawned now (N-256: no level has one, and a .umap change waits on the LFS budget),
+	 *  named VolumeSculptName so its save record finds it again. Local to this machine, like the level's height sculpt (its sculpt data is
+	 *  not replicated either: the plugin refuses to replicate a spawned one's). Null without a world. */
+	AActor* EnsureVolumeSculptActor(UWorld* World);
+	inline const TCHAR* VolumeSculptName = TEXT("MO_VolumeSculpt");
 
 	/** Type checks without naming the Voxel class. */
 	bool IsHeightSculptActor(const AActor* Actor);

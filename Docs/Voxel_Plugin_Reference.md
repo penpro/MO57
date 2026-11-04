@@ -619,7 +619,15 @@ and matches Voxel Plugin's own undo/redo behaviour in editor.
   `VolumeDig` / etc., which build the appropriate modifier struct and
   call `ApplyModifier` on the right actor.
 - `bUseVolumeSculpting` toggles between Height (2D sculpt) and Volume
-  (3D sculpt — what you'd use to carve cave entrances).
+  (3D sculpt — what you'd use to carve cave entrances). Off, an action
+  under rock still works the volume sculpt (`UsesVolumeAt`, N-256); no
+  level holds one, so `MOVoxel::EnsureVolumeSculptActor` spawns
+  `MO_VolumeSculpt` at run time (non-replicated: the plugin refuses
+  sculpt-data replication on a spawned sculpt, it needs a name stable for
+  networking; stamp `Scale` 25 cm instead of 100, `bIsInfinite` for a
+  run-time sculpt) and `MOVoxelSculptSaveDomain` makes it again on load.
+  A volume dig's sphere is at least 1.5 world voxels (75 cm): smaller
+  ones fall between the samples. `Docs/Terraform_Excavation_Plan.md`.
 - Five-second timed actions with movement-interrupt integration, progress
   widget hook, and reporting to `UMOTerrainModificationSubsystem` for
   PCG-foliage cleanup.

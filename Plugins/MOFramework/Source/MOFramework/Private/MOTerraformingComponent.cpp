@@ -76,12 +76,12 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	// Broadcast progress so any UI display can update.
 	OnTerraformProgress.Broadcast(PendingAction.GetProgress01(), PendingAction.GetTimeRemaining());
 
-	// Incremental dig/raise: move a little earth each time progress crosses the
+	// Incremental dig/raise (either sculpt) and a height flatten's bite: move a little earth each time progress crosses the
 	// next step threshold, so the ground changes gradually AND an interruption
 	// keeps the partial work already moved (see CancelTerraform). Authority-only:
 	// a remote client's tick must never edit the voxel world — it forwards the
-	// whole op at completion via ApplyPendingTerraform (H17). Flatten/smooth,
-	// volume-sphere, and remote clients apply atomically at completion below.
+	// whole op at completion via ApplyPendingTerraform (H17). Smooth, a volume
+	// flatten and remote clients apply atomically at completion below.
 	const bool bIncremental = IsIncrementalTerraformMode(PendingAction.Mode)
 		&& GetOwner()->HasAuthority();
 	if (bIncremental)
@@ -90,12 +90,7 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		const int32 TargetStep = FMath::FloorToInt(PendingAction.GetProgress01() * N);
 		while (PendingAction.AppliedSteps < TargetStep && PendingAction.AppliedSteps < N)
 		{
-			ApplyTerraformHeightIncrement(N);
-			PendingAction.AppliedSteps++;
-			if (PendingAction.Mode == EMOTerraformMode::Dig)
-			{
-				PendingAction.DugVolumeM3 += ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength / (float)N);
-			}
+			PendingAction.DugVolumeM3 += ApplyTerraformIncrement(++PendingAction.AppliedSteps, N);
 		}
 	}
 
@@ -111,17 +106,12 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 			const int32 N = FMath::Max(1, TerraformIncrementSteps);
 			while (PendingAction.AppliedSteps < N)
 			{
-				ApplyTerraformHeightIncrement(N);
-				PendingAction.AppliedSteps++;
-				if (PendingAction.Mode == EMOTerraformMode::Dig)
-				{
-					PendingAction.DugVolumeM3 += ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength / (float)N);
-				}
+				PendingAction.DugVolumeM3 += ApplyTerraformIncrement(++PendingAction.AppliedSteps, N);
 			}
 			RegisterTerraformZone();
 			if (PendingAction.Mode == EMOTerraformMode::Dig || (PendingAction.Mode == EMOTerraformMode::Flatten && !PendingAction.bFlattenFill))
 			{
-				GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);   // a flatten with no low ground in the brush: its cut earth is spoil too
+				GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/!PendingAction.bVolume);   // a flatten with no low ground in the brush: its cut earth is spoil too
 			}
 			bSuccess = true;
 		}
@@ -178,6 +168,39 @@ void UMOTerraformingComponent::AutoFindSculptActors()
 		VolumeSculptActor = Volume;
 		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Auto-found VolumeSculptActor: %s"), *Volume->GetName());
 	}
+}
+
+bool UMOTerraformingComponent::EnsureVolumeSculptActor()
+{
+	if (!VolumeSculptActor.IsValid())
+	{
+		VolumeSculptActor = MOVoxel::EnsureVolumeSculptActor(GetWorld());
+	}
+	return VolumeSculptActor.IsValid();
+}
+
+bool UMOTerraformingComponent::UsesVolumeAt(const FVector& At)
+{
+	if (bUseVolumeSculpting || (PendingAction.bActive && PendingAction.bVolume))
+	{
+		return EnsureVolumeSculptActor();
+	}
+	return HasRockOverhead(At) && EnsureVolumeSculptActor();
+}
+
+float UMOTerraformingComponent::GetVolumeBiteRadius() const
+{
+	// The half-sphere holding one open-ground bite's earth, floored at what the voxel world draws: 1.5 of its voxels (the generator's size).
+	const double CubicCm = (double)ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength) * 1.0e6;
+	const double EarthRadius = FMath::Pow(3.0 * CubicCm / (2.0 * UE_DOUBLE_PI), 1.0 / 3.0);
+	const double VoxelCm = FMOWorldGenParamsProvider::HasPublished() ? (double)FMOWorldGenParamsProvider::Get()->Tuning.VoxelSizeCm : 50.0;
+	return (float)FMath::Max(EarthRadius, 1.5 * VoxelCm);
+}
+
+float UMOTerraformingComponent::GetVolumeBiteM3() const
+{
+	const double R = GetVolumeBiteRadius();
+	return (float)(0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * R * R * R / 1.0e6);
 }
 
 bool UMOTerraformingComponent::HasValidSculptActor() const
@@ -346,7 +369,7 @@ bool UMOTerraformingComponent::Dig(const FVector& WorldLocation)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Dig at %s (Radius: %.1f, Strength: %.2f)"),
 		*WorldLocation.ToString(), Config.Radius, Config.RaiseLowerStrength);
 
-	if (bUseVolumeSculpting)
+	if (UsesVolumeAt(WorldLocation))
 	{
 		return VolumeDig(WorldLocation);
 	}
@@ -358,7 +381,7 @@ bool UMOTerraformingComponent::Raise(const FVector& WorldLocation)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Raise at %s (Radius: %.1f, Strength: %.2f)"),
 		*WorldLocation.ToString(), Config.Radius, Config.RaiseLowerStrength);
 
-	if (bUseVolumeSculpting)
+	if (UsesVolumeAt(WorldLocation))
 	{
 		return VolumeRaise(WorldLocation);
 	}
@@ -370,7 +393,7 @@ bool UMOTerraformingComponent::Flatten(const FVector& WorldLocation, float Targe
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Flatten at %s to height %.1f (Radius: %.1f)"),
 		*WorldLocation.ToString(), TargetHeight, Config.Radius);
 
-	if (bUseVolumeSculpting)
+	if (UsesVolumeAt(WorldLocation))
 	{
 		return VolumeFlatten(WorldLocation, FVector::UpVector, TargetHeight);
 	}
@@ -439,7 +462,7 @@ bool UMOTerraformingComponent::Smooth(const FVector& WorldLocation)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Smooth at %s (Radius: %.1f, Strength: %.2f)"),
 		*WorldLocation.ToString(), Config.Radius, Config.SmoothStrength);
 
-	if (bUseVolumeSculpting)
+	if (UsesVolumeAt(WorldLocation))
 	{
 		return VolumeSmooth(WorldLocation);
 	}
@@ -494,7 +517,7 @@ bool UMOTerraformingComponent::VolumeDig(const FVector& Location)
 	{
 		return false;
 	}
-	MOVoxel::VolumeSphere(Actor, Location, Config.Radius, /*bAdd*/ false, /*Smoothness*/ 0.0f);
+	MOVoxel::VolumeSphere(Actor, Location, GetVolumeBiteRadius(), /*bAdd*/ false, /*Smoothness*/ 0.0f);
 	return true;
 }
 
@@ -505,7 +528,7 @@ bool UMOTerraformingComponent::VolumeRaise(const FVector& Location)
 	{
 		return false;
 	}
-	MOVoxel::VolumeSphere(Actor, Location, Config.Radius, /*bAdd*/ true, /*Smoothness*/ 0.0f);
+	MOVoxel::VolumeSphere(Actor, Location, GetVolumeBiteRadius(), /*bAdd*/ true, /*Smoothness*/ 0.0f);
 	return true;
 }
 
@@ -886,13 +909,20 @@ bool UMOTerraformingComponent::BeginTerraform()
 
 	// The height sculpt works the ground's top surface over (X, Y): under rock -- in a cave, under an overhang, into a wall -- it would dig, raise
 	// or level the hill ABOVE, not the spot aimed at. A flatten in a cave levelled the hill down to the cave floor and opened the roof: square
-	// patches of sun on the floor (BR1101, Nov 1: "lighting problems when using flatten in a cave"). Digging under rock needs the volume sculpt.
-	if (!bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && HasRockOverhead(HitLocation))
+	// patches of sun on the floor (BR1101, Nov 1: "lighting problems when using flatten in a cave"). Under rock the volume sculpt works the spot
+	// itself (N-256), made if the level has none; only without one is it refused.
+	const bool bUnderRock = !bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && HasRockOverhead(HitLocation);
+	if (bUnderRock && !EnsureVolumeSculptActor())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s refused: rock overhead (the height sculpt would work the surface above)"), *GetModeDisplayName().ToString(),
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s refused: rock overhead and no volume sculpt"), *GetModeDisplayName().ToString(),
 			*HitLocation.ToString());
 		NotifyOwner(LOCTEXT("RockOverhead", "There is rock above this spot: the ground can only be worked in the open."));
 		return false;
+	}
+	if (bUnderRock)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s: rock overhead -- the volume sculpt works the spot itself"), *GetModeDisplayName().ToString(),
+			*HitLocation.ToString());
 	}
 
 	// Capture the action intent. The Flatten height is resolved NOW (not at
@@ -904,13 +934,15 @@ bool UMOTerraformingComponent::BeginTerraform()
 	PendingAction.TargetLocation = HitLocation;
 	PendingAction.TargetNormal = HitNormal;
 	PendingAction.ElapsedTime = 0.0f;
+	PendingAction.bVolume = bUseVolumeSculpting || bUnderRock;
 	// Volume-based duration: moving earth takes time proportional to how much earth this brush moves, floored at the legacy duration so
-	// trivial ops aren't instant. A height Dig/Raise moves exactly the sculpt's volume; Smooth (and volume sculpting) keep the nominal
-	// footprint x depth estimate -- their earth depends on the ground under the brush; a height Flatten is timed by its bite (below).
-	const bool bHeightDigRaise = !bUseVolumeSculpting && (CurrentMode == EMOTerraformMode::Dig || CurrentMode == EMOTerraformMode::Raise);
-	PendingAction.TotalTime = bHeightDigRaise
-		? ComputeDurationForVolumeSeconds(ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength),
-			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds))
+	// trivial ops aren't instant. A Dig/Raise moves exactly one bite (a volume bite: the half of its sphere behind the hit point, GetVolumeBiteM3);
+	// Smooth (and a volume flatten) keep the nominal footprint x depth estimate -- their earth depends on the ground under the brush; a height
+	// Flatten is timed by its bite (below).
+	const bool bDigRaise = CurrentMode == EMOTerraformMode::Dig || CurrentMode == EMOTerraformMode::Raise;
+	const float BiteM3 = PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
+	PendingAction.TotalTime = bDigRaise
+		? ComputeDurationForVolumeSeconds(BiteM3, TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds))
 		: ComputeTerraformDurationSeconds(Config.Radius, GetActionDepthMeters(CurrentMode),
 			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
 	// What the brush cuts decides how long it takes (Wes, Oct 17 2026): earth at the base rate, limestone ~5x, granite ~40x -- the same points the yield is
@@ -918,10 +950,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 	float DigHardness = 1.0f;
 	if (CurrentMode == EMOTerraformMode::Dig)
 	{
-		const double R = FMath::Max(1.0f, Config.Radius);
-		const float CutM3 = bUseVolumeSculpting ? (float)(0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * R * R * R / 1.0e6)
-			: ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
-		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, Config.Radius, CutM3, !bUseVolumeSculpting);
+		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, PendingAction.bVolume ? GetVolumeBiteRadius() : Config.Radius, BiteM3,
+			!PendingAction.bVolume);
 		PendingAction.TotalTime *= DigHardness;
 	}
 
@@ -938,7 +968,7 @@ bool UMOTerraformingComponent::BeginTerraform()
 				? HitLocation.Z   // owner not a character — fall back to ray-hit Z
 				: Config.FlattenTargetHeight;
 		}
-		if (!bUseVolumeSculpting)
+		if (!PendingAction.bVolume)
 		{
 			// One bite (Flatten's header): the brush's earth off the highest ground over the target, onto the lowest under it. Its time is that earth
 			// dug (at the rock's hardness) and, when it has somewhere to go, laid again -- not a nominal estimate of the whole brush.
@@ -950,7 +980,6 @@ bool UMOTerraformingComponent::BeginTerraform()
 				PendingAction.Reset();
 				return false;
 			}
-			const float BiteM3 = ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
 			DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, PendingAction.FlattenDigPoint, Config.Radius, BiteM3, /*bSlab=*/true);
 			PendingAction.TotalTime = FMath::Max(FMath::Max(0.1f, TerraformDurationSeconds),
 				BiteM3 * TerraformSecondsPerCubicMeter * (DigHardness + (PendingAction.bFlattenFill ? 1.0f : 0.0f)));
@@ -1023,7 +1052,7 @@ void UMOTerraformingComponent::CancelTerraform()
 		RegisterTerraformZone();
 		if (PendingAction.Mode == EMOTerraformMode::Dig || (PendingAction.Mode == EMOTerraformMode::Flatten && !PendingAction.bFlattenFill))
 		{
-			GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);   // the earth already moved is in the pile
+			GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/!PendingAction.bVolume);   // the earth already moved is in the pile
 		}
 	}
 
@@ -1113,6 +1142,13 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 		return false;
 	}
 
+	// The sculpt this apply works, decided once before it runs (a joiner's dig arrives here undecided: the host's own rock check decides it), so
+	// the per-mode method and the yield below agree.
+	if (PendingAction.Mode != EMOTerraformMode::RemoveFoliage && !PendingAction.bVolume)
+	{
+		PendingAction.bVolume = UsesVolumeAt(PendingAction.TargetLocation);
+	}
+
 	// Bypass the bUseCharacterFeetForFlatten branch in TerraformAtLocation —
 	// we've already locked in the Z. Apply directly via the per-mode methods.
 	bool bSuccess = false;
@@ -1154,12 +1190,9 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 		}
 		if (PendingAction.Mode == EMOTerraformMode::Dig)
 		{
-			// The atomic dig (a volume sphere into a wall, or a joiner's dig applied here): its whole volume at once. A sphere dug into a surface takes
-			// about the half of it behind the hit point.
-			const float R = FMath::Max(1.0f, Config.Radius);
-			const float VolumeM3 = bUseVolumeSculpting ? (float)(0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * (double)R * R * R / 1.0e6)
-				: ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
-			GrantDigYield(VolumeM3, /*bSlab=*/!bUseVolumeSculpting);
+			// The atomic dig (a joiner's dig applied here): its whole bite at once -- a volume bite is the half of its sphere behind the hit point.
+			GrantDigYield(PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength),
+				/*bSlab=*/!PendingAction.bVolume);
 		}
 	}
 
@@ -1240,28 +1273,49 @@ void UMOTerraformingComponent::RegisterTerraformZone()
 
 bool UMOTerraformingComponent::IsIncrementalTerraformMode(EMOTerraformMode Mode) const
 {
-	// Only the height-sculpt dig/raise path -- and a flatten's bite, a dig and a raise -- carries a fractionable Strength.
-	// Volume-sphere sculpts are all-or-nothing, and smooth converges rather than accumulating — those stay atomic-at-completion.
-	return !bUseVolumeSculpting
-		&& (Mode == EMOTerraformMode::Dig || Mode == EMOTerraformMode::Raise || Mode == EMOTerraformMode::Flatten);
+	// A dig or a raise moves earth that can be split into steps on either sculpt (a height strength fractioned, a volume sphere grown), and so
+	// does a height flatten's bite. Smooth converges rather than accumulating, and a volume flatten has no bite: those stay atomic-at-completion.
+	if (Mode == EMOTerraformMode::Dig || Mode == EMOTerraformMode::Raise)
+	{
+		return true;
+	}
+	const bool bVolume = PendingAction.bActive ? PendingAction.bVolume : bUseVolumeSculpting;
+	return !bVolume && Mode == EMOTerraformMode::Flatten;
 }
 
-void UMOTerraformingComponent::ApplyTerraformHeightIncrement(int32 TotalSteps)
+float UMOTerraformingComponent::ApplyTerraformIncrement(int32 Step, int32 TotalSteps)
 {
-	AActor* Actor = HeightSculptActor.Get();
-	if (!IsValid(Actor) || TotalSteps <= 0)
+	if (TotalSteps <= 0)
 	{
-		return;
+		return 0.0f;
+	}
+	const bool bDig = PendingAction.Mode == EMOTerraformMode::Dig;
+	if (PendingAction.bVolume)
+	{
+		// The sphere grows to the radius holding Step/TotalSteps of the bite (volume ~ r^3): each step takes the shell between it and the last.
+		if (PendingAction.Mode == EMOTerraformMode::Flatten || !EnsureVolumeSculptActor())
+		{
+			return 0.0f;
+		}
+		AActor* Actor = VolumeSculptActor.Get();
+		const float Fraction = FMath::Clamp((float)Step / (float)TotalSteps, 0.0f, 1.0f);
+		MOVoxel::VolumeSphere(Actor, PendingAction.TargetLocation, GetVolumeBiteRadius() * FMath::Pow(Fraction, 1.0f / 3.0f), /*bAdd*/ !bDig,
+			/*Smoothness*/ 0.0f);
+		return bDig ? GetVolumeBiteM3() / (float)TotalSteps : 0.0f;
+	}
+	AActor* Actor = HeightSculptActor.Get();
+	if (!IsValid(Actor))
+	{
+		return 0.0f;
 	}
 	const float StepStrength = Config.RaiseLowerStrength / static_cast<float>(TotalSteps);
 	if (PendingAction.Mode == EMOTerraformMode::Flatten)
 	{
-		PendingAction.DugVolumeM3 += ApplyFlattenStep(PendingAction.FlattenDigPoint, PendingAction.FlattenFillPoint, PendingAction.bFlattenFill, StepStrength);
-		return;
+		return ApplyFlattenStep(PendingAction.FlattenDigPoint, PendingAction.FlattenFillPoint, PendingAction.bFlattenFill, StepStrength);
 	}
 	const FVector2D Loc(PendingAction.TargetLocation.X, PendingAction.TargetLocation.Y);
-	const bool bAdd = (PendingAction.Mode == EMOTerraformMode::Raise);
-	MOVoxel::HeightSculpt(Actor, Loc, Config.Radius, StepStrength, bAdd);
+	MOVoxel::HeightSculpt(Actor, Loc, Config.Radius, StepStrength, /*bAdd*/ !bDig);
+	return bDig ? ComputeMovedVolumeCubicMeters(Config.Radius, StepStrength) : 0.0f;
 }
 
 bool UMOTerraformingComponent::ResolveCharacterGroundZ(float& OutGroundZ) const
