@@ -22,6 +22,23 @@ draw), two arrows, two kits, and (later on Nov 2, Wes: "Yes, rebuild them") the 
 | FishNet01 (Nov 3) | a net folded into a bundle, a fold of diamond mesh hanging loose with its knots, wooden floats on the head rope, notched stone sinkers | 46 x 50 cm, 10.0k |
 | SimpleLoom01 (Nov 3) | a backstrap loom laid out: the warp beam and its cord, 36 warp threads, the shed rod and the heddle rod with its loops, cloth woven and rolled on the breast beam, the sword, the leather back strap | 138 x 68 cm, 8.0k |
 | IronHelmet01 (Nov 3) | a conical nasal helmet raised from one plate, a riveted brow band, the nasal bar; dark iron, a little rust | 25 x 22 x 25 cm, 5.4k |
+| LeatherTunic01 (Nov 3) | a leather tunic dropped flat: short sleeves, a slit at the neck laced shut, creased where it lay, the cut edges darker | 98 x 72 x 6 cm, 5.5k |
+| ClothTunic01 (Nov 3) | a woven tunic dropped flat: knee length, long sleeves, a neck slit, soft folds | 126 x 93 x 5 cm, 7.7k |
+| LeatherTrousers01 (Nov 3) | leather trousers dropped flat: two legs from a drawstring waist, creased at the knees | 48 x 102 x 5 cm, 5.7k |
+| ChainMail01 (Nov 3) | a mail shirt (a byrnie) dropped flat: riveted iron rings, short sleeves, deep folds, a leather edging at the neck | 94 x 81 x 4 cm, 6.8k |
+| LeatherArmor01 (Nov 3) | a cuirass of hardened leather standing as on a body: armholes, neckline, laced up the back, shoulder straps, a skirt of hanging strips it stands on | 29 x 37 x 65 cm, 6.5k |
+| ScaleArmor01 (Nov 3) | a corselet of bronze scales sewn in overlapping rows on a leather backing, laced up the back, shoulder straps | 28 x 36 x 53 cm, 53.9k |
+| BronzeGreaves01 (Nov 3) | a pair of bronze greaves beaten to the shin, rims rolled, lying on their backs with their thongs undone | 36 x 46 x 11 cm, 7.0k |
+| LeatherBoots01 (Nov 3) | a pair of leather ankle boots (turnshoes), laced up the front | 28 x 27 x 20 cm, 2.3k |
+| Chariot01 (Nov 3) | a light war chariot: six-spoked wheels on a long axle at the back, a D-shaped bentwood car with a rawhide floor and leather siding, the pole curving up to the yoke | 337 x 180 x 107 cm, 15.0k |
+| Water01 (Nov 3) | 250 ml of water standing in a cup carved from a birch burl, a little cloudy | 14 x 11 x 6 cm, 1.1k |
+| CleanWater01 (Nov 3) | 250 ml of boiled water in a small fired-clay cup, clear | 8 x 8 x 9 cm, 0.8k |
+
+Nov 3, the last eleven placeholders: no item wears a graybox mesh now. The clothing and armour are built as they lie when dropped (a
+garment flat on the ground: `flat_garment`, an outline triangulated and creased by `folds`; a cuirass or a greave: `sheet_part`, a thin shell
+over a parametric surface) -- that is the world mesh and the icon; how each sits on a body when worn is the wearables' fitting, not done
+here. The water measures are shown as they stand in a cup (`revolve`); `mat_bronze` (not fully metallic: a fully metallic bronze mirrors a
+dark sky and reads black), `mat_mail`, `mat_water`, `mat_fired_clay`.
 
 Nov 3, natural variation (Wes: "give all the assets you made in blender some natural variation so they're not so uniform"): a part can
 carry a `tone` vertex attribute (the colour x 1 + tone, read by `toned()` in `mat_stick` and `mat_plain`; none = as made) and `tube(v0=)`
@@ -31,8 +48,8 @@ floats and sinkers is its own; the loom's bars bow and its warp is spaced and te
 shallow hammer dents and rivets set by eye.
 
 Nov 3 (Wes: "what else we need that you can build in blender and start filling up the items list debt"): the four above were the
-placeholders made of sticks, cord and iron; the 11 left are the clothing and armour (they need fitting to the bodies), the chariot and the
-water measures. The building pieces have their own pipeline (the same idea, tiling surfaces instead of a baked atlas: `Docs/Building.md`
+placeholders made of sticks, cord and iron; the 11 left then (the clothing and armour, the chariot and the water measures) followed the same
+evening (below). The building pieces have their own pipeline (the same idea, tiling surfaces instead of a baked atlas: `Docs/Building.md`
 section 7), which also makes the Moss01 item's mesh.
 
 ## 1. Running it

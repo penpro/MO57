@@ -1,0 +1,134 @@
+{
+ "LeatherTunic01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/LeatherTunic01/SM_LeatherTunic01.SM_LeatherTunic01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "ClothTunic01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/ClothTunic01/SM_ClothTunic01.SM_ClothTunic01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "LeatherTrousers01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/LeatherTrousers01/SM_LeatherTrousers01.SM_LeatherTrousers01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "ChainMail01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/ChainMail01/SM_ChainMail01.SM_ChainMail01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "LeatherArmor01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/LeatherArmor01/SM_LeatherArmor01.SM_LeatherArmor01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "ScaleArmor01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/ScaleArmor01/SM_ScaleArmor01.SM_ScaleArmor01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "BronzeGreaves01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/BronzeGreaves01/SM_BronzeGreaves01.SM_BronzeGreaves01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "LeatherBoots01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/LeatherBoots01/SM_LeatherBoots01.SM_LeatherBoots01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "Chariot01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/Chariot01/SM_Chariot01.SM_Chariot01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "Water01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/Water01/SM_Water01.SM_Water01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ },
+ "CleanWater01": {
+  "worldVisual": {
+   "StaticMesh": "/Game/BlenderItems/CleanWater01/SM_CleanWater01.SM_CleanWater01",
+   "RelativeTransform": {
+    "Scale3D": {
+     "X": 1,
+     "Y": 1,
+     "Z": 1
+    }
+   }
+  }
+ }
+}

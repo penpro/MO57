@@ -34,7 +34,7 @@ import sys
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector, noise
+from mathutils import Matrix, Vector, geometry, noise
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ITEM = ARGS[0] if ARGS else "SimpleBow01"
@@ -1762,8 +1762,600 @@ def run_iron_helmet():
                                    ("under", (0, 0, 6), (0.3, -0.5, -1.0), 30.0), ("rivets", (8, -6, 1.5), (0.7, -0.7, 0.3), 9.0)])
 
 
+# ------------------------------------------------------------------------------------------------------------------------------------------
+# The last graybox placeholders (Nov 3): clothing and armour as they lie when dropped, the war chariot, the two water measures. How a
+# garment sits on a body is the wearables' job (not done here): these are the world meshes and so the icons.
+# ------------------------------------------------------------------------------------------------------------------------------------------
+
+def mat_bronze(name, patina_edge=0.66, scale=0.25):
+    """Cast and hammered bronze: warm gold-brown metal, brighter on the high points, green-blue patina in patches. Not fully metallic: a
+    fully metallic bronze mirrors a dark sky and reads black (Nov 3)."""
+    nb = NB(name)
+    p = nb.new("ShaderNodeTexCoord").outputs["Object"]
+    pat = nb.step(nb.noise(p, scale, detail=6.0, rough=0.65), patina_edge, 0.06)
+    grain = nb.noise(p, 9.0, detail=4.0)
+    metal = nb.ramp(grain, [(0.3, srgb("#a8743a")), (0.75, srgb("#e0b06a"))])
+    green = nb.ramp(grain, [(0.3, srgb("#2f5a48")), (0.75, srgb("#5f9a80"))])
+    col = nb.mix(pat, metal, green)
+    return nb.finish(toned(nb, col), nb.mixf(pat, 0.3, 0.85), nb.bump(nb.m("ADD", grain, nb.m("MULTIPLY", pat, 0.5)), 0.25, 0.02),
+                     metallic=nb.mixf(pat, 0.72, 0.05))
+
+
+def mat_mail(name, pitch=0.9):
+    """Riveted mail from above: rows of iron rings, each through its neighbours (two offset grids of rings), dark gaps, rust in patches."""
+    nb = NB(name)
+    u, v, _ = nb.sep(nb.uv("proc"))
+
+    def rings(du, dv):
+        a = nb.m("SUBTRACT", nb.m("FRACT", nb.m("ADD", nb.m("MULTIPLY", u, 1.0 / pitch), du)), 0.5)
+        b = nb.m("SUBTRACT", nb.m("FRACT", nb.m("ADD", nb.m("MULTIPLY", v, 1.0 / (pitch * 0.8)), dv)), 0.5)
+        d = nb.m("SQRT", nb.m("ADD", nb.m("MULTIPLY", a, a), nb.m("MULTIPLY", b, b)))
+        return nb.m("SUBTRACT", 1.0, nb.step(nb.m("ABSOLUTE", nb.m("SUBTRACT", d, 0.36)), 0.1, 0.04))
+    ring = nb.m("MAXIMUM", rings(0.0, 0.0), rings(0.5, 0.5))
+    grain = nb.noise(nb.xyz(u, v, 0.0), 4.0, detail=3.0)
+    rust = nb.step(nb.noise(nb.xyz(u, v, 3.0), 0.2, detail=5.0, rough=0.6), 0.7, 0.05)   # rust in small spots, not blotches
+    metal = nb.ramp(grain, [(0.3, srgb("#8a8a90")), (0.75, srgb("#c8c8ce"))])           # bright iron: mail reads as metal at icon size
+    metal = nb.mix(nb.m("MULTIPLY", rust, 0.8), metal, srgb("#6a3a1c"))
+    col = nb.mix(ring, srgb("#3a3a3c"), metal)
+    # half metallic, like the bronze: a fully metallic ring mirrors a dark sky and the shirt reads black
+    return nb.finish(col, nb.mixf(ring, 0.8, nb.mixf(rust, 0.42, 0.85)), nb.bump(ring, 0.8, 0.08), metallic=nb.mixf(ring, 0.2, nb.mixf(rust, 0.5, 0.1)))
+
+
+def mat_water(name, deep, light, murk=0.0):
+    """Water standing in a cup: dark below, a little lighter where it shallows, still (a faint ripple); murk: specks of what it was drawn with."""
+    nb = NB(name)
+    p = nb.new("ShaderNodeTexCoord").outputs["Object"]
+    rip = nb.noise(p, 0.9, detail=3.0)
+    col = nb.ramp(rip, [(0.3, srgb(deep)), (0.8, srgb(light))])
+    if murk:
+        fleck = nb.step(nb.noise(p, 3.0, detail=2.0), 0.66, 0.03)
+        col = nb.mix(nb.m("MULTIPLY", fleck, murk), col, srgb("#4a3a22"))
+    return nb.finish(col, 0.04, nb.bump(rip, 0.06, 0.02))
+
+
+def mat_fired_clay(name, light="#b0704a", dark="#6a3a22"):
+    """A pit-fired clay pot: orange-brown, mottled, dark fire clouds where the flames licked it, a little grit."""
+    nb = NB(name)
+    p = nb.new("ShaderNodeTexCoord").outputs["Object"]
+    mott = nb.noise(p, 0.25, detail=5.0, rough=0.6)
+    cloud = nb.step(nb.noise(p, 0.12, detail=3.0), 0.6, 0.1)
+    grit = nb.noise(p, 6.0, detail=2.0)
+    col = nb.ramp(mott, [(0.3, srgb(dark)), (0.7, srgb(light))])
+    col = nb.mix(nb.m("MULTIPLY", cloud, 0.7), col, srgb("#2a1c14"))
+    return nb.finish(toned(nb, col), nb.m("ADD", 0.7, nb.m("MULTIPLY", grit, 0.15)), nb.bump(grit, 0.2, 0.02))
+
+
+def outline_points(outline, step):
+    """A closed outline [(x, y)] with points every step cm along it (counter-clockwise)."""
+    pts = []
+    n = len(outline)
+    for i in range(n):
+        a, b = Vector(outline[i]), Vector(outline[(i + 1) % n])
+        k = max(1, int((b - a).length / step))
+        pts += [a.lerp(b, j / k) for j in range(k)]
+    area = sum(pts[i].x * pts[(i + 1) % len(pts)].y - pts[(i + 1) % len(pts)].x * pts[i].y for i in range(len(pts)))
+    return pts if area > 0 else list(reversed(pts))
+
+
+def flat_garment(part, outline, top, step=2.0, edge_w=3.0, attrs=None):
+    """A garment laid flat on the ground: outline [(x, y)] cm; its upper face at top(x, y, e) (e: 0 at the edge .. 1 edge_w cm in), the lower
+    one on the ground; filled with points every step cm (a triangulation constrained to the outline) so its folds have somewhere to go. Proc
+    UVs in cm; attrs(e) -> vertex attributes. The outline's points in order, for laces and seams along it."""
+    pts = outline_points(outline, step)
+    n = len(pts)
+
+    def edge_dist(p):
+        best = 1e9
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            ab = b - a
+            t = max(0.0, min(1.0, (p - a).dot(ab) / max(ab.length_squared, 1e-9)))
+            best = min(best, (a + ab * t - p).length)
+        return best
+
+    def inside(x, y):
+        c = False
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            if (a.y > y) != (b.y > y) and x < a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y):
+                c = not c
+        return c
+    xs, ys = [p.x for p in pts], [p.y for p in pts]
+    grid, row, y = [], 0, min(ys) + step * 0.5
+    while y < max(ys):
+        x = min(xs) + step * (0.5 + 0.5 * (row % 2))
+        while x < max(xs):
+            p = Vector((x, y))
+            if inside(x, y) and edge_dist(p) > step * 0.6:
+                grid.append(p)
+            x += step
+        y += step * 0.866
+        row += 1
+    vco, _, faces, orig, _, _ = geometry.delaunay_2d_cdt(pts + grid, [(i, (i + 1) % n) for i in range(n)], [list(range(n))], 1, 1e-5)
+    in2out = {}
+    for oi, origs in enumerate(orig):
+        for o in origs:
+            in2out[o] = oi
+    topi, boti = [], []
+    for c in vco:
+        p = Vector((c[0], c[1]))
+        e = min(1.0, edge_dist(p) / edge_w)
+        a = attrs(e) if attrs else {}
+        topi.append(part.add_vert(Vector((p.x, p.y, top(p.x, p.y, e))), None, **a))
+        boti.append(part.add_vert(Vector((p.x, p.y, 0.05)), None, **a))
+    for f in faces:
+        f = list(f)
+        part.add_face([topi[i] for i in f], [(vco[i][0], vco[i][1]) for i in f], "top")
+        part.add_face([boti[i] for i in reversed(f)], [(vco[i][0] + 300.0, vco[i][1]) for i in reversed(f)], "bot")
+    per = 0.0
+    for i in range(n):
+        a, b = in2out[i], in2out[(i + 1) % n]
+        L = (pts[(i + 1) % n] - pts[i]).length
+        part.add_face((boti[a], boti[b], topi[b], topi[a]), [(per, 0.0), (per + L, 0.0), (per + L, 1.0), (per, 1.0)], "rim%d" % int(per // 40.0))
+        per += L
+    return [Vector((p.x, p.y, top(p.x, p.y, 0.0))) for p in pts]
+
+
+def folds(rng, n=7, amp=(1.2, 3.2), width=(3.0, 7.0), reach=(15.0, 45.0), box=(30.0, 35.0)):
+    """Where a garment dropped in a heap bunches: a few long creases (ridges along random lines, fading at their ends) and a soft lumpiness
+    -> h(x, y) cm."""
+    lines = []
+    for _ in range(n):
+        a = rng.uniform(0.0, math.pi)
+        lines.append((Vector((rng.uniform(-box[0], box[0]), rng.uniform(-box[1], box[1]))), Vector((math.cos(a), math.sin(a))),
+                      rng.uniform(*amp), rng.uniform(*width), rng.uniform(*reach)))
+    seed = rng.uniform(0.0, 50.0)
+
+    def h(x, y):
+        p = Vector((x, y))
+        s = 0.0
+        for c, d, a, w, half in lines:
+            rel = p - c
+            fall = max(0.0, 1.0 - abs(rel.dot(d)) / half)
+            s += a * math.exp(-((rel.x * -d.y + rel.y * d.x) / w) ** 2) * fall
+        return s + 0.35 * noise.noise(Vector((x * 0.08, y * 0.08, seed))) + 0.9 * max(0.0, noise.noise(Vector((x * 0.035, y * 0.035, seed + 9.0))))
+    return h
+
+
+def sheet_part(part, fn, s0, s1, t0, t1, ns, nt, thick, key, attrs=None):
+    """A thin shell over a parametric surface fn(s, t) -> (point, outward normal): its outer face, the inner one thick cm in and the rims
+    between them (a cuirass, a greave, a car's leather siding). Proc UVs are arc lengths in cm. -> the outer grid's vertex indices [s][t]."""
+    outer, inner, P = [], [], []
+    for i in range(ns + 1):
+        s = s0 + (s1 - s0) * i / ns
+        ro, ri, pr = [], [], []
+        for j in range(nt + 1):
+            t = t0 + (t1 - t0) * j / nt
+            p, nrm = fn(s, t)
+            a = attrs(s, t) if attrs else {}
+            ro.append(part.add_vert(p, None, **a))
+            ri.append(part.add_vert(p - nrm * thick, None, **a))
+            pr.append(p)
+        outer.append(ro)
+        inner.append(ri)
+        P.append(pr)
+    U = [[0.0] * (nt + 1) for _ in range(ns + 1)]
+    V = [[0.0] * (nt + 1) for _ in range(ns + 1)]
+    for i in range(ns + 1):
+        for j in range(1, nt + 1):
+            U[i][j] = U[i][j - 1] + (P[i][j] - P[i][j - 1]).length
+    for j in range(nt + 1):
+        for i in range(1, ns + 1):
+            V[i][j] = V[i - 1][j] + (P[i][j] - P[i - 1][j]).length
+    for i in range(ns):
+        for j in range(nt):
+            q = ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))
+            uv = [(U[a][b], V[a][b]) for a, b in q]
+            part.add_face([outer[a][b] for a, b in q], uv, key)
+            part.add_face([inner[a][b] for a, b in reversed(q)], [(u + 500.0, v) for u, v in reversed(uv)], key + "_in")
+
+    def strip(so, si, tag):
+        L = 0.0
+        for k in range(len(so) - 1):
+            d = (part.verts[so[k + 1]] - part.verts[so[k]]).length
+            part.add_face((so[k], so[k + 1], si[k + 1], si[k]), [(L, 0.0), (L + d, 0.0), (L + d, thick), (L, thick)], tag)
+            L += d
+    strip(outer[0], inner[0], key + "_r0")
+    strip(outer[ns], inner[ns], key + "_r1")
+    strip([outer[i][0] for i in range(ns + 1)], [inner[i][0] for i in range(ns + 1)], key + "_r2")
+    strip([outer[i][nt] for i in range(ns + 1)], [inner[i][nt] for i in range(ns + 1)], key + "_r3")
+    return outer
+
+
+def revolve(part, profile, segs=32, at=Vector((0.0, 0.0, 0.0)), attrs=None):
+    """A turned or carved vessel: profile [(r, z)] from the foot's outer edge up over the rim and down the inside to the floor; both ends
+    capped flat (the foot, the floor)."""
+    rings, us, vs, L, prev = [], [], [], 0.0, None
+    for r, z in profile:
+        if prev:
+            L += math.hypot(r - prev[0], z - prev[1])
+        prev = (r, z)
+        rings.append([part.add_vert(at + Vector((r * math.cos(2 * math.pi * j / segs), r * math.sin(2 * math.pi * j / segs), z)), None,
+                                    **(attrs or {})) for j in range(segs)])
+        us.append([2 * math.pi * max(r, 0.5) * j / segs for j in range(segs + 1)])
+        vs.append(L)
+    loft(part, rings, us, vs, closed=True, cap_start=True, cap_end=True, island_len=12.0)
+
+
+def lacing(part, a_pts, b_pts, r=0.18):
+    """A thong laced across a slit: zigzag from a_pts[0] to b_pts[0], back to a_pts[1] ... (points on the slit's two sides)."""
+    pts = []
+    for pa, pb in zip(a_pts, b_pts):
+        pts += [pa, pb]
+    tube(part, pts, r, sides=5)
+
+
+def tunic_outline(hw=26.0, hem=-40.0, flare=2.0, armpit=8.0, cuff_x=48.0, cuff=(12.0, 28.0), shoulder=32.0, neck=(9.0, 14.0)):
+    """A tunic laid flat, neck at +Y: the body, the sleeves straight out, a slit at the neck."""
+    nx, ny = neck
+    return [(-hw - flare, hem), (hw + flare, hem), (hw, armpit), (cuff_x - 1.0, cuff[0]), (cuff_x + 1.0, cuff[1]), (nx, shoulder),
+            (nx * 0.55, shoulder - 4.0), (1.0, ny), (-1.0, ny), (-nx * 0.55, shoulder - 4.0), (-nx, shoulder), (-cuff_x - 1.0, cuff[1]),
+            (-cuff_x + 1.0, cuff[0]), (-hw, armpit)]
+
+
+def build_leather_tunic():
+    """A leather tunic dropped flat: front over back, short sleeves, a slit at the neck laced shut; creased where it lay, the cut edges darker."""
+    rnd = random.Random(31)
+    hide = Part("tunic", mat_hide("M_%s_Leather" % ITEM, "#9a7650", "#4e3622", rough=0.6))
+    h = folds(rnd)
+    top = lambda x, y, e: 0.35 + 0.55 * e + h(x, y) * (0.4 + 0.6 * e)   # noqa: E731
+    flat_garment(hide, tunic_outline(), top, attrs=lambda e: {"edge": 1.0 - e})
+    laces = Part("laces", mat_cord("M_%s_Thong" % ITEM, "#7a5a3a", "#3a2616", plies=1, pitch=0.6))
+    on = lambda x, y, up=0.25: Vector((x, y, top(x, y, 0.5) + up))   # noqa: E731  (on the leather beside the slit)
+    lacing(laces, [on(-2.6, y) for y in (27.0, 23.0, 19.0, 15.5)], [on(2.6, y - 2.0) for y in (27.0, 23.0, 19.0, 15.5)])
+    tube(laces, [on(2.2, 13.8), on(5.0, 9.0, 0.2), on(4.0, 2.0, 0.2)], 0.18, sides=5)
+    return [hide, laces], None
+
+
+def build_cloth_tunic():
+    """A woven tunic dropped flat: knee length, long sleeves, a slit at the neck; soft folds."""
+    rnd = random.Random(37)
+    cloth = Part("tunic", mat_weave("M_%s_Cloth" % ITEM, warp="#b4a284", weft="#8c7656", pick_cm=0.35))
+    h = folds(rnd, n=9, amp=(0.8, 2.4), width=(2.0, 5.0), box=(32.0, 45.0))
+    flat_garment(cloth, tunic_outline(hw=27.0, hem=-62.0, flare=5.0, armpit=6.0, cuff_x=62.0, cuff=(14.0, 27.0), shoulder=31.0, neck=(8.0, 18.0)),
+                 lambda x, y, e: 0.25 + 0.35 * e + h(x, y) * (0.3 + 0.7 * e))
+    return [cloth], None
+
+
+def build_leather_trousers():
+    """Leather trousers dropped flat: two legs from a drawstring waist, creased at the knees, the cut edges darker."""
+    rnd = random.Random(41)
+    hide = Part("trousers", mat_hide("M_%s_Leather" % ITEM, "#8e6c48", "#4a321e", rough=0.6))
+    h = folds(rnd, n=7, box=(22.0, 48.0))
+    outline = [(-21.0, -52.0), (-3.0, -52.0), (0.0, 12.0), (3.0, -52.0), (21.0, -52.0), (24.0, 35.0), (22.0, 50.0), (-22.0, 50.0), (-24.0, 35.0)]
+    knees = lambda x, y: 1.2 * math.exp(-((y + 12.0) / 4.0) ** 2)   # noqa: E731  (the knees crease across)
+    top = lambda x, y, e: 0.35 + 0.55 * e + (h(x, y) + knees(x, y)) * (0.4 + 0.6 * e)   # noqa: E731
+    flat_garment(hide, outline, top, attrs=lambda e: {"edge": 1.0 - e})
+    cord = Part("drawstring", mat_cord("M_%s_Cord" % ITEM, "#a08a62", "#54442c", plies=2, pitch=0.35))
+    on = lambda x, y: Vector((x, y, top(x, y, 0.6) + 0.3))   # noqa: E731
+    tube(cord, [on(-21.0 + 42.0 * i / 20, 47.5 + 0.3 * math.sin(i)) for i in range(21)], 0.22, sides=6)
+    tube(cord, [on(0.0, 47.5), on(2.5, 42.0), on(1.0, 33.0), on(3.5, 27.0)], 0.22, sides=6)
+    tube(cord, [on(0.0, 47.5), on(-2.0, 41.0), on(-4.0, 34.0)], 0.22, sides=6)
+    return [hide, cord], None
+
+
+def build_chain_mail():
+    """A mail shirt (a byrnie) dropped flat: riveted iron rings, short sleeves, heavy, lying in deep folds; a leather edging at the neck."""
+    rnd = random.Random(43)
+    mail = Part("mail", mat_mail("M_%s_Mail" % ITEM))
+    h = folds(rnd, n=8, amp=(0.8, 2.4), width=(2.5, 5.5), box=(30.0, 40.0))
+    top = lambda x, y, e: 0.6 + 0.8 * e + h(x, y) * (0.5 + 0.5 * e)   # noqa: E731
+    flat_garment(mail, tunic_outline(hw=29.0, hem=-48.0, flare=4.0, armpit=6.0, cuff_x=46.0, cuff=(9.0, 29.0), shoulder=33.0, neck=(10.0, 23.0)), top)
+    edge = Part("edging", mat_hide("M_%s_Edge" % ITEM, "#6a4a2c", "#2e1e12", rough=0.5))
+    neck = [(x, 33.0 - 9.0 * (1.0 - (x / 10.0) ** 2)) for x in [-10.0 + 20.0 * i / 16 for i in range(17)]]
+    tube(edge, [Vector((x, y, top(x, y, 0.3) + 0.3)) for x, y in neck], (0.5, 0.8), sides=6)
+    return [mail, edge], None
+
+
+def cuirass_surface(lift, dx=(9.5, 12.5), wy=(13.5, 17.5), under_arm=24.0, neck=36.0, shoulder=42.0):
+    """The torso shell of a cuirass, front toward +X, open at the back for its lacing: fn(theta, v) -> (point, outward normal); theta in
+    radians from the front, v 0 at its foot (Z lift) .. 1 at its top edge: the neckline dipping at the front and back, the shoulders high on
+    either side of it, the armholes cut low under the arms. Narrow at the waist, full at the chest."""
+    def g(d, w):
+        d = (d + math.pi) % (2 * math.pi) - math.pi
+        return math.exp(-(d / w) ** 2)
+
+    def ztop_at(th):
+        sh = sum(g(th - c, 0.45) for c in (0.7, -0.7, math.pi - 0.7, 0.7 - math.pi))
+        nk = sum(g(th - c, 0.5) for c in (0.0, math.pi))
+        return lift + under_arm + (shoulder - under_arm) * min(1.0, sh) + (neck - under_arm) * nk * (1.0 - min(1.0, sh))
+
+    def fn(th, v):
+        ztop = ztop_at(th)
+        z = lift + v * (ztop - lift)
+        f = (z - lift) / (shoulder)
+        cx = dx[0] + (dx[1] - dx[0]) * math.sin(min(1.0, f * 1.4) * math.pi / 2)
+        cy = wy[0] + (wy[1] - wy[0]) * math.sin(min(1.0, f * 1.3) * math.pi / 2) - 1.5 * max(0.0, f - 0.85) / 0.15
+        front = 1.0 + 0.14 * max(0.0, math.cos(th)) * math.sin(math.pi * min(1.0, f * 1.1))   # the chest
+        p = Vector((cx * math.cos(th) * front, cy * math.sin(th), z))
+        n = Vector((math.cos(th) / cx, math.sin(th) / cy, 0.0)).normalized()
+        return p, n
+    return fn
+
+
+def cuirass_straps(part, fn, rnd):
+    """Shoulder straps over from the chest to the back, and a thong laced up the back."""
+    for side in (1, -1):
+        a = fn(0.7 * side, 1.0)[0]
+        b = fn(math.pi - 0.7 * side, 1.0)[0]
+        mid = (a + b) * 0.5 + Vector((0.0, 0.0, 7.0))
+        pts = [a.lerp(mid, t) if t < 1 else mid for t in (0.0, 0.5)] + [mid] + [mid.lerp(b, t) for t in (0.5, 1.0)]
+        tube(part, pts, (0.25, 1.8), sides=8, up=Vector((0.0, 0.0, 1.0)))
+
+
+def build_leather_armor():
+    """A cuirass of hardened leather (boiled, moulded and waxed in layers), standing as it would on a body: open at the back and laced, shoulder
+    straps over the top, a skirt of hanging strips (pteruges) round the hips that it stands on."""
+    rnd = random.Random(47)
+    lift = 15.0
+    hard = Part("cuirass", mat_hide("M_%s_Hardened" % ITEM, "#6e4826", "#2c180c", rough=0.38, pores=0.15))
+    fn = cuirass_surface(lift)
+    sheet_part(hard, fn, -2.92, 2.92, 0.0, 1.0, 48, 14, 0.6, "shell", attrs=lambda s, t: {"edge": 1.0 if t in (0.0, 1.0) else 0.0})
+    straps = Part("straps", mat_hide("M_%s_Straps" % ITEM, "#8a6440", "#3e2814", rough=0.55))
+    cuirass_straps(straps, fn, rnd)
+    for k in range(13):   # the pteruges, all round but the back
+        th = -2.6 + 5.2 * k / 12 + rnd.uniform(-0.04, 0.04)
+        p, n = fn(th, 0.0)
+        down = (n * rnd.uniform(0.25, 0.4) + Vector((0.0, 0.0, -1.0))).normalized()
+        side = Vector((-math.sin(th), math.cos(th), 0.0))
+        length = rnd.uniform(15.4, 16.0)   # down to the ground it stands on
+        lens(straps, length, lambda x, L=length: 2.4 if x < L - 2.4 else 2.4 * math.sqrt(max(0.0, 1.0 - ((x - L + 2.4) / 2.4) ** 2)),
+             lambda x, yn: 0.22, p + n * 0.2, down, side, nx=10, ny=3)
+    laces = Part("laces", mat_cord("M_%s_Thong" % ITEM, "#7a5a3a", "#3a2616", plies=1, pitch=0.6))
+    za = [fn(2.92, v)[0] for v in (0.15, 0.35, 0.55, 0.75, 0.92)]
+    zb = [fn(-2.92, v)[0] for v in (0.25, 0.45, 0.65, 0.85, 0.97)]
+    lacing(laces, za, zb, r=0.2)
+    return [hard, straps, laces], None
+
+
+def build_scale_armor():
+    """A corselet of bronze scales sewn in overlapping rows onto a leather backing, each row covering the stitching of the one below; open at
+    the back and laced, leather shoulder straps; standing as on a body."""
+    rnd = random.Random(53)
+    fn = cuirass_surface(0.0, under_arm=26.0, neck=38.0, shoulder=44.0)
+    backing = Part("backing", mat_hide("M_%s_Backing" % ITEM, "#7a5434", "#34200e", rough=0.55))
+    sheet_part(backing, fn, -2.86, 2.86, 0.0, 1.0, 48, 14, 0.5, "shell")
+    scales = Part("scales", mat_bronze("M_%s_Scales" % ITEM, patina_edge=0.7, scale=0.3))
+    rows = int((0.985 - 0.04) / 0.062) + 1
+    k = 0
+    v = 0.985
+    while v > 0.04:
+        n_round = 36
+        for j in range(n_round):
+            th = -2.78 + 5.56 * (j + (0.5 if k % 2 else 0.0)) / n_round
+            if abs(th) > 2.8:
+                continue
+            p, nrm = fn(th, v)
+            below = fn(th, max(0.0, v - 0.03))[0]
+            down = (below - p).normalized()
+            side = (fn(th + 0.02, v)[0] - fn(th - 0.02, v)[0]).normalized()
+            L = 3.6 * rnd.uniform(0.95, 1.05)
+            lens(scales, L, lambda x, L=L: 1.3 if x < L - 1.3 else 1.3 * math.sqrt(max(0.0, 1.0 - ((x - L + 1.3) / 1.3) ** 2)),
+                 lambda x, yn: 0.05 + 0.05 * (1.0 - yn * yn), p + nrm * (0.3 + 0.035 * (rows - k)), down, side, nx=5, ny=2,
+                 attrs=lambda x, y, t=rnd.uniform(-0.18, 0.18): {"tone": t})
+        k += 1
+        v -= 0.062
+    straps = Part("straps", mat_hide("M_%s_Straps" % ITEM, "#8a6440", "#3e2814", rough=0.55))
+    cuirass_straps(straps, fn, rnd)
+    laces = Part("laces", mat_cord("M_%s_Thong" % ITEM, "#7a5a3a", "#3a2616", plies=1, pitch=0.6))
+    lacing(laces, [fn(2.86, v)[0] for v in (0.15, 0.35, 0.55, 0.75, 0.92)], [fn(-2.86, v)[0] for v in (0.25, 0.45, 0.65, 0.85, 0.97)], r=0.2)
+    return [backing, scales, straps, laces], None
+
+
+def build_bronze_greaves():
+    """A pair of bronze greaves: each beaten from one sheet to the shin and calf, sprung open behind and tied with thongs, the rims rolled; one
+    lying on its back, the other beside it turned a little."""
+    rnd = random.Random(59)
+    bronze = Part("greaves", mat_bronze("M_%s_Bronze" % ITEM, patina_edge=0.68, scale=0.2))
+    ties = Part("ties", mat_cord("M_%s_Thong" % ITEM, "#7a5a3a", "#3a2616", plies=1, pitch=0.6))
+    H = 33.0
+
+    def r(z):
+        return 5.2 + 1.8 * math.sin(math.pi * min(1.0, z / H * 1.15) * 0.9) - 0.4 * max(0.0, z / H - 0.85) / 0.15
+
+    def amax(z):
+        return math.radians(108.0 + 18.0 * math.sin(math.pi * z / H))
+
+    for g, (off, yaw) in enumerate(((Vector((0.0, -9.0, 0.0)), 0.0), (Vector((2.0, 9.0, 0.0)), 0.25))):
+        R = Matrix.Rotation(yaw, 3, "Z")
+
+        def world(z, a, rr, off=off, R=R):
+            # lying on its back: the shin's axis along X, its front up, resting on its two sprung edges
+            local = Vector((z - H * 0.5, rr * math.sin(a), rr * math.cos(a) + 4.2))
+            return off + R @ local
+
+        def fn(z, t, world=world):
+            a = t * amax(z)
+            p = world(z, a, r(z))
+            n = (world(z, a, r(z) + 1.0) - p).normalized()
+            return p, n
+        sheet_part(bronze, fn, 0.0, H, -1.0, 1.0, 22, 28, 0.15, "greave%d" % g)
+        for z in (0.4, H - 0.4):   # the rolled rims at the ankle and the knee
+            tube(bronze, [world(z, t * amax(z), r(z) + 0.2) for t in [-1.0 + 2.0 * i / 24 for i in range(25)]], 0.32, sides=6)
+        for z in (6.0, 16.5, 27.0):   # the thongs, untied, hang from the sprung edges to the ground
+            for side in (1, -1):
+                e = world(z, side * amax(z), r(z) + 0.1)
+                out = R @ Vector((0.0, side * 1.0, 0.0))   # away from the greave, across its axis
+                tube(ties, [e, e + out * 1.5 + Vector((0.0, 0.0, -max(0.0, e.z - 0.3) * 0.7)), e + out * 3.0 + Vector((rnd.uniform(-1, 1), 0.0, -max(0.0, e.z - 0.3))),
+                            e + out * (5.0 + rnd.uniform(0, 3)) + Vector((rnd.uniform(-2, 2), 0.0, -max(0.0, e.z - 0.3)))], 0.2, sides=5)
+    return [bronze, ties], None
+
+
+def build_leather_boots():
+    """A pair of leather ankle boots (turnshoes: the sole and upper one piece, sewn inside out and turned), laced up the front; standing side
+    by side, one turned a little."""
+    leather = Part("boots", mat_hide("M_%s_Leather" % ITEM, "#7a5534", "#33200f", rough=0.55))
+    laces = Part("laces", mat_cord("M_%s_Thong" % ITEM, "#8a6a46", "#3a2616", plies=1, pitch=0.6))
+    L = 26.5
+    for b, (off, yaw) in enumerate(((Vector((0.0, -6.5, 0.0)), -0.05), (Vector((2.5, 6.5, 0.0)), 0.18))):
+        R = Matrix.Rotation(yaw, 3, "Z")
+        rings, us, vs, nx, sides = [], [], [], 22, 18
+        for i in range(nx + 1):
+            t = i / nx
+            x = 0.6 + (L - 1.2) * t
+            w = (3.6 + 1.5 * math.sin(math.pi * min(1.0, t * 1.25)) ** 0.8) * (1.0 - 0.75 * smoothstep(0.8, 1.0, t)) + 0.2
+            h = 8.0 - 4.2 * smoothstep(0.3, 1.0, t) - 1.2 * smoothstep(0.9, 1.0, t)
+            ring = []
+            for j in range(sides):
+                a = 2 * math.pi * j / sides
+                c, s = math.cos(a), math.sin(a)
+                y = w * math.copysign(abs(c) ** 0.7, c)
+                z = h * 0.5 + h * 0.5 * (math.copysign(abs(s) ** 0.35, s) if s < 0 else s)
+                ring.append(leather.add_vert(off + R @ Vector((x, y, z)), None))
+            rings.append(ring)
+            us.append([(w + h) * 2.0 * j / sides for j in range(sides + 1)])
+            vs.append(x)
+        loft(leather, rings, us, vs, closed=True, cap_start=True, cap_end=True)
+        # the shaft round the ankle: up the outside, over the top edge, down the inside
+        sh, cx = [], 6.0
+        prof = [(1.0, 2.0), (1.0, 12.0), (1.02, 19.0), (1.0, 19.6), (0.9, 19.6), (0.88, 19.0), (0.88, 4.0)]
+        srings, sus, svs, sv = [], [], [], 0.0
+        prev = None
+        for k, z in prof:
+            if prev:
+                sv += math.hypot((k - prev[0]) * 5.0, z - prev[1])
+            prev = (k, z)
+            ring = []
+            for j in range(sides):
+                a = 2 * math.pi * j / sides
+                ring.append(leather.add_vert(off + R @ Vector((cx + 5.3 * k * math.cos(a), 4.6 * k * math.sin(a), z)), None))
+            srings.append(ring)
+            sus.append([31.0 * k * j / sides for j in range(sides + 1)])
+            svs.append(sv)
+        loft(leather, srings, sus, svs, closed=True, cap_start=True, cap_end=True)
+        front = cx + 5.3
+        lacing(laces, [off + R @ Vector((front + 0.2, -1.3, z)) for z in (7.0, 10.5, 14.0, 17.5)],
+               [off + R @ Vector((front + 0.2, 1.3, z + 1.7)) for z in (7.0, 10.5, 14.0, 17.5)], r=0.17)
+    return [leather, laces], None
+
+
+def binding(part, centre, axis, radius, turns=5, width=4.0, cord=0.3):
+    """Rawhide wound round a joint: a short helix of turns about axis."""
+    axis = axis.normalized()
+    a = axis.cross(Vector((0.0, 0.0, 1.0)) if abs(axis.z) < 0.9 else Vector((1.0, 0.0, 0.0))).normalized()
+    b = axis.cross(a)
+    n = turns * 12
+    tube(part, [centre + axis * (width * (i / n - 0.5)) + (a * math.cos(2 * math.pi * turns * i / n) + b * math.sin(2 * math.pi * turns * i / n))
+                * (radius + cord) for i in range(n + 1)], cord, sides=5)
+
+
+def build_chariot():
+    """A light two-wheeled war chariot (the Egyptian and Hittite kind): six-spoked wheels at the very back on a long axle, a D-shaped car of
+    bent wood with a floor of interwoven rawhide thongs and leather siding at the front, the pole running forward under it and curving up to
+    the yoke with its two yoke saddles. About 3.3 m from the car's back to the yoke."""
+    rnd = random.Random(61)
+    wood = Part("wood", mat_stick("M_%s_Wood" % ITEM, bark="#5a4836", wood="#c4a47a", peeled=0.92))
+    leather = Part("leather", mat_hide("M_%s_Leather" % ITEM, "#9a7650", "#4e3622", rough=0.55))
+    floor = Part("floor", mat_netting("M_%s_Floor" % ITEM, light="#8a6a46", dark="#3a2414", mesh_cm=6.0))
+    hide = Part("bindings", mat_cord("M_%s_Rawhide" % ITEM, "#b09470", "#5a4a32", plies=1, pitch=0.7))
+    ax, wz, wr, track = -26.0, 47.6, 45.0, 78.0   # the felloe (2.6 cm) on the ground
+    cut = lambda i, n: {"cut": 1.0 if i in (0, n) else 0.0, "char": 0.0}   # noqa: E731
+    # the wheels: felloe, six spokes, the hub
+    for s in (1, -1):
+        y = s * track
+        ring = [Vector((ax + wr * math.cos(math.pi / 2 + 2 * math.pi * i / 48), y, wz + wr * math.sin(math.pi / 2 + 2 * math.pi * i / 48))) for i in range(49)]
+        tube(wood, ring, (2.6, 3.4), sides=8, cap_start=False, cap_end=False)
+        for k in range(6):
+            a = 2 * math.pi * k / 6 + 0.3
+            d = Vector((math.cos(a), 0.0, math.sin(a)))
+            tube(wood, [Vector((ax, y, wz)) + d * (5.0 + (wr - 6.0) * i / 6) for i in range(7)], [1.6 - 0.5 * i / 6 for i in range(7)], sides=8)
+        tube(wood, [Vector((ax, y - 9.0 * s * (1 - 2 * i / 8), wz)) for i in range(9)], [4.2 + 1.8 * math.sin(math.pi * i / 8) for i in range(9)], sides=12,
+             attrs=lambda i: cut(i, 8))
+    tube(wood, [Vector((ax, -track - 12.0 + (2 * track + 24.0) * i / 30, wz)) for i in range(31)], 3.0, sides=10, attrs=lambda i: cut(i, 30))
+    # the car: a D of bent wood (back straight over the axle, round at the front)
+    back, front_x, half = -30.0, 32.0, 48.0
+    fz = 51.0   # the floor on the axle
+
+    def d_point(u):
+        """u 0 .. 1 round the D from the back left corner through the front to the back right corner."""
+        a = math.pi * (u - 0.5)
+        return Vector((back + (front_x - back) * math.cos(a), half * math.sin(a), 0.0))
+    rim = [d_point(i / 40) + Vector((0.0, 0.0, fz)) for i in range(41)]
+    tube(wood, rim + [rim[0]], 2.2, sides=8, cap_start=False, cap_end=False)
+    rail = [d_point(i / 40) + Vector((0.0, 0.0, fz + 44.0 - 6.0 * abs(math.sin(math.pi * (i / 40 - 0.5))) ** 2)) for i in range(41)]
+    tube(wood, rail, 1.8, sides=8, attrs=lambda i: cut(i, 40))
+    for u in (0.0, 0.2, 0.38, 0.5, 0.62, 0.8, 1.0):
+        p = d_point(u)
+        top = rail[int(round(u * 40))]
+        tube(wood, [p + Vector((0.0, 0.0, fz)), top], 1.5, sides=8)
+        binding(hide, top, Vector((0.0, 0.0, 1.0)), 1.5, turns=3, width=2.5, cord=0.25)
+
+    def floor_fn(s, t):
+        x = back + (front_x - back) * s
+        hw = half * math.sqrt(max(0.0, 1.0 - max(0.0, (x - back) / (front_x - back)) ** 2)) * 0.97
+        return Vector((x, t * max(hw, 1.0), fz + 0.6 - 0.8 * (1.0 - t * t) * math.sin(math.pi * s))), Vector((0.0, 0.0, 1.0))
+    sheet_part(floor, floor_fn, 0.0, 0.98, -1.0, 1.0, 14, 18, 0.8, "floor")
+
+    def side_fn(u, z):
+        p = d_point(u)
+        n = Vector((p.x - back, p.y, 0.0)).normalized()
+        return p + Vector((0.0, 0.0, z)) + n * (0.4 * math.sin(math.pi * (z - fz) / 40.0)), n
+    sheet_part(leather, side_fn, 0.12, 0.88, fz + 1.0, fz + 38.0, 30, 10, 0.4, "siding")
+    # the pole under the car, curving up to the yoke; the yoke and its saddles
+    pole = []
+    for i in range(41):
+        x = ax - 4.0 + (288.0 + 4.0) * i / 40
+        z = fz - 5.0 + (66.0 * ((x - 30.0) / 254.0) ** 1.7 if x > 30.0 else 0.0)
+        pole.append(Vector((x, 0.0, z)))
+    tube(wood, pole, [3.6 - 0.9 * i / 40 for i in range(41)], sides=10, attrs=lambda i: cut(i, 40))
+    yx, yz = pole[-3].x, pole[-3].z + 3.5
+    yoke = [Vector((yx, -64.0 + 128.0 * i / 24, yz + 4.0 * (abs(-64.0 + 128.0 * i / 24) / 64.0) ** 2)) for i in range(25)]
+    tube(wood, yoke, 2.6, sides=10, attrs=lambda i: cut(i, 24))
+    binding(hide, Vector((yx, 0.0, yz - 1.0)), Vector((0.0, 1.0, 0.0)), 3.0, turns=6, width=6.0, cord=0.35)
+    for s in (1, -1):
+        top = Vector((yx, s * 34.0, yz + 4.0 * (34.0 / 64.0) ** 2))
+        for dx in (-1, 1):
+            tube(wood, [top, top + Vector((dx * 9.0, s * 2.0, -22.0)), top + Vector((dx * 13.0, s * 3.0, -27.0))], [1.6, 1.3, 1.1], sides=7,
+                 attrs=lambda i: cut(i, 2))
+        binding(hide, top, Vector((0.0, 1.0, 0.0)), 2.6, turns=4, width=4.0, cord=0.3)
+    binding(hide, Vector((ax, 0.0, wz)), Vector((0.0, 1.0, 0.0)), 3.0, turns=5, width=5.0, cord=0.35)
+    binding(hide, Vector((back + 35.0, 0.0, fz - 2.0)), Vector((1.0, 0.0, 0.0)), 3.6, turns=5, width=5.0, cord=0.35)
+    return [wood, leather, floor, hide], None
+
+
+def build_water(clean):
+    """A measure of water (250 ml) as it stands in a cup: untreated, in a cup carved from a birch burl, a little cloudy with what it was
+    drawn with; boiled, in a small fired-clay cup, clear."""
+    if clean:
+        cup = Part("cup", mat_fired_clay("M_%s_Clay" % ITEM))
+        revolve(cup, [(3.0, 0.0), (3.3, 0.4), (3.9, 3.0), (4.1, 6.0), (4.0, 8.5), (3.8, 9.0), (3.55, 8.6), (3.65, 6.0), (3.45, 3.0), (2.9, 1.1),
+                      (1.6, 0.9)])
+        water = Part("water", mat_water("M_%s_Water" % ITEM, "#30434c", "#6a8590"))
+        revolve(water, [(3.6, 6.6), (3.62, 6.9)], at=Vector((0.0, 0.0, 0.0)))
+        return [cup, water], None
+    cup = Part("cup", mat_stick("M_%s_Wood" % ITEM, bark="#4a3a2a", wood="#b48a5a", peeled=1.0))
+    revolve(cup, [(3.4, 0.0), (3.6, 0.3), (4.4, 1.5), (5.0, 3.0), (5.25, 4.6), (5.3, 5.6), (5.0, 5.9), (4.75, 5.5), (4.6, 4.2), (4.0, 2.4),
+                  (3.2, 1.3), (2.0, 1.0)], attrs={"cut": 1.0, "char": 0.0})
+    rounded_box(cup, (4.0, 2.6, 1.6), (6.4, 0.0, 5.0), attrs={"cut": 1.0, "char": 0.0})   # the lug, carved with the cup
+    water = Part("water", mat_water("M_%s_Water" % ITEM, "#2a3324", "#5a6a48", murk=0.8))
+    revolve(water, [(4.55, 4.25), (4.57, 4.5)])
+    return [cup, water], None
+
+
+def run_flat(build, size, centre=(0.0, 0.0, 1.0)):
+    c = centre
+    run_static(build, [("whole", c, (0.35, -0.7, 1.0), size), ("top", c, (0.0, -0.05, 1.0), size), ("low", c, (0.2, -1.0, 0.35), size),
+                       ("back", c, (-0.6, 0.8, 0.8), size), ("near", (c[0] + size * 0.15, c[1] + size * 0.2, c[2]), (0.3, -0.6, 1.0), size * 0.35),
+                       ("edge", (c[0] - size * 0.2, c[1] - size * 0.25, c[2]), (0.5, -0.7, 0.6), size * 0.3)])
+
+
+KITS_NOV3 = {
+    "LeatherTunic01": lambda: run_flat(build_leather_tunic, 110.0),
+    "ClothTunic01": lambda: run_flat(build_cloth_tunic, 140.0),
+    "LeatherTrousers01": lambda: run_flat(build_leather_trousers, 115.0),
+    "ChainMail01": lambda: run_flat(build_chain_mail, 110.0),
+    "LeatherArmor01": lambda: run_flat(build_leather_armor, 80.0, (0.0, 0.0, 32.0)),
+    "ScaleArmor01": lambda: run_flat(build_scale_armor, 70.0, (0.0, 0.0, 24.0)),
+    "BronzeGreaves01": lambda: run_flat(build_bronze_greaves, 50.0, (0.0, 0.0, 4.0)),
+    "LeatherBoots01": lambda: run_flat(build_leather_boots, 40.0, (13.0, 0.0, 9.0)),
+    "Chariot01": lambda: run_flat(build_chariot, 380.0, (115.0, 0.0, 55.0)),
+    "Water01": lambda: run_flat(lambda: build_water(False), 16.0, (0.5, 0.0, 3.5)),
+    "CleanWater01": lambda: run_flat(lambda: build_water(True), 14.0, (0.0, 0.0, 4.5)),
+}
+
+
 KITS = {"BowDrill01": run_bowdrill, "Snare01": run_snare, "WoodenSpear01": run_spear, "FireHardenedSpear01": run_spear,
-        "FishTrap01": run_fishtrap, "FishNet01": run_fishnet, "SimpleLoom01": run_loom, "IronHelmet01": run_iron_helmet}
+        "FishTrap01": run_fishtrap, "FishNet01": run_fishnet, "SimpleLoom01": run_loom, "IronHelmet01": run_iron_helmet, **KITS_NOV3}
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------------

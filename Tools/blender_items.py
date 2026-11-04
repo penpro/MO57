@@ -96,9 +96,10 @@ def main():
                                             "ids = [i for i in %r if i in g.ITEMS]; out(g.measure_all(only=ids) if ids else 'no held items')" % held],
                                       capture_output=True, text=True, cwd=ROOT)
                 print("\n".join(l for l in proc.stdout.splitlines() if not l.startswith("[")), flush=True)
-                proc = subprocess.run(UE + ["rows", "set", TABLE, "--file", os.path.join(ROOT, "Saved", "HeldGrip", "rows.json")],
-                                      capture_output=True, text=True, cwd=ROOT, env=env)
-                print(proc.stdout[-600:] + proc.stderr[-600:], flush=True)
+                if "no held items" not in proc.stdout:   # else rows.json is an older run's (Nov 3: it re-set all 32 grips for nothing)
+                    proc = subprocess.run(UE + ["rows", "set", TABLE, "--file", os.path.join(ROOT, "Saved", "HeldGrip", "rows.json")],
+                                          capture_output=True, text=True, cwd=ROOT, env=env)
+                    print(proc.stdout[-600:] + proc.stderr[-600:], flush=True)
 
 
 if __name__ == "__main__":
