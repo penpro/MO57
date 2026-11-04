@@ -1844,7 +1844,7 @@ bool FMOWorld_CreativeModeIsASwitch::RunTest(const FString& Parameters)
 	// A creative world builds and crafts instantly (Wes, Oct 26); everything else keeps its time, and a survival world keeps every time.
 	TestTrue(TEXT("creative: building is instant"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Building));
 	TestTrue(TEXT("creative: crafting is instant"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Crafting));
-	TestFalse(TEXT("creative: digging still takes its time"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Terraforming));
+	TestTrue(TEXT("creative: digging is instant (Nov 3)"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Terraforming));
 	TestFalse(TEXT("creative: gathering still takes its time"), FMOWorldRules::IsInstantActivity(true, EMOWorldPace::Gathering));
 	TestFalse(TEXT("survival: building takes its time"), FMOWorldRules::IsInstantActivity(false, EMOWorldPace::Building));
 	TestFalse(TEXT("survival: crafting takes its time"), FMOWorldRules::IsInstantActivity(false, EMOWorldPace::Crafting));

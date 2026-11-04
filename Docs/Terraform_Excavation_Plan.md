@@ -40,6 +40,12 @@ Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd8
   part done, balanced). Its time is that earth dug (at the rock's hardness) and laid. No low ground in the brush: the cut earth is spoil on
   the pile. Nothing over the feet: nothing to cut ("the Raise tool builds low ground up"). A joiner's flatten is the same bite, applied on
   the server.
+- **A creative world** (Nov 3, `Docs/World_Creation.md`): digs make no Dirt, the brush is x2 the radius and x10 the strength
+  (`GetBrushRadius` / `GetBrushStrength`, the one place every sculpt, time, yield and zone reads the brush), and actions are instant
+  (`FMOWorldRules::IsInstantActivity` includes Terraforming there); the server's rate floor drops to 0.1 s for an instant world, or a
+  joiner's quick creative digs were refused. `Tools/check_creative_dig.py`: survival 622.1 -> 619.4 in a timed bite with 22 Dirt; creative
+  615.9 -> 567.3 at once with none, and a raise back to 615.9. Raising takes no earth from the pack in any world (survival included: the
+  earth a raise adds comes from nowhere -- not modelled yet; the colony's fill jobs do spend carried earth).
 - **Under rock the volume sculpt works the spot itself** (BR1101-7: "lighting problems when using flatten in a cave"; N-256, Nov 3). The
   height sculpt edits the ground's top surface over (X, Y); in a cave that is the hill above, so a flatten at the cave floor levelled the
   hillside down to it and opened the roof (square patches of sun). Where voxel terrain stands over the aimed spot (`HasRockOverhead`: the

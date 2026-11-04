@@ -246,8 +246,9 @@ struct MOFRAMEWORK_API FMOWorldRules
 	static bool IsCreative(const UObject* WorldContext);
 
 	/**
-	 * Whether this activity takes no time in this world: building and crafting in a creative world (Wes, Oct 26 2026: "in creative mode make it so
-	 * building happens instantly, no build time"; crafting the same). The one exception to Principle 11 -- a world rule chosen when the world is
+	 * Whether this activity takes no time in this world: building, crafting and terraforming in a creative world (Wes, Oct 26 2026: "in creative
+	 * mode make it so building happens instantly, no build time"; crafting the same; terraforming since Nov 3, "so creative players can mess
+	 * around a lot more" with a larger brush). The one exception to Principle 11 -- a world rule chosen when the world is
 	 * created, never a skip inside a survival world. Pure on (bCreative, Activity) through IsInstantActivity: unit-tested.
 	 */
 	static bool IsInstant(const UObject* WorldContext, EMOWorldPace Activity);

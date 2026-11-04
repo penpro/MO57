@@ -660,6 +660,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
 	float GetVolumeBiteRadius() const;
 
+	/** The brush this world digs with: Config's, or in a creative world (FMOWorldRules::IsCreative) CreativeRadiusScale x its radius and
+	 *  CreativeStrengthScale x its strength (Wes, Nov 3: "make it have larger effects so creative players can mess around a lot more"). Every
+	 *  sculpt, time, yield and zone of an action goes through these; the volume bite follows (a ~2.2 m scoop in a creative world). */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	float GetBrushRadius() const;
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	float GetBrushStrength() const;
+
+	/** A creative world's brush: x2 the radius (5 m) and x10 the strength (a dig lowers the centre 50 cm, ~23 m3 a click). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Creative", meta=(ClampMin="0.1", ClampMax="10.0"))
+	float CreativeRadiusScale = 2.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Creative", meta=(ClampMin="0.1", ClampMax="20.0"))
+	float CreativeStrengthScale = 10.0f;
+
 	/** The earth one volume bite moves (m3): the half of its sphere behind the hit point. Its time and yield (BeginTerraform, GrantDigYield). */
 	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
 	float GetVolumeBiteM3() const;

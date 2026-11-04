@@ -5518,6 +5518,33 @@ def digsync_test(uproject, editor_exe, keep=False, boot_timeout=300):
                      f"{g0[1]:.1f} -> {hv[1] if hv else None}")
             rep.step("... and the joiner's the same (< 5 cm from the host's)", bool(cv) and bool(hv) and cv[0] == 1 and abs(cv[1] - hv[1]) < 5.0 and g0[1] - cv[1] > 30.0,
                      f"joiner {cv[1] if cv else None}, host {hv[1] if hv else None}")
+
+            # A joiner who arrives after the digs: a fresh process joins the same session; the plugin sends the whole sculpt when it registers.
+            old = read_pid(client)
+            stop(client)
+            for _ in range(60):   # stop() returns a second after the kill; the process can take longer to go
+                if not is_alive(old):
+                    break
+                time.sleep(1)
+            time.sleep(3)
+            start(client, uproject, editor_exe, pos=(660, 0), nosteam=True)
+            if rep.step("a fresh joiner boots", wait_ready(client, boot_timeout)):
+                call(client, ["py", "-c", "import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=30)
+                time.sleep(2)
+                found, index = find_session(client, "DigSyncTest", tries=5)
+                console(client, f"MO.Session.Join {index}")
+                reached, cst = _wait_state(client, "Client", "", 300)
+                if rep.step("... joins the same session after the digs", index is not None and reached, str(cst)):
+                    time.sleep(30)   # the world builds round its pawn
+                    lh, lv = None, None
+                    for _ in range(9):
+                        lh, lv = _surface_z(client, tx, ty, z + 2000.0, z - 2000.0), _surface_z(client, sx, sy, z + 2000.0, z - 2000.0)
+                        if lh and lv and lh[0] == 1 and lv[0] == 1 and abs(lh[1] - h[1]) < 3.0 and abs(lv[1] - hv[1]) < 5.0:
+                            break
+                        time.sleep(5.0)
+                    rep.step("... and stands on both digs as the host has them (height < 3 cm, volume < 5 cm)",
+                             bool(lh and lv) and lh[0] == 1 and lv[0] == 1 and abs(lh[1] - h[1]) < 3.0 and abs(lv[1] - hv[1]) < 5.0,
+                             f"height dig: joiner {lh[1] if lh else None}, host {h[1]}; volume dig: joiner {lv[1] if lv else None}, host {hv[1]}")
         return rep.ok
     finally:
         print(f"[nettest] digsync: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)

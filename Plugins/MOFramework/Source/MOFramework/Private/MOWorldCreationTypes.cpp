@@ -201,7 +201,7 @@ bool FMOWorldRules::IsInstant(const UObject* WorldContext, EMOWorldPace Activity
 
 bool FMOWorldRules::IsInstantActivity(bool bCreative, EMOWorldPace Activity)
 {
-	return bCreative && (Activity == EMOWorldPace::Building || Activity == EMOWorldPace::Crafting);
+	return bCreative && (Activity == EMOWorldPace::Building || Activity == EMOWorldPace::Crafting || Activity == EMOWorldPace::Terraforming);
 }
 
 bool FMOWorldRules::IsCreative(const UObject* WorldContext)

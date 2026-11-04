@@ -191,10 +191,20 @@ bool UMOTerraformingComponent::UsesVolumeAt(const FVector& At)
 float UMOTerraformingComponent::GetVolumeBiteRadius() const
 {
 	// The half-sphere holding one open-ground bite's earth, floored at what the voxel world draws: 1.5 of its voxels (the generator's size).
-	const double CubicCm = (double)ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength) * 1.0e6;
+	const double CubicCm = (double)ComputeMovedVolumeCubicMeters(GetBrushRadius(), GetBrushStrength()) * 1.0e6;
 	const double EarthRadius = FMath::Pow(3.0 * CubicCm / (2.0 * UE_DOUBLE_PI), 1.0 / 3.0);
 	const double VoxelCm = FMOWorldGenParamsProvider::HasPublished() ? (double)FMOWorldGenParamsProvider::Get()->Tuning.VoxelSizeCm : 50.0;
 	return (float)FMath::Max(EarthRadius, 1.5 * VoxelCm);
+}
+
+float UMOTerraformingComponent::GetBrushRadius() const
+{
+	return Config.Radius * (FMOWorldRules::IsCreative(this) ? FMath::Max(0.1f, CreativeRadiusScale) : 1.0f);
+}
+
+float UMOTerraformingComponent::GetBrushStrength() const
+{
+	return FMath::Clamp(Config.RaiseLowerStrength * (FMOWorldRules::IsCreative(this) ? FMath::Max(0.1f, CreativeStrengthScale) : 1.0f), 0.0f, 1.0f);
 }
 
 float UMOTerraformingComponent::GetVolumeBiteM3() const
@@ -358,7 +368,7 @@ void UMOTerraformingComponent::RegisterWorkedGround(const FVector& Location)
 {
 	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
 	{
-		TerrainMod->RegisterModifiedZone(Location, Config.Radius);
+		TerrainMod->RegisterModifiedZone(Location, GetBrushRadius());
 		// Immediate sweep: clears scatter already standing in the new zone.
 		TerrainMod->SweepModifiedZones();
 	}
@@ -367,7 +377,7 @@ void UMOTerraformingComponent::RegisterWorkedGround(const FVector& Location)
 bool UMOTerraformingComponent::Dig(const FVector& WorldLocation)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Dig at %s (Radius: %.1f, Strength: %.2f)"),
-		*WorldLocation.ToString(), Config.Radius, Config.RaiseLowerStrength);
+		*WorldLocation.ToString(), GetBrushRadius(), GetBrushStrength());
 
 	if (UsesVolumeAt(WorldLocation))
 	{
@@ -379,7 +389,7 @@ bool UMOTerraformingComponent::Dig(const FVector& WorldLocation)
 bool UMOTerraformingComponent::Raise(const FVector& WorldLocation)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Raise at %s (Radius: %.1f, Strength: %.2f)"),
-		*WorldLocation.ToString(), Config.Radius, Config.RaiseLowerStrength);
+		*WorldLocation.ToString(), GetBrushRadius(), GetBrushStrength());
 
 	if (UsesVolumeAt(WorldLocation))
 	{
@@ -391,7 +401,7 @@ bool UMOTerraformingComponent::Raise(const FVector& WorldLocation)
 bool UMOTerraformingComponent::Flatten(const FVector& WorldLocation, float TargetHeight)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Flatten at %s to height %.1f (Radius: %.1f)"),
-		*WorldLocation.ToString(), TargetHeight, Config.Radius);
+		*WorldLocation.ToString(), TargetHeight, GetBrushRadius());
 
 	if (UsesVolumeAt(WorldLocation))
 	{
@@ -405,15 +415,15 @@ bool UMOTerraformingComponent::Flatten(const FVector& WorldLocation, float Targe
 		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Flatten at %s: nothing in the brush stands over %.0f -- nothing to cut"), *WorldLocation.ToString(), TargetHeight);
 		return false;
 	}
-	const float CutM3 = ApplyFlattenStep(DigAt, FillAt, bFill, Config.RaiseLowerStrength);
+	const float CutM3 = ApplyFlattenStep(DigAt, FillAt, bFill, GetBrushStrength());
 	LastFlattenSpoilM3 = bFill ? 0.0f : CutM3;   // with no low ground in the brush the cut earth is spoil (the timed action puts it on the pile)
 	// The bite's own ground is worked ground too (the caller registers the brush centre; a bite at the brush's edge reaches a brush further).
 	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
 	{
-		TerrainMod->RegisterModifiedZone(DigAt, Config.Radius);
+		TerrainMod->RegisterModifiedZone(DigAt, GetBrushRadius());
 		if (bFill)
 		{
-			TerrainMod->RegisterModifiedZone(FillAt, Config.Radius);
+			TerrainMod->RegisterModifiedZone(FillAt, GetBrushRadius());
 		}
 	}
 	return true;
@@ -431,7 +441,7 @@ bool UMOTerraformingComponent::FindFlattenBite(const FVector& Center, float Targ
 	Zone.ZoneId = FGuid::NewGuid();   // a zone of this action only, never designated
 	Zone.Kind = EMODesignationKind::Flatten;
 	Zone.Center = Center;
-	Zone.Radius = Config.Radius;
+	Zone.Radius = GetBrushRadius();
 	Zone.TargetHeightZ = TargetZ;
 	int32 Samples = 0;
 	if (!Desig->FindBitePoint(Zone, /*bDig=*/true, OutDig, Samples))
@@ -449,18 +459,18 @@ float UMOTerraformingComponent::ApplyFlattenStep(const FVector& DigAt, const FVe
 	{
 		return 0.0f;
 	}
-	MOVoxel::HeightSculpt(Actor, FVector2D(DigAt.X, DigAt.Y), Config.Radius, Strength, /*bAdd*/ false);
+	MOVoxel::HeightSculpt(Actor, FVector2D(DigAt.X, DigAt.Y), GetBrushRadius(), Strength, /*bAdd*/ false);
 	if (bFill)
 	{
-		MOVoxel::HeightSculpt(Actor, FVector2D(FillAt.X, FillAt.Y), Config.Radius, Strength, /*bAdd*/ true);
+		MOVoxel::HeightSculpt(Actor, FVector2D(FillAt.X, FillAt.Y), GetBrushRadius(), Strength, /*bAdd*/ true);
 	}
-	return ComputeMovedVolumeCubicMeters(Config.Radius, Strength);
+	return ComputeMovedVolumeCubicMeters(GetBrushRadius(), Strength);
 }
 
 bool UMOTerraformingComponent::Smooth(const FVector& WorldLocation)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Smooth at %s (Radius: %.1f, Strength: %.2f)"),
-		*WorldLocation.ToString(), Config.Radius, Config.SmoothStrength);
+		*WorldLocation.ToString(), GetBrushRadius(), Config.SmoothStrength);
 
 	if (UsesVolumeAt(WorldLocation))
 	{
@@ -480,7 +490,7 @@ bool UMOTerraformingComponent::HeightDig(const FVector2D& Location)
 	{
 		return false;
 	}
-	MOVoxel::HeightSculpt(Actor, Location, Config.Radius, Config.RaiseLowerStrength, /*bAdd*/ false);
+	MOVoxel::HeightSculpt(Actor, Location, GetBrushRadius(), GetBrushStrength(), /*bAdd*/ false);
 	return true;
 }
 
@@ -491,7 +501,7 @@ bool UMOTerraformingComponent::HeightRaise(const FVector2D& Location)
 	{
 		return false;
 	}
-	MOVoxel::HeightSculpt(Actor, Location, Config.Radius, Config.RaiseLowerStrength, /*bAdd*/ true);
+	MOVoxel::HeightSculpt(Actor, Location, GetBrushRadius(), GetBrushStrength(), /*bAdd*/ true);
 	return true;
 }
 
@@ -502,7 +512,7 @@ bool UMOTerraformingComponent::HeightSmooth(const FVector2D& Location)
 	{
 		return false;
 	}
-	MOVoxel::HeightSmooth(Actor, Location, Config.Radius, Config.SmoothStrength);
+	MOVoxel::HeightSmooth(Actor, Location, GetBrushRadius(), Config.SmoothStrength);
 	return true;
 }
 
@@ -541,7 +551,7 @@ bool UMOTerraformingComponent::VolumeFlatten(const FVector& Location, const FVec
 	}
 	// TargetHeight is unused for volume flatten — the Voxel API flattens toward the
 	// Location/Normal plane; Height is the vertical reach of the brush.
-	MOVoxel::VolumeFlatten(Actor, Location, Normal, Config.Radius, Config.Radius * 2.0f, Config.Falloff);
+	MOVoxel::VolumeFlatten(Actor, Location, Normal, GetBrushRadius(), GetBrushRadius() * 2.0f, Config.Falloff);
 	return true;
 }
 
@@ -552,7 +562,7 @@ bool UMOTerraformingComponent::VolumeSmooth(const FVector& Location)
 	{
 		return false;
 	}
-	MOVoxel::VolumeSmooth(Actor, Location, Config.Radius, Config.SmoothStrength);
+	MOVoxel::VolumeSmooth(Actor, Location, GetBrushRadius(), Config.SmoothStrength);
 	return true;
 }
 
@@ -616,10 +626,10 @@ bool UMOTerraformingComponent::RemoveFoliage(const FVector& WorldLocation)
 		return false;
 	}
 
-	const float RadiusSq = Config.Radius * Config.Radius;
+	const float RadiusSq = GetBrushRadius() * GetBrushRadius();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] RemoveFoliage at %s (Radius: %.1f)"),
-		*WorldLocation.ToString(), Config.Radius);
+		*WorldLocation.ToString(), GetBrushRadius());
 
 	// SCOPE: removes only HISM instances explicitly opted-in via tags on the
 	// owning Actor OR the HISM ComponentTags. Tag list is sourced from
@@ -696,7 +706,7 @@ bool UMOTerraformingComponent::RemoveFoliage(const FVector& WorldLocation)
 			// bounds and these are reliable.
 			const FBoxSphereBounds CompBounds = ISM->Bounds;
 			const float ClosestPossibleDist = FVector::Dist(CompBounds.Origin, WorldLocation) - CompBounds.SphereRadius;
-			if (ClosestPossibleDist > Config.Radius)
+			if (ClosestPossibleDist > GetBrushRadius())
 			{
 				continue;
 			}
@@ -793,7 +803,7 @@ float UMOTerraformingComponent::GetActionDepthMeters(EMOTerraformMode Mode) cons
 	case EMOTerraformMode::Dig:
 	case EMOTerraformMode::Raise:
 		// Surface displacement scales with brush strength.
-		return Config.RaiseLowerStrength * TerraformDepthPerStrengthMeters;
+		return GetBrushStrength() * TerraformDepthPerStrengthMeters;
 	case EMOTerraformMode::Flatten:
 		// Cut+fill moves a terrain-dependent amount; use half the full-strength
 		// displacement as a representative earth-moved estimate.
@@ -940,17 +950,17 @@ bool UMOTerraformingComponent::BeginTerraform()
 	// Smooth (and a volume flatten) keep the nominal footprint x depth estimate -- their earth depends on the ground under the brush; a height
 	// Flatten is timed by its bite (below).
 	const bool bDigRaise = CurrentMode == EMOTerraformMode::Dig || CurrentMode == EMOTerraformMode::Raise;
-	const float BiteM3 = PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
+	const float BiteM3 = PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(GetBrushRadius(), GetBrushStrength());
 	PendingAction.TotalTime = bDigRaise
 		? ComputeDurationForVolumeSeconds(BiteM3, TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds))
-		: ComputeTerraformDurationSeconds(Config.Radius, GetActionDepthMeters(CurrentMode),
+		: ComputeTerraformDurationSeconds(GetBrushRadius(), GetActionDepthMeters(CurrentMode),
 			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
 	// What the brush cuts decides how long it takes (Wes, Oct 17 2026): earth at the base rate, limestone ~5x, granite ~40x -- the same points the yield is
 	// shared over (FMOGeologyYield). Raising places loose earth; smooth keeps the earth rate.
 	float DigHardness = 1.0f;
 	if (CurrentMode == EMOTerraformMode::Dig)
 	{
-		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, PendingAction.bVolume ? GetVolumeBiteRadius() : Config.Radius, BiteM3,
+		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, PendingAction.bVolume ? GetVolumeBiteRadius() : GetBrushRadius(), BiteM3,
 			!PendingAction.bVolume);
 		PendingAction.TotalTime *= DigHardness;
 	}
@@ -980,7 +990,7 @@ bool UMOTerraformingComponent::BeginTerraform()
 				PendingAction.Reset();
 				return false;
 			}
-			DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, PendingAction.FlattenDigPoint, Config.Radius, BiteM3, /*bSlab=*/true);
+			DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, PendingAction.FlattenDigPoint, GetBrushRadius(), BiteM3, /*bSlab=*/true);
 			PendingAction.TotalTime = FMath::Max(FMath::Max(0.1f, TerraformDurationSeconds),
 				BiteM3 * TerraformSecondsPerCubicMeter * (DigHardness + (PendingAction.bFlattenFill ? 1.0f : 0.0f)));
 		}
@@ -988,7 +998,7 @@ bool UMOTerraformingComponent::BeginTerraform()
 	// This world's digging pace (MOWorldCreationTypes.h): chosen when the world was made, never zero.
 	PendingAction.TotalTime = FMOWorldRules::ScaleSeconds(this, EMOWorldPace::Terraforming, PendingAction.TotalTime);
 	// A developer's shortcut (MO.Dev.TerraformSeconds), only while the world's host is in developer mode.
-	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f)
+	if (const float DevSeconds = MOTerraformDev::SecondsFor(this); DevSeconds > 0.0f && PendingAction.TotalTime > 0.0f)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] developer mode: %.1f s instead of the simulated %.1f s (MO.Dev.TerraformSeconds 0 = simulated)"), DevSeconds,
 			PendingAction.TotalTime);
@@ -1090,7 +1100,8 @@ void UMOTerraformingComponent::ServerApplyTerraform_Implementation(EMOTerraformM
 	// (H17 residual -- a modified client could otherwise fire instant craters as fast as it liked).
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const float DevSeconds = MOTerraformDev::SecondsFor(this);
-	const double MinInterval = 0.8 * FMath::Max(0.1f, DevSeconds > 0.0f ? DevSeconds : TerraformDurationSeconds);
+	const double MinInterval = FMOWorldRules::IsInstant(this, EMOWorldPace::Terraforming) ? 0.1
+		: 0.8 * FMath::Max(0.1f, DevSeconds > 0.0f ? DevSeconds : TerraformDurationSeconds);   // a creative world's actions are instant
 	if (LastServerTerraformTime >= 0.0 && Now - LastServerTerraformTime < MinInterval)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: %.2f s after the last apply (min %.1f) -- rejected"), Now - LastServerTerraformTime, MinInterval);
@@ -1177,7 +1188,7 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 		"ApplyPendingTerraform: mode=%d location=%s radius=%.1f flattenZ=%.1f sculptApplied=%s",
 		(int32)PendingAction.Mode,
 		*PendingAction.TargetLocation.ToString(),
-		Config.Radius,
+		GetBrushRadius(),
 		PendingAction.FlattenTargetHeight,
 		bSuccess ? TEXT("true") : TEXT("false"));
 
@@ -1191,7 +1202,7 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 		if (PendingAction.Mode == EMOTerraformMode::Dig)
 		{
 			// The atomic dig (a joiner's dig applied here): its whole bite at once -- a volume bite is the half of its sphere behind the hit point.
-			GrantDigYield(PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength),
+			GrantDigYield(PendingAction.bVolume ? GetVolumeBiteM3() : ComputeMovedVolumeCubicMeters(GetBrushRadius(), GetBrushStrength()),
 				/*bSlab=*/!PendingAction.bVolume);
 		}
 	}
@@ -1206,11 +1217,15 @@ void UMOTerraformingComponent::GrantDigYield(float VolumeM3, bool bSlab)
 	{
 		return;
 	}
+	if (FMOWorldRules::IsCreative(this))
+	{
+		return;   // a creative world's digs make no spoil (Wes, Nov 3: "make digging not produce dirt ... in creative mode")
+	}
 	// Whole items only: the part of an item's worth of earth a dig leaves over (an interrupted dig's few litres) is carried to this pawn's next dig,
 	// not lost -- earth is conserved (Docs/Terraform_Excavation_Plan.md).
 	const float WithCarry = VolumeM3 + DigYieldCarryM3;
 	TArray<FMOItemYield> Yields;
-	if (!FMOGeologyYield::ForDigInWorld(this, PendingAction.TargetLocation, Config.Radius, WithCarry, ExcavationItemsPerCubicMeter, bSlab, ExcavationSpoilItemId, Yields))
+	if (!FMOGeologyYield::ForDigInWorld(this, PendingAction.TargetLocation, GetBrushRadius(), WithCarry, ExcavationItemsPerCubicMeter, bSlab, ExcavationSpoilItemId, Yields))
 	{
 		Yields.Add({ ExcavationSpoilItemId, SpoilItemsForVolume(WithCarry, ExcavationItemsPerCubicMeter), true });   // no world seed: plain earth
 	}
@@ -1240,14 +1255,14 @@ void UMOTerraformingComponent::RegisterTerraformZone()
 	// owns the zone list, the sweep timer, and save/load.
 	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
 	{
-		TerrainMod->RegisterModifiedZone(PendingAction.TargetLocation, Config.Radius);
+		TerrainMod->RegisterModifiedZone(PendingAction.TargetLocation, GetBrushRadius());
 		if (PendingAction.Mode == EMOTerraformMode::Flatten && PendingAction.AppliedSteps > 0)
 		{
 			// The incremental bite worked its own two spots (a bite at the brush's edge reaches a brush further than the centre's zone).
-			TerrainMod->RegisterModifiedZone(PendingAction.FlattenDigPoint, Config.Radius);
+			TerrainMod->RegisterModifiedZone(PendingAction.FlattenDigPoint, GetBrushRadius());
 			if (PendingAction.bFlattenFill)
 			{
-				TerrainMod->RegisterModifiedZone(PendingAction.FlattenFillPoint, Config.Radius);
+				TerrainMod->RegisterModifiedZone(PendingAction.FlattenFillPoint, GetBrushRadius());
 			}
 		}
 
@@ -1308,14 +1323,14 @@ float UMOTerraformingComponent::ApplyTerraformIncrement(int32 Step, int32 TotalS
 	{
 		return 0.0f;
 	}
-	const float StepStrength = Config.RaiseLowerStrength / static_cast<float>(TotalSteps);
+	const float StepStrength = GetBrushStrength() / static_cast<float>(TotalSteps);
 	if (PendingAction.Mode == EMOTerraformMode::Flatten)
 	{
 		return ApplyFlattenStep(PendingAction.FlattenDigPoint, PendingAction.FlattenFillPoint, PendingAction.bFlattenFill, StepStrength);
 	}
 	const FVector2D Loc(PendingAction.TargetLocation.X, PendingAction.TargetLocation.Y);
-	MOVoxel::HeightSculpt(Actor, Loc, Config.Radius, StepStrength, /*bAdd*/ !bDig);
-	return bDig ? ComputeMovedVolumeCubicMeters(Config.Radius, StepStrength) : 0.0f;
+	MOVoxel::HeightSculpt(Actor, Loc, GetBrushRadius(), StepStrength, /*bAdd*/ !bDig);
+	return bDig ? ComputeMovedVolumeCubicMeters(GetBrushRadius(), StepStrength) : 0.0f;
 }
 
 bool UMOTerraformingComponent::ResolveCharacterGroundZ(float& OutGroundZ) const

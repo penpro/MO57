@@ -2168,3 +2168,11 @@ References: CL-0314
 ### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0316
 Status: RELEASE CL-0315 (N-267, #132's remainder: a joiner sees the host's digs): committed. C++: MOVoxelAlias.h/.cpp (EnableSculptReplication; the run-time volume sculpt net-addressable on every machine), MOTerrainModificationSubsystem.cpp (both before BeginPlay, co-op only). Tools: ue.py / ue_inst.py (`nettest digsync`: PASS -- height and volume digs reach the joiner). `ue.py auto` 418/418; Tools/check_dig_under_rock.py 10/10. Docs: Coop_And_Networking section 3, Terraform_Excavation_Plan, Voxel_Plugin_Reference, TRAPS, TOOLING, BACKLOG (N-267, N-256), DECISIONS (fork F60: the cave entrances' bowls). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
 References: CL-0315
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0317
+Status: CLAIM + C++ build window: creative-world terraforming (Wes, Nov 3: no dirt out, none needed to raise, larger effects) -- MOTerraformingComponent.h/.cpp (GetBrushRadius / GetBrushStrength: every brush use; creative x2 radius, x10 strength; no spoil in creative; the server's rate floor for instant worlds), MOWorldCreationTypes.h/.cpp (terraforming instant in a creative world), Tests/MOFrameworkTests.cpp; Tools/check_creative_dig.py (new). Also the digsync late-joiner phase in Tools/ue_inst.py (PASS).
+References: CL-0316
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0318
+Status: RELEASE CL-0317 (N-268 creative terraforming; the digsync late-joiner phase): committed. C++: MOTerraformingComponent.h/.cpp, MOWorldCreationTypes.h/.cpp, Tests/MOFrameworkTests.cpp. Tools: check_creative_dig.py (new, PASS), ue_inst.py (digsync: a fresh joiner after the digs, PASS). `ue.py auto` 418/418; check_dig_under_rock.py 10/10. Docs: World_Creation, Terraform_Excavation_Plan, DECISIONS (Nov 3 creative note; fork F61: a survival Raise's earth), BACKLOG (N-268, N-267), Coop_And_Networking, TOOLING. The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
+References: CL-0317
