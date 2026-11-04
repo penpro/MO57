@@ -11,11 +11,23 @@ struct MOFRAMEWORK_API FMOBlockedRecipe
 	FString Reason;
 };
 
+/** One way to get an item, in a player's words (N-255: the crafting panels say where a missing ingredient comes from). */
+struct MOFRAMEWORK_API FMOItemSourceHint
+{
+	/** "Pick up loose stones", "Boulder: Break off a building stone", "Make it: Knap Flint Flakes", "Butcher a deer carcass". */
+	FText Label;
+	/** The breadth-first round it became reachable in (0 = the bare world): the panels list the easiest first. */
+	int32 Tier = 0;
+};
+
 /** Result of FMOItemSourceAnalysis::Analyze. */
 struct MOFRAMEWORK_API FMOItemSourceReport
 {
 	/** Every obtainable item -> the first source found for it ("resource BlackLocust/StripBark", "recipe ShredBark", ...). */
 	TMap<FName, FString> SourceOf;
+
+	/** Every reachable way to get each item, in a player's words, in the order found (easiest tier first). */
+	TMap<FName, TArray<FMOItemSourceHint>> Hints;
 
 	/** Recipes no player can ever perform, each with the first gate that stops it. */
 	TArray<FMOBlockedRecipe> BlockedRecipes;

@@ -271,14 +271,30 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 		Obtainable.Add(ItemId, Source);
 		return true;
 	};
+	// Every way to get an item, in a player's words (N-255): recorded when the way becomes reachable, once per wording.
+	int32 HintTier = 0;
+	auto Hint = [&Report, &HintTier](FName ItemId, const FText& Label)
+	{
+		if (ItemId.IsNone() || Label.IsEmpty())
+		{
+			return;
+		}
+		TArray<FMOItemSourceHint>& Ways = Report.Hints.FindOrAdd(ItemId);
+		if (!Ways.ContainsByPredicate([&Label](const FMOItemSourceHint& Way) { return Way.Label.EqualTo(Label); }))
+		{
+			Ways.Add({ Label, HintTier });
+		}
+	};
 
 	for (UDataTable* Table : FindTablesWithRowStruct(FMOCarcassDefinitionRow::StaticStruct()))
 	{
-		Table->ForeachRow<FMOCarcassDefinitionRow>(TEXT("MOItemSources"), [&Produce](const FName& Key, const FMOCarcassDefinitionRow& Row)
+		Table->ForeachRow<FMOCarcassDefinitionRow>(TEXT("MOItemSources"), [&Produce, &Hint](const FName& Key, const FMOCarcassDefinitionRow& Row)
 		{
+			const FText Animal = Row.DisplayName.IsEmpty() ? FText::FromName(Key) : Row.DisplayName;
 			for (const FMOCarcassPartEntry& Part : Row.Parts)
 			{
 				Produce(Part.ItemDefinitionId, FString::Printf(TEXT("carcass %s/%s"), *Key.ToString(), *Part.PartId.ToString()));
+				Hint(Part.ItemDefinitionId, FText::Format(NSLOCTEXT("MOItemSources", "Butcher", "Butcher a {0}"), Animal));
 			}
 		});
 	}
@@ -290,6 +306,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			for (const FMODigDropEntry& Entry : Foraging->DigDropTable)
 			{
 				Produce(Entry.ItemId, TEXT("digging"));
+				Hint(Entry.ItemId, NSLOCTEXT("MOItemSources", "Dig", "Dig in the ground"));
 			}
 		}
 	}
@@ -304,6 +321,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				for (const FMODigDropEntry& Entry : Biome->DigYields)
 				{
 					Produce(Entry.ItemId, FString::Printf(TEXT("digging in %s"), *BiomeId.ToString()));
+					Hint(Entry.ItemId, NSLOCTEXT("MOItemSources", "Dig", "Dig in the ground"));
 				}
 			}
 		}
@@ -320,12 +338,16 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				Sample.Bedrock = Rock;
 				Sample.Ore = Ore;
 				bool bFill = true;
-				Produce(FMOGeologyYield::ItemFor(Sample, FName(TEXT("Dirt01")), bFill), TEXT("excavating (geology)"));
+				const FName Dug = FMOGeologyYield::ItemFor(Sample, FName(TEXT("Dirt01")), bFill);
+				Produce(Dug, TEXT("excavating (geology)"));
+				Hint(Dug, Material == EMODigMaterial::Soil ? NSLOCTEXT("MOItemSources", "Excavate", "Dig into the ground")
+					: NSLOCTEXT("MOItemSources", "ExcavateRock", "Dig into rock (a digging tool)"));
 			}
 		}
 	}
 
 	TMap<FName, FString> Pickups;
+	TMap<FName, TArray<FText>> PickupWays;   // the words for each pickup (a cover's action; the rest lie on the ground)
 	TArray<TTuple<const FMOCoverForage*, bool, FString>> ToolGatedCover;
 	TSet<FName> PlacedResources;
 	CollectPcgPickups(ItemByMesh, Pickups, PlacedResources);
@@ -363,6 +385,12 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 							for (const FMODigDropEntry& Yield : Cover->YieldsFor(bShore))
 							{
 								Pickups.FindOrAdd(Yield.ItemId, Source);
+								TArray<FText>& Ways = PickupWays.FindOrAdd(Yield.ItemId);
+								const FText Label = Cover->LabelFor(bShore);
+								if (!Ways.ContainsByPredicate([&Label](const FText& Way) { return Way.EqualTo(Label); }))
+								{
+									Ways.Add(Label);
+								}
 							}
 						}
 					}
@@ -383,6 +411,17 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 	{
 		Produce(Pickup.Key, Pickup.Value);
 		Report.PickupItems.Add(Pickup.Key);
+		if (const TArray<FText>* Ways = PickupWays.Find(Pickup.Key))
+		{
+			for (const FText& Way : *Ways)
+			{
+				Hint(Pickup.Key, Way);
+			}
+		}
+		if (!Pickup.Value.StartsWith(TEXT("gathering cover")))
+		{
+			Hint(Pickup.Key, NSLOCTEXT("MOItemSources", "Pickup", "Lying on the ground: pick it up"));
+		}
 	}
 	Report.PickupItems.Sort(FNameLexicalLess());
 
@@ -542,6 +581,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 	{
 		bChanged = false;
 		++Round;
+		HintTier = Round;
 		TArray<TPair<FName, const FMORecipeDefinitionRow*>> MetThisRound;
 
 		// Obtainable items teach (inspection grants, up to each grant's MaxLevel) and work as tools.
@@ -588,6 +628,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				for (const FMODigDropEntry& Yield : Cover->YieldsFor(Gated.Get<1>()))
 				{
 					bChanged |= Produce(Yield.ItemId, Gated.Get<2>());
+					Hint(Yield.ItemId, Cover->LabelFor(Gated.Get<1>()));
 				}
 			}
 		}
@@ -595,9 +636,11 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 		// Resource harvest actions: knowledge-gated, and tool-gated only when the action cannot be done bare-handed.
 		for (const TPair<FName, const FMOResourceNodeDefinitionRow*>& Resource : Resources)
 		{
+			const FText Where = Resource.Value->DisplayName.IsEmpty() ? FText::FromName(Resource.Key) : Resource.Value->DisplayName;
 			for (const FName& Yield : Resource.Value->YieldsItems)
 			{
 				bChanged |= Produce(Yield, FString::Printf(TEXT("resource %s"), *Resource.Key.ToString()));
+				Hint(Yield, FText::Format(NSLOCTEXT("MOItemSources", "Harvest", "Harvest: {0}"), Where));
 			}
 			for (const FMOResourceHarvestAction& Action : Resource.Value->HarvestActions)
 			{
@@ -609,6 +652,8 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				for (const FName& Yield : Action.YieldsItems)
 				{
 					bChanged |= Produce(Yield, FString::Printf(TEXT("resource %s/%s"), *Resource.Key.ToString(), *Action.ActionId.ToString()));
+					Hint(Yield, Action.DisplayName.IsEmpty() ? FText::Format(NSLOCTEXT("MOItemSources", "Harvest", "Harvest: {0}"), Where)
+						: FText::Format(NSLOCTEXT("MOItemSources", "HarvestAction", "{0}: {1}"), Where, Action.DisplayName));
 				}
 				if (Action.SkillXPReward > 0.0f)
 				{
@@ -639,6 +684,9 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			if (bContainer && (!Measure.Value.bMeasureNeedsSafeWater || (bFire && (bHeatable || bStones))))
 			{
 				bChanged |= Produce(Measure.Key, Measure.Value.bMeasureNeedsSafeWater ? TEXT("water boiled in a container") : TEXT("a container filled at water"));
+				Hint(Measure.Key, Measure.Value.bMeasureNeedsSafeWater
+					? NSLOCTEXT("MOItemSources", "BoilWater", "Boil water in a container you carry (a pot over a fire, or heated stones)")
+					: NSLOCTEXT("MOItemSources", "FillWater", "Fill a container you carry at a lake or river"));
 			}
 		}
 
@@ -672,6 +720,12 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			for (const FMORecipeOutput& Output : Recipe.Outputs)
 			{
 				Produce(Output.ItemDefinitionId, FString::Printf(TEXT("recipe %s"), *RecipeId.ToString()));
+				if (!Recipe.bIsBuilding)
+				{
+					// a harvest recipe is an action on something in the world ("Mine Stone"), not a thing made
+					const FText Name = Recipe.DisplayName.IsEmpty() ? FText::FromName(RecipeId) : Recipe.DisplayName;
+					Hint(Output.ItemDefinitionId, Recipe.bIsHarvestRecipe ? Name : FText::Format(NSLOCTEXT("MOItemSources", "Make", "Make it: {0}"), Name));
+				}
 			}
 			if (Recipe.SkillXPReward > 0.0f)
 			{

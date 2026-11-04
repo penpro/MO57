@@ -201,6 +201,10 @@ void UMOBuildingDetailPanel::PopulateRequirementsContainer()
 		}
 
 		AddTextWidget(IngredientsContainer, IngredientTextWidgets, DisplayText, Part.bHasEnough);
+		if (!Part.bIsAction && !Part.bHasEnough)
+		{
+			AddWhereToFind(IngredientsContainer, IngredientTextWidgets, Part.ItemDefinitionId);
+		}
 	}
 }
 

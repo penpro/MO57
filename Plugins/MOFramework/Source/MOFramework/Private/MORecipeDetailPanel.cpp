@@ -205,6 +205,10 @@ void UMORecipeDetailPanel::PopulateRequirementsContainer()
 		);
 
 		AddTextWidget(IngredientsContainer, IngredientTextWidgets, DisplayText, Ingredient.bHasEnough);
+		if (!Ingredient.bHasEnough)
+		{
+			AddWhereToFind(IngredientsContainer, IngredientTextWidgets, Ingredient.ItemDefinitionId);
+		}
 	}
 }
 

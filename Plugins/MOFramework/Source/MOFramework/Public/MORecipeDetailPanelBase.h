@@ -235,6 +235,12 @@ protected:
 	 */
 	void AddTextWidget(UPanelWidget* Container, TArray<TObjectPtr<UTextBlock>>& WidgetArray, const FText& Text, bool bHasEnough = true);
 
+	/**
+	 * Under an ingredient the player lacks: where it comes from ("Find it: Pick up loose stones; ..."; UMOItemSourceSubsystem), a quieter
+	 * line, indented. Nothing when no way is known. (N-255)
+	 */
+	void AddWhereToFind(UPanelWidget* Container, TArray<TObjectPtr<UTextBlock>>& WidgetArray, FName ItemId);
+
 	// ============================================================================
 	// WIDGET BINDINGS
 	// ============================================================================

@@ -99,6 +99,13 @@
   - A cobble course uses three of the eleven walling stones and one pinning stone, which keeps a wall at a few instanced parts per course
     while the wall as a whole shows all of them.
   - Moss daub became ~190k triangles (tufted cushions); Nanite carries it. Cheaper if it ever shows in a profile.
+- **The second batch of pieces and the last placeholders** (Nov 3, N-265 / N-266). Claude's small calls, noted:
+  - The half pieces are built in the stick half wall's own panel (X -51.3, Z -54.3 .. -4.3, measured), so one half daub fits the old stick
+    half wall and the new wattle one; a full wall's daub is refused on a half wall (the sizes differ).
+  - A hurdle fence is the wattle wall on open ground (walls already run on end to end): no separate piece. The pen fence is the dry-stone
+    wall (Farming_And_Husbandry: "posts and wattle, a stone wall later"), at the stones' real weight like the cobble pieces (F58's A).
+  - Clothing and armour as world items are what they look like dropped (laid flat, a cuirass standing); how they sit on a body when worn is
+    the wearables' fitting, a separate job. The water measures show as 250 ml standing in a cup (a carved one untreated, a fired one boiled).
 
 ### 2026-11-02
 - **How a hand holds an item is one standard** (Wes: "take what you learned here and make sure it works on the other metahumans and make sure

@@ -6,11 +6,14 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOUIUtils.h"
+#include "MOUITokens.h"
+#include "MOItemSourceSubsystem.h"
 #include "MOBuildingTypes.h"
 #include "MOCommonButton.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/SpinBox.h"
 #include "Components/Slider.h"
 
@@ -381,4 +384,35 @@ void UMORecipeDetailPanelBase::AddTextWidget(UPanelWidget* Container, TArray<TOb
 		Container->AddChild(TextWidget);
 		WidgetArray.Add(TextWidget);
 	}
+}
+
+void UMORecipeDetailPanelBase::AddWhereToFind(UPanelWidget* Container, TArray<TObjectPtr<UTextBlock>>& WidgetArray, FName ItemId)
+{
+	UMOItemSourceSubsystem* Sources = UMOItemSourceSubsystem::Get(this);
+	const FText Where = Sources ? Sources->GetWhereToFind(ItemId) : FText::GetEmpty();
+	if (!Container || Where.IsEmpty())
+	{
+		return;
+	}
+	UTextBlock* TextWidget = NewObject<UTextBlock>(this);
+	TextWidget->SetText(Where);
+	TextWidget->SetAutoWrapText(true);
+	if (UMOUITokens::IsLoaded())
+	{
+		TextWidget->SetFont(UMOUITokens::Font(FName(TEXT("body"))));
+		TextWidget->SetColorAndOpacity(UMOUITokens::SlateColor(FName(TEXT("color.text.secondary"))));
+	}
+	else
+	{
+		FSlateFontInfo Font = TextWidget->GetFont();
+		Font.Size = 10;
+		TextWidget->SetFont(Font);
+		TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor(0.62f, 0.62f, 0.62f)));
+	}
+	UPanelSlot* RowSlot = Container->AddChild(TextWidget);
+	if (UVerticalBoxSlot* Row = Cast<UVerticalBoxSlot>(RowSlot))
+	{
+		Row->SetPadding(FMargin(14.0f, 0.0f, 0.0f, 4.0f));   // under its ingredient, indented
+	}
+	WidgetArray.Add(TextWidget);
 }

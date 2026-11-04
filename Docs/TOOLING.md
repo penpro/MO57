@@ -40,6 +40,9 @@ UMG drag and drop). `MO.Test.InjectInput <IA_Name> [X Y] [Seconds]` feeds a REAL
 controller's own handlers -- tutorial events, menu gates -- which `MO.Test.Input` skips (it calls the pawn directly): use it for naive-player passes.
 A newer injection of the same action replaces the held one, and only the newest one's timer releases the key (until Oct 29 an older hold's
 timer cut a newer one short): steer W, then A, then W again without waiting the first one out.
+Where to find an item (Nov 3, N-255): `MO.Test.WhereToFind <ItemId>` (`[MOTEST] WhereToFind`: the "Find it" line the recipe / building
+panels put under a missing ingredient, the number of ways and what the one-off analysis cost). Building pieces: `MO.Test.PlacePiece`,
+`PieceProgress`, `PieceInfo`, `PieceDoor`, `ShelterHere`, `ShelterRay` (`Docs/Building.md` section 7; `Tools/check_buildings.py`).
 Crops (Oct 26): `MO.Test.AgeCrops <Days> [RadiusCm=1500]` (plots near player 0 grow that many more days; logs stage and growth), with
 `MO.Test.WorldAction list|Sow:<CropId>|Harvest|ClearPlot` on the plot. A creative world tills a plot at once; `Gathering=0.1` shortens sowing / harvest.
 Creatures (Oct 26): `MO.Test.SpawnCreature <Species|ClassPath> [DistanceCm=600] [SideCm=0]` (on the ground in front of player 0; Species = Pig ->

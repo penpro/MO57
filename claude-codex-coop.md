@@ -2124,3 +2124,15 @@ References: CL-0303
 ### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0305
 Status: RELEASE CL-0304 (N-264, natural variation in the Blender-made assets): committed -- Tools/blender_buildings_blender.py (Vary, the natural primitives, the uneven layouts), Tools/building_pieces.py (tint ranges, 18 stones), Tools/blender_items_blender.py (tone, natural, the four items), Content/Python/import_blender_buildings.py (M_Surf_Base, the stone laying); Docs (Building section 7, Blender_Items, BACKLOG N-264 + a by-eye row, DECISIONS Nov 3, TRAPS section 12: the FBX V flip, rebuilding a material from Python). No C++, no rows. Local only (LFS budget): /Game/BlenderBuildings (all 18 pieces reimported, M_Surf_Base new), the four items' meshes and the five icons. The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
 References: CL-0304
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session, resumed after a crash) — CL-0306
+Status: CLAIM for the second batch of building pieces (N-265: wattle half wall, half-wall daubs, roof peak thatch, dry-stone wall; the clay daub's inverted faces) and the last eleven graybox items (N-266). Editing Tools/blender_buildings_blender.py, building_pieces.py, check_buildings.py, blender_items_blender.py, blender_items.py, ue.py (rows_set_bulk), Content/Python/import_blender_buildings.py; Docs (Building, Blender_Items, BACKLOG, DECISIONS, TRAPS, PROGRESSION_ROADMAP), row patches. No C++. The editor and instances are mine for the imports and the in-game check.
+References: CL-0305
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0307
+Status: CLAIM + C++ build window now (editor closed): N-255 where-to-find hints -- MOItemSourceAnalysis.h/.cpp (every way in words), new MOItemSourceSubsystem.h/.cpp, MORecipeDetailPanelBase.h/.cpp, MORecipeDetailPanel.cpp, MOBuildingDetailPanel.cpp, Tests/MOWhereToFindTests.cpp (new); and MOBuildingComponent.cpp (TryAttachSnap: one of a kind per place by piece tag). One build, then `ue.py auto`.
+References: CL-0306
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0308
+Status: RELEASE CL-0306 + CL-0307 (N-265 building pieces batch 2, N-266 the last eleven graybox items, N-255 where-to-find hints + the one-daub-per-wall fix): committed in three commits. C++: MOItemSourceAnalysis.h/.cpp, MOItemSourceSubsystem.h/.cpp (new), MORecipeDetailPanelBase.h/.cpp, MORecipeDetailPanel.cpp, MOBuildingDetailPanel.cpp, MOBuildingComponent.cpp, Tests/MOWhereToFindTests.cpp (new); `ue.py auto` 416/416. Tools: blender_buildings_blender.py, building_pieces.py, check_buildings.py, blender_items_blender.py, blender_items.py, ue.py (rows_set_bulk); Content/Python/import_blender_buildings.py. Local only (LFS budget): the new /Game/BlenderBuildings pieces and /Game/BlenderItems items, their icons, the Recipes / DT_Items rows (row patches in Docs/RowPatches). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
+References: CL-0306, CL-0307

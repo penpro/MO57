@@ -150,6 +150,13 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   cover gathering, PCG pickups and recipe gates (ingredients, build parts, station + fuel, tools, discovery, knowledge). Reports
   orphan items, orphan knowledge, `unplaced_resources`, blocked recipes with their first gate, and a tier per item / recipe in two
   modes (today vs attempt-anything). Needs PIE. Rerun after any data change and read `unplaced_resources` first.
+- **Where to find a missing ingredient** (N-255, Nov 3; Wes, Nov 1: "the crude chopper takes stone, idk where to get stone"): the same
+  analysis keeps every reachable way to get each item in a player's words (`FMOItemSourceReport::Hints`: "Pick up loose stones",
+  "Boulder: Break off a building stone", "Make it: Knap Flint Flakes", "Butcher a deer", "Dig into rock (a digging tool)", "Fill a
+  container you carry at a lake or river"), each with the round it became reachable. `UMOItemSourceSubsystem` (game instance) runs it once,
+  the first time anything asks, and the recipe and building panels put "Find it: <the three easiest ways>" under every ingredient the
+  player lacks (`UMORecipeDetailPanelBase::AddWhereToFind`). `MO.Test.WhereToFind <ItemId>` prints the line and what the one-off analysis
+  cost; `MOFramework.Crafting.WhereToFindWords` holds every obtainable item to having words and none being the analysis's shorthand.
 - **Edit content live**, never the mirrors: `python Tools/ue.py rows set <table> --file rows.json` (readback-verified; `rows get` each
   row first and add only what is missing). The `*_JSON.json` / CSV files in `Plugins/MOFramework/Content/Data` have not tracked the
   live tables since early checkpoints. `ue.py mcp dt remove_rows` deletes; Git Bash needs `MSYS_NO_PATHCONV=1`. After MCP edits:
