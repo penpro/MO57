@@ -455,6 +455,11 @@
   re-creation:** it reloads in place and the actor survives -> load from the main menu in a fresh process (`load_game` on the menu's
   controller). Trace the ground with Visibility minus the `MOWorldItem`s (the spoil lands on the spot; an object-type WorldStatic trace
   starts inside some volume and returns its start). (N-256, Nov 3)
+- **Cave dressing floats round a bowl** -> `FindCaveSurfaces` took the cave field's sign change in the OPEN AIR for a floor (a hollow's
+  cap sphere runs on above the ground round its rim; the search goes a metre over the ground) -> a surface needs rock under it (below the
+  column's ground). **Planted things float at a cave mouth but `MO.PCG.Grounding` says grounded** -> it measures against the generator's
+  height field, which has no bowl -> `MO.PCG.OpeningAudit`. A floating mesh near a mouth: check `DT_CaveScatter` before the biome
+  palettes (the sand rocks there were the cave dressing). (BR23-1, Nov 3)
 
 ## 9. PCG
 

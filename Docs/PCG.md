@@ -97,7 +97,10 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
 
 - **`MOPCGElevationBands`**: every spawner chain passes one. `bExcludeWater` (default on) + `AllowedBiomeIds` + `bExcludeCaves`.
   `FMOPCGWaterMask` = the sea plane via the point's own ground Z + the generator's upland-lake zone (+ `ShoreFactor`, `BiomeAt`,
-  `IsInCave`, `MayHaveShore`). `MO.PCG.WaterAudit` measured 51k instances in one lake before; 0 after.
+  `IsInCave`, `MayHaveShore`). `MO.PCG.WaterAudit` measured 51k instances in one lake before; 0 after. `IsInCave` is the one cave test:
+  a rim zone, ground an opening has carved (`SampleOpeningDistanceUnderCm`, Nov 3), a cave surface; the biome spawner asks it too
+  (`IsInCave(X, Y, Z, GroundZ)` with the ground it already sampled). Round a cave mouth `MO.PCG.OpeningAudit`, not `MO.PCG.Grounding`
+  (that one measures against the generator's height field, which knows nothing of the bowl).
 - **The biome spawner** plants `DT_Biomes` palettes. Biome identity comes from the biome data, never from graph-wide layers.
   **New vegetation = a species row** (the HISM tag decides the tier), never a new native chain. A tag outside the large list (e.g.
   `MOBiomeCover_Fern`) lands a species in the near tier with no far copies.

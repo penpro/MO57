@@ -661,6 +661,48 @@ float FMOWorldGenDomain::DistanceToSinkholeRimZone(const FMOWorldGenParams& Para
 	return FMath::Min(Dist - S.RadiusCm * 2.3f, Entrance);
 }
 
+bool FMOWorldGenDomain::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f)
+	{
+		return false;
+	}
+	FEntranceBasics B;
+	float Ground = 0.0f;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground))
+	{
+		return false;
+	}
+	Out.Center = FVector2D(B.CenterX, B.CenterY);
+	Out.RadiusCm = B.HollowRadius;
+	Out.DepthCm = B.HollowDepth;
+	Out.GroundCm = Ground;
+	return true;
+}
+
+float FMOWorldGenDomain::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves)
+	{
+		return CaveFarCm;
+	}
+	// Under the point's base. The two features' own early-outs (out of reach: CaveFarCm after one cell hash) keep this cheap for every other point;
+	// in reach, the cave field itself decides -- the same gates (water, high ground) the stamp carves with, and a passage or gallery there too.
+	const double Under = GroundZ - 30.0;
+	float Near = SinkholeDistance(Params, X, Y, Under, Seed);
+	if (T.CaveEntranceChance > 0.0f)
+	{
+		Near = FMath::Min(Near, EntranceDistance(Params, X, Y, Under, Seed, T.VoxelSizeCm));
+	}
+	if (Near >= CaveFarCm)
+	{
+		return CaveFarCm;
+	}
+	return SampleCaveDistanceAtGround(Params, X, Y, Under, (float)GroundZ, Seed, T.VoxelSizeCm);
+}
+
 float FMOWorldGenDomain::DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;

@@ -66,9 +66,13 @@ struct MOFRAMEWORK_API FMOPCGWaterMask
 	/**
 	 * Is a surface point part of the CAVE system rather than the open ground: inside a sinkhole's rim zone (the shaft and its flared mouth) or well below the height terrain (200 cm: the wall / floor of a tunnel,
 	 * cavern or shaft). The cave stamp carves those out of the height terrain, but some PCG chains sample the terrain's HEIGHT and so plant grass and trees on the plug that is no longer there (seen 2026-10-12:
-	 * a green disc over a 5 m shaft). False when the mask is inactive or the cave system is off.
+	 * a green disc over a 5 m shaft). Also a point whose ground an opening has carved away (FMOWorldGen::SampleOpeningDistanceUnderCm < 0: a
+	 * hollow on a slope cuts wider uphill than its rim zone, up to 1.31 radii against the zone's 1.2). False when the mask is inactive or the cave
+	 * system is off.
 	 */
 	bool IsInCave(double X, double Y, double Z) const;
+	/** IsInCave with the generator's ground at (X, Y) already sampled (the biome spawner has it). */
+	bool IsInCave(double X, double Y, double Z, double GroundZ) const;
 
 	/** The index of a biome id in the params' list (INDEX_NONE if unknown or inactive). */
 	int32 FindBiome(FName BiomeId) const;

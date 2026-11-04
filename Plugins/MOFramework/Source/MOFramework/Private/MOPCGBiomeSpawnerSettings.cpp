@@ -655,8 +655,8 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				FCyScope GenStage(Cy.Gen, bProfile);
 				const float GroundZ = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
 				// ... and nothing is planted under water: rivers, lakes and the sea are terrain below SeaLevelCm, and an upland lake's water is the ellipse of its bowl (FMOPCGWaterMask).
-				if (Location.Z < GroundZ - 200.0f || EdgeMask.IsInWater(Location.X, Location.Y, Location.Z)
-					|| FMOWorldGen::DistanceToSinkholeRimZone(*GenParams, Location.X, Location.Y, TerrainSeed) <= 0.0f)
+				// ... nor in the caves: the one cave test every chain asks (FMOPCGWaterMask::IsInCave: a rim zone, ground an opening has carved, a cave surface).
+				if (EdgeMask.IsInWater(Location.X, Location.Y, Location.Z) || WaterMask.IsInCave(Location.X, Location.Y, Location.Z, GroundZ))
 				{
 					Result.Outcome = EPointOutcome::Suppressed;
 					return;

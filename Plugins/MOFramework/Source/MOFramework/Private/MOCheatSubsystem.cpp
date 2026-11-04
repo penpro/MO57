@@ -5255,6 +5255,119 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.PCG.OpeningAudit [radius_cm] ----------
+	// BR23-1 / BR24-22: what stands round the built cave entrances near the pawn. Per planted instance within 2.5 hollow radii of one: its distance in
+	// radii, the generator's carve under its pivot (FMOWorldGen::SampleOpeningDistanceUnderCm at the height terrain's ground -- what the scatter's
+	// IsInCave asks), the radial keep-out, and its base against the traced ground. By mesh: how many stand over carved ground, and how many float.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.OpeningAudit"),
+		TEXT("Dev: planted instances round the built cave entrances near the pawn -- carve under them, keep-outs, base gap. Usage: MO.PCG.OpeningAudit [radius_cm=20000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 2000.0, 100000.0) : 20000.0;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			TArray<FMOCaveEntranceHollow> Hollows;
+			int64 Cx0 = 0, Cy0 = 0;
+			FMOWorldGen::WorldToCell(*P, C.X, C.Y, P->Tuning.CaveEntranceCellCm, Cx0, Cy0);
+			const int64 Span = (int64)FMath::CeilToDouble(Radius / P->Tuning.CaveEntranceCellCm) + 1;
+			for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
+			{
+				for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
+				{
+					FMOCaveEntranceHollow E;
+					if (FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, TerrainSeed, E) && FVector2D::Distance(E.Center, FVector2D(C)) <= Radius)
+					{
+						Hollows.Add(E);
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING hollow at (%.0f, %.0f, %.0f) r=%.0f depth=%.0f, %.0f m from the pawn"), E.Center.X, E.Center.Y, E.GroundCm,
+							E.RadiusCm, E.DepthCm, FVector2D::Distance(E.Center, FVector2D(C)) / 100.0);
+					}
+				}
+			}
+			struct FRow { int32 N = 0, OverCarve = 0, Radial = 0, Floating = 0, FloatingKept = 0; float MinR = 1.0e9f, MaxR = 0.0f, GapMax = -1.0e9f; };
+			TMap<FString, FRow> Rows;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					if (!Mesh || Ism->GetInstanceCount() == 0)
+					{
+						continue;
+					}
+					const FBox Box = Ism->Bounds.GetBox();
+					bool bNear = false;
+					for (const FMOCaveEntranceHollow& E : Hollows)
+					{
+						bNear |= Box.ComputeSquaredDistanceToPoint(FVector(E.Center, E.GroundCm)) <= FMath::Square(E.RadiusCm * 2.5 + 5000.0);
+					}
+					if (!bNear)
+					{
+						continue;
+					}
+					const float MeshBottom = (float)(Mesh->GetBounds().Origin.Z - Mesh->GetBounds().BoxExtent.Z);
+					const FCollisionQueryParams Q(TEXT("OpeningAudit"), false, *ActorIt);
+					for (int32 I = 0; I < Ism->GetInstanceCount(); ++I)
+					{
+						FTransform T;
+						Ism->GetInstanceTransform(I, T, /*bWorldSpace*/ true);
+						const FVector L = T.GetLocation();
+						float InRadii = 1.0e9f;
+						for (const FMOCaveEntranceHollow& H : Hollows)
+						{
+							InRadii = FMath::Min(InRadii, (float)FVector2D::Distance(FVector2D(L), H.Center) / FMath::Max(1.0f, H.RadiusCm));
+						}
+						if (InRadii > 2.5f)
+						{
+							continue;
+						}
+						FRow& R = Rows.FindOrAdd(Mesh->GetName());
+						++R.N;
+						R.MinR = FMath::Min(R.MinR, InRadii);
+						R.MaxR = FMath::Max(R.MaxR, InRadii);
+						const float G = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+						const float Carve = FMOWorldGen::SampleOpeningDistanceUnderCm(*P, L.X, L.Y, G, TerrainSeed);
+						const bool bOverCarve = Carve < 0.0f;
+						R.OverCarve += bOverCarve ? 1 : 0;
+						R.Radial += FMOWorldGen::DistanceToSinkholeRimZone(*P, L.X, L.Y, TerrainSeed) <= 0.0f ? 1 : 0;
+						FHitResult Hit;
+						if (World->LineTraceSingleByChannel(Hit, L + FVector(0.0, 0.0, 300.0), L - FVector(0.0, 0.0, 3000.0), ECC_Visibility, Q))
+						{
+							const float Gap = (float)(L.Z + MeshBottom * T.GetScale3D().Z - Hit.ImpactPoint.Z);
+							R.GapMax = FMath::Max(R.GapMax, Gap);
+							if (Gap > 30.0f)
+							{
+								++R.Floating;
+								R.FloatingKept += bOverCarve ? 1 : 0;
+							}
+						}
+					}
+				}
+			}
+			Rows.ValueSort([](const FRow& A, const FRow& B) { return A.N > B.N; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %d hollow(s) within %.0f m; per mesh within 2.5 radii: n | radii | over carved ground (the scatter keeps out) | radial keep-out | floating (>30 cm, traced) and of those over carved ground | worst gap"),
+				Hollows.Num(), Radius / 100.0);
+			for (const TPair<FString, FRow>& It : Rows)
+			{
+				const FRow& R = It.Value;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %-36s n=%4d | %.2f-%.2f | carve %3d | radial %3d | floating %3d (%d) | worst %.0f"), *It.Key, R.N, R.MinR, R.MaxR,
+					R.OverCarve, R.Radial, R.Floating, R.FloatingKept, R.GapMax);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING DONE"));
+		}),
+		ECVF_Default));
+
 	// ---------- MO.PCG.ResourceCensus ----------
 	// What a new player can actually get near where they stand (H09: the tutorial asks for 10 cobbles, 10 bark, 10 sticks): per item, the harvest SOURCES (instances of
 	// components tagged Gives_<Item>: trees, boulders, bushes) and the LOOSE items lying on the ground (AMOWorldItem), each with a count and the nearest one.

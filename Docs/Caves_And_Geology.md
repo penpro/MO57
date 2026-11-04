@@ -8,8 +8,9 @@
 > `SampleOreIn` / `FindCaveSurfaces` / `FindOutcrops` / `SampleDig` (`MOWorldGenGeology.cpp`), `FMOGeologyYield` (MOFramework),
 > `UMOPCGCaveSpawnerSettings` (MO Cave Spawner), `/MOFramework/Data/DT_CaveScatter`, graph `Content/Penumbra/Maps/VVG_MOCaves`.
 > **Dev verbs:** `MO.WorldGen.FindCaveEntrance [r]`, `.FindCave [r]`, `.CaveSample x y z`, `.Bedrock`, `.FindOre <kind> [r]`,
-> `.Checksum`, `.Sinkholes [r]`; cvar `mo.PCG.CaveDensityScale`. **Tests:** `MOFramework.WorldGen.Caves`, `.GalleriesStayLevel`,
-> `.CavesStayDry`, `.CaveEntrances`, `.NoCavesOnHighGround`, `.CaveMaxLOD`, `.Geology`, `.CaveSurfaces`, `.DigYields`, `.GoldenChecksum`.
+> `.Checksum`, `.Sinkholes [r]`, `MO.PCG.OpeningAudit [r]` (what stands round the built entrances); cvar `mo.PCG.CaveDensityScale`. **Tests:**
+> `MOFramework.WorldGen.Caves`, `.GalleriesStayLevel`, `.CavesStayDry`, `.CaveEntrances`, `.OpeningKeepOut`, `.NoCavesOnHighGround`, `.CaveMaxLOD`,
+> `.Geology`, `.CaveSurfaces`, `.DigYields`, `.GoldenChecksum`.
 > **Open items:** `Docs/BACKLOG.md` § World: terrain, caves, geology. **Decisions:** `Docs/DECISIONS.md` (Oct 16 caves v8, Oct 17 geology calls).
 > **History:** the dated build log is `Docs/Terrain_Generation_Exploration.md` ("Geology", "Update 2026-10-10" caves, to-do list).
 
@@ -102,6 +103,16 @@ The test (`WorldGen.Geology`) asserts every ore sits in its host rock; 98 % of c
   from the field's gradient, floor / wall / ceiling by the normal), asks the rock 30 cm behind each point what it is and holds, and
   plants `DT_CaveScatter` rows (`FMOCaveScatterRow`: surface, bedrock, ore + minimum grade, density / m2, mesh, material, scale,
   align, sink, resource node, collision). Cost 5-14 ms per 64 m cell with caves.
+- **A surface has rock under it** (BR23-1 / BR24-22, Nov 3): a built entrance's hollow is a cap sphere, and the sphere runs on above the
+  ground round its rim. `FindCaveSurfaces` searches each column up to a metre over the ground, so it found the sphere's edge in the open
+  air and took it for a floor: the dressing (sand rocks, rocky-ground slabs) hung up to a metre over the ground round every bowl. A
+  crossing at or above the column's ground is not a surface now. Measured with `MO.PCG.OpeningAudit` at three bowls of seed 5730 (near
+  -339018, -236264): floating dressing (> 30 cm, traced) 42 + 10 and 42 + 6 -> 2 + 0 and 7 + 0; test `WorldGen.OpeningKeepOut` (976 points in the
+  air round 8 entrances without the rule, 0 with it).
+- **The scatter keeps off carved ground:** the hollow's cap is fitted to its centre's ground, so on a slope it cuts the surface up to 1.31
+  radii out against the radial keep-out's 1.2. `FMOWorldGen::SampleOpeningDistanceUnderCm` (the cave field 30 cm under a point, where a
+  sinkhole or entrance is in reach; one cell hash each elsewhere) is part of `FMOPCGWaterMask::IsInCave`, which the biome spawner now asks
+  too (it had its own copy of the radial test).
 - Rows: gravel / eroded-rock / sandstone floor skins, stones, fallen blocks (solid), rock lumps on walls and ceilings, ore lumps
   (coal black, hematite red, malachite green, cassiterite dark, chert on the flint scan). MIs in `/Game/Kitbash/Cave`.
 - **Outcrops:** `FMOWorldGen::FindOutcrops` (slope >= 30 deg over 3 m) + `DT_CaveScatter` rows with `Surface=Outcrop`

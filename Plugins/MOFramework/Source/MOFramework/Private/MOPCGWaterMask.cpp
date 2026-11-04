@@ -16,6 +16,16 @@ FMOPCGWaterMask FMOPCGWaterMask::ForActor(const AActor* Actor, float InBankRadii
 
 bool FMOPCGWaterMask::IsInCave(double X, double Y, double Z) const
 {
+	if (!bActive || !Params.IsSet() || !Params.GetValue()->Tuning.bEnableCaves)
+	{
+		return false;
+	}
+	const FMOWorldGenParams& P = *Params.GetValue();
+	return IsInCave(X, Y, Z, (double)FMOWorldGen::SampleHeightCm(P, X, Y, TerrainSeed, P.Tuning.VoxelSizeCm));
+}
+
+bool FMOPCGWaterMask::IsInCave(double X, double Y, double Z, double GroundZ) const
+{
 	if (!bActive || !Params.IsSet())
 	{
 		return false;
@@ -29,7 +39,14 @@ bool FMOPCGWaterMask::IsInCave(double X, double Y, double Z) const
 	{
 		return true;
 	}
-	return Z < (double)FMOWorldGen::SampleHeightCm(P, X, Y, TerrainSeed, P.Tuning.VoxelSizeCm) - 200.0;
+	// The ground under a point an opening has carved away: a hollow's cap is fitted to its centre's ground, so on a slope it cuts wider uphill than
+	// the rim zone above (up to 1.31 radii; WorldGen.OpeningKeepOut). A scatter's point stands on the height terrain's surface, which the cave stamp
+	// has not touched, so a plant there would stand in the air over the bowl (BR23-1, Nov 3).
+	if (FMOWorldGen::SampleOpeningDistanceUnderCm(P, X, Y, GroundZ, TerrainSeed) < 0.0f)
+	{
+		return true;
+	}
+	return Z < GroundZ - 200.0;
 }
 
 bool FMOPCGWaterMask::IsInWater(double X, double Y, double GroundZ) const

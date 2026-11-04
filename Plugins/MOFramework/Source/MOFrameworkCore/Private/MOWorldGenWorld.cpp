@@ -101,6 +101,21 @@ float FMOWorldGen::DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params,
 	return FMOWorldGenDomain::DistanceToCaveEntranceHollow(Params, Fx(Params, X), Fy(Params, Y), Seed);
 }
 
+bool FMOWorldGen::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out)
+{
+	const bool bFound = FMOWorldGenDomain::GetCaveEntranceInCell(Params, CellX, CellY, Seed, Out);
+	if (bFound)
+	{
+		ToWorld(Params, Out.Center);
+	}
+	return bFound;
+}
+
+float FMOWorldGen::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed)
+{
+	return FMOWorldGenDomain::SampleOpeningDistanceUnderCm(Params, Fx(Params, X), Fy(Params, Y), GroundZ, Seed);
+}
+
 // ---- Rock ----
 
 EMOBedrock FMOWorldGen::SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)

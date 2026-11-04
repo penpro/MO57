@@ -517,6 +517,86 @@ bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_OpeningKeepOut,
+	"MOFramework.WorldGen.OpeningKeepOut",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_OpeningKeepOut::RunTest(const FString& Parameters)
+{
+	// BR23-1 / BR24-22 (Oct 23-24; measured Nov 3, seed 5730): boulders hung in the air round the built entrances' bowls. The scatter samples the HEIGHT
+	// terrain, which the cave stamp has not touched, and kept out of a radial zone (1.2 x the hollow's radius); the hollow's cap is fitted to its centre's
+	// ground, so on a slope it cuts the surface wider uphill. Around every built entrance in a 10 x 10 km window: each column whose surface the cave field
+	// has carved (air 30 cm under the height terrain's ground) must be caught by SampleOpeningDistanceUnderCm -- what the scatter's IsInCave asks.
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	const float Voxel = P->Tuning.VoxelSizeCm;
+	int32 Entrances = 0, Carved = 0, RadialMissed = 0, Missed = 0, Surfaces = 0, InTheAir = 0;
+	float WorstReach = 0.0f;
+	for (int64 Cy = -10; Cy < 10 && Entrances < 8; ++Cy)
+	{
+		for (int64 Cx = -10; Cx < 10 && Entrances < 8; ++Cx)
+		{
+			FMOCaveEntranceHollow E;
+			if (!FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, CaveTestSeed, E))
+			{
+				continue;
+			}
+			++Entrances;
+			const double Half = E.RadiusCm * 2.5, Step = 100.0;
+			// The cave dressing's points (MO Cave Spawner): a hollow's cap sphere runs on above the ground round its rim, and its crossing there in the
+			// open air was taken for a floor -- the dressing hung up to a metre over the ground round every bowl. A surface has rock under it.
+			TArray<FMOCaveSurfacePoint> Points;
+			FMOWorldGen::FindCaveSurfaces(*P, CaveTestSeed, FBox2D(E.Center - FVector2D(Half), E.Center + FVector2D(Half)), 100.0f, Points);
+			Surfaces += Points.Num();
+			for (const FMOCaveSurfacePoint& S : Points)
+			{
+				InTheAir += S.Location.Z >= S.GroundCm ? 1 : 0;
+			}
+			for (double Dy = -Half; Dy <= Half; Dy += Step)
+			{
+				for (double Dx = -Half; Dx <= Half; Dx += Step)
+				{
+					const double X = E.Center.X + Dx, Y = E.Center.Y + Dy;
+					const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel);
+					if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, G - 30.0, G, CaveTestSeed, Voxel) >= 0.0f)
+					{
+						continue;
+					}
+					++Carved;
+					const float Reach = (float)FVector2D(Dx, Dy).Size() / E.RadiusCm;
+					WorstReach = FMath::Max(WorstReach, Reach);
+					RadialMissed += FMOWorldGen::DistanceToSinkholeRimZone(*P, X, Y, CaveTestSeed) > 0.0f ? 1 : 0;
+					Missed += FMOWorldGen::SampleOpeningDistanceUnderCm(*P, X, Y, G, CaveTestSeed) >= 0.0f ? 1 : 0;
+				}
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d built entrance(s): %d carved surface column(s) at 1 m, reaching %.2f x the hollow's radius; the radial keep-out missed %d, the opening query %d"),
+		Entrances, Carved, WorstReach, RadialMissed, Missed));
+	TestTrue(TEXT("the window holds built entrances"), Entrances > 0);
+	TestTrue(TEXT("their hollows carve the surface"), Carved > 0);
+	TestEqual(TEXT("every carved surface column round an opening is caught by SampleOpeningDistanceUnderCm"), Missed, 0);
+	AddInfo(FString::Printf(TEXT("%d cave surface point(s) round them, %d at or above their column's ground"), Surfaces, InTheAir));
+	TestTrue(TEXT("the hollows have cave surfaces to dress"), Surfaces > 0);
+	TestEqual(TEXT("no cave surface point stands in the open air (at or above its column's ground)"), InTheAir, 0);
+
+	// Far from any opening's zone nothing is kept out.
+	int32 Far = 0, FarFlagged = 0;
+	for (double X = -2.0e6; X < 2.0e6 && Far < 2000; X += 7919.0)
+	{
+		const double Y = X * 0.37 + 1234.0;
+		if (FMOWorldGen::DistanceToSinkholeRimZone(*P, X, Y, CaveTestSeed) < 6000.0f)
+		{
+			continue;
+		}
+		++Far;
+		const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel);
+		FarFlagged += FMOWorldGen::SampleOpeningDistanceUnderCm(*P, X, Y, G, CaveTestSeed) < 0.0f ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("%d point(s) over 60 m from any opening's zone: %d kept out"), Far, FarFlagged));
+	TestEqual(TEXT("points far from any opening are not kept out"), FarFlagged, 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CavesStayDry,
 	"MOFramework.WorldGen.CavesStayDry",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

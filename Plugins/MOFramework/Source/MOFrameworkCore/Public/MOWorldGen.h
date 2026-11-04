@@ -964,6 +964,16 @@ struct FMOSinkhole
 	float GroundCm = 0.0f;                      // ground height at Center
 };
 
+/** A built cave entrance's hollow (F30): a spherical cap DepthCm deep and RadiusCm across, its rim at GroundCm (the ground at Center); the passage
+ *  leaves it downhill. On a slope the cap cuts the ground wider uphill than RadiusCm (FMOWorldGen::SampleOpeningDistanceUnderCm). */
+struct FMOCaveEntranceHollow
+{
+	FVector2D Center = FVector2D::ZeroVector;   // world XY (cm) from FMOWorldGen
+	float RadiusCm = 0.0f;
+	float DepthCm = 0.0f;
+	float GroundCm = 0.0f;
+};
+
 /** Where FMOWorldGen::FindCoastalSpawn would put a new game: standing on the shore, facing open water. */
 struct FMOCoastalSpawn
 {
@@ -1103,6 +1113,16 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	/** Horizontal distance (cm) from (X,Y) to the hollow of the built cave entrance in its cell (negative = inside the hollow, where nothing may stand or
 	 *  grow), NoSinkholeDistanceCm if the cell has none or the feature is off (CaveEntranceChance 0). DistanceToSinkholeRimZone includes it. */
 	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** The built cave entrance of grid cell (CellX, CellY) (cell edge = CaveEntranceCellCm), or false if the cell has none, it did not settle or the
+	 *  feature is off. */
+	static bool GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out);
+
+	/** The cave field 30 cm under a point on the height terrain's surface (GroundZ: what a scatter samples), cm, negative = air -- the ground there is
+	 *  carved away -- where a sinkhole or a built entrance is within reach; CaveFarCm elsewhere (one cell hash each, so a scatter can ask it of every
+	 *  point). These openings cut the surface the height terrain still has, and the radial keep-outs above miss the carve on a slope: a hollow's cap is
+	 *  fitted to its centre's ground, so uphill it cuts wider than its radius and a rock planted on the old surface hangs in the air (BR23-1, Nov 3). */
+	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
 
 	/** DistanceToSinkholeRimZone where there is no sinkhole: farther than any footprint. It used to be CaveFarCm (30 m) -- a world feature with a footprint
 	 *  over 30 m was rejected in every cell WITHOUT a sinkhole (found Oct 16 2026 when v9 turned sinkholes off and every cliff assembly vanished). */
@@ -1303,6 +1323,8 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	static bool FindSinkholeAt(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, FMOSinkhole& Out);
 	static float DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static bool GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out);
+	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
 
 	// Rock.
 	static EMOBedrock SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);

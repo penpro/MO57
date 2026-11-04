@@ -431,6 +431,15 @@ void FMOWorldGenDomain::FindCaveSurfaces(const FMOWorldGenParams& Params, int32 
 						}
 					}
 					const double Zc = 0.5 * (A + B);
+					if (Zc >= (double)Ground)
+					{
+						// The field going on into the open air: a built entrance's cap sphere runs on above the ground round its rim (and the passage
+						// near the hollow). There is no rock there to carve, so no surface -- the dressing planted on one hung in the air round the
+						// bowls (BR23-1 / BR24-22, Nov 3; MO.PCG.OpeningAudit).
+						Z = Z2;
+						Dz = Dz2;
+						continue;
+					}
 					constexpr double Hd = 20.0;
 					const FVector Grad(
 						(SampleCaveDistanceAtGround(Params, X + Hd, Y, Zc, Ground, Seed, 50.0f) - SampleCaveDistanceAtGround(Params, X - Hd, Y, Zc, Ground, Seed, 50.0f)) / (2.0 * Hd),
