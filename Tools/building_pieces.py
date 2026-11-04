@@ -54,6 +54,7 @@ PINNING = [k for k in STONES if k.startswith("Pebble")]       # the small stones
 WALL_SNAP = dict(center=(-50.0, 0.0, 0.0), half=(5.0, 50.0, 50.0))
 ROOF_SNAP = dict(center=(-50.0, 0.0, 0.0), half=(53.5, 50.0, 53.5))
 FLOOR_SNAP = dict(center=(0.0, 0.0, 0.0), half=(50.0, 50.0, 5.0))
+HALF_SNAP = dict(center=(-51.3, 0.0, -29.3), half=(5.0, 50.0, 25.0))   # the stick half wall's box (BP_BuildableWallHalf, measured Nov 3)
 
 
 def part(item, qty, weight=1):
@@ -83,6 +84,28 @@ PIECES = {
         parts=[part("Mud01", 10, 2), part("Clay01", 4, 2), part("DriedGrass01", 4, 1)], seconds=2700, skill=("Woodworking", 1),
         attach="Face", host_tags=["Wattle"], tags=["Daub"], rain_pass=0.2, wind_pass=0.0,
         colliders=[dict(center=(-50.0, 0.0, 0.0), half=(7.0, 50.0, 50.0))], snap=WALL_SNAP),
+
+    # Nov 3: the half wall and its daubs, in the stick half wall's panel (so they fit it as they fit each other)
+    "WattleHalfWall": dict(
+        frame="wall", geometry="wattle_half", display="Wattle Half Wall", recipe="BuildWattleHalfWall",
+        description="A knee-high wattle panel: five short stakes and green rods woven between them. A low wall under a window or a gable, "
+                    "a garden edge, or the side of a pen. Daub it like a full wall.",
+        parts=[part("StraightBranch01", 5, 2), part("Stick01", 12, 1)], seconds=1200, skill=("Woodworking", 1),
+        snap_wall=True, stack_z=50.0, tags=["Wall", "Wattle", "Half"], rain_pass=0.6, wind_pass=0.45,
+        colliders=[dict(center=(-51.3, 0.0, -29.3), half=(4.0, 50.0, 25.0))], snap=HALF_SNAP),
+    "MossDaubHalf": dict(
+        frame="wall", geometry="moss_daub_half", display="Moss Daubing (Half Wall)", recipe="DaubHalfWallMoss",
+        description="Moss packed into a half wall's weave from both sides: it stops the draught. Goes on a wattle or stick half wall.",
+        parts=[part("Moss01", 6, 1)], seconds=750, skill=("Woodworking", 0),
+        attach="Face", host_tags=["Half"], tags=["Daub"], rain_pass=0.4, wind_pass=0.05,
+        colliders=[dict(center=(-51.3, 0.0, -29.3), half=(6.0, 50.0, 25.0))], snap=HALF_SNAP),
+    "ClayDaubHalf": dict(
+        frame="wall", geometry="clay_daub_half", display="Clay Daubing (Half Wall)", recipe="DaubHalfWallClay",
+        description="Clay and earth trodden with chopped grass and pressed into a half wall's weave from both sides. Goes on a wattle or "
+                    "stick half wall.",
+        parts=[part("Mud01", 5, 2), part("Clay01", 2, 2), part("DriedGrass01", 2, 1)], seconds=1350, skill=("Woodworking", 1),
+        attach="Face", host_tags=["Half"], tags=["Daub"], rain_pass=0.2, wind_pass=0.0,
+        colliders=[dict(center=(-51.3, 0.0, -29.3), half=(7.0, 50.0, 25.0))], snap=HALF_SNAP),
 
     # ---- Frame members that snap to a panel's edges -----------------------------------------------------------------------------------------
     "PolePost": dict(
@@ -144,6 +167,15 @@ PIECES = {
         skill=("Stoneworking", 2), snap_wall=True, stack_z=50.0, tags=["Wall", "Cobble", "Infill"], rain_pass=0.1, wind_pass=0.0,
         colliders=[dict(center=(-50.0, 0.0, 0.0), half=(7.0, 50.0, 50.0))], snap=dict(center=(-50.0, 0.0, 0.0), half=(7.0, 50.0, 50.0))),
 
+    "DryStoneWall": dict(
+        frame="wall", geometry="dry_stone_wall", display="Dry-Stone Wall", recipe="BuildDryStoneWall",
+        description="Field stones laid without mortar: two faces battered in from a broad foot, the heart packed with small stones, the top "
+                    "closed with stones set on edge. It stands for centuries and no animal pushes through it -- the pen and field wall of "
+                    "every stony country. A little wind finds the gaps.",
+        parts=[part("FieldStone01", 70, 1)], seconds=14400, skill=("Stoneworking", 1),
+        snap_wall=True, stack_z=50.0, tags=["Wall", "Stone", "DryStone"], rain_pass=0.0, wind_pass=0.15,
+        colliders=[dict(center=(-50.0, 0.0, 0.0), half=(24.0, 50.0, 50.0))], snap=dict(center=(-50.0, 0.0, 0.0), half=(24.0, 50.0, 50.0))),
+
     # ---- Roofs and floors --------------------------------------------------------------------------------------------------------------------
     "Thatch": dict(
         frame="roof", geometry="thatch", display="Grass Thatch", recipe="ThatchRoof",
@@ -152,6 +184,14 @@ PIECES = {
         parts=[part("DriedGrass01", 40, 2), part("Stick01", 4, 1), part("Cordage01", 6, 1)], seconds=3600, skill=("Woodworking", 1),
         attach="Face", host_tags=["Roof"], tags=["Thatch"], rain_pass=0.0, wind_pass=0.05,
         colliders=[dict(center=(-36.6, 0.0, 13.4), rot=(-45.0, 0.0, 0.0), half=(75.0, 53.0, 9.0))], snap=ROOF_SNAP),
+    "PeakThatch": dict(
+        frame="roof", geometry="peak_thatch", display="Grass Thatch (Roof Peak)", recipe="ThatchRoofPeak",
+        description="The ridge thatched: both slopes of a roof peak coursed from the eaves up, the top courses lapped over the ridge and a "
+                    "roll of grass bound along it to close the join. Goes on a stick roof peak.",
+        parts=[part("DriedGrass01", 44, 2), part("Stick01", 4, 1), part("Cordage01", 8, 1)], seconds=4200, skill=("Woodworking", 1),
+        attach="Face", host_tags=["RoofPeak"], tags=["Thatch"], rain_pass=0.0, wind_pass=0.05,
+        colliders=[dict(center=(4.4, 0.0, -19.5), rot=(-45.0, 0.0, 0.0), half=(52.0, 53.0, 9.0)),
+                   dict(center=(-85.8, 0.0, -14.7), rot=(37.8, 0.0, 0.0), half=(53.0, 53.0, 9.0))], snap=ROOF_SNAP),
     "PlankFloor": dict(
         frame="floor", geometry="plank_floor", display="Plank Floor", recipe="BuildPlankFloor",
         description="Riven oak boards pegged across two joists. Where the ground falls away under it, hewn posts carry it down to the ground.",

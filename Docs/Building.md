@@ -262,16 +262,20 @@ channel of the exposure). A plan or a site under way stops nothing.
 
 | Piece (recipe) | Frame | Build order (parts) | Cost | Time | Lets through |
 |---|---|---|---|---|---|
-| Wattle Wall (`BuildWattleWall`) | wall | 5 stakes, then 46 rods woven, in 8 courses | 5 straight branches, 24 green rods | 40 min | wind 0.45 |
+| Wattle Wall (`BuildWattleWall`) | wall | 5 stakes, then ~42 rods woven, in 7 courses | 5 straight branches, 24 green rods | 40 min | wind 0.45 |
+| Wattle Half Wall (`BuildWattleHalfWall`, Nov 3) | half wall (the stick half wall's panel) | 5 stakes, the rods in 4 courses | 5 straight branches, 12 green rods | 20 min | wind 0.45 |
 | Moss Daubing (`DaubWallMoss`) | on a Wattle wall | 8 bands of moss, bottom up | 12 moss | 25 min | wind 0.05 |
 | Clay Daubing (`DaubWallClay`) | on a Wattle wall | 8 bands of daub, both faces | 10 mud, 4 clay, 4 dried grass | 45 min | wind 0 |
+| Moss / Clay Daubing, half wall (`DaubHalfWallMoss`, `DaubHalfWallClay`, Nov 3) | on a Half wall (the stick or wattle one) | 4 bands | 6 moss / 5 mud, 2 clay, 2 dried grass | 12 / 23 min | wind 0.05 / 0 |
 | Pole Post / Pole Rail (`BuildPolePost`, `BuildPoleRail`) | a wall's side / its top or bottom, a floor's edge | pole, lashings | 1 straight branch, 2 cord | 10 min | -- |
 | Timber Post / Beam (`BuildTimberPost`, `BuildTimberBeam`) | the same | hewn oak, pegs | 1 log, 1 hardwood; an axe | 1 h | -- |
 | Timber Brace (`BuildTimberBrace`) | on a wall | brace, pegs | 4 hardwood; an axe | 40 min | -- |
 | Cobble Foundation (`BuildCobbleFoundation`) | floor, 40 cm deep | mortar core, rammed top, 3 courses of stones on four sides | 55 building stones, 15 mud | 4 h | -- |
 | Cobble Wall (`BuildCobbleWall`) | wall, 40 cm thick | mortar core, 6 courses of stones on both faces | 55 building stones, 15 mud | 4 h | nothing |
 | Cobble and Daub Infill (`BuildCobbleInfill`) | wall, 14 cm | core, 9 courses of small stones, the daub over them | 18 building stones, 8 mud, 3 clay, 3 dried grass | 2 h | wind 0 |
+| Dry-Stone Wall (`BuildDryStoneWall`, Nov 3) | wall, 56 cm at the foot battered to 38 | 4 bands of hearting, each with its courses on both faces and the wall heads, then the coping on edge | 70 building stones | 4 h | wind 0.15 |
 | Grass Thatch (`ThatchRoof`) | on a stick Roof | 7 courses from the eaves up, ridge roll, sways | 40 dried grass, 4 rods, 6 cord | 1 h | rain 0 |
+| Grass Thatch, roof peak (`ThatchRoofPeak`, Nov 3) | on a stick Roof Peak | both slopes' courses side by side, lapped over the ridge, ridge roll, sways | 44 dried grass, 4 rods, 8 cord | 70 min | rain 0 |
 | Plank Floor (`BuildPlankFloor`) | floor; timber posts below | joists, 5 boards | 5 planks, 1 log, 1 hardwood; an axe | 1 h | -- |
 | Wattle Door (`BuildWattleDoor`) | wall, 2 m | posts, sill, lintel, the hurdle's stakes, its weave, rawhide hinges | 8 straight branches, 30 rods, 2 branches, 1 scraped hide, 4 cord | 80 min | -- |
 | Plank Door (`BuildPlankDoor`) | wall, 2 m | posts, sill, lintel, planks, battens, pegs | 2 logs, 4 planks, 3 hardwood; an axe | 3 h | -- |
@@ -285,7 +289,11 @@ building stone" on a boulder with a hammerstone; the boulder stays) -- `UMOCover
 
 ### Not done yet
 
-- A thatch for the roof peak piece, a half-wall daub, wattle half walls, hurdle fences, a smoke hood.
+- A smoke hood. (Nov 3: the roof peak's thatch, the half walls and their daub, the dry-stone wall done; a hurdle fence is the wattle wall on
+  open ground -- walls run on end to end where the aim passes a wall's end.)
+- The clay daubs' two big faces pointed inward until Nov 3 (`daub_slab` reversed the wrong face): Unreal culled them, so clay daub never
+  showed in a game (Blender draws back faces, the previews looked right). Fixed; the stick walls stand ~9 cm out from their panel's plane,
+  so the clay daub now stands 6.5 cm (lumps 5-8) off it.
 - Look-and-feel (the moss lumps, the daub, the stone courses, the thatch's colour) is on Wes's by-eye list (`Docs/BACKLOG.md`).
 - The pieces' assets (`/Game/BlenderBuildings`) and the changed stick Blueprints stay local until the LFS budget allows (as the Blender
   items): `python Tools/blender_buildings.py --surfaces --rows` remakes all of them on another machine.

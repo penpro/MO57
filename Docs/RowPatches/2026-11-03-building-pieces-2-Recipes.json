@@ -1,0 +1,202 @@
+{
+ "BuildWattleHalfWall": {
+  "recipeId": "BuildWattleHalfWall",
+  "displayName": "Wattle Half Wall",
+  "description": "A knee-high wattle panel: five short stakes and green rods woven between them. A low wall under a window or a gable, a garden edge, or the side of a pen. Daub it like a full wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 1200,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 10,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "StraightBranch01",
+    "Quantity": 5,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 12,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/WattleHalfWall/BP_Piece_WattleHalfWall.BP_Piece_WattleHalfWall_C'"
+  }
+ },
+ "DaubHalfWallMoss": {
+  "recipeId": "DaubHalfWallMoss",
+  "displayName": "Moss Daubing (Half Wall)",
+  "description": "Moss packed into a half wall's weave from both sides: it stops the draught. Goes on a wattle or stick half wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 750,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 0,
+  "skillXPReward": 6,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Moss01",
+    "Quantity": 6,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/MossDaubHalf/BP_Piece_MossDaubHalf.BP_Piece_MossDaubHalf_C'"
+  }
+ },
+ "DaubHalfWallClay": {
+  "recipeId": "DaubHalfWallClay",
+  "displayName": "Clay Daubing (Half Wall)",
+  "description": "Clay and earth trodden with chopped grass and pressed into a half wall's weave from both sides. Goes on a wattle or stick half wall.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 1350,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 11,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "Mud01",
+    "Quantity": 5,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Clay01",
+    "Quantity": 2,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 2,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/ClayDaubHalf/BP_Piece_ClayDaubHalf.BP_Piece_ClayDaubHalf_C'"
+  }
+ },
+ "ThatchRoofPeak": {
+  "recipeId": "ThatchRoofPeak",
+  "displayName": "Grass Thatch (Roof Peak)",
+  "description": "The ridge thatched: both slopes of a roof peak coursed from the eaves up, the top courses lapped over the ridge and a roll of grass bound along it to close the join. Goes on a stick roof peak.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 4200,
+  "buildRange": 300,
+  "requiredSkillId": "Woodworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 35,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "DriedGrass01",
+    "Quantity": 44,
+    "Weight": 2,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Stick01",
+    "Quantity": 4,
+    "Weight": 1,
+    "ActionId": "None"
+   },
+   {
+    "ItemDefinitionId": "Cordage01",
+    "Quantity": 8,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/PeakThatch/BP_Piece_PeakThatch.BP_Piece_PeakThatch_C'"
+  }
+ },
+ "BuildDryStoneWall": {
+  "recipeId": "BuildDryStoneWall",
+  "displayName": "Dry-Stone Wall",
+  "description": "Field stones laid without mortar: two faces battered in from a broad foot, the heart packed with small stones, the top closed with stones set on edge. It stands for centuries and no animal pushes through it -- the pen and field wall of every stony country. A little wind finds the gaps.",
+  "category": "Buildings",
+  "bIsBuilding": true,
+  "craftTime": 0,
+  "totalBuildTime": 14400,
+  "buildRange": 300,
+  "requiredSkillId": "Stoneworking",
+  "requiredSkillLevel": 1,
+  "skillXPReward": 120,
+  "requiredTools": [],
+  "buildParts": [
+   {
+    "ItemDefinitionId": "FieldStone01",
+    "Quantity": 70,
+    "Weight": 1,
+    "ActionId": "None"
+   }
+  ],
+  "placementData": {
+   "bPrefersGroundPlacement": true,
+   "bPrefersWallPlacement": false,
+   "bPrefersCeilingPlacement": false,
+   "bAllowZRotation": true,
+   "bAllowXRotation": false,
+   "bAllowYRotation": false,
+   "RotationIncrement": 15,
+   "bRequiresNoCollision": true,
+   "PreviewMesh": "None",
+   "BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/Game/BlenderBuildings/DryStoneWall/BP_Piece_DryStoneWall.BP_Piece_DryStoneWall_C'"
+  }
+ }
+}

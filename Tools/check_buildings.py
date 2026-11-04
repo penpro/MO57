@@ -8,7 +8,9 @@ part way through their work (their parts popping in) and finished, then measured
   - part way through only the first parts show; finished, all of them;
   - the door opens and closes (its leaf turns);
   - behind a bare wattle wall the wind passes, behind the same wall moss-daubed it does not (MO.Test.ShelterHere);
-  - inside the hide tent: covered.
+  - inside the hide tent: covered;
+  - (Nov 3) a wattle half wall takes the half-wall moss daub; the old stick half wall takes the half-wall clay daub and refuses a full wall's;
+    the roof peak takes its thatch; a dry-stone wall stands on open ground and a second runs on from its end.
 
     python Tools/check_buildings.py [--seed 777] [--keep] [--reuse] [--shots]
 
@@ -281,6 +283,54 @@ def main():
                         if n:
                             progress("done", n["name"])
                     look(world_of(fnd2, (260.0, -150.0, 150.0)), world_of(inf, (-50.0, 0.0, 0.0)), "timber_frame")
+        # ---- Nov 3: half walls and their daub, the roof peak's thatch, the dry-stone wall ----
+        hw, line = place("BuildWattleHalfWall", world_of(f1, (0.0, -46.0, 6.0)), presses=3)
+        check(hw and hw["placed"], "wattle half wall stands on the floor's edge", line)
+        if hw:
+            build_stages(hw, "wattle_half", world_of(f1, (60.0, -300.0, 110.0)), world_of(hw, (-51.3, 0.0, -29.3)))
+            hd, line = place("DaubHalfWallMoss", world_of(hw, (-51.3, 0.0, -29.3)))
+            check(hd and hd["placed"] and near(hd["at"], hw["at"], 0.5), "moss daub goes on the wattle half wall (its frame)", line)
+            if hd:
+                build_stages(hd, "moss_daub_half", world_of(f1, (60.0, -300.0, 110.0)), world_of(hw, (-51.3, 0.0, -29.3)))
+        if f2:
+            # a clay-daubed wattle wall on the plank floor's -Y edge (Nov 3: the clay daubs' faces had pointed inward; look at it)
+            w2, line = place("BuildWattleWall", world_of(f2, (0.0, -46.0, 6.0)), presses=3)
+            check(w2 and w2["placed"], "a second wattle wall on the plank floor's edge", line)
+            if w2:
+                progress("done", w2["name"])
+                cdf, line = place("DaubWallClay", world_of(w2, (-50.0, 0.0, 0.0)))
+                check(cdf and cdf["placed"] and near(cdf["at"], w2["at"], 0.5), "clay daub goes on the wattle wall (its frame)", line)
+                if cdf:
+                    build_stages(cdf, "clay_daub", world_of(f2, (60.0, -320.0, 120.0)), world_of(w2, (-50.0, 0.0, 0.0)))
+            shw, line = place("BuildStickWallHalf", world_of(f2, (46.0, 0.0, 6.0)), presses=0)
+            check(shw and shw["placed"], "stick half wall on the plank floor's edge", line)
+            if shw:
+                progress("done", shw["name"])
+                full, line = place("DaubWallMoss", world_of(shw, (-51.3, 0.0, -29.3)))
+                check(full and not full["placed"], "CONTROL: a full wall's daub does not go on a half wall", line)
+                cd, line = place("DaubHalfWallClay", world_of(shw, (-51.3, 0.0, -29.3)))
+                check(cd and cd["placed"] and near(cd["at"], shw["at"], 0.5), "clay half daub goes on the old stick half wall too", line)
+                if cd:
+                    build_stages(cd, "clay_daub_half", world_of(f2, (300.0, -200.0, 110.0)), world_of(shw, (-51.3, 0.0, -29.3)))
+        px, py = sx + 300.0, sy + 450.0
+        peak, line = place("BuildStickRoofPeak45", (px, py, ground(px, py) + 60.0))
+        check(peak and peak["placed"], "stick roof peak placed", line)
+        if peak:
+            progress("done", peak["name"])
+            pt, line = place("ThatchRoofPeak", world_of(peak, (-50.0, 0.0, 0.0)))
+            check(pt and pt["placed"] and near(pt["at"], peak["at"], 0.5), "thatch goes on the roof peak (its frame)", line)
+            if pt:
+                build_stages(pt, "peak_thatch", world_of(peak, (200.0, -230.0, 150.0)), world_of(peak, (-40.0, 0.0, -10.0)))
+        dx, dy = sx - 300.0, sy - 450.0
+        dsw, line = place("BuildDryStoneWall", (dx, dy, ground(dx, dy) + 50.0))
+        check(dsw and dsw["placed"], "dry-stone wall placed on the ground", line)
+        if dsw:
+            build_stages(dsw, "dry_stone_wall", world_of(dsw, (230.0, -170.0, 120.0)), world_of(dsw, (-50.0, 0.0, 0.0)))
+            dsw2, line = place("BuildDryStoneWall", world_of(dsw, (-50.0, 58.0, 0.0)))
+            check(dsw2 and dsw2["placed"] and near(dsw2["at"], world_of(dsw, (0.0, 100.0, 0.0)), 3.0), "a second dry-stone wall runs on from its end", line)
+            if dsw2:
+                progress("done", dsw2["name"])
+                look(world_of(dsw, (260.0, -60.0, 140.0)), world_of(dsw, (-50.0, 50.0, 0.0)), "dry_stone_run")
         # ---- shelters ----
         tx, ty = sx + 900.0, sy
         tent, line = place("BuildHideTent", (tx, ty, ground(tx, ty)))

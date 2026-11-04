@@ -216,6 +216,9 @@
 - **A material "exists" in analysis but not in the world** -> only species- or spawner-placed resource rows exist -> read `unplaced_resources` first. (progression-pass1)
 - **CSV round-trips crash UE on reimport** -> UE exports the row-name column unquoted, the utility quotes all -> `Docs/TOOLING.md` § 4 (DataTables), `Tools/UE_CSV_FORMAT.md`. (CLAUDE)
 
+- **`ue.py rows set` with new rows among old ones wrote nothing** (VERIFIED 0/N, "could not add ... nothing written") -> `get_rows` on a mix
+  of old and new names fails as a whole, so every row looked new, and `add_rows` (all-or-nothing too) refused the old ones -> `rows_set_bulk`
+  takes what exists from the table's row list now (Nov 3).
 ## 5. Harness: ue.py, instances, nettest, tests
 
 - **A HUD screenshot shows no reticle / no popup** -> the console's `shot` leaves the UI out: `shot showui` (Oct 29).

@@ -231,10 +231,11 @@ def _rot90s():
 _STONE_INFO = {}
 
 
-def stone_info(key):
-    """A scan's native size and the quarter-turn that lays it long side along Y, middle along X, flat side down (Z)."""
-    if key in _STONE_INFO:
-        return _STONE_INFO[key]
+def stone_info(key, lay=(2, 0, 1)):
+    """A scan's native size and the quarter-turn that lands its short, middle and long sides on the world axes lay (default: short up Z,
+    middle across X, long along Y -- a walling stone lying flat along the face; (1, 2, 0) stands it on edge across the wall: a coping stone)."""
+    if (key, lay) in _STONE_INFO:
+        return _STONE_INFO[(key, lay)]
     mesh = unreal.load_asset(BP.STONES[key])
     bb = mesh.get_bounding_box()
     native = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z]
@@ -246,11 +247,11 @@ def stone_info(key):
         axes = [q.rotate_vector(unreal.Vector(*(1.0 if j == i else 0.0 for j in range(3)))) for i in range(3)]
         # which world axis each native axis lands on
         land = [max(range(3), key=lambda w: abs([a.x, a.y, a.z][w])) for a in axes]
-        if land[want[0]] == 2 and land[want[1]] == 0 and land[want[2]] == 1:
+        if land[want[0]] == lay[0] and land[want[1]] == lay[1] and land[want[2]] == lay[2]:
             best = (rot, land)
             break
-    _STONE_INFO[key] = (mesh, native, centre, best[0], best[1])
-    return _STONE_INFO[key]
+    _STONE_INFO[(key, lay)] = (mesh, native, centre, best[0], best[1])
+    return _STONE_INFO[(key, lay)]
 
 
 # half turns about each axis: the same stone with another face out (each keeps the long side along the face, the flat side level)
@@ -258,9 +259,9 @@ FLIPS = [unreal.Rotator(roll=0.0, pitch=0.0, yaw=0.0), unreal.Rotator(roll=180.0
          unreal.Rotator(roll=0.0, pitch=180.0, yaw=0.0), unreal.Rotator(roll=0.0, pitch=0.0, yaw=180.0)]
 
 
-def place_stone(key, centre, size, rng, tilt=8.0):
+def place_stone(key, centre, size, rng, tilt=8.0, lay=(2, 0, 1)):
     """A transform that puts the scan's centre at centre with world extents size (x, y, z), a random face out, turned a little off square."""
-    mesh, native, ncentre, base, land = stone_info(key)
+    mesh, native, ncentre, base, land = stone_info(key, lay)
     scale = [1.0, 1.0, 1.0]
     for i in range(3):
         scale[i] = size[land[i]] / max(native[i], 0.01)
@@ -272,10 +273,10 @@ def place_stone(key, centre, size, rng, tilt=8.0):
     return unreal.Transform(loc, q.rotator(), s)
 
 
-def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, start_stage=0):
-    """Stones on one vertical face (plane_x: the face, outward +-1 along X), in courses from z0 up to z1: (course, key) -> [transforms]. Each
-    course is its own height and built of three walling stones (BP.WALLING) and one pinning stone (BP.PINNING), so the parts stay a few per
-    course while the wall shows them all."""
+def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, start_stage=0, batter=0.0):
+    """Stones on one face (plane_x: the face at its foot, outward +-1 along X), in courses from z0 up to z1: (course, key) -> [transforms].
+    Each course is its own height and built of three walling stones (BP.WALLING) and one pinning stone (BP.PINNING), so the parts stay a few
+    per course while the wall shows them all. batter: how far the face leans in per cm of height (a dry-stone wall's 0.1)."""
     out = {}
     z = z0
     k = 0
@@ -294,7 +295,8 @@ def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, start_stage=
                 zc = z + hs * 0.5 + rng.uniform(0.0, max(0.0, h - hs) * 0.7)
                 d = depth * rng.uniform(0.75, 1.1)
                 proud = rng.uniform(-1.0, 1.6)                          # standing proud of the face or set back
-                c = (plane_x - outward * (d * 0.5 - 2.0 - proud), (ya + yb) * 0.5 + rng.uniform(-1.0, 1.0), zc)
+                face_x = plane_x - outward * batter * (zc - z0)
+                c = (face_x - outward * (d * 0.5 - 2.0 - proud), (ya + yb) * 0.5 + rng.uniform(-1.0, 1.0), zc)
                 key = rng.choice(keys)
                 # a scan fills ~2/3 of its box: sized up so neighbours meet and the joints stay narrow (they may touch: laid stones do)
                 size = (d, (yb - ya) * rng.uniform(1.12, 1.36), hs * rng.uniform(1.25, 1.45))
@@ -302,12 +304,43 @@ def lay_face(rng, plane_x, outward, y0, y1, z0, z1, depth, courses, start_stage=
                 if rng.random() < 0.35 and yb < y1 - 4.0:
                     # a pinning stone knocked into the joint after it, where two rounded ends leave a hollow
                     ps = rng.uniform(4.5, 7.5)
-                    pc = (plane_x - outward * (ps * 0.4 - 1.5), yb + rng.uniform(-1.0, 1.0), z + h * rng.uniform(0.25, 0.75))
+                    pz = z + h * rng.uniform(0.25, 0.75)
+                    pc = (plane_x - outward * (batter * (pz - z0) + ps * 0.4 - 1.5), yb + rng.uniform(-1.0, 1.0), pz)
                     out.setdefault((start_stage + k, pin), []).append(place_stone(pin, pc, (ps * 0.8, ps, ps * 0.75), rng, tilt=25.0))
             y += L
         z += h
         k += 1
     return out
+
+
+def coping(rng, x, half, y0, y1, z, stage):
+    """The coping: stones set on edge across the top of a wall from y0 to y1, close together, each its own thickness and height, leaning a
+    little -> {(stage, key): [transforms]} (one course)."""
+    out = {}
+    keys = rng.sample(BP.WALLING, 3)
+    y = y0 + rng.uniform(0.0, 2.0)
+    while y < y1 - 3.0:
+        t = rng.uniform(7.0, 13.0)
+        h = rng.uniform(12.0, 17.0)
+        across = 2.0 * half * rng.uniform(1.0, 1.15)
+        c = (x + rng.uniform(-1.5, 1.5), min(y + t * 0.5, y1 - t * 0.4), z + h * 0.5 - rng.uniform(0.0, 2.0))
+        key = rng.choice(keys)
+        out.setdefault((stage, key), []).append(place_stone(key, c, (across * 1.15, t * 1.3, h * 1.35), rng, tilt=6.0, lay=(1, 2, 0)))
+        y += t + rng.uniform(0.0, 1.0)
+    return out
+
+
+def interleave(bands, stones):
+    """Bands of a core (built bottom up) between the stone courses ("Course<N>_<Key>" parts, in course order): band i just before the courses
+    that rise past its foot, so the core never stands above the stones round it."""
+    course = lambda p: int(p["name"].split("_")[0][len("Course"):])   # noqa: E731
+    n = max(course(p) for p in stones) if stones else 0
+    out = []
+    for i, band in enumerate(bands):
+        lo, hi = n * i // len(bands), n * (i + 1) // len(bands)
+        out.append(band)
+        out += [p for p in stones if lo < course(p) <= hi]
+    return out + [p for p in stones if p not in out]
 
 
 def stone_parts(piece, rng):
@@ -319,6 +352,20 @@ def stone_parts(piece, rng):
     if piece == "CobbleWall":
         for side in (1, -1):
             add(lay_face(rng, WX + side * 20.0, side, -50.0, 50.0, -50.0, 50.0, 19.0, (11.0, 21.0)))
+    elif piece == "DryStoneWall":
+        d = dict(half_foot=28.0, half_top=19.0, z0=-50.0, z_cope=38.0)   # blender_buildings_blender.DRY_WALL
+        batter = (d["half_foot"] - d["half_top"]) / (d["z_cope"] - d["z0"])
+        for side in (1, -1):
+            add(lay_face(rng, WX + side * d["half_foot"], side, -50.0, 50.0, d["z0"], d["z_cope"], 20.0, (10.0, 19.0), batter=batter))
+        # the wall heads (Y +-50): laid in their own frame (the face at X +-50, along Y across the wall's width), turned a quarter about the
+        # wall's middle
+        turn = unreal.Rotator(roll=0.0, pitch=0.0, yaw=90.0).quaternion()
+        for side in (1, -1):
+            for k, v in lay_face(rng, side * 50.0, side, -d["half_top"], d["half_top"], d["z0"], d["z_cope"], 18.0, (10.0, 19.0)).items():
+                for t in v:
+                    loc = turn.rotate_vector(t.translation)
+                    lay.setdefault(k, []).append(unreal.Transform(unreal.Vector(loc.x + WX, loc.y, loc.z), (turn * t.rotation).rotator(), t.scale3d))
+        add(coping(rng, WX, d["half_top"], -50.0, 50.0, d["z_cope"], stage=len({k[0] for k in lay})))
     elif piece == "CobbleInfill":
         add(lay_face(rng, WX + 7.0, 1, -50.0, 50.0, -50.0, 50.0, 14.0, (8.0, 14.0)))
     elif piece == "CobbleFoundation":
@@ -464,10 +511,12 @@ def run(pieces=None, do_surfaces=True):
         for p in built["parts"]:
             import_mesh(os.path.join(src, p["fbx"]), folder, p["mesh"], mis)
             parts.append({"name": p["name"], "mesh": "%s/%s" % (folder, p["mesh"])})
-        if spec["geometry"].startswith("cobble"):
+        if spec["geometry"].startswith("cobble") or spec["geometry"] == "dry_stone_wall":
             stones = stone_parts(piece, random.Random(sum(map(ord, piece))))
             if piece == "CobbleInfill":
                 parts = parts[:1] + stones + parts[1:]   # the core, the stones bedded course by course, then the daub over them
+            elif piece == "DryStoneWall":
+                parts = interleave(parts, stones)        # each band of hearting laid with the courses round it
             else:
                 parts = parts + stones
         path, n_parts, n_cols = make_blueprint(piece, spec, parts)

@@ -65,7 +65,9 @@ world with today's gates).
   first thing the tutorial has you make; without it two dry branches twirled by hand; later the bow drill;
   carry fire with a torch (MakeTorch, T2). Fuel: Branch01, Firewood01, Charcoal01, Stick01 (green wood burns once laid, 32a87e46; it is refused only as the drill).
 - **Food:** forage roots / mushrooms / berries / nuts; deer carcass parts (RawMeat01 -> CookMeat).
-- **Shelter:** BuildLeanTo, stick walls / floors / roofs (T1).
+- **Shelter:** BuildLeanTo, stick walls / floors / roofs (T1). The building pieces (Nov 2-3, `Docs/Building.md` section 7): wattle walls and half walls,
+  moss / clay daub, pole framing, grass thatch (roof and peak), the hide lean-to and hide tent (Woodworking / Leatherworking 0-1); timber
+  framing, plank floors and doors (Woodworking 2-3, an axe); cobble foundations, walls and infill, the dry-stone wall (Stoneworking 1-2).
 - Producers (T0): ground pickups (sticks, bark, stones), cover gathering (dry grass, reeds, fibre, straight hazel rods,
   deadwood, tinder), digging (roots, mushrooms, river cobbles, flint, sand on strands, clay in lowland), carcass parts.
 

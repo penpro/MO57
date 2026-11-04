@@ -622,9 +622,15 @@ def rows_set_bulk(table, rows, do_save=True):
     names = list(rows.keys())
     snap = _map_snapshot(table)   # every write re-imports the whole table: maps ride along (see _map_snapshot)
     # New rows first, as rows_set_safe does: set_rows on a name the table lacks fails the WHOLE batch ("Rows do not exist") -- one new row
-    # in a bulk set used to leave every row unwritten (Oct 17 2026).
-    existing = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
-    missing = [n for n in names if not (isinstance(existing, dict) and n in existing)]
+    # in a bulk set used to leave every row unwritten (Oct 17 2026). Which rows exist comes from the table's row list: get_rows on a mix of
+    # old and new names fails as a whole too, so every name looked new, add_rows (also all-or-nothing) refused the old ones and nothing was
+    # written (Nov 3 2026: 5 new building recipes among 18 old ones).
+    listed = rows_list(table)
+    if isinstance(listed, list):
+        missing = [n for n in names if n not in set(listed)]
+    else:
+        existing = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+        missing = [n for n in names if not (isinstance(existing, dict) and n in existing)]
     if missing:
         mcp_call(DT, "add_rows", {"data_table": _table(table), "row_names": missing})
         report.append(f"bulk: added {len(missing)} new row(s): {', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")

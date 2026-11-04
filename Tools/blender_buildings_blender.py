@@ -635,6 +635,9 @@ def lashing(m, centre, axis, radius, turns=5, width=4.0, cord=0.35, seed=0.0):
 # ------------------------------------------------------------------------------------------------------------------------------------------
 
 WX = -50.0   # a wall panel's centre plane (the stick wall's frame)
+# the stick half wall's panel (BP_BuildableWallHalf's box, measured Nov 3): centred at X -51.3, Y +-50, Z -54.3 .. -4.3. The half pieces are
+# built in it, so a half daub fits the old stick half wall and the new wattle one alike
+HALF = dict(x=-51.3, z0=-54.3, z1=-4.3)
 
 
 def by_eye(ys, rng, jitter):
@@ -707,34 +710,35 @@ def group(meshes, n):
     return out
 
 
-def geo_wattle_wall(rng):
+def geo_wattle_wall(rng, x=WX, z0=-50.0, z1=50.0, stages=8):
+    """A wattle panel between heights z0 and z1 on the plane x: the stakes driven 8 cm below its foot, standing 7 cm over its head."""
     ys = by_eye([-40.0, -20.0, 0.0, 20.0, 40.0], rng, 3.0)
-    parts = [("Stakes", stakes_row(ys, -58.0, 57.0, 1.9, rng, seed=1))]
-    rods = weave_courses(ys, packed_courses(-49.7, 49.5, 1.1, rng), 1.9, rng, seed=3)
-    for i, g in enumerate(group(rods, 8)):
+    parts = [("Stakes", stakes_row(ys, z0 - 8.0, z1 + 7.0, 1.9, rng, seed=1, x=x))]
+    rods = weave_courses(ys, packed_courses(z0 + 0.3, z1 - 0.5, 1.1, rng), 1.9, rng, seed=3, x=x)
+    for i, g in enumerate(group(rods, stages)):
         parts.append(("Weave%d" % (i + 1), g))
     return parts
 
 
-def geo_moss_daub(rng, bands=8):
+def geo_moss_daub(rng, bands=8, x=WX, z0=-50.0, z1=50.0):
     """Moss stuffed into the weave by the handful from the bottom up: clumps of every size packed edge to edge over both faces (many small,
     a few big mats), each turned its own way, standing proud by its own amount, a few wisps hanging; staged in bands from the bottom."""
     out = [Mesh() for _ in range(bands)]
     for side in (1, -1):
         placed = []
-        for _ in range(5000):
+        for _ in range(int(5000 * (z1 - z0) / 100.0)):
             r = 2.4 + 6.0 * rng.random() ** 2.0
-            y, z = rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4), rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4)
+            y, z = rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4), rng.uniform(z0 + r * 0.4, z1 - r * 0.4)
             if any((y - py) ** 2 + (z - pz) ** 2 < ((r + pr) * 0.48) ** 2 for py, pz, pr in placed):
                 continue
             placed.append((y, z, r))
         for i, (y, z, r) in enumerate(placed):
-            m = out[min(bands - 1, int((z + 50.0) / (100.0 / bands)))]
+            m = out[min(bands - 1, int((z - z0) / ((z1 - z0) / bands)))]
             # a soft cushion, its surface all small bumps (the moss's own tufts), overlapping its neighbours into one stuffed mass that stands
             # proud of the weave (the rods reach ~4.5 cm off the panel's plane: none may show through); clumps of one gathering, so their
             # tints stay close
             rad = (r * rng.uniform(0.3, 0.45), r * rng.uniform(0.95, 1.3), r * rng.uniform(0.8, 1.15))
-            c = Vector((WX + side * (3.6 + rad[0] * 0.5 + rng.uniform(-0.3, 0.6)), y, z))
+            c = Vector((x + side * (3.6 + rad[0] * 0.5 + rng.uniform(-0.3, 0.6)), y, z))
             rot = Matrix.Rotation(rng.uniform(0.0, math.pi), 3, "X") @ Matrix.Rotation(rng.uniform(-0.2, 0.2), 3, "Z")
             blob(m, c, rad, "Moss", rot=rot, seed=side * 7.0 + i * 1.37, rough=0.2, rings=7, segs=14, freq=4.5, spread=0.4)
             if r > 4.5 and rng.random() < 0.3:   # a wisp hanging from a big clump
@@ -761,8 +765,9 @@ def daub_slab(m, z0, z1, offset, surf, y0=-50.0, y1=50.0, ny=24, nz=4, close_bot
                 ya, yb = (y0 + (y1 - y0) * j / ny) / T, (y0 + (y1 - y0) * (j + 1) / ny) / T
                 q = (g[i][j], g[i][j + 1], g[i + 1][j + 1], g[i + 1][j])
                 uv = [(ya, za), (yb, za), (yb, zb), (ya, zb)]
-                # +X face: (+y, +z) winds to -X by the right-hand rule, so the +X face reverses
-                if side > 0:
+                # (+y then +z) is +X by the right-hand rule (sheet()'s convention, which renders right), so the -X face reverses. It was the
+                # +X face until Nov 3: both faces pointed in, Unreal culled them and the clay daubs never showed (Blender draws back faces)
+                if side < 0:
                     q, uv = tuple(reversed(q)), list(reversed(uv))
                 m.face(q, uv, surf)
     f, b = grids[1], grids[-1]
@@ -783,20 +788,21 @@ def daub_slab(m, z0, z1, offset, surf, y0=-50.0, y1=50.0, ny=24, nz=4, close_bot
     return m
 
 
-def geo_clay_daub(rng):
+def geo_clay_daub(rng, x=WX, z0=-50.0, z1=50.0, nb=8):
     """Daub thrown on by the handful and pressed flat: a lumpy plaster over both faces, in bands from the bottom up."""
+    zc, zh = (z0 + z1) * 0.5, (z1 - z0) * 0.5
+
     def offset(side, y, z):
         lump = 1.6 * noise.noise(Vector((y * 0.06, z * 0.06, side * 3.0))) + 0.7 * noise.noise(Vector((y * 0.22, z * 0.22, side * 1.3)))
         hand = 0.35 * noise.noise(Vector((y * 0.8, z * 0.8, side * 7.0)))
-        edge = min(1.0, (50.5 - abs(y)) / 5.0, (50.5 - abs(z)) / 5.0)
-        return (5.0 + lump + hand) * (0.6 + 0.4 * max(edge, 0.0))
+        edge = min(1.0, (50.5 - abs(y)) / 5.0, (zh + 0.5 - abs(z - zc)) / 5.0)
+        return (6.5 + lump + hand) * (0.6 + 0.4 * max(edge, 0.0))   # over the weave, and over a stick wall's rails (they stand ~9 cm out)
     parts = []
-    nb = 8
     for bi in range(nb):
         m = Mesh()
-        z0 = -50.0 + 100.0 * bi / nb - (0.0 if bi == 0 else 0.8)
-        z1 = -50.0 + 100.0 * (bi + 1) / nb
-        daub_slab(m, z0, z1, offset, "Daub", nz=4, ny=26, close_bottom=(bi == 0), close_top=(bi == nb - 1))
+        za = z0 + (z1 - z0) * bi / nb - (0.0 if bi == 0 else 0.8)
+        zb = z0 + (z1 - z0) * (bi + 1) / nb
+        daub_slab(m, za, zb, offset, "Daub", nz=4, ny=26, close_bottom=(bi == 0), close_top=(bi == nb - 1), x=x)
         parts.append(("Daub%d" % (bi + 1), m))
     return parts
 
@@ -850,8 +856,9 @@ def geo_timber_brace(rng):
     return [("Brace", m), ("Pegs", p)]
 
 
-def mortar_core(x0, x1, y0, y1, z0, z1, inset=3.0, seed=0.0):
-    """The earth-mortar heart of a stone piece, a little inside its faces (the stones stand proud of it)."""
+def mortar_core(x0, x1, y0, y1, z0, z1, inset=3.0, seed=0.0, taper=0.0):
+    """The earth-mortar heart of a stone piece, a little inside its faces (the stones stand proud of it). taper: how much narrower across X
+    it is at the top than at the foot (0.3 = 30%: a dry-stone wall's batter)."""
     m = Mesh()
     cx, cy, cz = (x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5
     hx, hy, hz = (x1 - x0) * 0.5 - inset, (y1 - y0) * 0.5, (z1 - z0) * 0.5
@@ -868,6 +875,8 @@ def mortar_core(x0, x1, y0, y1, z0, z1, inset=3.0, seed=0.0):
             else:
                 p += Vector((t, s, sign * hz))
                 n = Vector((0, 0, sign))
+            if taper:
+                p.x = cx + (p.x - cx) * (1.0 - taper * (p.z - (cz - hz)) / (2.0 * hz))
             p += n * 0.8 * noise.noise(p * 0.08 + Vector((seed, 0, 0)))
             return p, n
         return fn
@@ -894,6 +903,28 @@ def geo_cobble_foundation(rng):
 
 def geo_cobble_wall(rng):
     return [("Core", mortar_core(WX - 20.0, WX + 20.0, -50.0, 50.0, -50.0, 44.0, inset=8.0, seed=2.0))]   # the top course caps it
+
+
+# The dry-stone wall (Nov 3): 56 cm thick at its foot, battered to 38 under the coping, its faces' stones laid by the editor
+# (import_blender_buildings.py) with the same batter, the coping stones on edge from Z 38 to the top
+DRY_WALL = dict(half_foot=28.0, half_top=19.0, z0=-50.0, z_cope=38.0)
+
+
+def geo_dry_stone_wall(rng, bands=4):
+    """The hearting of a dry-stone wall: the small stones packed between its two faces, inside them (the faces, the wall heads and the coping
+    are the scanned stones). In bands, so it rises with the courses round it (the editor lays each band between its courses)."""
+    d = DRY_WALL
+    z0, z1, inset = d["z0"], d["z_cope"] + 2.0, 9.0
+
+    def half(z):
+        return d["half_foot"] - (d["half_foot"] - d["half_top"]) * (z - d["z0"]) / (d["z_cope"] - d["z0"])
+    parts = []
+    for i in range(bands):
+        za, zb = z0 + (z1 - z0) * i / bands, z0 + (z1 - z0) * (i + 1) / bands
+        ha, hb = half(za), half(zb)
+        parts.append(("Hearting%d" % (i + 1), mortar_core(WX - ha, WX + ha, -50.0 + inset, 50.0 - inset, za, zb, inset=inset, seed=4.0 + i,
+                                                          taper=1.0 - (hb - inset) / (ha - inset))))
+    return parts
 
 
 def geo_cobble_infill(rng):
@@ -950,20 +981,20 @@ class Bundles:
         return 1.4 * noise.noise(Vector((y * 0.45, self.seed, 0.0))) + 0.6 * noise.noise(Vector((y * 1.7, self.seed, 3.0)))
 
 
-def geo_thatch(rng):
-    parts = []
-    gauge = 22.0
-    s_start = -26.0           # the eaves overhang the frame
-    base_off = 9.0            # the battens / sticks stand this far above the slab's mid-plane
+def thatch_courses(rng, point, normal, s_start, s_end, y0, y1, base_off, gauge=22.0):
+    """Courses of thatch up one slope from s_start to s_end (cm along it): point(s, y, off) is a point on the slope (off: out of it), normal its
+    outward normal. Each course a wedge laid in bundles (Bundles), thick at the butts and thin where the next course covers it, each a little
+    proud of the one below; the top course runs 8 cm past s_end (over the ridge). -> [Mesh] from the eaves up."""
     courses = []
     s = s_start
-    while s < ROOF_LEN - 10.0:
+    while s < s_end - 10.0:
         courses.append(s)
         s += gauge + rng.uniform(-3.0, 3.0)
+    out = []
     for k, sb in enumerate(courses):
         m = Mesh()
-        top = min(sb + 64.0, ROOF_LEN + 8.0)
-        bun = Bundles(rng, -53.0, 53.0)
+        top = min(sb + 64.0, s_end + 8.0)
+        bun = Bundles(rng, y0, y1)
 
         def fn(sv, y, k=k, sb=sb, top=top, bun=bun):
             # a wedge: thick at the butts (sv = sb), thin where the next course covers it; the butts staggered bundle by bundle
@@ -973,11 +1004,17 @@ def geo_thatch(rng):
             thick = 19.0 * (1.0 - 0.65 * frac) * (1.0 + (full - 1.0) * (1.0 - frac))
             off = base_off + k * 0.8 + thick + 1.2 * noise.noise(Vector((y * 0.06, sv * 0.06, k)))
             yy = y * (1.0 + 0.05 * (1.0 - frac))
-            return roof_point(sv - butt, yy, off), ROOF_N
-        sheet(m, fn, sb, top, -53.0, 53.0, 8, 56, lambda sv, y, sb=sb, top=top: 19.0 * (1.0 - 0.65 * (sv - sb) / max(top - sb, 1.0)),
+            return point(sv - butt, yy, off), normal
+        sheet(m, fn, sb, top, y0, y1, 8, 56, lambda sv, y, sb=sb, top=top: 19.0 * (1.0 - 0.65 * (sv - sb) / max(top - sb, 1.0)),
               "Thatch", back=True, rim=True)
-        courses_name = "Course%d" % (k + 1)
-        parts.append((courses_name, m))
+        out.append(m)
+    return out
+
+
+def geo_thatch(rng):
+    base_off = 9.0            # the battens / sticks stand this far above the slab's mid-plane
+    # the eaves overhang the frame (the first course starts 26 cm below them)
+    parts = [("Course%d" % (k + 1), m) for k, m in enumerate(thatch_courses(rng, roof_point, ROOF_N, -26.0, ROOF_LEN, -53.0, 53.0, base_off))]
     # the ridge roll: a bundle laid along the top edge over the last course
     ridge = Mesh()
     r_pts = [roof_point(ROOF_LEN - 2.0, y, base_off + 16.0) for y in [-55.0 + 110.0 * i / 20 for i in range(21)]]
@@ -987,6 +1024,44 @@ def geo_thatch(rng):
     sways = Mesh()
     for k, s_rod in enumerate((ROOF_LEN - 30.0, ROOF_LEN - 58.0)):
         pts = [roof_point(s_rod, y, base_off + 13.5 + 0.6 * k) for y in [-52.0 + 104.0 * i / 16 for i in range(17)]]
+        tube(sways, pts, 1.0, "Rod", sides=6)
+    parts.append(("Sways", sways))
+    return parts
+
+
+# The stick roof peak (BP_BuildableRoofPeak45, measured Nov 3 from its sticks): an A-frame in the roof's box. Its front slope runs at 45 deg
+# from the eave at X 14, Z -54.5 up to the ridge at X -39.2, Z -1.3 (the sticks' centre line z = -x - 40.5); its back slope comes down at 38
+# deg from the ridge to X -101, Z -49.3 (z = 0.775 x + 29).
+PEAK_RIDGE = Vector((-39.2, 0.0, -1.3))
+PEAK_SIDES = [(Vector((14.0, 0.0, -54.5)), Vector((1.0, 0.0, 1.0)).normalized()),
+              (Vector((-101.0, 0.0, -49.3)), Vector((-0.613, 0.0, 0.790)))]
+
+
+def geo_peak_thatch(rng):
+    """Thatch for the roof peak: both slopes coursed from their eaves up (the courses go on side by side, a course on one side then the
+    other), their top courses lapping over the ridge, a ridge roll over the join and sways pinning both sides."""
+    base_off = 9.0
+    sides = []
+    for eave, n in PEAK_SIDES:
+        up = (PEAK_RIDGE - eave).normalized()
+        length = (PEAK_RIDGE - eave).length
+
+        def point(s, y, off, eave=eave, up=up, n=n):
+            return eave + up * s + Vector((0.0, y, 0.0)) + n * off
+        sides.append((point, n, length, thatch_courses(rng, point, n, -20.0, length, -53.0, 53.0, base_off)))
+    parts = []
+    for k in range(max(len(c) for _, _, _, c in sides)):
+        for si, (_, _, _, courses) in enumerate(sides):
+            if k < len(courses):
+                parts.append(("%sCourse%d" % ("Front" if si == 0 else "Back", k + 1), courses[k]))
+    ridge = Mesh()
+    n_mid = (PEAK_SIDES[0][1] + PEAK_SIDES[1][1]).normalized()
+    tube(ridge, [PEAK_RIDGE + n_mid * (base_off + 18.0) + Vector((0.0, y, 0.0)) for y in [-55.0 + 110.0 * i / 20 for i in range(21)]], 9.5,
+         "Thatch", sides=12, cap_surf="Thatch", wobble=0.08)
+    parts.append(("Ridge", ridge))
+    sways = Mesh()
+    for point, n, length, _ in sides:
+        pts = [point(length - 22.0, y, base_off + 13.5) for y in [-52.0 + 104.0 * i / 16 for i in range(17)]]
         tube(sways, pts, 1.0, "Rod", sides=6)
     parts.append(("Sways", sways))
     return parts
@@ -1270,6 +1345,11 @@ GEOMETRY = {
     "cobble_foundation": geo_cobble_foundation, "cobble_wall": geo_cobble_wall, "cobble_infill": geo_cobble_infill, "thatch": geo_thatch,
     "plank_floor": geo_plank_floor, "wattle_door": geo_wattle_door, "plank_door": geo_plank_door, "thatch_leanto": geo_thatch_leanto,
     "hide_leanto": geo_hide_leanto, "hide_tent": geo_hide_tent,
+    # Nov 3: the half wall's pieces (built in the stick half wall's panel), the peak's thatch, the dry-stone wall
+    "wattle_half": lambda rng: geo_wattle_wall(rng, stages=4, **HALF),
+    "moss_daub_half": lambda rng: geo_moss_daub(rng, bands=4, **HALF),
+    "clay_daub_half": lambda rng: geo_clay_daub(rng, nb=4, **HALF),
+    "peak_thatch": geo_peak_thatch, "dry_stone_wall": geo_dry_stone_wall,
 }
 
 # Support posts (AMOBuildPieceActor::SupportMesh: 100 cm tall on its foot at the origin) for the floors that grow them.

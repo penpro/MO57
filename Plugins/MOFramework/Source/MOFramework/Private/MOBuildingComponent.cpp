@@ -1266,10 +1266,16 @@ FTransform UMOBuildingComponent::TryAttachSnap(const FVector& RawLocation, const
 	{
 		return Result;
 	}
-	// One of a kind per place: a second daub on the same wall, a second post on the same corner.
+	// One of a kind per place: a second daub on the same wall, a second post on the same corner. "A kind" is a shared piece tag, not the
+	// class: a moss daub went onto a clay-daubed wall while the check compared classes (Nov 3).
+	auto SameKind = [this](const AMOBuildableActor* Other)
+	{
+		return Other->GetClass() == CurrentGhost->GetClass()
+			|| Other->PieceTags.ContainsByPredicate([this](const FName& Tag) { return CurrentGhost->PieceTags.Contains(Tag); });
+	};
 	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
 	{
-		if (*It != CurrentGhost && It->GetClass() == CurrentGhost->GetClass() && !It->IsGhostMode()
+		if (*It != CurrentGhost && SameKind(*It) && !It->IsGhostMode()
 			&& FVector::DistSquared(It->GetActorLocation(), Best.GetLocation()) < 4.0f
 			&& It->GetActorQuat().AngularDistance(Best.GetRotation()) < FMath::DegreesToRadians(2.0f))
 		{
