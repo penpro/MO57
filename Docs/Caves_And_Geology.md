@@ -106,9 +106,10 @@ The test (`WorldGen.Geology`) asserts every ore sits in its host rock; 98 % of c
 - **A surface has rock under it** (BR23-1 / BR24-22, Nov 3): a built entrance's hollow is a cap sphere, and the sphere runs on above the
   ground round its rim. `FindCaveSurfaces` searches each column up to a metre over the ground, so it found the sphere's edge in the open
   air and took it for a floor: the dressing (sand rocks, rocky-ground slabs) hung up to a metre over the ground round every bowl. A
-  crossing at or above the column's ground is not a surface now. Measured with `MO.PCG.OpeningAudit` at three bowls of seed 5730 (near
-  -339018, -236264): floating dressing (> 30 cm, traced) 42 + 10 and 42 + 6 -> 2 + 0 and 7 + 0; test `WorldGen.OpeningKeepOut` (976 points in the
-  air round 8 entrances without the rule, 0 with it).
+  crossing at or above the column's ground is not a surface now. Measured by `Tools/check_cave_mouths.py` (`MO.PCG.OpeningAudit`) at three
+  bowls of seed 5730 (near -339018, -236264): floor-facing dressing floating > 30 cm 40 / 50 / 51 (worst 74-81 cm) -> 0 / 0 / 0 (worst
+  22-24 cm); test `WorldGen.OpeningKeepOut` (976 points in the air round 8 entrances without the rule, 0 with it). Lumps on walls and
+  ceilings (15-34 per bowl) have the cave's air under them and are not measured.
 - **The scatter keeps off carved ground:** the hollow's cap is fitted to its centre's ground, so on a slope it cuts the surface up to 1.31
   radii out against the radial keep-out's 1.2. `FMOWorldGen::SampleOpeningDistanceUnderCm` (the cave field 30 cm under a point, where a
   sinkhole or entrance is in reach; one cell hash each elsewhere) is part of `FMOPCGWaterMask::IsInCave`, which the biome spawner now asks

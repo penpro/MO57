@@ -58,7 +58,7 @@ Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd8
     (`MOVoxelSculptSaveDomain`) makes it again before its record loads. It is each machine's own, as the level's height sculpt is: neither
     replicates its sculpt data to a joiner (the plugin refuses a spawned sculpt's; the map's height sculpt has it off -- the #132 gap).
   - Refused only if no volume sculpt can be made (no world), with the old line on screen.
-  - **Verified (Nov 3, seed 777, developer mode's 1 s timers, scratch `probe_rockdig.py` / `probe_rockload.py`):** a 75 cm rock added
+  - **Verified (Nov 3, seed 777, developer mode's 1 s timers; `python Tools/check_dig_under_rock.py`):** a 75 cm rock added
     3 m over the aimed ground (`bUseVolumeSculpting` for one Raise) makes the spot "under rock"; the dig under it is not refused, the
     volume sculpt is made, the ground there drops 622 -> 564 cm and the rock over it stays (980 cm); CONTROL: a dig turned 120 deg away
     in the open stays the height sculpt. Saved, then loaded from the main menu in a fresh process: the sculpt is made again, its record

@@ -2152,3 +2152,11 @@ References: CL-0310
 ### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0312
 Status: RELEASE CL-0311 (BR23-1 / BR24-22, rocks floating round the cave mouths): committed. C++: MOWorldGenGeology.cpp (FindCaveSurfaces: a crossing at or above the column's ground is not a surface), MOWorldGen.h / MOWorldGenCaves.cpp / MOWorldGenWorld.cpp (SampleOpeningDistanceUnderCm, GetCaveEntranceInCell), MOPCGWaterMask.h/.cpp (IsInCave: ground an opening has carved; an overload with the ground), MOPCGBiomeSpawnerSettings.cpp (asks IsInCave instead of its own copy), MOCheatSubsystem.cpp (MO.PCG.OpeningAudit), Tests/MOWorldGenCaveTests.cpp (WorldGen.OpeningKeepOut). No generator output change (checksums unchanged). `ue.py auto` 418/418. Docs: Caves_And_Geology, PCG section 4, TRAPS section 8, BACKLOG (BR23-1, BR24-22, a by-eye row). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
 References: CL-0311
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0313
+Status: CLAIM the instances for `ue.py nettest traversal` runs (N-238, the flaky first hop): diagnosis from the Nov 1 logging; no edits yet.
+References: CL-0312
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0314
+Status: RELEASE CL-0313. N-238: four more `ue.py nettest traversal` runs passed every step (6 of 6 since the Nov 1 logging; not reproduced). Committed: Tools/check_cave_mouths.py (new; its control fails 40 / 50 / 51 per bowl without the BR23-1 fix, passes 0 / 0 / 0 with it), Tools/check_dig_under_rock.py (new; 10 checks pass), MOCheatSubsystem.cpp (MO.PCG.OpeningAudit measures floor-facing instances only: a lump on a cave ceiling has the cave's air under it); Docs: TOOLING, Caves_And_Geology, Terraform_Excavation_Plan, TRAPS, BACKLOG (N-238 note, BR23-1 numbers, by-eye rows). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
+References: CL-0313

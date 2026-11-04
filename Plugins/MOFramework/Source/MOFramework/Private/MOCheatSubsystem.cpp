@@ -5293,7 +5293,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					}
 				}
 			}
-			struct FRow { int32 N = 0, OverCarve = 0, Radial = 0, Floating = 0, FloatingKept = 0; float MinR = 1.0e9f, MaxR = 0.0f, GapMax = -1.0e9f; };
+			struct FRow { int32 N = 0, OverCarve = 0, Radial = 0, Floating = 0, FloatingKept = 0, NotFloor = 0; float MinR = 1.0e9f, MaxR = 0.0f, GapMax = -1.0e9f; };
 			TMap<FString, FRow> Rows;
 			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
 			{
@@ -5341,6 +5341,12 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						const bool bOverCarve = Carve < 0.0f;
 						R.OverCarve += bOverCarve ? 1 : 0;
 						R.Radial += FMOWorldGen::DistanceToSinkholeRimZone(*P, L.X, L.Y, TerrainSeed) <= 0.0f ? 1 : 0;
+						// A gap is measured under floor dressing only: a lump on a cave wall or ceiling (turned to its surface) has the cave's air under it.
+						if (T.GetRotation().GetUpVector().Z < 0.55)
+						{
+							++R.NotFloor;
+							continue;
+						}
 						FHitResult Hit;
 						if (World->LineTraceSingleByChannel(Hit, L + FVector(0.0, 0.0, 300.0), L - FVector(0.0, 0.0, 3000.0), ECC_Visibility, Q))
 						{
@@ -5356,13 +5362,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				}
 			}
 			Rows.ValueSort([](const FRow& A, const FRow& B) { return A.N > B.N; });
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %d hollow(s) within %.0f m; per mesh within 2.5 radii: n | radii | over carved ground (the scatter keeps out) | radial keep-out | floating (>30 cm, traced) and of those over carved ground | worst gap"),
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %d hollow(s) within %.0f m; per mesh within 2.5 radii: n | radii | over carved ground (the scatter keeps out) | radial keep-out | on walls / ceilings (not measured) | floating (floor-facing, >30 cm, traced) and of those over carved ground | worst gap"),
 				Hollows.Num(), Radius / 100.0);
 			for (const TPair<FString, FRow>& It : Rows)
 			{
 				const FRow& R = It.Value;
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %-36s n=%4d | %.2f-%.2f | carve %3d | radial %3d | floating %3d (%d) | worst %.0f"), *It.Key, R.N, R.MinR, R.MaxR,
-					R.OverCarve, R.Radial, R.Floating, R.FloatingKept, R.GapMax);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING %-36s n=%4d | %.2f-%.2f | carve %3d | radial %3d | walls %3d | floating %3d (%d) | worst %.0f"), *It.Key, R.N, R.MinR, R.MaxR,
+					R.OverCarve, R.Radial, R.NotFloor, R.Floating, R.FloatingKept, R.GapMax);
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] OPENING DONE"));
 		}),

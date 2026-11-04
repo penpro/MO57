@@ -458,7 +458,8 @@
 - **Cave dressing floats round a bowl** -> `FindCaveSurfaces` took the cave field's sign change in the OPEN AIR for a floor (a hollow's
   cap sphere runs on above the ground round its rim; the search goes a metre over the ground) -> a surface needs rock under it (below the
   column's ground). **Planted things float at a cave mouth but `MO.PCG.Grounding` says grounded** -> it measures against the generator's
-  height field, which has no bowl -> `MO.PCG.OpeningAudit`. A floating mesh near a mouth: check `DT_CaveScatter` before the biome
+  height field, which has no bowl -> `MO.PCG.OpeningAudit` / `Tools/check_cave_mouths.py`. A trace down from a lump on a cave CEILING
+  reads as metres of float (the cave's air under it): measure floor-facing instances only. A floating mesh near a mouth: check `DT_CaveScatter` before the biome
   palettes (the sand rocks there were the cave dressing). (BR23-1, Nov 3)
 
 ## 9. PCG
