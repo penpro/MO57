@@ -12,6 +12,7 @@
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "MOWorldItem.h"
+#include "MOVoxelAlias.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/World.h"
@@ -698,6 +699,16 @@ void UMOTerrainModificationSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Sa
 void UMOTerrainModificationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
+	// Before the actors' BeginPlay, on every machine: the level's sculpts carry the host's digs to the joiners (#132's remainder, Nov 3).
+	if (InWorld.GetNetMode() != NM_Standalone)
+	{
+		// The volume sculpt digging under rock works (N-256) exists on every machine from the start, under one name, so the host's under-rock digs
+		// reach the joiners too -- the whole sculpt for a late joiner (the plugin sends it when the client registers).
+		MOVoxel::EnsureVolumeSculptActor(&InWorld);
+		const int32 Enabled = MOVoxel::EnableSculptReplication(&InWorld);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxel] %d level sculpt(s) replicate their edits (%s)"), Enabled,
+			InWorld.GetNetMode() == NM_Client ? TEXT("joiner") : TEXT("host"));
+	}
 	if (UGameInstance* GI = InWorld.GetGameInstance())
 	{
 		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())

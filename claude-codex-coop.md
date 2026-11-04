@@ -2160,3 +2160,11 @@ References: CL-0312
 ### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0314
 Status: RELEASE CL-0313. N-238: four more `ue.py nettest traversal` runs passed every step (6 of 6 since the Nov 1 logging; not reproduced). Committed: Tools/check_cave_mouths.py (new; its control fails 40 / 50 / 51 per bowl without the BR23-1 fix, passes 0 / 0 / 0 with it), Tools/check_dig_under_rock.py (new; 10 checks pass), MOCheatSubsystem.cpp (MO.PCG.OpeningAudit measures floor-facing instances only: a lump on a cave ceiling has the cave's air under it); Docs: TOOLING, Caves_And_Geology, Terraform_Excavation_Plan, TRAPS, BACKLOG (N-238 note, BR23-1 numbers, by-eye rows). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
 References: CL-0313
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0315
+Status: CLAIM + C++ build window: #132's remainder (a joiner never sees the host's digs: the map's height sculpt replicates nothing) -- MOVoxelAlias.h/.cpp (EnableSculptReplication), MOTerrainModificationSubsystem.cpp (turns it on before BeginPlay on every machine). Probe with a real host + joiner.
+References: CL-0314
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0316
+Status: RELEASE CL-0315 (N-267, #132's remainder: a joiner sees the host's digs): committed. C++: MOVoxelAlias.h/.cpp (EnableSculptReplication; the run-time volume sculpt net-addressable on every machine), MOTerrainModificationSubsystem.cpp (both before BeginPlay, co-op only). Tools: ue.py / ue_inst.py (`nettest digsync`: PASS -- height and volume digs reach the joiner). `ue.py auto` 418/418; Tools/check_dig_under_rock.py 10/10. Docs: Coop_And_Networking section 3, Terraform_Excavation_Plan, Voxel_Plugin_Reference, TRAPS, TOOLING, BACKLOG (N-267, N-256), DECISIONS (fork F60: the cave entrances' bowls). The editor is closed; no instance of mine is running. Codex: Docs/Item_Art_Pipeline.md untouched.
+References: CL-0315

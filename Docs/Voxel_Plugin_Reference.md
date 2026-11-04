@@ -622,10 +622,12 @@ and matches Voxel Plugin's own undo/redo behaviour in editor.
   (3D sculpt — what you'd use to carve cave entrances). Off, an action
   under rock still works the volume sculpt (`UsesVolumeAt`, N-256); no
   level holds one, so `MOVoxel::EnsureVolumeSculptActor` spawns
-  `MO_VolumeSculpt` at run time (non-replicated: the plugin refuses
-  sculpt-data replication on a spawned sculpt, it needs a name stable for
-  networking; stamp `Scale` 25 cm instead of 100, `bIsInfinite` for a
-  run-time sculpt) and `MOVoxelSculptSaveDomain` makes it again on load.
+  `MO_VolumeSculpt` at run time (in co-op on every machine at world
+  begin, one name, `SetNetAddressable()`: the plugin replicates sculpt
+  data only for a name stable for networking; stamp `Scale` 25 cm instead
+  of 100, `bIsInfinite` for a run-time sculpt) and
+  `MOVoxelSculptSaveDomain` makes it again on load. The level's height
+  sculpt replicates its edits since Nov 3 (`EnableSculptReplication`).
   A volume dig's sphere is at least 1.5 world voxels (75 cm): smaller
   ones fall between the samples. `Docs/Terraform_Excavation_Plan.md`.
 - Five-second timed actions with movement-interrupt integration, progress

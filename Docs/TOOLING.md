@@ -99,7 +99,8 @@ The World look lab (Oct 28): `MO_PROJECT=D:/UEProjects/MO_WorldLab` drives `D:/U
 D:/UEProjects/MO_WorldLab/Saved/WorldLabExport/worldlab_patch_latest.json [--dry-run]` (MO57's editor open; DT_Biomes rows, `Content/Python/terrain_surface_overrides.json`, the wind collection).
 Co-op traversal: `python Tools/ue.py nettest traversal` (a joiner hops up, grabs, climbs, lets go, and holds on at a lip with no room on
 top (N-236); host and joiner must agree; each block is faced only once the joiner's machine has it; ~6 min; an occasional run fails
-from its first jump for reasons outside the moves: N-238 -- rerun once).
+from its first jump for reasons outside the moves: N-238 -- rerun once). Co-op digging: `python Tools/ue.py nettest digsync` (the host digs, the
+joiner must stand on the same dug ground; ~5 min).
 A new player's first minutes (Oct 29): `python Tools/check_onboarding.py [--seed 777] [--keep]` (one instance, a new world through the
 creator: the early-access notice after Begin and "Got it"; every tutorial popup walked, each menu step done with its key; the fire from nothing
 -- inspect a dry branch, the drill then listed in the crafting menu (read from its entries: the list hides what the survivor cannot make, and

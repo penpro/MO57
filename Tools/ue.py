@@ -1563,6 +1563,8 @@ def cmd_nettest(a):
         sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep, seed=a.seed, pairs=a.pairs) else 1)
     if a.mode == "traversal":
         sys.exit(0 if ui.traversal_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "digsync":
+        sys.exit(0 if ui.digsync_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "bases":
         sys.exit(0 if ui.bases_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "churn":
@@ -1875,7 +1877,7 @@ def main():
     ip.set_defaults(fn=cmd_inst)
 
     s = sub.add_parser("nettest", help="two-process (lan) / real-Steam (steam-host) session test; PASS/FAIL + exit code")
-    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "packaged-suite", "packaged-removal", "bugreport", "churn", "netdiag", "traversal", "bases", "packaged-bases"])
+    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "packaged-suite", "packaged-removal", "bugreport", "churn", "netdiag", "traversal", "digsync", "bases", "packaged-bases"])
     s.add_argument("--seconds", type=int, default=60, help="netdiag mode: seconds per measured phase (controls run half as long, at least 15)")
     s.add_argument("--phases", default="", help="netdiag mode: comma list of phases to run (clean,lag50,loss1,ctl_ratecap,ctl_speedhack); default all")
     s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")

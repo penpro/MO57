@@ -56,7 +56,9 @@ Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd8
     `MOVoxel::EnsureVolumeSculptActor` spawns one named `MO_VolumeSculpt` the first time it is needed -- samples every 25 cm (the
     plugin's 100 cm default draws a metre grid) and `bIsInfinite` (the plugin's flag for run-time sculpts) -- and the save domain
     (`MOVoxelSculptSaveDomain`) makes it again before its record loads. It is each machine's own, as the level's height sculpt is: neither
-    replicates its sculpt data to a joiner (the plugin refuses a spawned sculpt's; the map's height sculpt has it off -- the #132 gap).
+    replicates its sculpt data to a joiner -- until Nov 3. Now in co-op every machine makes `MO_VolumeSculpt` at world begin under
+    that name, net-addressable, and the plugin's channel carries both sculpts' edits (`Docs/Coop_And_Networking.md` section 3,
+    `nettest digsync`).
   - Refused only if no volume sculpt can be made (no world), with the old line on screen.
   - **Verified (Nov 3, seed 777, developer mode's 1 s timers; `python Tools/check_dig_under_rock.py`):** a 75 cm rock added
     3 m over the aimed ground (`bUseVolumeSculpting` for one Raise) makes the spot "under rock"; the dig under it is not refused, the

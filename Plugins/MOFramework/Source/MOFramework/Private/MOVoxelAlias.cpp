@@ -81,16 +81,51 @@ namespace MOVoxel
 		{
 			return nullptr;
 		}
-		Volume->SetReplicates(false);            // each machine's own, as the level's height sculpt is
-		Volume->bReplicateSculptData = false;    // the plugin refuses it on a spawned sculpt
+		// Each machine spawns its own (the actor does not replicate), under the same name in the persistent level: net-addressable by that name, so
+		// the plugin's channel can carry its sculpt data host -> joiners (it refuses a spawned sculpt whose name is not stable for networking).
+		Volume->SetReplicates(false);
+		Volume->SetNetAddressable();
+		Volume->bReplicateSculptData = World->GetNetMode() != NM_Standalone;
 		{
 			const FVoxelVolumeSculptStampRef Stamp = Volume->GetStamp();
 			Stamp->Scale = 25.0f;        // its samples every 25 cm (default 100): a dig's scoop takes the 50 cm voxel world's shape, not a metre grid's
 			Stamp->bIsInfinite = true;   // "for runtime stamps": an empty sculpt has no bounds, so its first edit would not reach the chunks
 		}
 		Volume->FinishSpawning(FTransform::Identity);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxel] spawned the volume sculpt %s (the level has none)"), *Volume->GetName());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxel] spawned the volume sculpt %s (the level has none)%s"), *Volume->GetName(),
+			Volume->bReplicateSculptData ? TEXT(", its edits replicate") : TEXT(""));
+		if (Volume->GetName() != VolumeSculptName)
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOVoxel] the volume sculpt got the name %s, not %s: another machine's would not match it"), *Volume->GetName(), VolumeSculptName);
+		}
 		return Volume;
+	}
+
+	int32 EnableSculptReplication(UWorld* World)
+	{
+		int32 Enabled = 0;
+		TArray<AActor*> Actors;
+		GetHeightSculptActors(World, Actors);
+		for (AActor* Actor : Actors)
+		{
+			AVoxelSculptHeight* Height = AsHeight(Actor);
+			if (IsValid(Height) && !Height->HasActorBegunPlay() && Height->IsNameStableForNetworking())
+			{
+				Height->bReplicateSculptData = true;
+				++Enabled;
+			}
+		}
+		GetVolumeSculptActors(World, Actors);
+		for (AActor* Actor : Actors)
+		{
+			AVoxelSculptVolume* Volume = AsVolume(Actor);
+			if (IsValid(Volume) && !Volume->HasActorBegunPlay() && Volume->IsNameStableForNetworking())
+			{
+				Volume->bReplicateSculptData = true;
+				++Enabled;
+			}
+		}
+		return Enabled;
 	}
 
 	bool IsHeightSculptActor(const AActor* Actor) { return Actor && Actor->IsA<AVoxelSculptHeight>(); }

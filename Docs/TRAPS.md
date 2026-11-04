@@ -446,9 +446,11 @@
   cells from `FMOWorldGen::WorldToCell`, never `(0,0) +- WorldHalfSizeCm` or `floor(X / Cell)` of a world position. A world-space function
   missing from the `FMOWorldGen` facade fails the build on purpose. (`Docs/Terrain_Generation_Exploration.md` § World space, Oct 26)
 - **A volume sculpt spawned at run time never reaches a joiner** -> the plugin refuses sculpt-data replication on a sculpt whose name is
-  not stable for networking (a spawned actor), and a volume sculpt's default `bReplicates` would only make an empty copy -> spawn it
-  non-replicated and save it (`MOVoxel::EnsureVolumeSculptActor`, `MO_VolumeSculpt`; the save domain makes it again on load). The
-  map's height sculpt has its sculpt data off too (#132). **A spawned volume sculpt edits nothing you can see** -> its stamp samples
+  not stable for networking (a spawned actor), and a volume sculpt's default `bReplicates` would only make an empty copy -> spawn it on
+  EVERY machine under one name, non-replicated, `SetNetAddressable()` + `bReplicateSculptData` before `FinishSpawning`
+  (`MOVoxel::EnsureVolumeSculptActor`, `MO_VolumeSculpt`; the save domain makes it again on load). A joiner fetches the new data on
+  request: allow ~15 s before measuring its ground. The
+  level's height sculpt replicates since Nov 3 (MOVoxel::EnableSculptReplication before BeginPlay on every machine; it was off, so a joiner never saw a dig). **A spawned volume sculpt edits nothing you can see** -> its stamp samples
   every 100 cm (`Scale`), so a sphere under ~1 voxel falls between the samples (a 52 cm dig and a 52 cm rock left no trace) -> set
   `Scale` (25 cm) and `bIsInfinite` before `FinishSpawning`, and keep a dig sphere at least 1.5 world voxels (75 cm,
   `GetVolumeBiteRadius`). A sphere of the 2.5 m terraform brush is ~33 m3 at once. **`MO.Save.LoadFrom` cannot test a run-time actor's

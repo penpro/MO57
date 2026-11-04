@@ -5457,6 +5457,75 @@ def traversal_test(uproject, editor_exe, keep=False, boot_timeout=300):
             stop(host)
 
 
+def digsync_test(uproject, editor_exe, keep=False, boot_timeout=300):
+    """A JOINER sees the ground the host dug (#132's remainder, Nov 3): the level's height sculpt carries its edits through the plugin's own
+    channel (MOVoxel::EnableSculptReplication, on every machine before BeginPlay). Until then the joiner kept the ground as generated: the host
+    dug 11.9 cm and the joiner still stood on the old surface. The host digs five times 3 m ahead of itself (the height sculpt); both machines
+    measure the ground there. Then a volume dig 3 m to the side (the sculpt a dig under rock works, N-256: MO_VolumeSculpt, made on every
+    machine at world begin under one name, net-addressable): the joiner's ground follows within ~15 s (it fetches the new data). Real processes."""
+    rep = Report()
+    host, client = "dighost", "digclient"
+    try:
+        start(host, uproject, editor_exe, pos=(0, 0), nosteam=True)
+        start(client, uproject, editor_exe, pos=(660, 0), nosteam=True)
+        if not _host_and_join(rep, host, client, "DigSyncTest", boot_timeout=boot_timeout):
+            return False
+        time.sleep(30)   # the world builds round both pawns
+        both = [re.search(r"\[MOVoxel\] (\d+) level sculpt\(s\) replicate their edits \((host|joiner)\)", read_log_from(n, 0)) for n in (host, client)]
+        rep.step("both machines turn on the level sculpt's replication before play", all(m and int(m.group(1)) >= 1 for m in both),
+                 ", ".join(m.group(0) if m else "no line" for m in both))
+        r = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
+                         "out('SPOT %.1f %.1f %.1f %.4f %.4f' % (l.x, l.y, l.z, f.x, f.y))")
+        m = re.search(r"SPOT (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)", r)
+        if not rep.step("host: found its pawn", bool(m), r.strip()[-120:]):
+            return False
+        x, y, z, fx, fy = (float(v) for v in m.groups())
+        tx, ty = x + fx * 300.0, y + fy * 300.0
+        before = _surface_z(host, tx, ty, z + 2000.0, z - 2000.0)
+        if not rep.step("host: measures the ground 3 m ahead", bool(before) and before[0] == 1, str(before)):
+            return False
+        for _ in range(5):
+            console(host, "MO.Test.TerraformRPC Dig 300")
+            time.sleep(3.0)
+        time.sleep(10.0)
+        h, c = _surface_z(host, tx, ty, z + 2000.0, z - 2000.0), _surface_z(client, tx, ty, z + 2000.0, z - 2000.0)
+        dug = before[1] - h[1] if h and h[0] == 1 else -1.0
+        rep.step("the host's five digs lower its ground (> 5 cm)", dug > 5.0, f"{before[1]:.1f} -> {h[1] if h else None}")
+        rep.step("... and the joiner stands on the same dug ground (< 3 cm from the host's, > 5 cm under the old)",
+                 bool(c) and c[0] == 1 and abs(c[1] - h[1]) < 3.0 and before[1] - c[1] > 5.0, f"joiner {c[1] if c else None}, host {h[1] if h else None}")
+
+        # Under rock (N-256): the volume sculpt made at run time (MO_VolumeSculpt, spawned on every machine under one name, net-addressable)
+        # carries a volume dig -- the kind a dig under rock makes -- to the joiner too.
+        spawned = [re.search(r"spawned the volume sculpt MO_VolumeSculpt \(the level has none\), its edits replicate", read_log_from(n, 0)) for n in (host, client)]
+        rep.step("both machines make the volume sculpt, net-addressable, at world begin", all(spawned), str([bool(m) for m in spawned]))
+        sx, sy = x - fy * 300.0, y + fx * 300.0   # 3 m to the side: clear of the height digs
+        g0 = _surface_z(host, sx, sy, z + 2000.0, z - 2000.0)
+        if rep.step("host: measures the ground 3 m to the side", bool(g0) and g0[0] == 1, str(g0)):
+            _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); tc = p.get_component_by_class(unreal.MOTerraformingComponent); "
+                         f"tc.set_editor_property('use_volume_sculpting', True); ok = tc.dig(unreal.Vector({sx:.1f}, {sy:.1f}, {g0[1]:.1f})); "
+                         "tc.set_editor_property('use_volume_sculpting', False); out('VDIG ok=%s' % ok)")
+            time.sleep(10.0)
+            hv = _surface_z(host, sx, sy, z + 2000.0, z - 2000.0)
+            cv, waited = None, 10.0
+            while waited < 45.0:   # the joiner fetches the sculpt's new data from the host (request / reply over the voxel channel)
+                cv = _surface_z(client, sx, sy, z + 2000.0, z - 2000.0)
+                if cv and hv and cv[0] == 1 and abs(cv[1] - hv[1]) < 5.0:
+                    break
+                time.sleep(5.0)
+                waited += 5.0
+            print(f"[nettest] digsync: the joiner's ground at the volume dig after {waited:.0f} s: {cv}", flush=True)
+            rep.step("a volume dig lowers the host's ground (> 30 cm: a 75 cm sphere)", bool(hv) and hv[0] == 1 and g0[1] - hv[1] > 30.0,
+                     f"{g0[1]:.1f} -> {hv[1] if hv else None}")
+            rep.step("... and the joiner's the same (< 5 cm from the host's)", bool(cv) and bool(hv) and cv[0] == 1 and abs(cv[1] - hv[1]) < 5.0 and g0[1] - cv[1] > 30.0,
+                     f"joiner {cv[1] if cv else None}, host {hv[1] if hv else None}")
+        return rep.ok
+    finally:
+        print(f"[nettest] digsync: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        if not keep:
+            stop(client)
+            stop(host)
+
+
 BODYSHAPE_RE = re.compile(r"\[MOQUERY\] BODYSHAPE (\S+)( \(this machine's player\))? base '(\w*)' shows ([\d.]+) % body fat, ([\d.]+) kg of muscle(.*)")
 
 

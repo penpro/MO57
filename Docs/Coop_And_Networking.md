@@ -58,6 +58,16 @@
   The world's shape and ORIGIN ride in the same struct (`FMOWorldSeedInfo::Shape` / `::Origin`): a new world is shifted so its start is
   (0,0) (`Docs/World_Creation.md` §2), and a joiner generating at another origin would stand on other land. The client logs the origin it
   received; `nettest game` / `hostsave` check it equals the host's.
+- **The ground the host digs reaches every joiner** (Nov 3, #132's remainder -- lost from the backlog in the Oct 17 consolidation, open since
+  July): the level's height sculpt carries its edits through the plugin's own channel (`UVoxelChannel`, a `UChannel` on the game's net
+  connection, registered on every net driver -- Steam Sockets too). `bReplicateSculptData` was off on the map's sculpt, so a joiner kept the
+  ground as generated (the host dug 11.9 cm, the joiner stood on the old surface). `MOVoxel::EnableSculptReplication`, called from
+  `UMOTerrainModificationSubsystem::OnWorldBeginPlay` on every machine before the actors' BeginPlay (the plugin picks its server / client data
+  source there), turns it on for every sculpt placed in the level; logged `[MOVoxel] N level sculpt(s) replicate their edits (host|joiner)`.
+  The volume sculpt digging under rock works (N-256, no level holds one) is made on every machine at world begin under one name,
+  `MO_VolumeSculpt`, and `AActor::SetNetAddressable()` before `FinishSpawning` makes that name stable for networking, so the plugin carries
+  it too (the joiner's ground followed a 65 cm volume dig in ~15 s: it fetches the new data). The actor itself does not replicate (each
+  machine spawns its own). `nettest digsync`.
 - **Voxel collision exists only around each machine's own human-driven pawns:** `AMOCharacter::VoxelCollisionInvoker`
   (`bWaitForVoxelWorld`) is enabled in `NotifyControllerChanged` while a human drives the pawn (5/6 joins 0 cm, 1/6 17-50 cm for ~10 s).
 - **Every machine builds fine terrain around every OTHER player too** (`AMOCharacter::RemotePlayerTerrainDetail`, a `UVoxelLODVolumeComponent`,
@@ -163,6 +173,8 @@ python Tools/ue.py inst list              # the running instances; drive one wit
   `_client_light_fire` (Oct 20: the joiner's hand drill runs on the host, and the joiner's OWN screen shows "Firemaking +25 XP": the server ->
   joiner skill toast, which the bridge's Python cannot test because it runs RPCs locally; the drill is shortened by `MO.Test.FireAttemptSeconds`)
   (`MO_ACTIONS_ONLY=<names> python Tools/ue.py nettest actions` runs a subset).
+- `nettest digsync` (Nov 3): the host digs five times; the joiner must stand on the same dug ground (< 3 cm) and both machines log the
+  replication switch. Before the fix: host 460.8 -> 448.9, joiner 460.8.
 - `nettest traversal` (Oct 26): a joiner hops up onto a replicated test block, grabs a climbable face, climbs it and lets go; the host and the
   joiner must agree at each step (`Docs/Movement_And_Traversal.md` §4-5). It found that a move started inside `DoJump` lost the jump press.
 - `nettest netdiag` checks the SMOOTHNESS instruments, not smoothness: two processes on one PC talk over loopback, so it cannot show an

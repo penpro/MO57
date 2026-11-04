@@ -40,10 +40,16 @@ namespace MOVoxel
 	AActor* FindHeightSculptActor(UWorld* World);
 	AActor* FindVolumeSculptActor(UWorld* World);
 	/** The world's volume sculpt: the level's, else one spawned now (N-256: no level has one, and a .umap change waits on the LFS budget),
-	 *  named VolumeSculptName so its save record finds it again. Local to this machine, like the level's height sculpt (its sculpt data is
-	 *  not replicated either: the plugin refuses to replicate a spawned one's). Null without a world. */
+	 *  named VolumeSculptName so its save record finds it again. In co-op every machine spawns its own at world begin under that name,
+	 *  net-addressable (AActor::SetNetAddressable), so the plugin replicates its sculpt data host -> joiners. Null without a world. */
 	AActor* EnsureVolumeSculptActor(UWorld* World);
 	inline const TCHAR* VolumeSculptName = TEXT("MO_VolumeSculpt");
+
+	/** Co-op (#132's remainder, Nov 3): the level's sculpts carry their edits to every joiner through the plugin's own channel (UVoxelChannel on
+	 *  the game's net connection, Steam's too). Call on EVERY machine before the actors' BeginPlay (the plugin picks its server / client data
+	 *  source there). Only a sculpt placed in the level qualifies: a spawned one's name is not stable for networking (the plugin refuses it).
+	 *  Returns how many were turned on. Until Nov 3 a joiner never saw the ground the host dug (the map's height sculpt had it off). */
+	int32 EnableSculptReplication(UWorld* World);
 
 	/** Type checks without naming the Voxel class. */
 	bool IsHeightSculptActor(const AActor* Actor);
