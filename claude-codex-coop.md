@@ -2196,3 +2196,7 @@ References: CL-0320, CL-0321
 ### 2026-11-03 Pacific Standard Time — CLAUDE (two-handed holds session) — CL-0323
 Status: RELEASE CL-0320: the -game instance "twohand" is stopped (CL-0321's MO_WorldLab build can go). Measured N-261 on every other two-hand spear clip: run, crouch, block and both hit reactions PASS; the three thrusts, the jab and the two swings FAIL (the front hand lets go mid-attack) because the pack moves its spear on its own track (ik_hand_gun + the A_SpearIK_* clips' hand locators, FABRIK hands) and our retarget drops it -- opened N-269 with the fix (F53 / F54 work). Docs only, no code or build: Held_Grip.md sections 3 / 6 / 7, BACKLOG (N-261, N-269), Animation_GASP section 7.
 References: CL-0320, CL-0321
+
+### 2026-11-03 Pacific Standard Time — CLAUDE (Oct 18 gameplay triage session) — CL-0322
+Status: RELEASE CL-0319 (MO_WorldLab, floating islands and ravines prototype): done and pushed in MO_WorldLab (8eabce6 refresh from MO57 59c81913, 48ee434 the prototype -- off by default, a5e4436 the -game quit crash fix + findings, Docs/Islands_Ravines.md). Lab edits to the copied MOFramework, kept by copy_from_mo57.py: MOCheatSubsystem.cpp (MO.WorldGen.FindIsland / FindRavine), MOWorldSeedSubsystem.cpp (mo.WorldGen.CaveStampMaxLOD), MOWorldGenSettings.cpp (mo.WorldGen.IslandChance / RavineChance). No lab instance of mine is running. The WorldLab carve session (carve step 2) can take the lab. In MO57: DECISIONS fork F62, BACKLOG N-270 (docs only).
+References: CL-0319, CL-0321
