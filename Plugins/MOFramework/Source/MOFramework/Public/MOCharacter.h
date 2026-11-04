@@ -1035,19 +1035,30 @@ public:
 		FTransform SupportInHand = FTransform::Identity;   // the handle as the OTHER hand would hold it (its own seat), in that hand bone's space
 		FVector2D Run = FVector2D::ZeroVector;    // the item along the handle's axis from its centre (cm: butt, head); zero: no second hand on it
 		float SupportWeight = 0.0f;               // how far the other hand holds it now (UMOBodyRetargetAnimInstance, each evaluation)
+		float TrackWeight = 0.0f;                 // how far it follows the clip's own spear track (FMOHandGrip::Track), each evaluation
+		float TrackHold = 0.0f;                   // ... how far the clip's other hand holds that spear
+		FVector TrackDir = FVector::ZeroVector;   // ... the clip's spear, toward its head (the body mesh's component space)
 	};
 
 	/** The hand's grip, false while it holds nothing it closes on. */
 	bool GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const;
 
 	/** The held item as the hands left it after an evaluation (UMOBodyRetargetAnimInstance): its handle in the carrying hand's bone space -- the
-	 *  seat, or turned through the other hand on a long handle (FMOHandGrip::Support) -- and how far the other hand holds it. */
-	void AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight);
+	 *  seat, or turned through the other hand on a long handle (FMOHandGrip::Support), or onto the clip's spear (FMOHandGrip::Track) -- how
+	 *  far the other hand holds it, and how far it followed the clip's spear track (its weight, the clip's other hand's hold, its direction). */
+	void AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight, float TrackWeight = 0.0f, float TrackHold = 0.0f,
+		const FVector& TrackDir = FVector::ZeroVector);
 
 	/** How far the other hand holds this hand's item (0..1: FMOHandGrip::Support; Docs/Held_Grip.md, two hands). For the checks
 	 *  (Tools/check_grip.py --clip). */
 	UFUNCTION(BlueprintCallable, Category="MO|HeldItems")
 	float GetHeldGripSupport(bool bLeftHand) const { return HandGrips[bLeftHand ? 0 : 1].SupportWeight; }
+
+	/** How far this hand's item followed the playing clip's own spear track in the last evaluation (0..1: FMOHandGrip::Track, N-269), how far
+	 *  the clip's other hand holds that spear (OutClipHold), and the clip's spear, toward its head (OutDirWorld: world, unit; zero off the
+	 *  track). For the checks (Tools/check_grip.py --clip). */
+	UFUNCTION(BlueprintCallable, Category="MO|HeldItems")
+	float GetHeldGripTrack(bool bLeftHand, FVector& OutDirWorld, float& OutClipHold) const;
 
 	/** The held item's handle as the hand closes on it: its frame (world, cm), half sizes, style, and this body's hand scale (its knuckle span
 	 *  over the reference hand's). False while the hand grips nothing. For the checks (Tools/check_grip.py, check_bow.py; Docs/Held_Grip.md). */

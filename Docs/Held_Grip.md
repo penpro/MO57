@@ -116,19 +116,57 @@ the clips put the front hand too far off for that:
 **Where it holds (Nov 3).** The stances hold (§6): idle, walk, run, crouch, block and the two hit reactions. The six attacks do not: the
 three thrusts, the jab and the two swings. The cause is how the Mega Spear pack is built, not the gates.
 
-- **The spear is its own track.** The pack's spear (`SK_Spear`) rides the character's `ik_hand_gun` bone, not either hand, and has its
-  own clips (`A_SpearIK_*`). Those move a `HandL` / `HandR` locator along it. The pack's `ABP_SpearAnimations_IK` pulls both hands onto
-  the locators (two FABRIK nodes), and an `AttachLeft` notify in the thrust hands the spear to the other hand.
-- **The hands slide along it.** The distance between the two locators changes through an attack: 29-96 cm in the thrust, 38-68 in the
-  jab, 34-68 in the horizontal swing (68 at rest).
+- **The spear is its own track.** The pack's spear (`SK_Spear`) rides the character's `ik_hand_gun` bone, not either hand. Its own clips
+  (`A_SpearIK_*`) move only a `HandL` / `HandR` locator along it, never the spear. The pack's `ABP_SpearAnimations_IK` pulls the hands onto
+  the locators (two FABRIK nodes, positions only). In the thrust a `DtachLeft` notify (0.14 s) lets the front hand go and `AttachLeft`
+  (0.77 s) takes it back.
+- **The spear pivots in the rear hand and slides through the front one** (measured Nov 3 on the pack's own clips).
+  - **The rear hand** stays at one place on the shaft while the shaft turns in it: 24° in the jab, 43° in the horizontal swing, 34° in the
+    vertical swing, 66° in the thrust.
+  - **The front hand** keeps its turn on the shaft (0-4° in the jab and horizontal swing, 11-13° in the vertical) and slides along it (30 cm
+    in the jab, 34 in the swing). In the middle of the thrust it is off the spear altogether.
+  - **Changing to one hand,** the rear hand slides 89 cm up the shaft.
+  - **The pack's IK barely works.** Wherever a hand holds the spear, the character clip already has it within 2 cm of its locator.
 - **Our clips lose that track.** The retarget carries the arms but not `ik_hand_gun`: it stays at the origin in every `*_MH` clip.
 - **So no shaft in the rear hand fits.** Measured on Femme in our clips, the line from the rear hand's seat to the front hand's runs
   22-54° off the shaft where the jab and the horizontal swing let go (the hands 22-45 cm apart, 55 at rest), up to 31° in the vertical
   swing, and 56-88° through most of the thrust (the front hand's seat 94-115 cm from the rear one, toward the butt). A shaft turned that
   far in the rear fist is not a grip.
-- **The fix is the pack's own design** (N-269): carry the spear track through the retarget, hold the spear where the clip's spear is
-  during a spear clip, and pull both hands onto their locators, the fingers closing as here. Widening the gates would not do it: the
-  one-hand clips' free hand starts at 39°.
+- **The fix is the pack's own design** (N-269): the spear's track, next. Widening the gates would not do it: the one-hand clips' free
+  hand starts at 39°.
+
+### The spear's track (`FMOHandGrip::Track`; Nov 4, N-269)
+
+In a spear clip the spear goes where the pack's spear goes, and the hands hold it where the pack's hands hold it. The arms stay ours.
+
+1. **The track, baked into each clip** (`Content/Python/spear_track.py`, run by `retarget_weapon_sets.py` after its pelvis repair; local
+   only, like the clips). From the pack's source clip, frame by frame:
+   - `MO_SpearDirX / Y / Z`: the spear toward its head (`ik_hand_gun`, turned as `BP_SpearFighter` attaches it: -90° in roll), in
+     component space.
+   - `MO_SpearHoldL / R`: whether that hand holds it (1 with the hand bone within 15 cm of the shaft's axis, 0 past 21 cm or off the spear).
+     The pack's holding hands sit 4-14 cm off it; a free one is 22 cm or more.
+   - `MO_SpearSlideL / R`: how far that hand is up the shaft from where it holds it in `A_2H_Idle_01` (left 12.0, right -55.3 cm from the
+     spear's middle).
+   - `MO_SpearTrack`: 1 throughout. The other curves blend with the clip; this says by how much.
+
+   Carrying `ik_hand_gun` through the retarget instead would scale the spear off our hands, and the spear clips' locators are not needed:
+   the character clips already put the hands on the spear. Our hands match the pack's closely: the line between them within 1-12° of the
+   pack's (mostly 1-5°), each hand 3-17 cm from the pack's scaled position (the most in the thrust's shallower lunge).
+2. **The carrying hand's wrist** (`WristTurn`). A fist takes a shaft up to 30° off its seat. Past that the shaft runs through the fingers:
+   the thrusts put the index 1.5-2.5 cm into it. So the wrist turns toward the clip's spear by the rest, at most 40°.
+3. **The spear** (`Track`). The handle turns about the carrying hand's grip onto the clip's direction, slides out of that palm (at most
+   3 cm, as two hands' does) and slides under the hand by `MO_SpearSlide`. The hand closes on the shaft where it now is.
+4. **The free hand** (`HoldOn`), wherever the clip's hand holds the spear:
+   - Its seat goes to the nearest point of the shaft's axis on the item, turned onto the axis the nearer way round. Two-bone IK moves the
+     arm there, the elbow bending the way the clip has it.
+   - Its palm then lies on the shaft, never in it: the hand moves off square to the axis (at most 3 cm). The clip's flat palm took the seat
+     0.5-0.7 cm into it.
+   - Its fingers close on the shaft round it.
+   - **Gates:** full within 12 cm of the axis, none past 25 (an arm is never yanked across). Full within 45° of turn, none past 70 (a wrist
+     is never wrung round). None in the carrying hand's place.
+   - Where the clip's hand lets go (the middle of the thrust, the changes of grip), the free hand is the animation's.
+5. **Blending.** The curves come in and out with the clip, so the track takes over from `Support` (above) as a spear clip blends in.
+   Outside the spear set (no curves) `Support` alone holds the other hand, as before.
 
 ## 4. A bow
 
@@ -205,6 +243,12 @@ on the ground and in the hand.
   - `TwoHands`: every base, either hand as the other hand, its seat 55 cm up a shaft held 12° off the line, its own axis 0° or 12° off.
     The four fingers on the shaft, the thumb not in it, the palm on it and not in it. Before the palm slide, the 12° case put the palm
     0.56-0.78 cm into the shaft on every base and the index finger 0.04-0.06.
+  - `Track` (N-269): the spear's track. The carrying hand's shaft turns onto the clip's spear about its grip, slides 89 cm under the hand,
+    is cut at the head, and goes half way at half the weight; it stays seated with no weight, no direction, no run or a stone. The free
+    hand's seat lands on the shaft, turned only as far as it was off (either way round), half held at 18.5 cm off. It is not held 26 cm off,
+    75° turned, in the carrying hand's place or past the head. A palm 1.0 cm into the shaft moves off until it touches; out of reach the
+    hand slides up the shaft to where the arm reaches; with no point in reach it lets go. The wrist takes a 24° pivot whole, 45° of the
+    thrust's 66, half at half the weight.
 - **`held_grip.hold_all()`:** the same in Python, offline in the editor.
 - **`python Tools/check_grip.py [--bases ..] [--items ..] [--shots all|first|none]`:** the game itself. Each base holds each item, idle.
   - Measured: each finger's and the palm's nearest approach to the handle as the game holds it (`AMOCharacter::GetHeldGripShape`).
@@ -214,7 +258,13 @@ on the ground and in the hand.
   - **Two hands:** `--clip A_2H_Idle_01_MH --support [--samples 8]`. It plays a clip on the body (a name under
     `/MOFramework/Characters/Spear/` or a full path), measures through it, and measures the other hand on the same shaft too. It fails
     unless the game holds it fully (`AMOCharacter::GetHeldGripSupport` 1) with the same finger and palm limits. Close-ups of that hand:
-    `<base>_<item>_support_{out,front}.png`. `--name` runs a second instance beside another session's.
+    `<base>_<item>_<clip>_support_{out,front}.png`. `--name` runs a second instance beside another session's.
+  - **The spear's track** (any spear clip, N-269): the spear must lie within 1° of the clip's spear wherever it follows it fully
+    (`AMOCharacter::GetHeldGripTrack`); the carrying hand is measured on the whole shaft (it may slide up it); the other hand must hold it in
+    the samples where the clip's hand holds it and let go where the clip's lets go. `--verbose` prints every sample, with the arm's
+    straightness (1: straight) and the shaft's turn in the fist off the knuckle line and out of the palm's plane. `--freeze 0.35` takes
+    the close-ups with the clip held still at 35 % of its length (its play rate 0, not a pause): a moving attack carries the hand out of
+    the camera's view between aiming and the shot. Those are named `..._at35_...`.
 - **`python Tools/check_bow.py --item CompositeBow01 --base Harvey`:** the bow drawn on any base; the string stays on the fingers.
 
 **Measured Nov 2** (`check_grip.py --shots all`, seed 777, the idle hand). 163 of 165 base x item pairs hold:
@@ -247,7 +297,26 @@ Close-ups of the front hand on Femme: `Saved/Screenshots/grip/Femme_<spear>_supp
 | `A_2H_01_Thrust_Mid / High / Low_MH` | FAIL 4 / 4 each: the front hand holds only near the start and end; for most of the clip its fingers are 13 cm to over a metre off the shaft |
 | `A_2H_01_Jab_Mid_MH`, `A_2H_01_Swing_HorizontalMid_MH`, `A_2H_01_Swing_VerticalDown_MH` | FAIL 4 / 4 each: it holds at the start and end and lets go mid-attack, the four fingers at worst 2.6-7.3 cm off in the jab and 5-25 cm in the swings |
 
-Why the attacks fail and what fixes them: §3, two hands, "Where it holds".
+Why the attacks failed: §3, two hands, "Where it holds". The fix: "The spear's track".
+
+**The spear's track, Nov 4** (the same check on all 19 spear clips: the two-hand idle, walk, run, crouch, block, hits, the three thrusts,
+the jab, both swings, the one-hand idle, walk, jab and thrust, both changes of grip; Femme and Harvey, FlintSpear01 and WoodenSpear01,
+12 samples each): **GRIP PASS 76 / 76.**
+
+- **The spear** lies on the pack's spear in every sample (0.00°).
+- **The carrying hand's** four fingers are on the shaft (0.00 cm) and its palm on it or clear (0.00-0.25 cm).
+- **The front hand** holds wherever the pack's does: every sample of the stances, the jab and the swings. Its four fingers are on the
+  shaft and its palm on it (0.00). It slides along the shaft with the pack's (28-57 cm up from the rear hand in Femme's jab). It lets go
+  where the pack's does: the middle of each thrust, the changes of grip, every one-hand clip.
+- **The arm** never quite straightens (0.44-0.995).
+- **On the way** (the same clips, Nov 4):
+  - **Pivot in the fist.** With the pivot left in the fist, each thrust put the carrying index 1.5-2.5 cm into the shaft. Left at 30° in
+    the fist, the one-hand jab's index flipped between 2.2 cm in and clear. With the wrist taking it, both are clear.
+  - **Palm.** Without the palm slide the front palm went 0.5-0.7 cm in (the walk, the jab, the vertical swing).
+  - **Reach.** Without the reach every sample with the palm still in had the arm straight (1.000), the hand short of the pack's shaft.
+
+Close-ups of Femme's hands, each attack held still (`--freeze`): `Saved/Screenshots/grip/Femme_FlintSpear01_<clip>_at<NN>_{out,front}.png`
+and `..._support_{out,front}.png` (the by-eye list in `Docs/BACKLOG.md` names them).
 
 **The bow on three bodies** (`check_bow.py --item CompositeBow01 --base Femme / Trey / Harvey`): each passes.
 
@@ -259,18 +328,16 @@ Why the attacks fail and what fixes them: §3, two hands, "Where it holds".
 
 ## 7. Not done
 
-- **Two hands in the spear attacks** (N-269; §3, two hands, "Where it holds"). The support grip holds in every two-hand stance and lets
-  go in the six attacks, because the pack moves the spear on its own track and IKs the hands to it. The fix:
-  1. Carry `ik_hand_gun` through the retarget (a chain in `IK_SpearSource` and the MetaHuman rig; `retarget_weapon_sets.py`), and retarget
-     the `A_SpearIK_*` clips' `HandL` / `HandR` locators with it.
-  2. During a spear clip, hold the spear where the clip's spear is: the item on that track, mapped from `SK_Spear`'s frame to the item's
-     handle.
-  3. Pull each hand onto its locator (two-bone IK, as the pack's FABRIK does), and close the fingers as now.
-  4. Follow `AttachLeft` / `AttachRight` for which hand carries it.
-  This belongs with building the spear attacks (F53, F54).
+- **The spear's track** (N-269, done Nov 4: §3, "The spear's track"). Left over:
+  - **Coverage.** Measured on Femme and Harvey with two of the six spears; Jalena, Zuri and Trey and the other spears are not.
+  - **The clips' own animation.** Only `check_grip.py` plays the spear clips: the attacks are not in the game yet (F53, F54).
+  - **The throw.** The track lets go of the spear with the clip's hand at the release (`A_1H_Throw_MH`, `MO_SpearHoldR` 0), so the item
+    goes back to the seat until throwing takes it (F53).
+  - **The look.** Wes's by-eye check (`Docs/BACKLOG.md`): the wrist angles the hand up to 45° with the spear, and the front hand slides.
+  - **No Python mirror.** `held_grip.py` has no copy of `Track` / `HoldOn`.
 - **Other two-hand items.** No clip swings a maul, hoe or axe two-handed yet, so hands side by side on a haft are covered by the tests
   only.
-  - **The 1H to 2H changes:** they pass through the 20-30° ramp; not looked at.
+  - **The 1H to 2H changes:** measured with the track (above); the spear set's own changes pass.
   - **The Python mirror:** `held_grip.py` has no copy of `Support`.
 - **The drawing hand to the string.** Sparrow's draw keeps the hand 7-11 cm off the bow's plane and, on a bigger body, further back at
   the start; the string goes to the fingers. An IK bringing the fingers onto the string's line from the nock on would make every body draw

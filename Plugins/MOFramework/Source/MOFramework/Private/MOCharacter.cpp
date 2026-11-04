@@ -3146,6 +3146,8 @@ void AMOCharacter::SeatHandGrip(int32 Hand)
 	Grip.SeatedOn = Body;   // once per body, whether or not it seats
 	Grip.Run = FVector2D::ZeroVector;
 	Grip.SupportWeight = 0.0f;
+	Grip.TrackWeight = Grip.TrackHold = 0.0f;
+	Grip.TrackDir = FVector::ZeroVector;
 	FTransform HandleInHand;
 	FString Why;
 	if (!FMOHandGrip::Seat(Body, Grip.Fist.Get(), Grip.FistTime, Hand == 0, Grip.Style, Grip.HalfSize, Grip.HandOffset, HandleInHand, Grip.HandScale, &Why))
@@ -3185,11 +3187,14 @@ void AMOCharacter::SeatHandGrip(int32 Hand)
 		*HandleInHand.GetLocation().ToCompactString(), Grip.Run.X, Grip.Run.Y);
 }
 
-void AMOCharacter::AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight)
+void AMOCharacter::AimHandGrip(int32 Hand, const FTransform& HandleInHand, float SupportWeight, float TrackWeight, float TrackHold, const FVector& TrackDir)
 {
 	FHandGrip& Grip = HandGrips[Hand];
 	USceneComponent* Handle = Grip.Handle.Get();
 	Grip.SupportWeight = SupportWeight;
+	Grip.TrackWeight = TrackWeight;
+	Grip.TrackHold = TrackHold;
+	Grip.TrackDir = TrackDir;
 	if (!Handle || Grip.Run.Y <= Grip.Run.X)
 	{
 		return;   // only a long handle a second hand can hold is ever turned from its seat
@@ -3202,6 +3207,15 @@ void AMOCharacter::AimHandGrip(int32 Hand, const FTransform& HandleInHand, float
 	{
 		Handle->SetRelativeTransform(MeshInHand);
 	}
+}
+
+float AMOCharacter::GetHeldGripTrack(bool bLeftHand, FVector& OutDirWorld, float& OutClipHold) const
+{
+	const FHandGrip& Grip = HandGrips[bLeftHand ? 0 : 1];
+	OutClipHold = Grip.TrackHold;
+	OutDirWorld = GetMesh() && !Grip.TrackDir.IsNearlyZero() ? GetMesh()->GetComponentTransform().TransformVectorNoScale(Grip.TrackDir).GetSafeNormal()
+		: FVector::ZeroVector;
+	return Grip.TrackWeight;
 }
 
 bool AMOCharacter::GetHandGrip(bool bLeftHand, FHandGrip& OutGrip) const

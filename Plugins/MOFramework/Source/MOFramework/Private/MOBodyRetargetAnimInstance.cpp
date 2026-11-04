@@ -45,6 +45,8 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output)
 {
 	bAimed[0] = bAimed[1] = false;
 	SupportWeight[0] = SupportWeight[1] = 0.0f;
+	TrackWeight[0] = TrackWeight[1] = TrackHold[0] = TrackHold[1] = 0.0f;
+	TrackDir[0] = TrackDir[1] = FVector::ZeroVector;
 	if (HandGrips[0].Alpha <= ZERO_ANIMWEIGHT_THRESH && HandGrips[1].Alpha <= ZERO_ANIMWEIGHT_THRESH)
 	{
 		return;
@@ -124,6 +126,21 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output)
 		return true;
 	};
 	const FCompactPoseBoneIndex HandIndex[2] = {Compact(TEXT("hand_l")), Compact(TEXT("hand_r"))};
+	// What each hand's fingers close on, and how far: planned first, because a free hand pulled onto a tracked spear moves its arm, and the arm
+	// has to be in the pose before any finger is read off it.
+	struct FFingers
+	{
+		int32 Hand = 0;
+		const FMOHandGripIK* Grip = nullptr;   // the fist and hand scale they close with (the item's, for a free hand too)
+		FMOHandGrip::FShape On;
+		float Weight = 0.0f;
+	};
+	TArray<FFingers, TInlineAllocator<4>> Fingers;   // in order: a free hand's over what its own grip closed (an item blending into it)
+	int32 Reach = INDEX_NONE;   // the free hand pulled onto a tracked handle (one at most: two carrying hands leave none free)
+	FTransform ReachCS;
+	float ReachWeight = 0.0f;
+	bool bPoseChanged = false;   // a hand turned at the wrist or an arm pulled onto the spear: back into the local pose before the fingers
+	static const FName ArmBones[2][2] = {{TEXT("upperarm_l"), TEXT("lowerarm_l")}, {TEXT("upperarm_r"), TEXT("lowerarm_r")}};
 	for (int32 Hand = 0; Hand < 2; ++Hand)
 	{
 		const FMOHandGripIK& Grip = HandGrips[Hand];
@@ -131,35 +148,139 @@ void FMOBodyRetargetAnimInstanceProxy::ApplyHandGrips(FPoseContext& Output)
 		{
 			continue;
 		}
-		const FTransform HandCS = Pose.GetComponentSpaceTransform(HandIndex[Hand]);
+		FTransform HandCS = Pose.GetComponentSpaceTransform(HandIndex[Hand]);
+		const bool bLong = Grip.Run.Y > Grip.Run.X;   // a long handle: a second hand can hold it, and it may turn from its seat
+
+		// A clip carrying its spear's own track (the spear set, N-269): the curves come weighted by the clip (TrackCurve: they blend in and out
+		// with it). Read first: past what a fist takes, the hand turns toward the clip's spear at the wrist before anything is seated in it.
+		const float TrackIn = bLong ? Output.Curve.Get(FMOHandGrip::TrackCurve) : 0.0f;
+		auto ClipValue = [&Output, TrackIn](const FName& Curve) { return TrackIn > 0.0f ? Output.Curve.Get(Curve) / TrackIn : 0.0f; };   // as the clip has it
+		FVector Dir = FVector::ZeroVector;
+		float Track = 0.0f;
+		if (TrackIn > ZERO_ANIMWEIGHT_THRESH)
+		{
+			Dir = FVector(Output.Curve.Get(FMOHandGrip::TrackDirCurves[0]), Output.Curve.Get(FMOHandGrip::TrackDirCurves[1]),
+				Output.Curve.Get(FMOHandGrip::TrackDirCurves[2])).GetSafeNormal();
+			Track = Dir.IsNearlyZero() ? 0.0f
+				: FMath::Min(TrackIn, 1.0f) * FMath::Clamp(ClipValue(FMOHandGrip::TrackHoldCurves[Hand]), 0.0f, 1.0f) * Grip.Alpha;
+		}
+		if (Track > ZERO_ANIMWEIGHT_THRESH)
+		{
+			const FQuat Wrist = FMOHandGrip::WristTurn((Grip.HandleInHand * HandCS).GetUnitAxis(EAxis::Z), Dir, Track);
+			if (!Wrist.Equals(FQuat::Identity, 1.0e-6f))
+			{
+				HandCS.SetRotation((Wrist * HandCS.GetRotation()).GetNormalized());
+				const FBoneTransform Turned[] = {FBoneTransform(HandIndex[Hand], HandCS)};
+				Pose.LocalBlendCSBoneTransforms(Turned, 1.0f);
+				bPoseChanged = true;
+			}
+		}
 		FMOHandGrip::FShape Handle;
 		Handle.Frame = Grip.HandleInHand * HandCS;
 		Handle.HalfSize = Grip.HalfSize;
 		Handle.Style = Grip.Style;
+		const int32 Other = 1 - Hand;
+		const float Free = HandIndex[Other].IsValid() ? 1.0f - HandGrips[Other].Alpha : 0.0f;
+		FMOHandGrip::FPalm Palms[2];
+		bool bPalms[2] = {false, false};
+		if (bLong)
+		{
+			bPalms[0] = ReadPalm(Hand, Grip.HandScale, Palms[0]);
+			bPalms[1] = HandIndex[Other].IsValid() && ReadPalm(Other, Grip.HandScale, Palms[1]);
+		}
 
 		// The other hand, carrying nothing, on a long handle where the clip puts it (a spear's front hand): the handle turned through that
 		// hand's own seat and out of both palms, its fingers closed on it. Neither hand moves; the item follows them (AMOCharacter::AimHandGrip,
 		// after this).
-		const int32 Other = 1 - Hand;
-		const float Free = 1.0f - HandGrips[Other].Alpha;
-		if (Free > ZERO_ANIMWEIGHT_THRESH && HandIndex[Other].IsValid() && Grip.Run.Y > Grip.Run.X)
+		FMOHandGrip::FShape Stretch;
+		float FreeWeight = 0.0f;
+		if (Free > ZERO_ANIMWEIGHT_THRESH && bLong)
 		{
-			FMOHandGrip::FPalm Palms[2];
-			const bool bPalms[2] = {ReadPalm(Hand, Grip.HandScale, Palms[0]), ReadPalm(Other, Grip.HandScale, Palms[1])};
-			FMOHandGrip::FShape Stretch;
-			SupportWeight[Hand] = FMOHandGrip::Support(Handle, Grip.SupportInHand * Pose.GetComponentSpaceTransform(HandIndex[Other]),
+			FreeWeight = FMOHandGrip::Support(Handle, Grip.SupportInHand * Pose.GetComponentSpaceTransform(HandIndex[Other]),
 				bPalms[0] ? &Palms[0] : nullptr, bPalms[1] ? &Palms[1] : nullptr, Grip.Run, Grip.Alpha * Free, Stretch);
-			if (SupportWeight[Hand] > 0.0f)
+		}
+
+		// The track: the handle onto the clip's spear through this hand's grip, and the free hand pulled onto it where the clip's hand holds it.
+		// It takes over from Support as the clip comes in.
+		FMOHandGrip::FShape CarryOn = Handle;
+		if (Track > ZERO_ANIMWEIGHT_THRESH)
+		{
+			const float Slide = ClipValue(FMOHandGrip::TrackSlideCurves[Hand]);
+			FMOHandGrip::Track(Handle, Dir, Slide, bPalms[0] ? &Palms[0] : nullptr, Grip.Run, Track, CarryOn);
+			TrackWeight[Hand] = Track;
+			TrackDir[Hand] = Dir;
+			TrackHold[Hand] = FMath::Clamp(ClipValue(FMOHandGrip::TrackHoldCurves[Other]), 0.0f, 1.0f);
+			FreeWeight *= 1.0f - Track;
+			if (Free > ZERO_ANIMWEIGHT_THRESH)
 			{
-				CloseFingers(Other, Grip, Stretch, SupportWeight[Hand]);
+				FMOHandGrip::FFreeHand FreeHand;
+				FreeHand.HandCS = Pose.GetComponentSpaceTransform(HandIndex[Other]);
+				FreeHand.SeatCS = Grip.SupportInHand * FreeHand.HandCS;
+				FreeHand.Palm = bPalms[1] ? &Palms[1] : nullptr;
+				const FCompactPoseBoneIndex Upper = Compact(ArmBones[Other][0]);
+				const FCompactPoseBoneIndex Lower = Compact(ArmBones[Other][1]);
+				if (Upper.IsValid() && Lower.IsValid())
+				{
+					const FVector Shoulder = Pose.GetComponentSpaceTransform(Upper).GetLocation();
+					const FVector Elbow = Pose.GetComponentSpaceTransform(Lower).GetLocation();
+					FreeHand.Shoulder = Shoulder;
+					FreeHand.ArmCm = FVector::Dist(Shoulder, Elbow) + FVector::Dist(Elbow, FreeHand.HandCS.GetLocation());
+				}
+				const FVector CarryGrip = Handle.Frame.TransformPosition(FVector(0.0f, 0.0f, Slide * Track));
+				FTransform Target;
+				FMOHandGrip::FShape OnIt;
+				const float Hold = FMOHandGrip::HoldOn(Handle, CarryGrip, FreeHand, Grip.Run, Track * TrackHold[Hand] * Free, Target, OnIt);
+				if (Hold > 0.0f)
+				{
+					Reach = Other;
+					ReachCS = Target;
+					ReachWeight = Hold;
+					Stretch = OnIt;
+					FreeWeight += Hold;
+				}
 			}
 		}
-		if (Grip.Run.Y > Grip.Run.X)
+		SupportWeight[Hand] = FreeWeight;
+		if (FreeWeight > 0.0f)
+		{
+			Fingers.Add({Other, &Grip, Stretch, FreeWeight});
+		}
+		if (bLong)
 		{
 			AimedHandleInHand[Hand] = Handle.Frame.GetRelativeTransform(HandCS);
 			bAimed[Hand] = true;
 		}
-		CloseFingers(Hand, Grip, Handle, Grip.Alpha);
+		Fingers.Add({Hand, &Grip, CarryOn, Grip.Alpha});
+	}
+
+	// The free hand onto the tracked spear: its arm by two-bone IK (the elbow bending the way the clip has it), the hand turned onto the shaft
+	if (Reach != INDEX_NONE)
+	{
+		const FCompactPoseBoneIndex Upper = Compact(ArmBones[Reach][0]);
+		const FCompactPoseBoneIndex Lower = Compact(ArmBones[Reach][1]);
+		if (Upper.IsValid() && Lower.IsValid())
+		{
+			FTransform U = Pose.GetComponentSpaceTransform(Upper);
+			FTransform L = Pose.GetComponentSpaceTransform(Lower);
+			FTransform E = Pose.GetComponentSpaceTransform(HandIndex[Reach]);
+			const FVector Mid = 0.5f * (U.GetLocation() + E.GetLocation());
+			const FVector Out = L.GetLocation() - Mid;
+			const FVector JointTarget = L.GetLocation() + (Out.SizeSquared() > 1.0f ? Out.GetSafeNormal() : -FVector::ZAxisVector) * 30.0f;
+			AnimationCore::SolveTwoBoneIK(U, L, E, JointTarget, ReachCS.GetLocation(), false, 1.0, 1.0);
+			E.SetRotation(ReachCS.GetRotation());
+			const FBoneTransform Chain[] = {FBoneTransform(Upper, U), FBoneTransform(Lower, L), FBoneTransform(HandIndex[Reach], E)};   // root to tip
+			Pose.LocalBlendCSBoneTransforms(Chain, ReachWeight);
+			bPoseChanged = true;
+		}
+	}
+	if (bPoseChanged)
+	{
+		FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(Pose, Output.Pose);
+		Pose.InitPose(Output.Pose);   // the fingers read the turned hand and the moved arm
+	}
+	for (const FFingers& Close : Fingers)
+	{
+		CloseFingers(Close.Hand, *Close.Grip, Close.On, Close.Weight);
 	}
 }
 
@@ -372,7 +493,8 @@ void UMOBodyRetargetAnimInstance::NativePostEvaluateAnimation()
 		{
 			if (Proxy.bAimed[Hand])
 			{
-				Owner->AimHandGrip(Hand, Proxy.AimedHandleInHand[Hand], Proxy.SupportWeight[Hand]);
+				Owner->AimHandGrip(Hand, Proxy.AimedHandleInHand[Hand], Proxy.SupportWeight[Hand], Proxy.TrackWeight[Hand], Proxy.TrackHold[Hand],
+					Proxy.TrackDir[Hand]);
 			}
 		}
 	}

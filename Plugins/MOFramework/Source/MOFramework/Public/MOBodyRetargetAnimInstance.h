@@ -41,6 +41,8 @@ struct FMOClimbLimbIK
  *  The other hand, carrying nothing, holds the same handle where the clip puts it (a spear's front hand, a maul's upper hand): the handle turns
  *  through that hand's own seat of it (SupportInHand) and out of both palms (FMOHandGrip::Support), its fingers close on it, and the item
  *  follows after the evaluation (AMOCharacter::AimHandGrip). Neither hand moves.
+ *  In a clip that carries its spear's own track (the spear set: FMOHandGrip::Track, N-269) the item goes where the clip's spear is, through
+ *  the carrying hand's grip, and the free hand is pulled onto it (two-bone IK, its seat turned onto the shaft) wherever the clip's hand holds it.
  *  A bow also limits the other hand's draw: drawn (nocked) past the bow's full draw -- a longer arm than the one it was built for: Harvey's
  *  draw is 85 cm, the bows' 64 -- the drawing hand stops there (two-bone IK along the draw), as an archer short-draws a bow too short for him. */
 struct FMOHandGripIK
@@ -91,6 +93,11 @@ struct MOFRAMEWORK_API FMOBodyRetargetAnimInstanceProxy : public FAnimInstancePr
 	FTransform AimedHandleInHand[2];
 	float SupportWeight[2] = {0.0f, 0.0f};
 	bool bAimed[2] = {false, false};
+	/** ... and how far it followed the clip's own spear track (FMOHandGrip::Track, N-269), how far the clip's other hand holds that spear, and
+	 *  the clip's spear (component space, toward its head). */
+	float TrackWeight[2] = {0.0f, 0.0f};
+	float TrackHold[2] = {0.0f, 0.0f};
+	FVector TrackDir[2] = {FVector::ZeroVector, FVector::ZeroVector};
 
 protected:
 	virtual FAnimNode_Base* GetCustomRootNode() override { return RetargetNode; }
@@ -118,8 +125,8 @@ private:
 	/** Each foot back inside the ankle's range (local space, last: after the retarget, the slot and the climbing IK). */
 	void LimitAnkles(FPoseContext& Output) const;
 
-	/** The holding hands' fingers round their handles, and a free hand's round the other hand's long handle where the clip puts it (local
-	 *  space, after the slot and the climbing IK). */
+	/** The holding hands' fingers round their handles, and a free hand's round the other hand's long handle where the clip puts it -- or, in a
+	 *  clip carrying its spear's track, that hand's arm pulled onto the spear first (after the slot and the climbing IK). */
 	void ApplyHandGrips(FPoseContext& Output);
 
 	/** A drawn bow's drawing hand kept within the bow's full draw (after the grips). */

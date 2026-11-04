@@ -19,6 +19,8 @@ class USkeletalMesh;
  *    stop, the rest go on). A hand bigger than the fist was made for closes further round a thin handle instead of stopping in the air.
  *  - Support (UMOBodyRetargetAnimInstance, every evaluation): the other hand, carrying nothing, on a long handle where the clip puts it -- the
  *    handle turned through that hand's own seat, its fingers closed on it (a spear's front hand).
+ *  - Track (the same, in a clip that carries the spear's own track: the spear set): the handle where the clip's spear is, through the
+ *    carrying hand's grip, and the free hand pulled onto it where the clip's hand holds it.
  * Pure functions: the tests and Content/Python/held_grip.py (the same numbers offline) use them as the game does.
  */
 struct MOFRAMEWORK_API FMOHandGrip
@@ -164,6 +166,61 @@ struct MOFRAMEWORK_API FMOHandGrip
 	 *  toward the head). */
 	static float Support(FShape& Handle, const FTransform& SeatCS, const FPalm* Carrying, const FPalm* Free, const FVector2D& Run, float Weight,
 		FShape& OutStretch);
+
+	/**
+	 * A clip that carries its spear's own track (N-269; Docs/Held_Grip.md, two hands, "The spear's track"). The Mega Spear pack moves its spear
+	 * on a bone of its own (ik_hand_gun) and pulls the hands onto it, so the spear is not fixed in either hand: measured Nov 3, the rear hand
+	 * stays at one place on the shaft while the shaft pivots in it (24 deg in the jab, 43 in the horizontal swing, 66 in the thrust), the front
+	 * hand slides along it (34 cm in the swing) or lets go (the middle of the thrust), and changing to one hand the rear hand slides 89 cm up it.
+	 * The retarget cannot carry that bone onto our bodies (it would scale it off our hands), so Content/Python/spear_track.py bakes it into each
+	 * retargeted clip as curves: the spear's direction (component space, toward the head), each hand's hold of it (the pack's hand within reach
+	 * of the shaft) and how far each hand has slid along it from the two-hand stance. The arms stay ours (within 1-12 deg of the pack's); the
+	 * spear and which hand holds it are the pack's. All the curves are weighted by TrackCurve (1 through the clip), so they blend with the clip.
+	 *  - Track: the handle turned about the carrying hand's grip onto the clip's direction (Dir, unit, toward the head), the item slid back as
+	 *    the hand slides SlideCm toward its head, then slid square to itself out of the carrying palm (at most SupportSlideCm), all by Weight.
+	 *    OutGrip: the shaft where the carrying hand holds it, as far either way as its fingers reach (cut at the item's ends: Run).
+	 *  - HoldOn: the free hand (FFreeHand) onto the tracked handle. Its seat (SeatCS: that hand's own seat of the handle, in the space the
+	 *    handle is in) goes to the nearest point of the axis on the item (SupportEndCm in from either end) that its arm reaches (Nov 4: the
+	 *    vertical swing puts the pack's shaft past our arm's reach; the hand slides along it as a fighter's front hand does), its axis turned
+	 *    onto the handle's (the nearer way round); OutHandCS: where the hand bone goes for that (from HandCS, its transform now), OutStretch:
+	 *    what its fingers close on. Returns how far it holds: Weight, none with the seat moved TrackReachNoneCm or more (an arm is never yanked
+	 *    across to it), TrackShortNoneCm short of the shaft with the arm straight, its axis TrackTurnNoneDeg or more off the handle's (a wrist is
+	 *    never wrung round onto it: a hand arriving from elsewhere takes it as it comes round) or in the carrying hand's place (CarryGrip: that
+	 *    hand's grip on the axis; SupportApartFullCm / SupportApartNoneCm). Its palm (where it is now; null: not checked) then lies on the
+	 *    shaft, never in it: the hand moved off it square to the axis (at most SupportSlideCm), as Support slides the shaft (Nov 3: the clip's
+	 *    flat palm took the seat 0.6-0.7 cm into it).
+	 *  - WristTurn: the carrying hand's own turn toward the clip's spear (component space, about the wrist), before Track turns the handle in
+	 *    its fist. A shaft pivoting in a fist goes through the fingers (Nov 4: the thrusts pivot it up to 66 deg, the index 1.5-2.5 cm into it;
+	 *    left 30 deg in the fist, the one-hand jab's open index finger still lay across it, 2.2 cm in or clear from frame to frame), so the
+	 *    wrist turns the hand onto it, as a hand angles a spear, up to TrackWristTurnMaxDeg (a wrist's deviation), and only what is past that
+	 *    stays in the fist (beyond TrackFistTurnDeg, what a fist takes on its own: none), all by Weight. SeatAxis: the handle's axis as the hand
+	 *    seats it; Dir: the clip's spear.
+	 */
+	static const FName TrackCurve;
+	static const FName TrackDirCurves[3];     // X, Y, Z
+	static const FName TrackHoldCurves[2];    // left, right hand
+	static const FName TrackSlideCurves[2];   // left, right hand (cm toward the head from the two-hand stance's grip)
+	static constexpr float TrackReachFullCm = 12.0f;
+	static constexpr float TrackReachNoneCm = 25.0f;
+	static constexpr float TrackTurnFullDeg = 45.0f;
+	static constexpr float TrackTurnNoneDeg = 70.0f;
+	static constexpr float TrackFistTurnDeg = 0.0f;
+	static constexpr float TrackWristTurnMaxDeg = 45.0f;
+	static constexpr float TrackShortNoneCm = 5.0f;
+	/** The free hand as it is now: its seat of the handle, the hand bone, its palm (null: not checked) and its arm (the shoulder's joint and
+	 *  the arm's length to the wrist; zero: any reach). */
+	struct FFreeHand
+	{
+		FTransform SeatCS = FTransform::Identity;
+		FTransform HandCS = FTransform::Identity;
+		const FPalm* Palm = nullptr;
+		FVector Shoulder = FVector::ZeroVector;
+		float ArmCm = 0.0f;
+	};
+	static void Track(FShape& Handle, const FVector& Dir, float SlideCm, const FPalm* Carrying, const FVector2D& Run, float Weight, FShape& OutGrip);
+	static float HoldOn(const FShape& Handle, const FVector& CarryGrip, const FFreeHand& Free, const FVector2D& Run, float Weight,
+		FTransform& OutHandCS, FShape& OutStretch);
+	static FQuat WristTurn(const FVector& SeatAxis, const FVector& Dir, float Weight);
 
 	/** The standard Power seat in the four knuckles' frame (e1 little finger -> index, e2 toward the fist's curled fingertips, e3 their cross;
 	 *  per cm of knuckle span): the handle's centre, its axis and its face. Measured Nov 2 2026 from Sparrow's bow in her fist (RMB_Loop at

@@ -351,4 +351,175 @@ bool FMOHandGrip_TwoHands::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOHandGrip_Track,
+	"MOFramework.Animation.HandGrip.Track",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOHandGrip_Track::RunTest(const FString& Parameters)
+{
+	// A clip carrying its spear's track (N-269): a shaft seated at the origin along +Z, 60 cm of it toward the butt and 140 toward the head
+	const FVector2D Run(-60.0, 140.0);
+	auto Shaft = []()
+	{
+		FMOHandGrip::FShape S;
+		S.HalfSize = FVector(1.3, 1.2, 8.0);
+		S.Style = EMOGripStyle::Power;
+		return S;
+	};
+	auto Deg = [](const FVector& A, const FVector& B) { return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0))); };
+	const FVector Pivot = FVector(0.0, FMath::Sin(FMath::DegreesToRadians(43.0)), FMath::Cos(FMath::DegreesToRadians(43.0)));   // the horizontal swing's pivot
+	FMOHandGrip::FShape Grip;
+
+	// The carrying hand: the shaft turned about its grip onto the clip's direction; slid as the hand slides up it
+	FMOHandGrip::FShape H = Shaft();
+	FMOHandGrip::Track(H, Pivot, 0.0f, nullptr, Run, 1.0f, Grip);
+	TestTrue(FString::Printf(TEXT("turned onto the clip's spear (%.4f deg off), about the hand's grip"), Deg(H.Frame.GetUnitAxis(EAxis::Z), Pivot)),
+		Deg(H.Frame.GetUnitAxis(EAxis::Z), Pivot) < 0.01 && H.Frame.GetLocation().Equals(FVector::ZeroVector, 1e-4));
+	TestTrue(FString::Printf(TEXT("... the hand closes on the shaft round its grip (%s, half %.1f)"), *Grip.Frame.GetLocation().ToCompactString(), Grip.HalfSize.Z),
+		Grip.Frame.GetLocation().Equals(FVector::ZeroVector, 1e-3) && FMath::IsNearlyEqual(Grip.HalfSize.Z, static_cast<double>(FMOHandGrip::SupportReachCm), 1e-3));
+
+	H = Shaft();
+	FMOHandGrip::Track(H, FVector::ZAxisVector, 89.0f, nullptr, Run, 1.0f, Grip);   // changing to one hand: the rear hand 89 cm up the shaft
+	TestTrue(FString::Printf(TEXT("the hand slid 89 cm toward the head: the item 89 cm back under it (%s), the hand's grip where it was (%s)"),
+		*H.Frame.GetLocation().ToCompactString(), *Grip.Frame.GetLocation().ToCompactString()),
+		H.Frame.GetLocation().Equals(FVector(0.0, 0.0, -89.0), 1e-3) && Grip.Frame.GetLocation().Equals(FVector::ZeroVector, 1e-3));
+
+	H = Shaft();
+	FMOHandGrip::Track(H, FVector::ZAxisVector, 135.0f, nullptr, Run, 1.0f, Grip);   // 5 cm short of the head: the grip cut there
+	TestTrue(FString::Printf(TEXT("near the head the grip is cut at the item's end (half %.1f, centre %s)"), Grip.HalfSize.Z, *Grip.Frame.GetLocation().ToCompactString()),
+		FMath::IsNearlyEqual(Grip.HalfSize.Z, 7.5, 1e-3) && Grip.Frame.GetLocation().Equals(FVector(0.0, 0.0, -2.5), 1e-3));
+
+	H = Shaft();
+	FMOHandGrip::Track(H, Pivot, 20.0f, nullptr, Run, 0.5f, Grip);   // the clip blending in: half the turn and half the slide
+	const FVector Half = H.Frame.GetUnitAxis(EAxis::Z);
+	TestTrue(FString::Printf(TEXT("half the weight: half the turn (%.2f deg of 43), half the slide (%s)"), Deg(Half, FVector::ZAxisVector), *H.Frame.GetLocation().ToCompactString()),
+		FMath::IsNearlyEqual(Deg(Half, FVector::ZAxisVector), 21.5, 0.05) && H.Frame.GetLocation().Equals(-Half * 10.0, 1e-3));
+
+	struct FStill { const TCHAR* Why; FVector Dir; FVector2D Run; EMOGripStyle Style; float Weight; };
+	const FStill Stills[] = {
+		{TEXT("no weight (the clip's hand off the shaft)"), Pivot, Run, EMOGripStyle::Power, 0.0f},
+		{TEXT("no direction"), FVector::ZeroVector, Run, EMOGripStyle::Power, 1.0f},
+		{TEXT("an item no second hand holds (no run)"), Pivot, FVector2D::ZeroVector, EMOGripStyle::Power, 1.0f},
+		{TEXT("a stone"), Pivot, Run, EMOGripStyle::Sphere, 1.0f}};
+	for (const FStill& Still : Stills)
+	{
+		H = Shaft();
+		H.Style = Still.Style;
+		FMOHandGrip::Track(H, Still.Dir, 30.0f, nullptr, Still.Run, Still.Weight, Grip);
+		TestTrue(FString::Printf(TEXT("%s: the handle as seated, the hand closing on it"), Still.Why),
+			H.Frame.Equals(FTransform::Identity, 1e-4) && Grip.Frame.Equals(FTransform::Identity, 1e-4) && Grip.HalfSize.Equals(H.HalfSize));
+	}
+
+	// The free hand onto the tracked shaft: its seat 8 cm off the axis, 55 cm up it, its own axis 15 deg off -- the hand bone goes where that
+	// seat lies on the axis, turned onto it (the nearer way round), whatever the seat's place in the hand
+	const FTransform SeatInHand(FQuat(FVector(1.0, 1.0, 0.0).GetSafeNormal(), 0.4), FVector(3.0, 8.0, -2.0));
+	auto HandFor = [&SeatInHand](const FTransform& SeatCS) { return SeatInHand.Inverse() * SeatCS; };
+	auto FreeAt = [](const FTransform& SeatCS, const FTransform& HandCS, const FMOHandGrip::FPalm* Palm = nullptr, const FVector& Shoulder = FVector::ZeroVector,
+		float ArmCm = 0.0f)
+	{
+		FMOHandGrip::FFreeHand Free;
+		Free.SeatCS = SeatCS;
+		Free.HandCS = HandCS;
+		Free.Palm = Palm;
+		Free.Shoulder = Shoulder;
+		Free.ArmCm = ArmCm;
+		return Free;
+	};
+	auto SeatAt = [](const FVector& At, const FVector& Along)
+	{
+		return FTransform(FRotationMatrix::MakeFromZX(Along, FVector::XAxisVector).ToQuat(), At);
+	};
+	const FVector Tilted = FVector(FMath::Sin(FMath::DegreesToRadians(15.0)), 0.0, FMath::Cos(FMath::DegreesToRadians(15.0)));
+	H = Shaft();
+	FTransform Seat = SeatAt(FVector(8.0, 0.0, 55.0), Tilted);
+	FTransform HandCS;
+	FMOHandGrip::FShape Stretch;
+	float W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, HandFor(Seat)), Run, 1.0f, HandCS, Stretch);
+	const FTransform NewSeat = SeatInHand * HandCS;
+	TestTrue(FString::Printf(TEXT("the free hand 8 cm off the shaft holds it fully (%.3f)"), W), W > 0.999f);
+	TestTrue(FString::Printf(TEXT("... its seat on the axis (%s) and along it (%.4f deg off)"), *NewSeat.GetLocation().ToCompactString(),
+		Deg(NewSeat.GetUnitAxis(EAxis::Z), FVector::ZAxisVector)), NewSeat.GetLocation().Equals(FVector(0.0, 0.0, 55.0), 1e-3)
+		&& Deg(NewSeat.GetUnitAxis(EAxis::Z), FVector::ZAxisVector) < 0.01);
+	TestTrue(FString::Printf(TEXT("... the hand turned only that 15 deg (%.3f)"), FMath::RadiansToDegrees(HandFor(Seat).GetRotation().AngularDistance(HandCS.GetRotation()))),
+		FMath::IsNearlyEqual(FMath::RadiansToDegrees(HandFor(Seat).GetRotation().AngularDistance(HandCS.GetRotation())), 15.0, 0.01));
+	TestTrue(FString::Printf(TEXT("... its fingers close on the shaft round it (%s, half %.1f)"), *Stretch.Frame.GetLocation().ToCompactString(), Stretch.HalfSize.Z),
+		Stretch.Frame.GetLocation().Equals(FVector(0.0, 0.0, 55.0), 1e-3) && FMath::IsNearlyEqual(Stretch.HalfSize.Z, static_cast<double>(FMOHandGrip::SupportReachCm), 1e-3));
+
+	Seat = SeatAt(FVector(8.0, 0.0, 55.0), -Tilted);
+	W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, HandFor(Seat)), Run, 1.0f, HandCS, Stretch);
+	TestTrue(FString::Printf(TEXT("facing the other way round: turned onto -Z, not wrung round (%.3f, %.3f deg)"), W,
+		Deg((SeatInHand * HandCS).GetUnitAxis(EAxis::Z), -FVector::ZAxisVector)), W > 0.999f && Deg((SeatInHand * HandCS).GetUnitAxis(EAxis::Z), -FVector::ZAxisVector) < 0.01);
+
+	Seat = SeatAt(FVector(18.5, 0.0, 55.0), FVector::ZAxisVector);
+	W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, HandFor(Seat)), Run, 1.0f, HandCS, Stretch);
+	TestTrue(FString::Printf(TEXT("18.5 cm off it: half held (%.3f)"), W), FMath::IsNearlyEqual(W, 0.5f, 1e-3f));
+
+	struct FMiss { const TCHAR* Why; FVector At; FVector Along; FVector Carry; };
+	const FMiss Misses[] = {
+		{TEXT("26 cm off the shaft (an arm is not yanked across)"), FVector(26.0, 0.0, 55.0), FVector::ZAxisVector, FVector::ZeroVector},
+		{TEXT("its axis 75 deg off (a wrist is not wrung round)"), FVector(4.0, 0.0, 55.0), FVector(FMath::Sin(1.309), 0.0, FMath::Cos(1.309)), FVector::ZeroVector},
+		{TEXT("in the carrying hand's place"), FVector(4.0, 0.0, 5.0), FVector::ZAxisVector, FVector::ZeroVector},
+		{TEXT("past the head (its nearest point on the item 30 cm away)"), FVector(4.0, 0.0, 166.0), FVector::ZAxisVector, FVector::ZeroVector}};
+	for (const FMiss& Miss : Misses)
+	{
+		Seat = SeatAt(Miss.At, Miss.Along);
+		const FTransform Was = HandFor(Seat);
+		W = FMOHandGrip::HoldOn(H, Miss.Carry, FreeAt(Seat, Was), Run, 1.0f, HandCS, Stretch);
+		TestTrue(FString::Printf(TEXT("%s: not held (%.3f), the hand where it was"), Miss.Why, W), W == 0.0f && HandCS.Equals(Was, 1e-4));
+	}
+
+	// Its palm on the shaft, never in it: a flat palm 1.5 cm off the axis where the seat puts the hand (1.0 cm into the shaft) -- the hand
+	// moves off it square to the axis until the palm only touches
+	Seat = SeatAt(FVector(8.0, 0.0, 55.0), FVector::ZAxisVector);
+	const FTransform Before = HandFor(Seat);
+	FMOHandGrip::FPalm Palm;
+	for (int32 i = 0; i < 4; ++i)
+	{
+		Palm.Metacarpal[i] = FVector(9.5, 0.0, 50.0 + 2.0 * i);
+		Palm.Knuckle[i] = FVector(9.5, 0.0, 51.0 + 2.0 * i);
+	}
+	W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, Before, &Palm), Run, 1.0f, HandCS, Stretch);
+	FMOHandGrip::FPalm After = Palm;
+	for (int32 i = 0; i < 4; ++i)
+	{
+		After.Metacarpal[i] = HandCS.TransformPosition(Before.InverseTransformPosition(Palm.Metacarpal[i]));
+		After.Knuckle[i] = HandCS.TransformPosition(Before.InverseTransformPosition(Palm.Knuckle[i]));
+	}
+	const float PalmOn = FMOHandGrip::PalmClearance(After, Stretch);
+	const FVector SeatNow = (SeatInHand * HandCS).GetLocation();
+	TestTrue(FString::Printf(TEXT("a palm that would go 1.0 cm in: the hand off it (its seat %s), the palm on the shaft (%.3f cm)"), *SeatNow.ToCompactString(), PalmOn),
+		W > 0.999f && PalmOn >= -0.02f && PalmOn <= 0.05f && FMath::IsNearlyEqual(SeatNow.X, 1.0, 0.05) && FMath::IsNearlyZero(SeatNow.Y, 1e-3));
+
+	// Out of the arm's reach where its seat lies nearest the shaft: the hand slides along the shaft to the nearest point the arm reaches (the
+	// seat moved 17 cm: 0.615 held); with no point of it in reach, it lets go
+	Seat = SeatAt(FVector(8.0, 0.0, 55.0), FVector::ZAxisVector);
+	const FVector HandAt40 = (SeatInHand.Inverse() * FTransform(Seat.GetRotation(), FVector(0.0, 0.0, 40.0))).GetLocation();
+	const FVector Shoulder(40.0, 0.0, 20.0);
+	const float Arm = FVector::Dist(Shoulder, HandAt40) / 0.995f;
+	W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, HandFor(Seat), nullptr, Shoulder, Arm), Run, 1.0f, HandCS, Stretch);
+	const FVector Reached = (SeatInHand * HandCS).GetLocation();
+	TestTrue(FString::Printf(TEXT("out of reach at 55 cm up the shaft: the hand slides to 40 (its seat %s), held %.3f"), *Reached.ToCompactString(), W),
+		Reached.Equals(FVector(0.0, 0.0, 40.0), 0.05) && FMath::IsNearlyEqual(W, 8.0f / 13.0f, 0.01f)
+		&& FMath::IsNearlyEqual(FVector::Dist(Shoulder, HandCS.GetLocation()), static_cast<double>(Arm * 0.995f), 0.05));
+	Seat = SeatAt(FVector(8.0, 0.0, 55.0), FVector::ZAxisVector);
+	W = FMOHandGrip::HoldOn(H, FVector::ZeroVector, FreeAt(Seat, HandFor(Seat), nullptr, FVector(80.0, 0.0, 55.0), 60.0f), Run, 1.0f, HandCS, Stretch);
+	TestTrue(FString::Printf(TEXT("the shaft beyond the straight arm's reach everywhere: not held (%.3f)"), W), W == 0.0f && HandCS.Equals(HandFor(Seat), 1e-4));
+
+	// The carrying hand's wrist: it turns the hand onto the clip's spear up to TrackWristTurnMaxDeg; only what is past that stays in the fist
+	auto Off = [](float Deg) { return FVector(0.0, FMath::Sin(FMath::DegreesToRadians(Deg)), FMath::Cos(FMath::DegreesToRadians(Deg))); };
+	auto WristDeg = [](const FQuat& Q) { return FMath::RadiansToDegrees(Q.GetAngle()); };
+	const FQuat Thrust = FMOHandGrip::WristTurn(FVector::ZAxisVector, Off(66.0f), 1.0f);
+	TestTrue(FString::Printf(TEXT("the thrust's 66 deg: the wrist turns 45 (%.2f) toward it, the fist keeps 21 (%.2f)"), WristDeg(Thrust),
+		Deg(Thrust.RotateVector(FVector::ZAxisVector), Off(66.0f))), FMath::IsNearlyEqual(WristDeg(Thrust), 45.0, 0.01)
+		&& FMath::IsNearlyEqual(Deg(Thrust.RotateVector(FVector::ZAxisVector), Off(66.0f)), 21.0, 0.01));
+	const FQuat Jab = FMOHandGrip::WristTurn(FVector::ZAxisVector, Off(24.0f), 1.0f);
+	TestTrue(FString::Printf(TEXT("the jab's 24 deg: all in the wrist (%.2f), the shaft in the fist's seat (%.3f off)"), WristDeg(Jab),
+		Deg(Jab.RotateVector(FVector::ZAxisVector), Off(24.0f))), FMath::IsNearlyEqual(WristDeg(Jab), 24.0, 0.01) && Deg(Jab.RotateVector(FVector::ZAxisVector), Off(24.0f)) < 0.05);
+	TestTrue(FString::Printf(TEXT("half the clip's weight: half the wrist's turn (%.2f)"), WristDeg(FMOHandGrip::WristTurn(FVector::ZAxisVector, Off(66.0f), 0.5f))),
+		FMath::IsNearlyEqual(WristDeg(FMOHandGrip::WristTurn(FVector::ZAxisVector, Off(66.0f), 0.5f)), 22.5, 0.01));
+	TestTrue(TEXT("on the seat already: no turn"), FMOHandGrip::WristTurn(FVector::ZAxisVector, FVector::ZAxisVector, 1.0f).Equals(FQuat::Identity, 1e-6f));
+	return true;
+}
+
 #endif

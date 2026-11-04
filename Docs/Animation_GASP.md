@@ -241,8 +241,14 @@ limbs bend for the draw; released, it snaps to brace and settles. `MO.Test.BowSh
 **The spear in both hands (Nov 2, N-261):** in the two-hand stance the front hand holds the shaft too. The spear turns about the rear
 hand's grip onto the line through the front hand's own seat, and the front hand's fingers close on it (`Docs/Held_Grip.md` section 3, two
 hands). Checked on Femme and Harvey: it holds in every two-hand stance (idle, walk, run, crouch, block, the hit reactions) and lets go
-mid-attack in the thrusts, the jab and the swings. The pack moves its spear on its own track (`ik_hand_gun` and the `A_SpearIK_*` clips'
-hand locators, the hands pulled onto them by FABRIK), and the retarget drops that track. Carrying it through is N-269, with the attacks.
+mid-attack in the thrusts, the jab and the swings. The pack moves its spear on its own track (`ik_hand_gun`; the hands pulled onto it by
+FABRIK), and the retarget drops that track.
+
+**The spear's own track (Nov 4, N-269):** `Content/Python/spear_track.py` (run by `retarget_weapon_sets.py` after its pelvis repair) bakes
+the pack's spear into every spear clip as curves: its direction, which hand holds it, how far each hand has slid along it. In a spear clip
+the spear follows the pack's: through the rear hand's grip, the wrist angling the hand with it up to 45°. The front hand is pulled onto it
+by two-bone IK wherever the pack's hand holds it, sliding along the shaft into its arm's reach, and its fingers close on it. All 19 spear
+clips pass on Femme and Harvey with two spears (`Docs/Held_Grip.md` section 3, "The spear's track", and section 6).
 
 Not done (F53's work, when the attacks are built): the arrow on the string, the bow's carry in the idle stances; **the lunges step forward in the pelvis**, not the root -- the throw 110 cm,
 the 1H thrust 75, the 2H thrusts 97 (their source moved its root 42 cm, folded into the pelvis by the retargeter) -- so an attack must

@@ -494,6 +494,184 @@ float FMOHandGrip::PalmClearance(const FPalm& Palm, const FShape& Shape)
 	return Min;
 }
 
+namespace
+{
+	/** How far a handle at Through, turned to Rot, slides square to its axis out of a palm until it only touches: its stretch there
+	 *  (SupportReachCm either way) against the palm, pushed away from the palm's centre, at most SupportSlideCm (the seat's own rule). Zero
+	 *  when it is on the palm or clear of it: a handle is never drawn into a palm. */
+	FVector GripOutOfPalm(const FMOHandGrip::FPalm& Palm, const FMOHandGrip::FShape& Handle, const FQuat& Rot, const FVector& Through)
+	{
+		FMOHandGrip::FShape Here;
+		Here.Frame = FTransform(Rot, Through);
+		Here.HalfSize = FVector(Handle.HalfSize.X, Handle.HalfSize.Y, FMOHandGrip::SupportReachCm);
+		Here.Style = Handle.Style;
+		if (FMOHandGrip::PalmClearance(Palm, Here) >= 0.0f)
+		{
+			return FVector::ZeroVector;
+		}
+		FVector PalmCentre = FVector::ZeroVector;
+		for (int32 i = 0; i < 4; ++i)
+		{
+			PalmCentre += (Palm.Metacarpal[i] + Palm.Knuckle[i]) * 0.125f;
+		}
+		const FVector Axis = Rot.GetAxisZ();
+		FVector Out = Through - PalmCentre;
+		Out = (Out - Axis * FVector::DotProduct(Out, Axis)).GetSafeNormal();
+		if (Out.IsNearlyZero())
+		{
+			return FVector::ZeroVector;
+		}
+		float In = 0.0f, Clear = FMOHandGrip::SupportSlideCm;
+		Here.Frame.SetLocation(Through + Out * Clear);
+		if (FMOHandGrip::PalmClearance(Palm, Here) >= 0.0f)
+		{
+			for (int32 It = 0; It < 16; ++It)
+			{
+				const float Mid = 0.5f * (In + Clear);
+				Here.Frame.SetLocation(Through + Out * Mid);
+				(FMOHandGrip::PalmClearance(Palm, Here) >= 0.0f ? Clear : In) = Mid;
+			}
+		}
+		return Out * Clear;
+	}
+
+	float GripRamp(float X, float Full, float None)
+	{
+		return FMath::Clamp((None - X) / (None - Full), 0.0f, 1.0f);
+	}
+
+	/** The handle's section from Lo to Hi along its axis (cm from its frame's origin). */
+	FMOHandGrip::FShape GripSection(const FMOHandGrip::FShape& Handle, float Lo, float Hi)
+	{
+		FMOHandGrip::FShape Out;
+		Out.Frame = FTransform(Handle.Frame.GetRotation(), Handle.Frame.GetLocation() + Handle.Frame.GetUnitAxis(EAxis::Z) * (0.5f * (Lo + Hi)));
+		Out.HalfSize = FVector(Handle.HalfSize.X, Handle.HalfSize.Y, FMath::Max(0.5f * (Hi - Lo), 0.0f));
+		Out.Style = Handle.Style;
+		return Out;
+	}
+}
+
+const FName FMOHandGrip::TrackCurve(TEXT("MO_SpearTrack"));
+const FName FMOHandGrip::TrackDirCurves[3] = {FName(TEXT("MO_SpearDirX")), FName(TEXT("MO_SpearDirY")), FName(TEXT("MO_SpearDirZ"))};
+const FName FMOHandGrip::TrackHoldCurves[2] = {FName(TEXT("MO_SpearHoldL")), FName(TEXT("MO_SpearHoldR"))};
+const FName FMOHandGrip::TrackSlideCurves[2] = {FName(TEXT("MO_SpearSlideL")), FName(TEXT("MO_SpearSlideR"))};
+
+void FMOHandGrip::Track(FShape& Handle, const FVector& Dir, float SlideCm, const FPalm* Carrying, const FVector2D& Run, float Weight, FShape& OutGrip)
+{
+	OutGrip = Handle;
+	const float W = FMath::Clamp(Weight, 0.0f, 1.0f);
+	if (W <= 0.0f || Handle.Style != EMOGripStyle::Power || Run.Y <= Run.X || Dir.IsNearlyZero())
+	{
+		return;
+	}
+	// Turned about the carrying hand's grip (the seat) onto the clip's direction, out of that palm, then the item slid back under the hand
+	const FVector Grip = Handle.Frame.GetLocation();
+	const FQuat Seated = Handle.Frame.GetRotation();
+	const FQuat OnTrack = (FQuat::FindBetweenNormals(Seated.GetAxisZ(), Dir.GetSafeNormal()) * Seated).GetNormalized();
+	const FQuat Turned = FQuat::Slerp(Seated, OnTrack, W).GetNormalized();
+	const FVector Through = Grip + (Carrying ? GripOutOfPalm(*Carrying, Handle, Turned, Grip) : FVector::ZeroVector);
+	const float At = SlideCm * W;   // where the hand holds it, from the item's grip
+	Handle.Frame.SetRotation(Turned);
+	Handle.Frame.SetLocation(Through - Turned.GetAxisZ() * At);
+	// The shaft where the hand is, as far either way as its fingers reach, cut at the item's ends
+	OutGrip = GripSection(Handle, FMath::Max(Run.X, At - SupportReachCm), FMath::Min(Run.Y, At + SupportReachCm));
+}
+
+FQuat FMOHandGrip::WristTurn(const FVector& SeatAxis, const FVector& Dir, float Weight)
+{
+	const FVector A = SeatAxis.GetSafeNormal();
+	const FVector B = Dir.GetSafeNormal();
+	const float W = FMath::Clamp(Weight, 0.0f, 1.0f);
+	if (W <= 0.0f || A.IsNearlyZero() || B.IsNearlyZero())
+	{
+		return FQuat::Identity;
+	}
+	const float PivotDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0f, 1.0f)));
+	const FVector About = FVector::CrossProduct(A, B).GetSafeNormal();
+	if (PivotDeg <= TrackFistTurnDeg || About.IsNearlyZero())
+	{
+		return FQuat::Identity;   // the fist takes it
+	}
+	return FQuat(About, FMath::DegreesToRadians(FMath::Min(PivotDeg - TrackFistTurnDeg, TrackWristTurnMaxDeg) * W));
+}
+
+float FMOHandGrip::HoldOn(const FShape& Handle, const FVector& CarryGrip, const FFreeHand& Free, const FVector2D& Run, float Weight,
+	FTransform& OutHandCS, FShape& OutStretch)
+{
+	OutHandCS = Free.HandCS;
+	if (Weight <= 0.0f || Handle.Style != EMOGripStyle::Power || Run.Y - Run.X <= 2.0f * SupportEndCm)
+	{
+		return 0.0f;
+	}
+	const FVector Origin = Handle.Frame.GetLocation();
+	const FVector Axis = Handle.Frame.GetUnitAxis(EAxis::Z);
+	const FTransform& SeatCS = Free.SeatCS;
+	const FVector Seat = SeatCS.GetLocation();
+	const FVector SeatZ = SeatCS.GetUnitAxis(EAxis::Z);
+	const FVector Onto = FVector::DotProduct(SeatZ, Axis) >= 0.0f ? Axis : -Axis;
+	const float TurnDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(SeatZ, Onto), -1.0f, 1.0f)));
+	// The seat turned onto the axis (the nearer way round): the hand bone then lies a fixed offset from wherever on the axis the seat goes
+	const FTransform SeatInHand = SeatCS.GetRelativeTransform(Free.HandCS);
+	const FQuat SeatRot = (FQuat::FindBetweenNormals(SeatZ, Onto) * SeatCS.GetRotation()).GetNormalized();
+	const FVector HandFromSeat = (SeatInHand.Inverse() * FTransform(SeatRot, FVector::ZeroVector)).GetLocation();
+	// The nearest point of the axis on the item, then, if the arm does not reach there, the nearest one it reaches (the hand slides along the
+	// shaft); with none in reach, the point nearest the shoulder, held less the further short the straight arm stops
+	const float Lo = Run.X + SupportEndCm;
+	const float Hi = Run.Y - SupportEndCm;
+	float At = FMath::Clamp(FVector::DotProduct(Seat - Origin, Axis), Lo, Hi);
+	float Short = 0.0f;
+	if (Free.ArmCm > 0.0f)
+	{
+		const float Reach = Free.ArmCm * 0.995f;
+		const FVector P0 = Origin + HandFromSeat - Free.Shoulder;   // the hand bone at At = 0, from the shoulder
+		const float B = FVector::DotProduct(P0, Axis);
+		const float Disc = B * B - (P0.SizeSquared() - Reach * Reach);
+		if (Disc >= 0.0f)
+		{
+			const float Root = FMath::Sqrt(Disc);
+			const float In = FMath::Max(Lo, -B - Root), Out = FMath::Min(Hi, -B + Root);
+			if (In <= Out)
+			{
+				At = FMath::Clamp(At, In, Out);
+			}
+			else
+			{
+				At = -B - Root > Hi ? Hi : Lo;   // the reachable stretch lies past an end of the item
+				Short = (P0 + Axis * At).Size() - Reach;
+			}
+		}
+		else
+		{
+			At = FMath::Clamp(-B, Lo, Hi);
+			Short = (P0 + Axis * At).Size() - Reach;
+		}
+	}
+	const FVector OnAxis = Origin + Axis * At;
+	const float Moved = (Seat - OnAxis).Size();
+	const float Apart = FMath::Abs(At - FVector::DotProduct(CarryGrip - Origin, Axis));
+	const float Hold = FMath::Min(Weight, 1.0f) * GripRamp(Moved, TrackReachFullCm, TrackReachNoneCm) * GripRamp(Short, 0.0f, TrackShortNoneCm)
+		* GripRamp(TurnDeg, TrackTurnFullDeg, TrackTurnNoneDeg) * GripRamp(-Apart, -SupportApartFullCm, -SupportApartNoneCm);
+	if (Hold <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// The hand bone where that puts the seat
+	OutHandCS = SeatInHand.Inverse() * FTransform(SeatRot, OnAxis);
+	OutHandCS.SetScale3D(Free.HandCS.GetScale3D());
+	if (Free.Palm)
+	{
+		// The palm as it will lie (it moves with the hand), and the hand off the shaft square to it until the palm only touches
+		FPalm Lying = *Free.Palm;
+		for (int32 i = 0; i < 4; ++i)
+		{
+			Lying.Metacarpal[i] = OutHandCS.TransformPosition(Free.HandCS.InverseTransformPosition(Free.Palm->Metacarpal[i]));
+			Lying.Knuckle[i] = OutHandCS.TransformPosition(Free.HandCS.InverseTransformPosition(Free.Palm->Knuckle[i]));
+		}
+		OutHandCS.AddToTranslation(-GripOutOfPalm(Lying, Handle, Handle.Frame.GetRotation(), OnAxis));
+	}
+	OutStretch = GripSection(Handle, FMath::Max(Run.X, At - SupportReachCm), FMath::Min(Run.Y, At + SupportReachCm));
+	return Hold;
+}
 float FMOHandGrip::Support(FShape& Handle, const FTransform& SeatCS, const FPalm* Carrying, const FPalm* Free, const FVector2D& Run, float Weight,
 	FShape& OutStretch)
 {
@@ -533,41 +711,10 @@ float FMOHandGrip::Support(FShape& Handle, const FTransform& SeatCS, const FPalm
 				OnLine = (FQuat::FindBetweenNormals(bHeadward ? Axis : -Axis, Now) * Seated).GetNormalized();
 				for (int32 h = 0; h < 2; ++h)
 				{
-					if (!Palms[h])
+					if (Palms[h])
 					{
-						continue;
+						Through[h] += GripOutOfPalm(*Palms[h], Handle, OnLine, Through[h]);
 					}
-					FShape Here;
-					Here.Frame = FTransform(OnLine, Through[h]);
-					Here.HalfSize = FVector(Handle.HalfSize.X, Handle.HalfSize.Y, SupportReachCm);
-					Here.Style = Handle.Style;
-					if (PalmClearance(*Palms[h], Here) >= 0.0f)
-					{
-						continue;   // on it or clear of it: never drawn into a palm
-					}
-					FVector PalmCentre = FVector::ZeroVector;
-					for (int32 i = 0; i < 4; ++i)
-					{
-						PalmCentre += (Palms[h]->Metacarpal[i] + Palms[h]->Knuckle[i]) * 0.125f;
-					}
-					FVector Out = Through[h] - PalmCentre;
-					Out = (Out - Now * FVector::DotProduct(Out, Now)).GetSafeNormal();
-					if (Out.IsNearlyZero())
-					{
-						continue;
-					}
-					float In = 0.0f, Clear = SupportSlideCm;
-					Here.Frame.SetLocation(Through[h] + Out * Clear);
-					if (PalmClearance(*Palms[h], Here) >= 0.0f)
-					{
-						for (int32 It = 0; It < 16; ++It)
-						{
-							const float Mid = 0.5f * (In + Clear);
-							Here.Frame.SetLocation(Through[h] + Out * Mid);
-							(PalmClearance(*Palms[h], Here) >= 0.0f ? Clear : In) = Mid;
-						}
-					}
-					Through[h] += Out * Clear;
 				}
 			}
 			OnLine = (FQuat::FindBetweenNormals(bHeadward ? Axis : -Axis, (Through[1] - Through[0]).GetSafeNormal()) * Seated).GetNormalized();

@@ -7,7 +7,8 @@ Sources (Fab, local only, gitignored; copy them from a project that has them to 
 Made here (tracked): /MOFramework/Characters/Bow|Spear/ -- IK_<Kind>Source (GASP's UE4 mannequin IK rig, on the pack's mesh: both skeletons
 carry every bone it names), RTG_<Kind>ToMetaHuman (the crouch set's RTG_MoverMannyToMetaHuman with that source, chains re-mapped) and the clips
 as <name>_MH. The source's curves are removed (Paragon's crashed a -game process on load). The retargeter puts the pelvis on the floor
-(TRAPS: "her backside drops to the floor"): every clip then gets repair_crouch_pelvis.py. The MetaHuman's retarget pose has its arms and fingers
+(TRAPS: "her backside drops to the floor"): every clip then gets repair_crouch_pelvis.py, and the spear clips spear_track.py (the pack's spear
+rides ik_hand_gun, which the retarget drops: its track comes over as curves, N-269). The MetaHuman's retarget pose has its arms and fingers
 turned onto the source's (Nov 2: its A-pose bent her bow arm 33 deg and cocked the wrist 40). Finally each clip is measured against its source,
 scaled by the bodies' head heights (pelvis, thigh, feet), and its arms and hands by angle (elbow, wrist, knuckle line, each finger joint).
 
@@ -37,6 +38,7 @@ UE4_RIG = "/Game/Characters/UE4_Mannequin/Rigs/IK_UE4_Mannequin_Retarget"   # GA
 TEMPLATE_RTG = "/MOFramework/Characters/Crouch/RTG_MoverMannyToMetaHuman"
 TARGET_MESH = "/Game/MetaHumans/MH_F_1/Body/SKM_MH_F_1_BodyMesh"
 REPAIR = os.path.join(unreal.Paths.project_content_dir(), "Python", "repair_crouch_pelvis.py")
+SPEAR_TRACK = os.path.join(unreal.Paths.project_content_dir(), "Python", "spear_track.py")
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 ALIGN_BONES = ["%s_%s" % (b, s) for s in "lr" for b in ("upperarm", "lowerarm", "hand")] + \
               ["%s_%s_%s" % (f, j, s) for s in "lr" for f in FINGERS for j in ("01", "02", "03")]
@@ -207,6 +209,8 @@ try:
         made += list(zip(paths, retarget(kind, mesh, make_rigs(kind, mesh), paths)))
     os.environ["REPAIR_CLIPS"] = ",".join(d for _, d in made)
     exec(open(REPAIR, encoding="utf-8").read(), {"__name__": "repair"})
+    # The spear's own track (N-269): the retarget drops the pack's ik_hand_gun, so its spear comes over as curves (spear_track.py)
+    exec(open(SPEAR_TRACK, encoding="utf-8").read(), {"__name__": "spear_track"})
     off = [d.split("/")[-1] for s, d in made if measure(s, d) > 12.0]
     log("done: %d clips; off their source by more than 12 cm, or arms / fingers past their limits: %s" % (len(made), off or "none"))
 except Exception:
