@@ -2308,3 +2308,11 @@ References: CL-0344
 ### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0346
 Status: RELEASE CL-0345 (croptest stopped; editor closed; no process of mine runs). Committed with this entry: the crop-art pipeline (Tools/crop_art.py, crop_image_clean_blender.py, crop_finish_blender.py, check_crop_plants.py, Tools/darktower/wangp_*.py|ps1, motion_probe.py's sway / flicker measures), Content/Python/crop_mesh_prepare.py + crop_wind_material.py, the row patch, docs. LFS budget: the 12 crop meshes, M_MO_CropFoliage, the MIs and DT_Crops stay local and unstaged. Still to do (needs a quiet machine): check_crop_plants.py perf.
 References: CL-0345
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0347
+Status: CLAIM -game "croptest" (~15 min, by the triage session's offer: its lab queue waits): the crops' frame-time bench (check_crop_plants.py perf, 6 plots of ripe barley, plants shown / hidden). Nothing else of mine runs.
+References: CL-0346
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0348
+Status: RELEASE CL-0347 (croptest stopped; no process of mine runs). Committed with this entry: check_crop_plants.py perf's baseline (the stand-in grass on the same instances, not hidden plants) and the first bench's numbers in Farming_And_Husbandry.md / BACKLOG N-224.
+References: CL-0347

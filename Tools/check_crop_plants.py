@@ -9,8 +9,9 @@
         traced onto the worked ground, as AMOCropPlotActor::RefreshPlants lays them); shots of each from 4 m and close up.
 
     python Tools/check_crop_plants.py perf <label>=<mesh path>:<height>[:<material>] [--plots 6]
-        a row of plots all dressed with that mesh; MO.Perf.Bench over the field twice each with the plants shown and hidden -> the GPU
-        ms the crop costs. Run with the editor CLOSED (Docs/Performance.md: the GPU is shared).
+        a row of plots all dressed with that mesh; MO.Perf.Bench over the field twice each with that mesh and with the stand-in grass on
+        the same instances -> the GPU ms the crop costs against the grass. Run on an EMPTY machine (no editor, no other instance:
+        Docs/Performance.md, the GPU is shared).
 
 Shots: Saved/CropTest/<mode>/ at 10:00 (the clock is moved forward to it: set backwards, the sky stayed dark, Oct 30).
 
@@ -239,15 +240,21 @@ def ab(args, shoot=True):
     return 0
 
 
-HIDE = HEAD + r'''
+# The baseline swaps every plot's plants to the stand-in grass (the same instances): hiding them instead opened the view to a costlier
+# background and the "without" frames came out SLOWER (Nov 4: 31 / 17 ms without against 7.5 / 10 ms with).
+SWAP = HEAD + r'''
 n = 0
+m = unreal.load_asset(MESH)
 for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCropPlotActor):
     ism = a.get_component_by_class(unreal.InstancedStaticMeshComponent)
     if ism:
-        ism.set_visibility(SHOW, False)
+        ism.set_static_mesh(m)
+        for si in range(len(m.static_materials)):
+            ism.set_material(si, m.get_material(si))
         n += 1
-out("SHOWN %s %d" % (SHOW, n))
+out("SWAPPED %s %d" % (m.get_name(), n))
 '''
+STANDIN = "/Game/Fab/Megascans/Plants/Dry_Grass_tbbqejqr/Medium/tbbqejqr_tier_2/StaticMeshes/SM_tbbqejqr_VarA.SM_tbbqejqr_VarA"
 
 
 def bench(label, seconds=12):
@@ -263,8 +270,10 @@ def bench(label, seconds=12):
 
 
 def perf(args):
-    """A row of plots all dressed with one mesh; GPU ms over the field with the plants shown and hidden (editor closed: Performance.md)."""
+    """A row of plots all dressed with one mesh; GPU ms over the field with that mesh and with the stand-in grass on the same instances
+    (an empty machine: Docs/Performance.md -- no editor, no other instance)."""
     label, rest = args.patches[0].split("=", 1)
+    crop_mesh = rest.split(":")[0]
     args.patches = ["%s%d=%s" % (label, k, rest) for k in range(args.plots)]
     ab(args, shoot=False)
     o, f = boot(True)
@@ -275,14 +284,15 @@ def perf(args):
     shot("%s_field" % label)
     results = {}
     for rep in range(2):
-        for show in (True, False):
-            q(HIDE.replace("SHOW", str(show)), "SHOWN")
-            time.sleep(4)
-            results.setdefault(show, []).append(bench("%s_%s_%d" % (label, "on" if show else "off", rep)))
+        for crop in (True, False):
+            q(SWAP.replace("MESH", repr(crop_mesh if crop else STANDIN)), "SWAPPED")
+            time.sleep(6)
+            results.setdefault(crop, []).append(bench("%s_%s_%d" % (label, "crop" if crop else "standin", rep)))
     on = [v for v in results[True] if v]
     off = [v for v in results[False] if v]
     if on and off:
-        print("PERF %s: %d plots x 196 plants: gpu %.2f ms with, %.2f ms without -> %.2f ms" % (label, len(pts), sum(on) / len(on), sum(off) / len(off), sum(on) / len(on) - sum(off) / len(off)))
+        print("PERF %s: %d plots x 196 plants: gpu %.2f ms with the crop, %.2f ms with the stand-in grass -> %+.2f ms"
+              % (label, len(pts), sum(on) / len(on), sum(off) / len(off), sum(on) / len(on) - sum(off) / len(off)))
     ui.console(NAME, "MO.Cam.Reset")
     return 0
 

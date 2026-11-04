@@ -105,8 +105,10 @@ three stages each (the plot's `StageMeshes`: Sprouted, Growing, Ripe), made by o
 Checked in a real world with `Tools/check_crop_plants.py` (`grow`: one crop sown and aged through its stages; `ab`: candidates side by
 side on fallow plots; `perf`: the GPU cost of a row of plots). Nov 4: `grow` 4/4 (Wild grain sown through the plot's menu and drawn as the
 barley at Sprouted, Growing and Ripe); every stage at its in-game height in `Saved/CropTest/ab_capped/`. At 4 m each reads as its crop;
-from ~1 m the ripe heads smear (TRELLIS's limit), flax flowers read pale and ripe flax too orange. Not measured yet: the frame cost
-(`perf` needs no other UE process running). **The assets are local only:** the LFS budget refuses `.uasset` pushes (BACKLOG "Waiting on
+from ~1 m the ripe heads smear (TRELLIS's limit), flax flowers read pale and ripe flax too orange. Frame cost, first bench (Nov 4, an
+empty machine, a -game instance at 1600x900, 4090): a 6-plot field of ripe barley (1,176 plants, 40k-triangle Nanite, the flicker wind) in
+view, the whole frame's GPU at 7.5-10.3 ms. Its baseline was wrong (the plants HIDDEN opened the view to a costlier background: 17-31 ms),
+so `perf` now swaps the same instances to the stand-in grass; the crop's own cost against the grass is still to measure. **The assets are local only:** the LFS budget refuses `.uasset` pushes (BACKLOG "Waiting on
 Wes"); `crop_art.py` and `Docs/RowPatches/2026-11-04-crops-trellis-barley-DT_Crops.json` remake them.
 
 ## 3. Domestic animals (the simulation)
