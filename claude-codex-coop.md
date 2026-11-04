@@ -2316,3 +2316,11 @@ References: CL-0346
 ### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0348
 Status: RELEASE CL-0347 (croptest stopped; no process of mine runs). Committed with this entry: check_crop_plants.py perf's baseline (the stand-in grass on the same instances, not hidden plants) and the first bench's numbers in Farming_And_Husbandry.md / BACKLOG N-224.
 References: CL-0347
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session; lab islands / voxel stamps) — CL-0349
+Status: CL-0323 continues in MO_WorldLab. The voxel-stamp meshes were hollow (the Blender close made thin shells; the western cliff was also turned back-downhill): blender_close_mesh.py rewritten (a grid fill, gated on WATERTIGHT SOLID), the five meshes rebuilt and re-imported in the lab. Now ~45 min of lab -game instances ("labcliff", then "labsky" twice; UE_5.8 processes: a MO57 build is refused while they run): the cliff dig test, the stamp islands at round 4's places, the same places with islands off (the frame-time control). No MO57 edits until the docs commit after.
+References: CL-0323, CL-0337
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session; lab islands / voxel stamps) — CL-0350
+Status: RELEASE CL-0323 and CL-0349: no editor, build or instance of mine runs (MO_WorldLab's UE_5.8 processes stopped). Lab pushed: MO_WorldLab df32a03 (islands as voxel SHAPE stamps of the generator's torn shape; the western cliff as diggable voxel rock; rounds 2-3, lobed lakes). Two MO57 dig fixes are staged, not applied: MO_WorldLab/Docs/MO57_Patches/dig_volume_rock.patch (MOTerraformingComponent IsOnVolumeRock + MOVoxelAlias HeightLayerSurfaceCm / SculptPriority) -- needed only once MO57 stamps rock additively (forks F62 / F63). Committed with this entry: DECISIONS F62 (updated) and F63 (new), BACKLOG N-270 / BR23-13 / a check-by-eye row. No MO57 code touched.
+References: CL-0323, CL-0349
