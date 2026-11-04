@@ -92,7 +92,8 @@ Production-ready software: fix systems, not symptoms. These override convenience
 - Hand work to its Claude session through `D:\ClaudeMeetClaude\` (`README.md` there): requests in `inbox-for-darktower\`, results in
   `inbox-for-darkside\`, each with a short `*.md` saying what it is and what to do. DARKTOWER writes only inside `ClaudeMeetClaude\` on
   the share, never into this tree: results come back through the inbox (or its pushed branch) and a DARKSIDE agent imports them.
-- Start long GPU jobs there with `Start-Process` or a scheduled task so they outlive the SSH session; `ssh darktower "nvidia-smi"` before
+- Start long GPU jobs there as a scheduled task so they outlive the SSH session (a `Start-Process` child dies with it: Nov 3;
+  `Tools/darktower/wangp_run_job.ps1` does it for WanGP); `ssh darktower "nvidia-smi"` before
   assuming its VRAM is free.
 - ComfyUI runs there at http://192.168.1.169:8188.
   - If `/system_stats` stops answering, restart it with `ssh darktower "D:\ComfyUI\start-comfyui-detached.ps1"`.

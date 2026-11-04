@@ -122,6 +122,28 @@ def track(path, patches, plot):
         print("patch (%d,%d): median %.2f px/s, max %.1f px/s (%.0fx median), step share %.0f %%, jump share %.0f %% (%d jumps, %d on hitch frames)"
               % (x, y, med, speed.max(), speed.max() / max(med, 1e-9), 100 * share, 100 * jshare, jump.sum(), (jump & hitch).sum()))
         trajectories.append((x, y, np.concatenate([[0.0], np.cumsum(steps[:, 1])]), np.concatenate([[0.0], np.cumsum(steps[:, 0])])))
+        # How FAR and how FAST it sways, apart (the median speed above is their product): the RMS of the detrended displacement, and the
+        # period of the strongest swing (FFT of the larger component, resampled to even time). Crop wind, Nov 4: "about 20% as much and a
+        # little faster".
+        tu = np.linspace(t[0], t[-1], len(t))
+        comps = []
+        for series in (trajectories[-1][2], trajectories[-1][3]):
+            s = np.interp(tu, t, series)
+            s = s - np.polyval(np.polyfit(tu, s, 1), tu)
+            comps.append(s)
+        rms = float(np.sqrt(np.mean(comps[0] ** 2) + np.mean(comps[1] ** 2)))
+        main = comps[0] if np.var(comps[0]) >= np.var(comps[1]) else comps[1]
+        spec = np.abs(np.fft.rfft(main * np.hanning(len(main))))
+        freqs = np.fft.rfftfreq(len(main), (tu[-1] - tu[0]) / max(len(tu) - 1, 1))
+        k = int(np.argmax(spec[1:])) + 1 if len(spec) > 1 else 0
+        # A burst shorter than the slow sway reads its whole length as the "strongest period"; so also: the share of the motion's power
+        # above 0.5 Hz (ripples against a slow lean) and the strongest period among the faster parts (> 0.25 Hz).
+        power = spec ** 2
+        fast = float(power[freqs > 0.5].sum() / max(power[1:].sum(), 1e-12))
+        band = np.nonzero(freqs > 0.25)[0]
+        kf = band[int(np.argmax(spec[band]))] if len(band) else 0
+        print("patch (%d,%d): sway rms %.2f px, strongest period %.2f s, fast share %.0f %%, strongest fast period %.2f s"
+              % (x, y, rms, 1.0 / freqs[k] if k and freqs[k] > 0 else float("nan"), 100 * fast, 1.0 / freqs[kf] if kf else float("nan")))
     if plot:
         from PIL import Image, ImageDraw
         width, height = 1100, 80 + 150 * len(trajectories)

@@ -1,0 +1,9 @@
+{
+ "WildGrain": {
+  "stageMeshes": [
+   "/Game/ImageTo3D/Crops/Barley/Sprouted/Crop_Barley_Sprouted/StaticMeshes/Crop_Barley_Sprouted.Crop_Barley_Sprouted",
+   "/Game/ImageTo3D/Crops/Barley/Growing/Crop_Barley_Growing/StaticMeshes/Crop_Barley_Growing.Crop_Barley_Growing",
+   "/Game/ImageTo3D/Crops/Barley/Ripe/Crop_Barley_Ripe/StaticMeshes/Crop_Barley_Ripe.Crop_Barley_Ripe"
+  ]
+ }
+}

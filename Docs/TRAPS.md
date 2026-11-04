@@ -33,6 +33,8 @@
   with spaces can't go through -ExecCmds. (overnight-polish, swimming, oceanology)
 - **WinError 206 from ue.py** -> request bodies over ~30 KB overran the command line -> fixed (`_curl` sends the body on stdin). (overnight-polish)
 - **A background probe keeps running and teleports the shared instance** -> launched with `&` inside the Bash tool -> use `run_in_background`. (oct16)
+- **A DARKTOWER job started over SSH never runs (no log, no output)** -> Windows OpenSSH kills a `Start-Process` child when the session
+  ends -> register a one-shot scheduled task (`Tools/darktower/wangp_run_job.ps1`). (Nov 3)
 
 ## 2. Engine, build and C++ (UE 5.8.4 since Oct 26 15:33; it was 5.8.3)
 
@@ -562,6 +564,8 @@
   (`import_blender_items.py` stops with that message). (Nov 2)
 - **The editor's own source control auto-adds new assets to the git index** (`A` in `git status --short`) -> while the LFS budget refuses
   uploads, `git restore --staged <paths>` before committing, and check the staged column. (Nov 2)
+- **A TRELLIS / glTF plant previews in rainbow colours** -> glTF makes COLOR_0 a MULTIPLIER of the base colour, so a viewer tints the plant by
+  its wind vertex colours (Unreal's foliage master reads them as data only) -> preview the `_novc.glb` copy `crop_finish_blender.py` writes. (Nov 3)
 
 ## 11. Water
 

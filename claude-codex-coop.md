@@ -2288,3 +2288,23 @@ References: CL-0340
 ### 2026-11-04 Pacific Standard Time — CLAUDE (two-handed holds session) — CL-0339
 Status: RELEASE CL-0326 (N-269 done): no editor, build or instance of mine runs. Committed with this entry: MOHandGrip.h/.cpp (Track, HoldOn, WristTurn; Support's palm slide factored into one helper), MOBodyRetargetAnimInstance.h/.cpp (the spear's track read from the clip's curves; the free arm by two-bone IK), MOCharacter.h/.cpp (GetHeldGripTrack), Tests/MOHandGripTests.cpp (HandGrip.Track), Content/Python/spear_track.py (new) + retarget_weapon_sets.py, Tools/check_grip.py (the track's checks, --verbose, --freeze), Docs (Held_Grip, BACKLOG N-269 + a by-eye row, Animation_GASP section 7). Local only (LFS budget): the 21 spear *_MH clips' curves. Verified: all 19 spear clips GRIP PASS 76/76 (Femme, Harvey x FlintSpear01, WoodenSpear01); ue.py auto 418/419 -- the one failure is MOFramework.Rendering.FoliageTransmissionCapped on /Game/Misc/CropTest/ (MI_Test_BarleyRipe: the crop-plant session's new material, not this work). `python -m graphify update .` not run (the WindowsApps Python is denied here).
 References: CL-0326, CL-0338
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0342
+Status: RELEASE CL-0341's croptest (done). CLAIM MO57's editor ~10 min: Content/Python/fix_foliage_transmission.py over /Game (caps the 12 crop MIs at strength 0.5: FoliageTransmissionCapped failed on them, reported by the two-handed holds session), then ue.py auto --filter that test with the editor closed.
+References: CL-0341
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0343
+Status: RELEASE CL-0342's editor (closed; FoliageTransmissionCapped 1/1 after the cap). CLAIM -game "croptest" again (~25 min, screenshots only, alongside the lab instances): the 12 crop stages again with the capped materials at their in-game heights.
+References: CL-0342
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0344
+Status: RELEASE CL-0343's croptest (done). CLAIM MO57's editor (~30 min): Wes, Nov 4: "all the crops move WAY too much ... they should move about 20% as much and a little faster ... little ripples" -- reading the foliage wind graph, then the crop materials' wind (only /Game/ImageTo3D/Crops/ MIs, or a crop-only copy of the master; the shared M_MS_Foliage / grass untouched for now).
+References: CL-0343
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0345
+Status: RELEASE CL-0344's editor (closed): the 12 crop MIs' wind set to 20 % of the grass's primary sway + the secondary flutter (/Game/ImageTo3D/Crops only). CLAIM -game "croptest" (~20 min): the wind before / after measured with Tools/motion_probe.py.
+References: CL-0344
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0346
+Status: RELEASE CL-0345 (croptest stopped; editor closed; no process of mine runs). Committed with this entry: the crop-art pipeline (Tools/crop_art.py, crop_image_clean_blender.py, crop_finish_blender.py, check_crop_plants.py, Tools/darktower/wangp_*.py|ps1, motion_probe.py's sway / flicker measures), Content/Python/crop_mesh_prepare.py + crop_wind_material.py, the row patch, docs. LFS budget: the 12 crop meshes, M_MO_CropFoliage, the MIs and DT_Crops stay local and unstaged. Still to do (needs a quiet machine): check_crop_plants.py perf.
+References: CL-0345

@@ -358,6 +358,9 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   PivotPainter2 package: an Add of a time-only and a pivot-only operand must take the pivot operand straight from the `MO_WindPrecision`
   Fmod (a synthetic graph checks the detector both ways first). Oct 18: 10 functions, 3 sites (MF_AdvancedWind_Level, both
   PN_WindAnimation), all reduced. A reimported vendor graph fails it: rerun `foliage_wind_precision.py` (add the function to its list).
+- **The crops' own wind (Nov 4, `M_MO_CropFoliage`, `Content/Python/crop_wind_material.py`)** follows the rule by construction: the world
+  position is `Fmod` 4000 before the drifting noise's time term is added, and its `Time` wraps every 600 s, a whole number of cycles of
+  both flutter waves (2.0 and 3.3 Hz), so the flutter never jumps (the gust field reshuffles once in 10 minutes).
 - **Pivot Painter data textures** are data, sampled at each branch's own texel: no mips, never streamed, sRGB off, nearest filter.
   `Content/Python/pivot_painter_textures.py` (editor, idempotent) enforces exactly that on every texture in a `PivotPainter` folder and
   reports the rest: the compression differs by design (positions 16-bit `TC_HDR`, axis / extent 8-bit `TC_VECTOR_DISPLACEMENTMAP`,
