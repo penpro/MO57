@@ -5,7 +5,9 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "MOAdrenalineComponent.h"
 #include "MOCharacter.h"
+#include "MOInventoryRequest.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPersistenceTestPawn.h"
 #include "MOworldSaveGame.h"
@@ -60,6 +62,21 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	Source->History->ApplySaveDataAuthority(Past);
 	Source->Respiration->DebugSetOxygenReserve(0.3f);
 
+	// A burning torch in the hand. The test pawn has no held mesh, so it burns with no flame to draw: the burning is what is saved.
+	Source->DispatchBeginPlay();
+	Source->Inventory->SetSlotCountAuthority(8);
+	Source->Equipment->LightSwapTime = Source->Equipment->MediumSwapTime = Source->Equipment->HeavySwapTime = 1.0f;
+	const FGuid Torch = FGuid::NewGuid();
+	FMOInventoryAddOptions TorchOptions;
+	TorchOptions.State.Durability = 90;
+	Source->Inventory->TryAddItem(Torch, TEXT("Torch01"), 1, TorchOptions);
+	if (!TestTrue(TEXT("the torch goes to the hand"), Source->Equipment->EquipFromInventory(Source->Inventory, Torch, EMOEquipmentSlot::RightHand)))
+	{
+		return false;
+	}
+	static_cast<UActorComponent*>(Source->Equipment)->TickComponent(1.1f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("the torch lights"), Source->Light->LightHeld());
+
 	UMOWorldSaveGame* Save = NewObject<UMOWorldSaveGame>();
 	Persistence->CapturePersistedPawnsAndInventories(World, Save);
 	if (!TestEqual(TEXT("the save captures the pawn"), Save->PersistedPawns.Num(), 1))
@@ -69,7 +86,9 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	const FMOPersistedPawnRecord& Record = Save->PersistedPawns[0];
 	TestTrue(TEXT("the record says it has component data"), Record.bHasComponentData);
 
+	TestTrue(TEXT("the record says the light burns"), Record.CarriedLightData.bLit);
 	AMOPersistenceTestPawn* Target = World->SpawnActor<AMOPersistenceTestPawn>();
+	Target->DispatchBeginPlay();
 	Persistence->ApplyPawnComponentState(Target, Record);
 
 	TestEqual(TEXT("what it learned comes back"), Target->Knowledge->AllLearnedKnowledge.Num(), 2);
@@ -87,6 +106,8 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	Target->History->BuildSaveData(Kept);
 	TestEqual(TEXT("and when a player left it, for While you were away"), Kept.PlayerLeftAt, Past.PlayerLeftAt);
 	TestEqual(TEXT("the breath being held comes back: a load is not a breath of air"), Target->Respiration->GetOxygenReserve(), 0.3f);
+	TestEqual(TEXT("the torch is back in the hand"), Target->Equipment->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemGuid, Torch);
+	TestTrue(TEXT("and burning: a save in a dark cave does not come back dark"), Target->Light->IsLit());
 
 	// A record from before these fields leaves a live pawn as it is.
 	FMOPersistedPawnRecord Old;
@@ -155,6 +176,7 @@ bool FMOPersistence_EveryPawnComponentIsSaved::RunTest(const FString& Parameters
 		TestTrue(*FString::Printf(TEXT("%s's %s is in a save"), *Component->GetClass()->GetName(), *Param->Struct->GetName()), Saved.Contains(Param->Struct));
 	}
 	TestTrue(*FString::Printf(TEXT("the fence saw the survivor's saving components (%d)"), Checked), Checked >= 8);
+	TestFalse(TEXT("the control: adrenaline's struct is in no save, so the set can tell what is missing"), Saved.Contains(FMOAdrenalineSaveData::StaticStruct()));
 	return true;
 }
 

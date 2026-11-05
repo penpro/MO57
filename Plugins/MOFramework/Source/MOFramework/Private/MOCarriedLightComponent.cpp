@@ -109,6 +109,16 @@ bool UMOCarriedLightComponent::FindUnlitHeld(EMOEquipmentSlot& OutSlot, FMOEquip
 	return false;
 }
 
+void UMOCarriedLightComponent::BuildSaveData(FMOCarriedLightSaveData& OutSaveData) const
+{
+	OutSaveData.bLit = IsLit();
+}
+
+bool UMOCarriedLightComponent::ApplySaveDataAuthority(const FMOCarriedLightSaveData& InSaveData)
+{
+	return InSaveData.bLit && !IsLit() && LightHeld();
+}
+
 bool UMOCarriedLightComponent::LightHeld()
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority())

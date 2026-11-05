@@ -57,6 +57,7 @@
 #include "MOSkillsComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOCarriedLightComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOQuestTypes.h"
 #include "MOWeatherTypes.h"
@@ -208,6 +209,10 @@ struct FMOPersistedPawnRecord
     /** Equipment component state (equipped items per slot) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOEquipmentSaveData EquipmentData;
+
+    /** Whether the light in the hands was burning (UMOCarriedLightComponent). False in a save from before it. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOCarriedLightSaveData CarriedLightData;
 
     /** Recruitment component state (for survivors) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")

@@ -1370,6 +1370,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             EquipmentComp->BuildSaveData(PawnRecord.EquipmentData);
             PawnRecord.bHasComponentData = true;
         }
+        if (const UMOCarriedLightComponent* LightComp = Pawn->FindComponentByClass<UMOCarriedLightComponent>())
+        {
+            LightComp->BuildSaveData(PawnRecord.CarriedLightData);
+            PawnRecord.bHasComponentData = true;
+        }
         if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
         {
             RecruitmentComp->BuildSaveData(PawnRecord.RecruitmentData);
@@ -1834,6 +1839,12 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
     {
         EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
+    }
+
+    // After the equipment: the flame goes on the torch that is in the hand.
+    if (UMOCarriedLightComponent* LightComp = Pawn->FindComponentByClass<UMOCarriedLightComponent>())
+    {
+        LightComp->ApplySaveDataAuthority(PawnRecord.CarriedLightData);
     }
     // Apply recruitment state
     if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())

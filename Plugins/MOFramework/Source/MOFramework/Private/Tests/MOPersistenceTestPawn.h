@@ -1,7 +1,9 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "MOCarriedLightComponent.h"
 #include "MOCharacterHistoryComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MOIdentifiableInterface.h"
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
@@ -25,6 +27,8 @@ public:
 		Personality = CreateDefaultSubobject<UMOPersonalityComponent>(TEXT("Personality"));
 		History = CreateDefaultSubobject<UMOCharacterHistoryComponent>(TEXT("History"));
 		Respiration = CreateDefaultSubobject<UMORespirationComponent>(TEXT("Respiration"));
+		Equipment = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("Equipment"));
+		Light = CreateDefaultSubobject<UMOCarriedLightComponent>(TEXT("Light"));
 	}
 
 	UPROPERTY()
@@ -44,6 +48,12 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<UMORespirationComponent> Respiration;
+
+	UPROPERTY()
+	TObjectPtr<UMOEquipmentComponent> Equipment;
+
+	UPROPERTY()
+	TObjectPtr<UMOCarriedLightComponent> Light;
 
 	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override { return Identity; }
 	virtual UMOInventoryComponent* GetInventory_Implementation() const override { return Inventory; }

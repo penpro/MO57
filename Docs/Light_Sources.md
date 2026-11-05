@@ -78,6 +78,8 @@ Units trap: a UE point light defaults to *unitless*. A unitless value is ×16, a
 `intensity_units` through `set_editor_property` on a live light does not refresh its render proxy. That is why an early "8000 cd" test light
 looked black: it was rendering far dimmer.
 
+A torch burning when the world was saved burns after the load (`FMOCarriedLightSaveData`, Nov 5, N-299): it is relit once the equipment is back in the hand; its wear was already the item's own.
+
 ## What the camera must do: exposure
 
 A 10 cd torch lights a wall 2 m away to 10 / 4 = 2.5 lux. At albedo 0.3 that wall's luminance is 2.5 × 0.3 / π ≈ 0.24 cd/m², which is
