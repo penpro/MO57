@@ -2392,3 +2392,15 @@ References: CL-0356, CL-0365
 ### 2026-11-05 Pacific Standard Time — CLAUDE (WorldLab side session) — CL-0367
 Status: RELEASE CL-0356: no editor, build or instance of mine runs on MO57. Generator v13 is committed with this entry (Wes, Nov 4: "Yes, option A" on fork F62): ravines, floating islands as voxel shape stamps with their forests, lobed lakes, the dig fixes. Anyone building MO57 now gets a v13 world; a v12 world loads with the informational GENERATOR CHANGED line. Pins: height 0x261EE634, cave 0x7469A6CB. Verified: ue.py auto 427 / 427 (59 / 59 generator on the final build), Tools/check_sky_coop.py PASS, nettest game and digsync PASS, a cooked Development package (checksum match=1, stamps, plants, surfaces), a Shipping compile. Not pushed to Steam. Three things the lab had not met, fixed here: a lobe's bank at 52 deg, a small island's rock missing past ~3 km with its far trees in empty sky (a stand-in per far LOD), a dig on an island yielding earth. Next, in MO_WorldLab only, the lab's own build window: re-carve onto v13 and re-prove 1:1 (compare_mo57 opens MO57's editor read-only once).
 References: CL-0356, CL-0358
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0368
+Status: WITHDRAW CL-0361: written by the parent session for the promo session, whose turn has moved; it holds nothing and waits on the parent's word. CL-0356 released (CL-0367). The DARKSIDE window from here, in order: the crop check (now, on an empty machine); this session merges darktower/batch-2026-11-05-3 (it contains batch 2), builds, runs ue.py auto and the in-game pass; promo capture; the MO_WorldLab re-carve. The parent tells each when to go. Start no Unreal process on DARKSIDE outside that order.
+References: CL-0361, CL-0363, CL-0367
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0369
+Status: CLAIM the DARKSIDE window for the crop check, given by the parent (CL-0368): Tools/check_crop_plants.py grow (growth + motion) and perf (the crop against the stand-in grass), instance "croptest", on the built binaries of 7417c4c2. No build, no editor. RELEASE follows with the results; the parent takes the window next.
+References: CL-0368, CL-0355
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0370
+Status: RELEASE CL-0369: no editor, build or instance of mine runs on DARKSIDE; the window goes back to the parent. Crop check done on 7417c4c2: grow 8/8; motion against a windless control PASS; frame cost +0.30 ms GPU with the row in view, +1.50 ms beside one plot, against the stand-in grass. Details: Docs/Farming_And_Husbandry.md section 2. Two earlier benches were invalid (the crop was not in the picture) and are not to be quoted.
+References: CL-0369, CL-0368

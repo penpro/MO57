@@ -340,6 +340,10 @@
   instances assert compiling M_MS_Surface_Material (MaterialShader.cpp:2567, "missing expected shader type FAnisotropyPS": its cached
   conservative parameters disagree with the compile) -> don't; on-demand compile is the only working mode for the uncooked game here. (Oct 21)
 
+- **A DARKTOWER job needs the share or a window** -> an SSH session has neither, and a `Start-Process` child dies with it -> a scheduled task with the default Interactive principal runs in Wes's session 1:
+  probed Nov 4 it read `Z:` and `\\DARKSIDE\DarksideProduction`, opened a window, and `motion_probe.py clip` captured it (only while he is logged on). DARKTOWER's engine has none of the five Voxel shader
+  hooks, so the first `ue.py inst start` there edits `D:\UE_5.8\Engine\Shaders\Private`. Frame-time benches stay on DARKSIDE (Wes: "inconsistent metrics don't work").
+
 ## 6. Co-op and RPC
 
 - **A host climbing showed as FALLING on the joiner, and resting on a wall dropped to the ground there** -> another machine's copy (a
@@ -735,6 +739,10 @@
   spent ~29 of its 30 ms in `GetItemIdForMesh`'s MISS path (a path string plus ~260 soft-pointer resolves and string builds per grass
   component), not in walking the actors; a component walk alone changed nothing -> memoize a lookup that walks a table per call, misses
   included. (Oct 29, N-196)
+- **A cost comes out near zero and looks like good news** -> what you meant to measure is not in the picture: a crop field sat behind a crest (+0.10 ms was wild grass), then showed as a band 5 % of the
+  view; in view, beside one plot, it cost +1.50 ms -> before any number, swap the thing and diff two shots (`motion_probe.py diff`; `check_crop_plants.py perf` refuses a camera under 20 %), and LOOK
+  at the shot. **A motion check passes anything** -> a threshold under the probe's noise floor over a window of wild grass: a hand-high sprouted plot read like a ripe one -> only the thing's own
+  pixels, against the same thing with the effect off, and subtract the control's power (a render's noise is broadband and reads as flicker). (Nov 5, N-224)
 
 ## 16. AI and gameplay
 

@@ -99,11 +99,29 @@ three stages each (the plot's `StageMeshes`: Sprouted, Growing, Ripe), made by o
 Checked in a real world with `Tools/check_crop_plants.py` (`grow`: one crop sown and aged through its stages; `ab`: candidates side by
 side on fallow plots; `perf`: the GPU cost of a row of plots). Nov 4: `grow` 4/4 (Wild grain sown through the plot's menu and drawn as the
 barley at Sprouted, Growing and Ripe); every stage at its in-game height in `Saved/CropTest/ab_capped/`. At 4 m each reads as its crop;
-from ~1 m the ripe heads smear (TRELLIS's limit), flax flowers read pale and ripe flax too orange. Frame cost, first bench (Nov 4, an
-empty machine, a -game instance at 1600x900, 4090): a 6-plot field of ripe barley (1,176 plants, 40k-triangle Nanite, the flicker wind) in
-view, the whole frame's GPU at 7.5-10.3 ms. Its baseline was wrong (the plants HIDDEN opened the view to a costlier background: 17-31 ms),
-so `perf` now swaps the same instances to the stand-in grass; the crop's own cost against the grass is still to measure. **The assets are local only:** the LFS budget refuses `.uasset` pushes (BACKLOG "Waiting on
+from ~1 m the ripe heads smear (TRELLIS's limit), flax flowers read pale and ripe flax too orange. **The assets are local only:** the LFS budget refuses `.uasset` pushes (BACKLOG "Waiting on
 Wes"); `crop_art.py` and `Docs/RowPatches/2026-11-04-crops-trellis-barley-DT_Crops.json` remake them.
+
+**Measured Nov 5, generator v13 (7417c4c2), DARKSIDE, a -game instance at 1600x900, 4090, seed 777.** Shots, clips and logs: `Saved/CropTest/nov5/` (not in git).
+
+- **Growth:** `grow` 8/8: sown through the plot's menu, Sprouted / Growing / Ripe reached, each drawn as the barley.
+- **Motion, from 4 m:** the plot's own plants with the wind against the same plants with `Flicker Strength` 0.
+
+    | Stage | Swing, AA off (grey levels) | Of the power the wind adds, over 1.2 Hz | Reach, TSR | Speed, TSR (levels / frame) | Of these plants moving at a moment |
+    |---|---|---|---|---|---|
+    | Growing | 2.13 -> 17.72 | 67 % | 2.04 -> 7.55 | 0.15 -> 2.07 | 1 % -> 42 % |
+    | Ripe | 1.78 -> 11.97 | 66 % | 1.94 -> 7.83 | 0.14 -> 2.49 | 0 % -> 63 % |
+
+    Against the wild grass, same camera, whole view, a sprouted plot -> the grown one: reach 3.66 -> 4.90 (Growing), 4.84 (Ripe); speed 0.96 -> 1.46, 1.71. They move somewhat more than the grass around them: they are taller, and the wind's reach grows with height. How that looks is on Wes's by-eye list.
+- **Frame cost:** 6 plots of ripe barley (1,176 plants, 40k-triangle Nanite, the flicker wind), GPU ms, three runs each, against the stand-in grass on the same instances.
+
+    | Camera | Crop | Stand-in grass | Crop's cost | Whole frame, crop / grass |
+    |---|---|---|---|---|
+    | Above the field, the row in view | 7.0, 7.0, 7.2 | 6.7, 6.8, 6.8 | **+0.30** | 10.87 / 10.67 ms |
+    | Beside one plot at eye height (4 m) | 9.8, 9.9, 9.8 | 8.4, 8.3, 8.3 | **+1.50** | 12.63 / 11.87 ms (79 / 84 fps) |
+
+    Read it with two limits. The grass takes the crop's instance scale, so it stands shorter: a low baseline. Chrome (Wes's) was on the GPU in 18 of the 43 samples during the runs, at 8-24 %; no other Unreal, build or render process ran. Both arms alternate, so the differences hold better than the absolute ms.
+- **Benches thrown away:** two, kept as `perf_invalid_*`. The first looked over a crest at wild grass (+0.10 ms); the second, from a higher camera, showed the row as a band, 5 % of the picture (no difference). That is why `perf` tests each camera with a swap first.
 
 ## 3. Domestic animals (the simulation)
 

@@ -25,7 +25,7 @@ import ue_inst as ui  # noqa: E402
 
 NAME = "windtest"
 BIOMES = "Meadow,Rainforest,LocustWoodland,DryScrub"
-BPY = r"C:/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe"   # motion_probe needs numpy
+BPY = os.environ.get("MO_NUMPY_PYTHON", r"C:/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe")   # motion_probe needs numpy
 PROBE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "motion_probe.py")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Saved", "PlantWind")
 CROP = ("1280", "720", "160", "90")   # off the HUD

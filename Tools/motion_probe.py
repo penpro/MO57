@@ -17,6 +17,7 @@ patches (leaves, twigs against the sky); a patch that drifts onto flat sky stops
     python Tools/motion_probe.py clip <pid> <seconds> <out.mp4> [--crop w h x y]   a colour clip of the window (ffmpeg), for a person to judge
     python Tools/motion_probe.py activity <burst.npz> [--crop w h x y]             per-pixel motion of a burst: tracking measures coherent motion
                                                                                     only (a flicker of many blades cancels out), this measures it all
+    python Tools/motion_probe.py diff <a.png> <b.png>                              how much of the view two stills disagree on: did a swap change anything in the picture?
 
 Activity (Nov 4 2026, the plants' wind, Docs/PCG.md section 9): how far pixels swing (temporal std, grey levels), how fast (the share of each
 pixel's temporal power under 0.7 Hz = slow sway, over 1.2 Hz = flicker) and where (the 64 px tiles moving at a moment against the tiles that
@@ -82,7 +83,7 @@ def capture(pid, seconds, out_path, colour_clip=False, crop=None):
             rgb = a[:, :, 2::-1]
             if crop:
                 rgb = rgb[crop[3]:crop[3] + crop[1], crop[2]:crop[2] + crop[0]]
-            frames.append(rgb.copy())
+            frames.append(rgb[:rgb.shape[0] // 2 * 2, :rgb.shape[1] // 2 * 2].copy())   # libx264 refuses odd sizes
         else:
             frames.append((0.299 * a[:, :, 2] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 0]).astype(np.uint8))
     gdi32.DeleteObject(bmp)
@@ -223,9 +224,9 @@ def activity(path, crop=None):
     ever = moving.mean(axis=1) > 0.02
     at_once = float(moving.mean(axis=0).mean())
     print("activity %d frames, %.1f fps: swing %.2f grey levels, speed %.3f levels/frame, slow (<0.7 Hz) %.0f %% of the motion's power, flicker (>1.2 Hz) "
-          "%.0f %%, tiles moving at a moment %.0f %% (floor %.2f), of those that ever move %.0f %%" % (
+          "%.0f %%, tiles moving at a moment %.0f %% (floor %.2f), of those that ever move %.0f %%, power slow %.6f fast %.6f" % (
               n, 1 / dt, swing / len(tiles), float(tiles.mean()), 100 * slow_p / max(slow_p + fast_p, 1e-6), 100 * fast_p / max(slow_p + fast_p, 1e-6),
-              100 * at_once, floor, 100 * at_once / max(float(ever.mean()), 1e-6)))
+              100 * at_once, floor, 100 * at_once / max(float(ever.mean()), 1e-6), slow_p / (n * n * len(tiles)), fast_p / (n * n * len(tiles))))   # comparable between bursts: subtract a windless control's
 
 
 def compare(a_path, b_path, out_path, w=640, h=360, seconds=9.5, fps=30):
@@ -260,6 +261,15 @@ def compare(a_path, b_path, out_path, w=640, h=360, seconds=9.5, fps=30):
         a.std(axis=0).mean(), b.std(axis=0).mean(), da.mean(), db.mean(), 100 * moving(da), 100 * moving(db)))
 
 
+def diff(a_path, b_path, w=640, h=360, level=16):
+    """How much of the view two still pictures disagree on: did a swap change anything that is in the picture?"""
+    def grey(path):
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-frames:v", "1", "-vf", "scale=%d:%d" % (w, h), "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True)
+        return np.frombuffer(r.stdout, np.uint8).reshape(h, w).astype(np.int16)
+
+    print("diff: %.0f %% of the view differs by over %d grey levels" % (100 * float((np.abs(grey(a_path) - grey(b_path)) > level).mean()), level))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -283,9 +293,14 @@ def main():
     cm.add_argument("before")
     cm.add_argument("after")
     cm.add_argument("out")
+    df = sub.add_parser("diff")
+    df.add_argument("a")
+    df.add_argument("b")
     a = ap.parse_args()
     if a.cmd == "compare":
         compare(a.before, a.after, a.out)
+    elif a.cmd == "diff":
+        diff(a.a, a.b)
     elif a.cmd == "capture":
         capture(a.pid, a.seconds, a.out)
     elif a.cmd == "clip":
