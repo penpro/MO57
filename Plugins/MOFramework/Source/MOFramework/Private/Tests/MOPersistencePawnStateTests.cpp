@@ -49,6 +49,15 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	Traits.Sociability = 0.7f;
 	Traits.Stability = -0.9f;
 	Source->Personality->SetTraits(Traits);
+	FMOCharacterHistorySaveData Past;
+	Past.Entries.AddDefaulted();
+	Past.Entries[0].Description = FText::FromString(TEXT("Finished: Gather Sticks"));
+	Past.Relationships.AddDefaulted();
+	Past.Relationships[0].OtherCharacterGuid = FGuid::NewGuid();
+	Past.Relationships[0].Strength = 0.4f;
+	Past.PlayerLeftAt = FDateTime(2026, 6, 1, 12, 0, 0);
+	Past.bHasValidData = true;
+	Source->History->ApplySaveDataAuthority(Past);
 
 	UMOWorldSaveGame* Save = NewObject<UMOWorldSaveGame>();
 	Persistence->CapturePersistedPawnsAndInventories(World, Save);
@@ -71,6 +80,11 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("its character comes back: sociability"), Target->Personality->GetTraits().Sociability, 0.7f);
 	TestEqual(TEXT("its character comes back: stability"), Target->Personality->GetTraits().Stability, -0.9f);
+	TestEqual(TEXT("its history comes back (no settlement here: the colony's save never held it)"), Target->History->GetEntries().Num(), 1);
+	TestEqual(TEXT("its bonds come back"), Target->History->GetRelationships().Num(), 1);
+	FMOCharacterHistorySaveData Kept;
+	Target->History->BuildSaveData(Kept);
+	TestEqual(TEXT("and when a player left it, for While you were away"), Kept.PlayerLeftAt, Past.PlayerLeftAt);
 
 	// A record from before these fields leaves a live pawn as it is.
 	FMOPersistedPawnRecord Old;

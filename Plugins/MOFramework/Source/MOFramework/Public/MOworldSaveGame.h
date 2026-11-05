@@ -216,6 +216,10 @@ struct FMOPersistedPawnRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOSurvivorJobQueueSaveData JobQueueData;
 
+    /** This pawn's event log and relationships (UMOCharacterHistoryComponent), whoever it is. bHasValidData false in a save from before it: the colony's VillagerHistory holds them there. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOCharacterHistorySaveData HistoryData;
+
     /**
      * (H38) Combat component state — weapon wear (durability) for main/off hand
      * and combat decay timer. Persisted so weapon durability survives reload.

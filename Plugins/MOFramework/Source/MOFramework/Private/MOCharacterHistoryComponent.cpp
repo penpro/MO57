@@ -261,6 +261,7 @@ void UMOCharacterHistoryComponent::BuildSaveData(FMOCharacterHistorySaveData& Ou
 {
 	OutSaveData.Entries = Entries;
 	OutSaveData.Relationships = Relationships;
+	OutSaveData.PlayerLeftAt = PlayerLeftAt;
 	OutSaveData.bHasValidData = true;
 }
 
@@ -277,5 +278,6 @@ bool UMOCharacterHistoryComponent::ApplySaveDataAuthority(const FMOCharacterHist
 		Entries.RemoveAt(0, Entries.Num() - MaxEntries);
 	}
 	Relationships = InSaveData.Relationships;
+	PlayerLeftAt = InSaveData.PlayerLeftAt;
 	return true;
 }

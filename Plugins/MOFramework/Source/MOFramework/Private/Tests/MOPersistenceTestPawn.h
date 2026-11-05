@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "MOCharacterHistoryComponent.h"
 #include "MOIdentifiableInterface.h"
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
@@ -21,6 +22,7 @@ public:
 		Inventory = CreateDefaultSubobject<UMOInventoryComponent>(TEXT("Inventory"));
 		Knowledge = CreateDefaultSubobject<UMOKnowledgeComponent>(TEXT("Knowledge"));
 		Personality = CreateDefaultSubobject<UMOPersonalityComponent>(TEXT("Personality"));
+		History = CreateDefaultSubobject<UMOCharacterHistoryComponent>(TEXT("History"));
 	}
 
 	UPROPERTY()
@@ -34,6 +36,9 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<UMOPersonalityComponent> Personality;
+
+	UPROPERTY()
+	TObjectPtr<UMOCharacterHistoryComponent> History;
 
 	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override { return Identity; }
 	virtual UMOInventoryComponent* GetInventory_Implementation() const override { return Inventory; }

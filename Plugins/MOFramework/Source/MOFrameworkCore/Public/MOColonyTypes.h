@@ -406,6 +406,10 @@ struct MOFRAMEWORKCORE_API FMOCharacterHistorySaveData
 	UPROPERTY()
 	TArray<FMOCharacterRelationship> Relationships;
 
+	/** Game time a player last left this pawn, for "While you were away" (MinValue: none). */
+	UPROPERTY()
+	FDateTime PlayerLeftAt = FDateTime::MinValue();
+
 	UPROPERTY()
 	bool bHasValidData = false;
 };

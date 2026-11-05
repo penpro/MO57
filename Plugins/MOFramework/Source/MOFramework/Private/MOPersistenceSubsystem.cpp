@@ -39,6 +39,7 @@
 #include "MORecruitmentComponent.h"
 #include "MOCombatComponent.h"               // (H30/H38) combat weapon-wear restore
 #include "MOPersonalityComponent.h"
+#include "MOCharacterHistoryComponent.h"
 #include "MOSurvivorJobQueueComponent.h"     // (H39) survivor job-queue restore
 #include "MOCreature.h"
 #include "MOBuildableActor.h"
@@ -1398,6 +1399,12 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             JobQueueComp->BuildSaveData(PawnRecord.JobQueueData);
             PawnRecord.bHasComponentData = true;
         }
+        // Its event log and relationships, settlement or none.
+        if (const UMOCharacterHistoryComponent* HistoryComp = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>())
+        {
+            HistoryComp->BuildSaveData(PawnRecord.HistoryData);
+            PawnRecord.bHasComponentData = true;
+        }
 
         UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s ComponentData=%s"),
             *Pawn->GetName(),
@@ -1865,6 +1872,12 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
     {
         JobQueueComp->ApplySaveDataAuthority(PawnRecord.JobQueueData);
+    }
+
+    // Its event log and relationships. No-ops on a record from before them (bHasValidData false): the colony's domain applies those.
+    if (UMOCharacterHistoryComponent* HistoryComp = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>())
+    {
+        HistoryComp->ApplySaveDataAuthority(PawnRecord.HistoryData);
     }
 
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),
