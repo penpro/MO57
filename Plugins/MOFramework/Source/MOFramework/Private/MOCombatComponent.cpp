@@ -1134,7 +1134,7 @@ void UMOCombatComponent::ExecuteAttack()
 
 		// Process each hit - draw blue sphere at impact points
 		bool bStruck = false;
-		for (const FHitResult& Hit : HitResults)
+		for (const FHitResult& Hit : OneHitPerActor(HitResults))
 		{
 			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 			// #if ENABLE_DRAW_DEBUG
@@ -1371,6 +1371,26 @@ void UMOCombatComponent::HandleWeaponBroke(FName ItemDefinitionId)
 		const FText Name = ItemDefinitionId.IsNone() ? NSLOCTEXT("MOCombat", "TheWeapon", "weapon") : UMOItemDatabaseSettings::GetItemDisplayName(ItemDefinitionId);
 		PC->ClientShowNotification(FText::Format(NSLOCTEXT("MOCombat", "WeaponBroke", "Your {0} broke."), Name), 4.0f, EMONotificationType::Warning);
 	}
+}
+
+TArray<FHitResult> UMOCombatComponent::OneHitPerActor(const TArray<FHitResult>& Hits)
+{
+	TArray<FHitResult> Result;
+	Result.Reserve(Hits.Num());
+	for (const FHitResult& Hit : Hits)
+	{
+		const AActor* Actor = Hit.GetActor();
+		FHitResult* Same = Actor ? Result.FindByPredicate([Actor](const FHitResult& Kept) { return Kept.GetActor() == Actor; }) : nullptr;
+		if (!Same)
+		{
+			Result.Add(Hit);
+		}
+		else if (Same->BoneName.IsNone() && !Hit.BoneName.IsNone())
+		{
+			*Same = Hit;
+		}
+	}
+	return Result;
 }
 
 bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection)

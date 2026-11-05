@@ -94,6 +94,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 ### Melee damage (Oct 18 2026)
 
+- **One blow, one strike on a body** (`OneHitPerActor`, Nov 5, N-301): a sweep can touch a body twice, and each hit struck it.
 - **The blow**: `UMOCombatComponent::ProcessHit` -> `BaseDamage` x distance falloff (1.0 at the body, 0.7 at full range) -> the target's
   `ReceiveAttack` -> `UMOCombatMedicalHelpers::ApplyCombatDamage` -> `InflictDamage(part, BaseDamage x CriticalMultiplier, wound type of
   the damage category)` -> the part loses that x the wound's `BaseDamageMultiplier` (DT_Wounds: Blunt 0.8). A creature dies when a vital
