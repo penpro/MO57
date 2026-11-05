@@ -436,6 +436,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Weather|UDSSync")
 	void RequestUdsSync();
 
+	/** The throttle: true once MinHours of game time have passed since the last sync, or when the clock now reads EARLIER than it (a load, a dev time change): the sky is
+	 *  then simply wrong, and waiting for the clock to catch up would freeze it until it did. */
+	static bool IsUdsSyncDue(const FDateTime& Now, const FDateTime& LastSync, float MinHours);
+
 	/**
 	 * Game hours elapsed since the last successful UDS push. Useful for
 	 * debug UI / overlays. Returns a large number if no sync has happened

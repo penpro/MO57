@@ -34,6 +34,8 @@
   location queries blend canopy toward interior warmth (see `MOWeatherIntegrationSubsystem`).
 - Every MO system reads and writes weather through `IMOWeatherProviderInterface` / `UMOWeatherIntegrationSubsystem`; the host's
   changes go through `BP_WeatherBridge` into UDW `Change Weather` (server-authoritative).
+- The sky follows the clock through a throttle (`RequestUdsSync`, one game minute). A clock that moves BACK (a load, a dev time change) syncs at once (`IsUdsSyncDue`, Nov 4, N-286): until then
+  the negative elapsed time read as "too soon" and the sky froze until the clock caught up with the last sync.
 - **Weather director** (`UMOWeatherDirectorSubsystem`): holds a weather for a spell of GAME time, then follows a Markov chain over
   the UDS presets (~45 % fair / 13 % wet / 0.5 % thunderstorm over a long run); a wet front falls as snow below ~0.5 C. It respects
   a weather set by anyone else (adopts it, holds it 6 game hours). `MO.Weather.Director 0|1` (cvar), `.Info`, `.Next`.
