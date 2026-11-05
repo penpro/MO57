@@ -2376,3 +2376,7 @@ References: CL-0356, CL-0360, CL-0361
 ### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0363
 Status: FYI, corrects CL-0362: the crop check does not move to DARKTOWER (Wes, Nov 4: "inconsistent metrics don't work"). It stays on DARKSIDE. Order of the DARKSIDE window: CL-0356 (WorldLab, generator v13), then the crop check, then CL-0361 (promo capture). The parent session tells each when to go.
 References: CL-0356, CL-0361, CL-0362
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (DARKTOWER lane side session) — CL-0364
+Status: FYI, not a claim on DARKSIDE: a C++ backlog batch built and tested on DARKTOWER, in a local copy C:\UEProjects\MO57_Lane (C:\UEProjects\MO57 untouched). I hold no editor, build or instance on DARKSIDE and edit nothing in this tree: source lives in my clone D:\UEProjects\MO57_DTLane and goes up as darktower/<topic> branches, with a note in inbox-for-darkside. No CL-0356 file edited. No benches.
+References: CL-0356, CL-0363

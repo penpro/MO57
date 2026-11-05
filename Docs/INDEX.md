@@ -42,6 +42,7 @@ Archived (dated) documents are listed in `Docs/Archive/INDEX.md`. Rebuilt 2026-1
 | `Docs/UI.md` | CommonUI architecture, input mode, activation, HUD, UMG traps, the UI kit, dev console | Any UI work |
 | `Docs/Persistence.md` | Save domains, identity, generator identity in saves, crash / bug reports | Saves, identity, bug reports |
 | `Docs/Audio.md` | Audio subsystem, heartbeat meter, NaN guard, backend, footsteps | Audio reports or sound work |
+| `Docs/Promo_Video.md` | The promo film: concept, script, storyboard, how footage is captured (fixed time step, 180 degree shutter), the reusable Blender kit, score and mix, masters | Making or re-cutting any promo video, title, lower third or trailer asset |
 | `Docs/Packaging.md` | Development vs Shipping, cook traps, ShipDiag, packaged settings / saves | Packaging, Shipping-only bugs |
 | `Docs/Performance.md` | Targets, measuring protocols, quality tiers, findings | Perf work or any FPS claim |
 | `Docs/TECHNICAL_REFERENCE.md` | Modules + load-bearing patterns, conventions, subsystems / components / interfaces, replication, perf guidelines, plugins | Writing new C++ systems |
