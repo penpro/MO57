@@ -692,6 +692,10 @@ void UMOAnatomyComponent::BuildSaveData(FMOAnatomySaveData& OutSaveData) const
 		Entry.CourseElapsed = Condition.CourseElapsed;
 		OutSaveData.Conditions.Add(Entry);
 	}
+
+	// A destroyed organ's clock: a save during it must not be the cure.
+	OutSaveData.DeathClockPart = GetDeathClockRemaining() > 0.0f ? DeathTimerPart : EMOBodyPartType::None;
+	OutSaveData.DeathClockRemaining = GetDeathClockRemaining();
 }
 
 bool UMOAnatomyComponent::ApplySaveDataAuthority(const FMOAnatomySaveData& InSaveData)
@@ -759,6 +763,30 @@ bool UMOAnatomyComponent::ApplySaveDataAuthority(const FMOAnatomySaveData& InSav
 		Condition.CourseSeconds = Entry.CourseSeconds;
 		Condition.CourseElapsed = Entry.CourseElapsed;
 		Conditions.AddCondition(Condition);
+	}
+
+	// The clock goes on where it stood. A save from before the clock was saved carries none: a body in that state starts one, it does not live on with no lungs.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DeathTimerHandle);
+	}
+	DeathTimerPart = EMOBodyPartType::None;
+	DeathTimerRemaining = 0.0f;
+	if (InSaveData.DeathClockPart != EMOBodyPartType::None && InSaveData.DeathClockRemaining > 0.0f)
+	{
+		StartDeathTimer(InSaveData.DeathClockPart, InSaveData.DeathClockRemaining);
+	}
+	else
+	{
+		for (const FMOBodyPartState& Part : BodyParts)
+		{
+			const float Seconds = Part.Status == EMOBodyPartStatus::Destroyed ? DeathClockSecondsFor(Part.PartType) : 0.0f;
+			if (Seconds > 0.0f)
+			{
+				StartDeathTimer(Part.PartType, Seconds);
+				break;
+			}
+		}
 	}
 
 	return true;
@@ -1060,35 +1088,43 @@ void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaT
 void UMOAnatomyComponent::CheckDeathConditions(EMOBodyPartType DestroyedPart)
 {
 	FMOBodyPartDefinitionRow PartDef;
-	if (!GetBodyPartDefinition(DestroyedPart, PartDef))
-	{
-		// Fallback for vital organs
-		if (DestroyedPart == EMOBodyPartType::Brain || DestroyedPart == EMOBodyPartType::Heart)
-		{
-			OnInstantDeath.Broadcast(DestroyedPart);
-			return;
-		}
-		if (DestroyedPart == EMOBodyPartType::LungLeft || DestroyedPart == EMOBodyPartType::LungRight)
-		{
-			// Check if both lungs are destroyed
-			bool bBothLungsDestroyed = !IsBodyPartFunctional(EMOBodyPartType::LungLeft) &&
-									   !IsBodyPartFunctional(EMOBodyPartType::LungRight);
-			if (bBothLungsDestroyed)
-			{
-				StartDeathTimer(DestroyedPart, 180.0f);  // ~3 minutes
-			}
-		}
-		return;
-	}
-
-	if (PartDef.bInstantDeathOnDestruction)
+	const bool bHasRow = GetBodyPartDefinition(DestroyedPart, PartDef);
+	const bool bInstant = bHasRow ? PartDef.bInstantDeathOnDestruction
+		: (DestroyedPart == EMOBodyPartType::Brain || DestroyedPart == EMOBodyPartType::Heart);   // the vital organs with no row
+	if (bInstant)
 	{
 		OnInstantDeath.Broadcast(DestroyedPart);
+		return;
 	}
-	else if (PartDef.DeathTimerOnDestruction > 0.0f)
+	const float Seconds = DeathClockSecondsFor(DestroyedPart);
+	if (Seconds > 0.0f)
 	{
-		StartDeathTimer(DestroyedPart, PartDef.DeathTimerOnDestruction);
+		StartDeathTimer(DestroyedPart, Seconds);
 	}
+}
+
+float UMOAnatomyComponent::DeathClockSecondsFor(EMOBodyPartType DestroyedPart) const
+{
+	// A paired organ kills only when its pair is gone too: a person lives on one lung. (Until Nov 2026 this rule was only in the branch for a part with no row; every
+	// lung has a row, so losing ONE was three minutes to live.)
+	const bool bLung = DestroyedPart == EMOBodyPartType::LungLeft || DestroyedPart == EMOBodyPartType::LungRight;
+	const bool bKidney = DestroyedPart == EMOBodyPartType::KidneyLeft || DestroyedPart == EMOBodyPartType::KidneyRight;
+	if (bLung || bKidney)
+	{
+		const EMOBodyPartType Pair = DestroyedPart == EMOBodyPartType::LungLeft ? EMOBodyPartType::LungRight
+			: DestroyedPart == EMOBodyPartType::LungRight ? EMOBodyPartType::LungLeft
+			: DestroyedPart == EMOBodyPartType::KidneyLeft ? EMOBodyPartType::KidneyRight : EMOBodyPartType::KidneyLeft;
+		if (IsBodyPartFunctional(Pair))
+		{
+			return 0.0f;
+		}
+	}
+	FMOBodyPartDefinitionRow PartDef;
+	if (GetBodyPartDefinition(DestroyedPart, PartDef))
+	{
+		return PartDef.bInstantDeathOnDestruction ? 0.0f : PartDef.DeathTimerOnDestruction;
+	}
+	return bLung ? 180.0f : 0.0f;   // ~3 minutes, the lungs with no row
 }
 
 void UMOAnatomyComponent::StartDeathTimer(EMOBodyPartType Part, float Seconds)

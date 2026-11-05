@@ -228,6 +228,13 @@ struct MOFRAMEWORKMEDICAL_API FMOAnatomySaveData
 
 	UPROPERTY()
 	TArray<FMOConditionSaveEntry> Conditions;
+
+	/** A destroyed organ's clock still running when the world was saved (None: no clock), so a save and a load do not cure it. */
+	UPROPERTY()
+	EMOBodyPartType DeathClockPart = EMOBodyPartType::None;
+
+	UPROPERTY()
+	float DeathClockRemaining = 0.0f;
 };
 
 // ============================================================================
@@ -443,6 +450,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Anatomy|Query")
 	bool GetBodyPartState(EMOBodyPartType Part, FMOBodyPartState& OutState) const;
 
+	/** The clock a destroyed organ started: the seconds left (0: none running) and the organ. */
+	float GetDeathClockRemaining() const { return DeathTimerPart != EMOBodyPartType::None ? FMath::Max(0.0f, DeathTimerRemaining) : 0.0f; }
+	EMOBodyPartType GetDeathClockPart() const { return DeathTimerPart; }
+
 	/**
 	 * Get all wounds on a specific body part.
 	 */
@@ -596,6 +607,9 @@ private:
 
 	/** Start death timer for vital organ. */
 	void StartDeathTimer(EMOBodyPartType Part, float Seconds);
+
+	/** The clock this destroyed organ starts: 0 for none, and none while a pair's other organ still works (one lung keeps a person alive). */
+	float DeathClockSecondsFor(EMOBodyPartType DestroyedPart) const;
 
 	/** Tick the death timer. */
 	void TickDeathTimer();
