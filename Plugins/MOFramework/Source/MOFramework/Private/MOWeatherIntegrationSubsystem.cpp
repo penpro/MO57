@@ -179,18 +179,22 @@ void UMOWeatherIntegrationSubsystem::RequestUdsSync()
 	}
 
 	const FDateTime Now = Clock->GetGameDateTime();
-	const FTimespan Elapsed = Now - LastUdsSyncDateTime;
-	const float ElapsedHours = static_cast<float>(Elapsed.GetTotalHours());
 
 	// Throttle: bail if the window hasn't elapsed. Multiple requests within
 	// the window are silently dropped — that's the whole point. The throttle
 	// is what protects UDS from being spammed.
-	if (ElapsedHours < MinHoursBetweenUdsSyncs)
+	if (!IsUdsSyncDue(Now, LastUdsSyncDateTime, MinHoursBetweenUdsSyncs))
 	{
 		return;
 	}
 
 	DoUdsSyncInternal(Now);
+}
+
+bool UMOWeatherIntegrationSubsystem::IsUdsSyncDue(const FDateTime& Now, const FDateTime& LastSync, float MinHours)
+{
+	const float ElapsedHours = static_cast<float>((Now - LastSync).GetTotalHours());
+	return ElapsedHours < 0.0f || ElapsedHours >= MinHours;
 }
 
 float UMOWeatherIntegrationSubsystem::GetGameHoursSinceLastUdsSync() const
