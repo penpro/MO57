@@ -1,4 +1,5 @@
 #include "MOSurvivorCommands.h"
+#include "MOCharacter.h"
 #include "MOPlayerController.h"
 #include "MOSurvivorController.h"
 #include "MOSurvivorJobQueueComponent.h"
@@ -31,7 +32,7 @@ bool FMOSurvivorCommands::CanCommand(const APlayerController* Issuer, const APaw
 		return false;
 	}
 	const UMORecruitmentComponent* Recruitment = Survivor->FindComponentByClass<UMORecruitmentComponent>();
-	return Recruitment && Recruitment->IsPossessable();
+	return Recruitment && Recruitment->IsPossessable() && !AMOCharacter::IsDeadBody(Survivor);
 }
 
 bool FMOSurvivorCommands::Execute(APlayerController* Issuer, APawn* Survivor, const FMOSurvivorCommand& Command)

@@ -2446,6 +2446,12 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	EnterDeadState(CausePart);
 }
 
+bool AMOCharacter::IsDeadBody(const AActor* Actor)
+{
+	const AMOCharacter* Character = Cast<AMOCharacter>(Actor);
+	return Character && Character->IsDead();
+}
+
 void AMOCharacter::RestoreAsCorpse()
 {
 	if (!HasAuthority() || bIsDead)
