@@ -522,6 +522,7 @@ void UMOVitalsComponent::BuildSaveData(FMOVitalsSaveData& OutSaveData) const
 	OutSaveData.Vitals = Vitals;
 	OutSaveData.Exertion = Exertion;
 	OutSaveData.Activity = Activity;
+	OutSaveData.WetnessLevel = WetnessLevel;
 }
 
 bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData)
@@ -534,6 +535,7 @@ bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveD
 	Vitals = InSaveData.Vitals;
 	Exertion = InSaveData.Exertion;
 	Activity = InSaveData.Activity;
+	SetWetnessLevel(InSaveData.WetnessLevel);   // soaked when saved is soaked when loaded: quitting is not a way to dry off
 
 	// Update blood loss stage
 	PreviousBloodLossStage = GetBloodLossStage();

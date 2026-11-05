@@ -146,7 +146,7 @@ Water coupling: `ApplyWaterToExposure` (Ambient -> water temperature 0.7 x air +
 **A joiner's own state (N-177 / N-178, Oct 19):** `WetnessLevel` replicates to its owner (it was server-only: a joiner never saw the wet
 moodle), and `Vitals` has `OnRep_Vitals`, which fires the same `OnVitalsChanged` / `OnThermalComfortChanged` the host's tick fires (they
 fired on the server only: a joiner's thermal moodle and status panel never changed). Verified on a joiner in rain: its own wetness
-0.12 -> 0.40, thermal load 1.2, comfort Cold, both moodles on its screen.
+0.12 -> 0.40, thermal load 1.2, comfort Cold, both moodles on its screen. **Saved since Nov 4 (N-285):** `FMOVitalsSaveData::WetnessLevel`; until then a load dried the clothing at once (test `MOFramework.Medical.Vitals.WetnessSaved`).
 
 ## 5. Breath and drowning
 

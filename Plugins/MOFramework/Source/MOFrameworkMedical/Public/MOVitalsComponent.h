@@ -154,6 +154,10 @@ struct MOFRAMEWORKMEDICAL_API FMOVitalsSaveData
 
 	UPROPERTY()
 	FMOActivityState Activity;
+
+	/** How wet the clothing is (0-1). A save from before this field loads dry. */
+	UPROPERTY()
+	float WetnessLevel = 0.0f;
 };
 
 // ============================================================================
