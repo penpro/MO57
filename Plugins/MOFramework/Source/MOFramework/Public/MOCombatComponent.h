@@ -511,6 +511,9 @@ public:
 	/** The main-hand weapon state (equipped from the right hand by SyncMainHandFromEquipment). */
 	const FMOWeaponState& GetMainHandWeapon() const { return MainHandWeapon; }
 
+	/** One blow lands on an actor once: a sweep can touch one body twice (its capsule and its mesh). The hit that names a bone is kept, as it knows the part; otherwise the first. Order kept. */
+	static TArray<FHitResult> OneHitPerActor(const TArray<FHitResult>& Hits);
+
 	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. Wearing out says so (HandleWeaponBroke). */
 	void ApplyWeaponDurabilityLoss(int32 Amount);
 

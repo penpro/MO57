@@ -147,6 +147,31 @@ bool FMOCombatBlowsTrain::RunTest(const FString& Parameters)
 	return true;
 }
 
+// One blow lands on a body once (N-301, the June audit's L12): each hit of the sweep went to ProcessHit, so a swing that touched a body twice struck it twice. Expected: one hit per actor; failing before: the loop took them all.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatOneHitPerActor, "MOFramework.Combat.Damage.OneHitPerActor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCombatOneHitPerActor::RunTest(const FString& Parameters)
+{
+	AActor* Wolf = NewObject<AActor>();
+	AActor* Deer = NewObject<AActor>();
+	const auto HitOn = [](AActor* Actor, FName Bone)
+	{
+		FHitResult Hit(Actor, nullptr, FVector::ZeroVector, FVector::UpVector);
+		Hit.BoneName = Bone;
+		return Hit;
+	};
+
+	const TArray<FHitResult> Kept = UMOCombatComponent::OneHitPerActor({ HitOn(Wolf, NAME_None), HitOn(Deer, NAME_None), HitOn(Wolf, TEXT("spine_03")), HitOn(Wolf, TEXT("head")) });
+	if (TestEqual(TEXT("one hit for each of the two bodies"), Kept.Num(), 2))
+	{
+		TestTrue(TEXT("in the order they were touched"), Kept[0].GetActor() == Wolf && Kept[1].GetActor() == Deer);
+		TestEqual(TEXT("the first hit that names a bone is the one kept"), Kept[0].BoneName, FName(TEXT("spine_03")));
+	}
+	TestEqual(TEXT("a sweep that touched nothing strikes nothing"), UMOCombatComponent::OneHitPerActor({}).Num(), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatBareHandCannotDestroyVitalPart, "MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
