@@ -619,14 +619,24 @@ void UMOVitalsComponent::TickVitals()
 
 EMOThermalComfort UMOVitalsComponent::GetThermalComfort() const
 {
-	const float Temp = Vitals.BodyTemperature;
-	if (Temp < ThermalThresholds.VeryColdBelow) return EMOThermalComfort::VeryCold;
-	if (Temp < ThermalThresholds.ColdBelow)     return EMOThermalComfort::Cold;
-	if (Temp >= ThermalThresholds.VeryHotAbove) return EMOThermalComfort::VeryHot;
-	if (Temp >= ThermalThresholds.HotAbove)     return EMOThermalComfort::Hot;
+	return ClassifyThermalComfort(Vitals.BodyTemperature, Vitals.ThermalLoad, ThermalThresholds, LastThermalComfort);
+}
+
+EMOThermalComfort UMOVitalsComponent::ClassifyThermalComfort(float CoreC, float ThermalLoad, const FMOThermalComfortThresholds& Thresholds, EMOThermalComfort Current)
+{
+	// How far past a line a pawn already over it must come back before it counts as back: a tenth of a degree, a tenth of the body's effort.
+	constexpr float CoreMarginC = 0.1f;
+	constexpr float LoadMargin = 0.1f;
+	const bool bCold = Current == EMOThermalComfort::Cold || Current == EMOThermalComfort::VeryCold;
+	const bool bHot = Current == EMOThermalComfort::Hot || Current == EMOThermalComfort::VeryHot;
+
+	if (CoreC < Thresholds.VeryColdBelow + (Current == EMOThermalComfort::VeryCold ? CoreMarginC : 0.0f)) return EMOThermalComfort::VeryCold;
+	if (CoreC < Thresholds.ColdBelow + (bCold ? CoreMarginC : 0.0f))                                       return EMOThermalComfort::Cold;
+	if (CoreC >= Thresholds.VeryHotAbove - (Current == EMOThermalComfort::VeryHot ? CoreMarginC : 0.0f))   return EMOThermalComfort::VeryHot;
+	if (CoreC >= Thresholds.HotAbove - (bHot ? CoreMarginC : 0.0f))                                        return EMOThermalComfort::Hot;
 	// (N-178) The core still holds, but the body is working for it: shivering hard is cold, sweating hard is hot.
-	if (Vitals.ThermalLoad >= 0.5f)  return EMOThermalComfort::Cold;
-	if (Vitals.ThermalLoad <= -0.6f) return EMOThermalComfort::Hot;
+	if (ThermalLoad >= 0.5f - (Current == EMOThermalComfort::Cold ? LoadMargin : 0.0f))  return EMOThermalComfort::Cold;
+	if (ThermalLoad <= -0.6f + (Current == EMOThermalComfort::Hot ? LoadMargin : 0.0f))  return EMOThermalComfort::Hot;
 	return EMOThermalComfort::Comfortable;
 }
 
