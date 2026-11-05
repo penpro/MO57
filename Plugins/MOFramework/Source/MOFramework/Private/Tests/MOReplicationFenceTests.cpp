@@ -2,6 +2,7 @@
 #include "MOCraftingSubsystem.h"
 #include "MOCraftingTypes.h"
 #include "UObject/Class.h"
+#include "UObject/Package.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/UnrealType.h"
 
