@@ -141,8 +141,8 @@ struct MOFRAMEWORK_API FMOCraftingQueueEntry : public FFastArraySerializerItem
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	bool bFree = false;
 
-	/** Captured at enqueue, combined across duplicate ingredient rows. Never reread a changed recipe to refund. */
-	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	/** Captured at enqueue, combined across duplicate ingredient rows. Never reread a changed recipe to refund. Server only, for the save: the engine cannot replicate a map (MOFramework.Net.NothingReplicatedIsAMap). */
+	UPROPERTY(NotReplicated, BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> IngredientsPerCraft;
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
