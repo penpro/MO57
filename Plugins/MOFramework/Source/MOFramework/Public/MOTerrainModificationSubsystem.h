@@ -243,12 +243,17 @@ public:
 
 	/**
 	 * On RegisterModifiedZone: a new zone whose center is within
-	 * MergeDistanceFactor × (RadiusA, RadiusB)'s avg of an existing zone
-	 * MERGES into it (radius takes the max). Aggressive merge keeps zone
-	 * counts low when the player works the same patch repeatedly.
+	 * MergeDistanceFactor x the larger radius of an existing zone MERGES into it
+	 * (TryMergeZone), which keeps zone counts low when the player works the same
+	 * patch. The merged zone covers both, so it can outgrow the brush on its far
+	 * side, by at most Radius x F / (1 - F): a third of the brush at 0.25, a whole
+	 * brush at 0.5 (N-307).
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|TerrainMod", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MergeDistanceFactor = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|TerrainMod", meta=(ClampMin="0.0", ClampMax="0.9"))
+	float MergeDistanceFactor = 0.25f;
+
+	/** Merge a new zone into an existing one if it is close enough; the merged zone covers both. Its center stays: the grid index keeps it. */
+	static bool TryMergeZone(FMOTerrainModifiedZone& Existing, const FVector& Location, float Radius, float InMergeDistanceFactor);
 
 	// ============================================================================
 	// AUTO-SWEEP SCOPE (tag-based)
