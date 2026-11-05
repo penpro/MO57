@@ -100,6 +100,8 @@ killer feature: the player designates, the simulation executes without them, at 
 "player designates a work AREA that pawns act on": building placement is point/single-actor
 and isn't even pawn-worked (no Build job); **no farm/crop/plot system exists** (the
 "waters crops" idea is a commented-out stub); no stockpile/zone/selection-volume tooling.
+A dig that merges into a nearby zone grows it to cover both (`TryMergeZone`, Nov 5, N-307); the far edge of a merged dig used to lie in no zone, with its grass standing over the dug ground.
+
 `FMOTerrainModifiedZone` is an *after-the-fact* record of worked ground (and its sweep
 deletes grass) — **do not overload it.** So designation is **built new, by composing two
 proven patterns**:
