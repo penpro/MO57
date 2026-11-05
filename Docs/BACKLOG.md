@@ -22,6 +22,8 @@ word in `Docs/BugReports_2026-10-23.md` § Wes's votes): thumbs up = row removed
 
 | What to look at | Where / how | Fixed looks like | From |
 |---|---|---|---|
+| A world's name in the Load list (Nov 5, N-309) | New Game, type a name, play to the first autosave, quit to the menu. Then rename it from the list, load it, wait for the next autosave (10 min) | the list says your name, not `World_20261105_...`, and the rename stands; say if the default `World <saves + 1>` reads badly | N-309 |
+| The edges of a trench (Nov 5, N-307) | Dig a line of overlapping spots through tall grass | bare along both edges, no plant standing over dug ground, and no wide bald ring past the dig | N-307 |
 | A first launch's mix, by ear (Nov 4, N-280: music 0.15, effects 0.5, ambient 0.2, weather 0.5 instead of 0.8 / 1.0 / 1.0) | Delete `GameUserSettings.ini` (or press Defaults in Options) and play a few minutes | the music sits under the world, the effects and ambience balanced, as your own settings are; say if a new player's mix should be louder | N-280 |
 | A killed animal on a joiner's screen (Nov 5: the joiner's copy now has its body) | In co-op, kill a wolf with a joiner near, and look on the joiner's screen | it lies where it fell, posed as on the host's; it does not vanish or stand in its reference pose | N-294 |
 | The TRELLIS crops, every stage (Nov 4, N-224: barley, emmer, flax, pea x sprouted / growing / ripe) | `Saved/CropTest/ab_capped/sheet_4m.png`, `sheet_close.png` (`python Tools/check_crop_plants.py ab ...`); Wild grain in a field plot shows the barley | each reads as its crop at 4 m; known: ripe heads smear from ~1 m, flax flowers pale and ripe flax too orange | Wes Nov 3 |
