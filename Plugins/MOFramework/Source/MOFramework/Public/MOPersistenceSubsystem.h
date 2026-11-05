@@ -347,6 +347,8 @@ private:
     void HandleIdentityReintroduced(const FGuid& StableGuid);
 
 private:
+    friend class FMOPersistence_PawnStateSurvivesASave;   // MOPersistencePawnStateTests.cpp: a pawn through the real capture and apply
+
     // Save helpers
     bool IsPersistedPawn(const APawn* Pawn) const;
     void CapturePersistedPawnsAndInventories(UWorld* World, UMOWorldSaveGame* SaveObject) const;
