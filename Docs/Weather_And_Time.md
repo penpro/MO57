@@ -31,7 +31,9 @@
 
 - **Ultra Dynamic Sky + Ultra Dynamic Weather** (`Content/UltraDynamicSky`) register the weather provider
   (`IMOWeatherProviderInterface`) that drives ambient temperature. Feels-like temperature is based on the GLOBAL temperature: UDS
-  location queries blend canopy toward interior warmth (see `MOWeatherIntegrationSubsystem`).
+  location queries blend canopy toward interior warmth (see `MOWeatherIntegrationSubsystem`). Its terms have no steps (`FMOFeelsLike::ComputeTerms`, Nov 4, N-282): wind chill
+  comes on from nothing at 10 C and is in full at 5 C, wet cold from 20 C to 15 C, the heat index from 25 C up. Until then each switched on at its threshold: in a full wind the
+  feels-like fell 20 C as the air cooled through 10 C, and the body's heat balance met that as a step. Test `MOFramework.Weather.FeelsLikeHasNoSteps`.
 - Every MO system reads and writes weather through `IMOWeatherProviderInterface` / `UMOWeatherIntegrationSubsystem`; the host's
   changes go through `BP_WeatherBridge` into UDW `Change Weather` (server-authoritative).
 - **Weather director** (`UMOWeatherDirectorSubsystem`): holds a weather for a spell of GAME time, then follows a Markov chain over
