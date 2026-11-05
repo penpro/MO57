@@ -26,6 +26,8 @@
   never in a widget. Test new co-op verbs with a `nettest actions` step that checks on the HOST and includes a "direct client call
   refused" control.
 
+**A builder's death pauses the build** (Nov 5, N-306): the work done and the materials on the site stand for whoever takes it up, as after any other interruption. It was a cancel with no refund until then, so a wolf at the builder emptied the site and put a half-built house back to a ghost. How a cancel refunds is still F7.
+
 ## 2. Placement and the ghost
 
 - One path: `TryPlaceGhost -> ServerPlaceBuilding` (in place on the authority); the placement preview never replicates. Before Oct 16
