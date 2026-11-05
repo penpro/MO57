@@ -431,8 +431,10 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     }
     SaveObject->WorldId = CurrentWorldId;
 
-    // World seed (for voxel terrain regeneration)
-    SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
+    // World seed (for voxel terrain regeneration): the seed this world published (AMOGameMode, for every machine), not a settings field a new-game flow writes.
+    const AMOGameState* SeedState = World ? World->GetGameState<AMOGameState>() : nullptr;
+    const int32 PublishedSeed = SeedState ? SeedState->GetWorldSeedInfo().Seed : 0;
+    SaveObject->WorldSeed = PublishedSeed != 0 ? PublishedSeed : UMOGameSettings::GetWorldSeed();
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
     // What the world was created with: its shape is already folded into the published params below (UMOWorldGenSettings::SetActiveWorldShape).
     if (const AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr)

@@ -121,10 +121,8 @@ void UMOGameSettings::SetToDefaults()
 	// Main Menu / First Run
 	bPlayIntro = true;
 	bHasCompletedFirstRun = false;
-	bPendingNewGame = false;
-	PendingNewGameSlot.Empty();
-	PendingWorldName.Empty();
-	PendingWorldSeed = 0;
+	// Not the Pending* fields: they are the new-game flow's, not options, and PendingWorldSeed is the seed of the world being played (Options' Defaults, pressed in a world, took it
+	// to 0, and the next save wrote seed 0: that world's terrain was gone at the next load).
 
 	// Gameplay
 	CameraSensitivity = 1.0f;
