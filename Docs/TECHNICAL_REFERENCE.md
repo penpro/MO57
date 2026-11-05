@@ -342,11 +342,12 @@ MOInventoryComponent → MOPersistenceSubsystem (GI) [circular dep — M11]   [S
 
 ### Authority Check Convention
 
-Standardize on `HasAuthority()` (preferred) over `GetOwnerRole() != ROLE_Authority` (M5).
+On an actor, `HasAuthority()`. On a component, either of these: they read the same flag (M5, closed Nov 4), and neither is wrong, so don't convert one to the other. Never dereference an unchecked owner.
 
 ```cpp
-// Preferred pattern for state mutations:
-if (!GetOwner()->HasAuthority()) return;
+// State mutations in a component:
+if (GetOwnerRole() != ROLE_Authority) return;               // null-safe: no owner reads as no authority
+if (!GetOwner() || !GetOwner()->HasAuthority()) return;     // the same
 ```
 
 ### Timer Safety
