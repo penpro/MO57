@@ -956,13 +956,28 @@ def scrap_dev_saves():
     print(f"[saves] scrapped {len(gone)} dev save(s) / autosave folder(s)" + (": " + ", ".join(gone[:12]) + (" ..." if len(gone) > 12 else "") if gone else ""))
 
 
+def _ubt_env():
+    """UBT runs on the .NET the engine ships (10.0 for 5.8), as Epic's GetDotnetPath.bat sets up: a machine with only an older runtime (DARKTOWER) otherwise
+    stops at once with "You must install or update .NET"."""
+    env = dict(os.environ)
+    base = os.path.join(ENGINE_ROOT, "Engine", "Binaries", "ThirdParty", "DotNet")
+    if not env.get("UE_USE_SYSTEM_DOTNET") and os.path.isdir(base):
+        versions = sorted((d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d, "win-x64"))), reverse=True)
+        if versions:
+            root = os.path.join(base, versions[0], "win-x64")
+            env["DOTNET_ROOT"] = root
+            env["DOTNET_MULTILEVEL_LOOKUP"] = "0"
+            env["PATH"] = root + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def build(target=None):
     """Run UBT for target (default: this project's editor target); returns True on success. Streams the tail of the output."""
     target = target or f"{PROJECT_NAME}Editor"
     proc = subprocess.Popen(
         [UBT, target, "Win64", "Development", f"-Project={UPROJECT}", "-NoHotReload"],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        encoding="utf-8", errors="replace")
+        encoding="utf-8", errors="replace", env=_ubt_env())
     tail = []
     for line in proc.stdout:
         line = line.rstrip()
