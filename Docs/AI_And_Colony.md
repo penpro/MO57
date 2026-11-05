@@ -95,6 +95,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 ### Melee damage (Oct 18 2026)
 
+- **A body is nothing to fight** (`ProcessHit`, Nov 5, N-305): a blow on a corpse strikes nothing, so it trains no Melee (2 XP a blow since N-288, and a body never dodges), wears no weapon and wounds no dead.
 - **One blow, one strike on a body** (`OneHitPerActor`, Nov 5, N-301): a sweep can touch a body twice, and each hit struck it.
 - **The blow**: `UMOCombatComponent::ProcessHit` -> `BaseDamage` x distance falloff (1.0 at the body, 0.7 at full range) -> the target's
   `ReceiveAttack` -> `UMOCombatMedicalHelpers::ApplyCombatDamage` -> `InflictDamage(part, BaseDamage x CriticalMultiplier, wound type of

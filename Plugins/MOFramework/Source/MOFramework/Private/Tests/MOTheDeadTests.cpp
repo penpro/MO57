@@ -1,8 +1,13 @@
 #include "Misc/AutomationTest.h"
 #include "MOCharacter.h"
 #include "MOColonyManagerSubsystem.h"
+#include "MOCombatComponent.h"
+#include "MOCombatMedicalTypes.h"
 #include "MOIdentityComponent.h"
 #include "MORecruitmentComponent.h"
+#include "MOSkillsComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "UObject/UnrealType.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -66,6 +71,46 @@ bool FMOColonyTheDeadCannotBeRecruited::RunTest(const FString& Parameters)
 	const FMORecruitmentResult Result = Recruit->BeginInteractionDetailed(Player);
 	TestEqual(TEXT("a corpse answers that it is dead"), static_cast<int32>(Result.Outcome), static_cast<int32>(EMORecruitmentOutcome::Unavailable));
 	TestFalse(TEXT("and does not join"), Recruit->IsPossessable());
+	return true;
+}
+
+// A blow on a corpse trained the striker (N-305): since N-288 a blow that lands is 2 Melee XP, and a body never dodges, so a corpse was free skill (Principle 11).
+// Expected: no hit and no XP; failing before: ProcessHit went on to ReceiveAttack and TrainFromBlow.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatNoBlowOnTheDead, "MOFramework.Combat.Damage.NoBlowOnTheDead",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCombatNoBlowOnTheDead::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("MOCombatNoBlowOnTheDeadWorld"));
+	GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Fighter = World->SpawnActor<AActor>();
+	UMOSkillsComponent* Skills = NewObject<UMOSkillsComponent>(Fighter);
+	UMOCombatComponent* Combat = NewObject<UMOCombatComponent>(Fighter);
+	Fighter->AddInstanceComponent(Skills);
+	Fighter->AddInstanceComponent(Combat);
+	Skills->RegisterComponent();
+	Combat->RegisterComponent();
+	Fighter->DispatchBeginPlay();
+
+	AMOCharacter* Body = NewObject<AMOCharacter>(GetTransientPackage());
+	if (MarkDead(*this, Body))
+	{
+		FHitResult Hit;
+		Hit.HitObjectHandle = FActorInstanceHandle(Body);
+		FMOAttackDamageProfile Profile;
+		Profile.ArcAngle = 360.0f;
+		Profile.Range = 200.0f;
+		Profile.BaseDamage = 10.0f;
+		TestFalse(TEXT("a body takes no blow"), Combat->ProcessHit(Hit, Profile, FVector::ForwardVector));
+		FMOSkillProgress Melee;
+		const bool bHasMelee = Skills->GetSkillProgress(FName(TEXT("Melee")), Melee);
+		TestFalse(TEXT("and teaches nothing"), bHasMelee && (Melee.CurrentXP > 0.0f || Melee.Level > 0));
+	}
+	TestFalse(TEXT("a live actor is no body (the control)"), AMOCharacter::IsDeadBody(Fighter));
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
 	return true;
 }
 
