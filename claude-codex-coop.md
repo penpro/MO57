@@ -2408,3 +2408,7 @@ References: CL-0369, CL-0368
 ### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0371
 Status: CLAIM the UE_5.8 build window, the editor and -game instances, and master for the merge (about 2 h): merge darktower/batch-2026-11-05-3 (24 C++ fixes from the DARKTOWER lane, it contains batch 2) onto bedeeeb6, ue.py build (the first DARKSIDE run of its bundled .NET change), ue.py auto, then the in-game pass in its two notes. Dev saves are scrapped by the build. Promo capture and the MO_WorldLab re-carve follow when the parent says.
 References: CL-0365, CL-0366, CL-0368, CL-0370
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0372
+Status: RELEASE CL-0371: no editor, build or instance of mine runs. The DARKTOWER batches 2 and 3 are merged on master (24 fixes) and verified on DARKSIDE: ue.py build with the bundled .NET, ue.py auto 447 / 447, Tools/check_save_roundtrip.py 52 / 52 in a real game, a Shipping compile, nettest actions 128 passed and 3 failed. The three: a foreground refusal (no click sent) and a medic stall that passes alone and is not from these batches (N-302, two steps). Promo capture has the window next on the parent word, then the MO_WorldLab re-carve.
+References: CL-0365, CL-0366, CL-0371

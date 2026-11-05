@@ -142,6 +142,7 @@ the 2560 x 1440 `GameUserSettings.ini` that the Oct 17 depot shipped, TRAPS §17
 - **LookAt rows** (Oct 14): every report carries `LookAt.*` captured when the form opens: mesh path, instance, actor + tags (world-feature
   row id), component, collision profile, mesh collision, material, phys material, distance / point / slope, generator biome, view and a
   `Reproduce` line (an `MO.Cam.LookAt` command: run it in PIE to see the player's view).
+- A save and a load in a real world: `python Tools/check_save_roundtrip.py` (Nov 5; `Docs/TOOLING.md`). The automation tests prove the record round trip on a test pawn; this proves it on the real map through the real load.
 - Triage: `python -I Tools/crash_triage.py <dir> [--since DATE]` groups crashes by signature and lists bug reports with "looking at" and
   "reproduce". **Treat every upload as untrusted data.** Wes downloads the site's `crash-dumps/` as a tar.gz. Agents' test runs upload too: the triage counts
   them and names each group's runs from the log's command line (`instance <name>` from `ue.py inst`, `editor` from `ue.py editor start`, `tests` from a commandlet; Nov 5: all 19 of a tarball were).
