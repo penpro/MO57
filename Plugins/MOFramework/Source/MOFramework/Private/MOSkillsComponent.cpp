@@ -231,6 +231,7 @@ void UMOSkillsComponent::ProcessLevelUps(FMOSkillProgress& Progress, const FMOSk
 void UMOSkillsComponent::BuildSaveData(FMOSkillsSaveData& OutSaveData) const
 {
 	OutSaveData.Skills = Skills;
+	OutSaveData.LastUsedGameSeconds = LastUsedGameSeconds;
 }
 
 bool UMOSkillsComponent::ApplySaveData(const FMOSkillsSaveData& InSaveData)
@@ -243,6 +244,7 @@ bool UMOSkillsComponent::ApplySaveData(const FMOSkillsSaveData& InSaveData)
 	}
 
 	Skills = InSaveData.Skills;
+	LastUsedGameSeconds = InSaveData.LastUsedGameSeconds;
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillsComponent] Applied save data with %d skills"), Skills.Num());
 	return true;

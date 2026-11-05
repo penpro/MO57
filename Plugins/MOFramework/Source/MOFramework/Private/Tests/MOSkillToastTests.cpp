@@ -2,10 +2,33 @@
 // Until Oct 20 2026 the popup showed only "Woodworking Lv. 0" in faint text, and knowledge raw ("WoodProperties"). Run: python Tools/ue.py auto --filter "MOFramework.UI.SkillToast"
 
 #include "Misc/AutomationTest.h"
+#include "GameFramework/Actor.h"
+#include "MOSkillsComponent.h"
 #include "MOSkillToastWidget.h"
 #include "MOSkillDatabaseSettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+// A skill left unused goes on going unused through a save (N-298): the decay clock was in no save, so every load gave every skill a fresh grace and a player who reloaded never lost any. Expected:
+// the time last used back as saved; failing before: none, and a new grace.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSkills_UnusedClockSaved, "MOFramework.Skills.UnusedClockSaved",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSkills_UnusedClockSaved::RunTest(const FString& Parameters)
+{
+	FMOSkillsSaveData Saved;
+	Saved.LastUsedGameSeconds.Add(TEXT("Melee"), 1234.0);
+	UMOSkillsComponent* Skills = NewObject<UMOSkillsComponent>(NewObject<AActor>());
+	TestTrue(TEXT("the save applies"), Skills->ApplySaveData(Saved));
+	FMOSkillsSaveData Again;
+	Skills->BuildSaveData(Again);
+	const double* LastUsed = Again.LastUsedGameSeconds.Find(TEXT("Melee"));
+	if (TestNotNull(TEXT("the clock is held and goes out again in the next save"), LastUsed))
+	{
+		TestEqual(TEXT("as it was"), *LastUsed, 1234.0);
+	}
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSkillToast_SaysWhatChanged, "MOFramework.UI.SkillToast.SaysWhatChanged",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

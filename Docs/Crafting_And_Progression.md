@@ -57,6 +57,7 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
   ingredient lots and per-repeat requirements; a completion consumes one repeat, installs durable products and a requested native
   completion receipt before observers. Cancellation retains exact remaining lots. Full inventories/missing vessels leave persisted
   pending products/refunds, retried without deleting them. Owning-client cancel RPCs provide intent, not a refund-policy choice.
+- **A skill's decay clock is saved** (`FMOSkillsSaveData::LastUsedGameSeconds`, Nov 5, N-298): until then every load gave every skill a fresh grace.
 - **Survivor crafts use the same service:** `TransferIngredientsTo` can carry the actual source vessel, preserving its GUID, wear
   and liquid profile. The saved job checkpoint owns its leg, handling interval, exact queued entry, borrowed vessels and actual product
   counts. It resumes paid work or a result completed before the controller rebound, and returns products plus borrowed vessels together.
