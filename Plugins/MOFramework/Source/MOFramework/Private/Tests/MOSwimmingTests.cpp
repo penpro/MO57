@@ -18,7 +18,7 @@
 #include "MOVitalsComponent.h"
 #include "MOWaterSubsystem.h"
 #include "MOWorldGen.h"
-#include "MOLakeShapeTestUtils.h"
+#include "MOWorldGenLakeTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

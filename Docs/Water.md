@@ -26,7 +26,7 @@
   rectangle (+3 m, 60 cm freeboard) because a lake plane cannot rotate.
 - **Lobed lakes (generator v13, BR23-13, F62 A):** every lake and pond is 3-4 overlapping lobes inside its old ellipse with a ragged shore (`LakeLobes` 4; `FMOWorldGenDomain::LakeShapeQ2`: q = 1 on the shore, the one shape function every lake test asks;
   the water plane and its buried box are unchanged, every lobe stays inside the unit circle). Water covers 34-59 % of the old ellipse (mean 47 %). A small lobe squeezes the bank (q runs 1 / (lobe radius x aspect) per radius): `FLake::BankScale` lowers the whole bank so its steepest side
-  stays a bank, and the fit's walled test asks at the bank's real reach (`BankReachAlong`). Measured over 120 lakes: steepest carved slope 0.81 (round lakes 0.36), none at 1.0; 2,518 upland lakes against 2,464 round. Tests that walk a shore use `MOLakeTest::PointAtQ` (`Tests/MOLakeShapeTestUtils.h`), never a radius.
+  stays a bank, and the fit's walled test asks at the bank's real reach (`BankReachAlong`). Measured over 120 lakes: steepest carved slope 0.81 (round lakes 0.36), none at 1.0; 2,518 upland lakes against 2,464 round. Tests that walk a shore use `MOLakeTest::PointAtQ` (`MOWorldGenLakeTestUtils.h`), never a radius.
 - `FMOWorldGen::GetWaterSurfaceCm` (upland ellipse = its own surface, else the sea plane) is what `UMOWaterSubsystem::GetSurfaceZ`
   answers; `ClassifyWaterBody` gives sea / river / lake / pond for drinking and illness. `GetGroundZ` + `BuriedMarginCm` (300):
   feet that far under the generator ground are NOT in water (the ocean plane fills everything under z = 0, underground too).

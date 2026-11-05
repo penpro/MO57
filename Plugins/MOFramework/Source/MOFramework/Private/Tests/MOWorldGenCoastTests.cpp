@@ -3,7 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "HAL/PlatformTime.h"
 #include "MOWorldGen.h"
-#include "MOLakeShapeTestUtils.h"
+#include "MOWorldGenLakeTestUtils.h"
 #include "MOUplandLakeSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOBiomeFinder.h"

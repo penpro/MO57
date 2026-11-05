@@ -1,4 +1,4 @@
-// Where a lake's own shape puts a point, for the tests that walk its shore. Lakes have lobes and a ragged edge since generator v13 (FMOWorldGenDomain::LakeShapeQ2), so "0.9 of the
+// Tests only (it takes sines, so nothing that makes the world may call it): where a lake's own shape puts a point, for the tests that walk its shore. Lakes have lobes and a ragged edge since generator v13 (FMOWorldGenDomain::LakeShapeQ2), so "0.9 of the
 // radius along the long axis" says nothing about the shore: ask for q instead (q = 1 on the shore, < 1 in the water).
 #pragma once
 

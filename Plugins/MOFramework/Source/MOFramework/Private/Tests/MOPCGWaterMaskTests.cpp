@@ -3,7 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "MOPCGWaterMask.h"
 #include "MOWorldGen.h"
-#include "MOLakeShapeTestUtils.h"
+#include "MOWorldGenLakeTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
