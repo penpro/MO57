@@ -102,6 +102,7 @@ exposure below 10 C; both come on over 5 C since Nov 4, no steps, N-282) terms n
 - **The realistic model** `UMOMetabolismComponent` (glycogen 500 g, hydration, digestion ~1 h per meal, ~2.5 L water/day) feeds
   vitals and mental state. Since Oct 13 the player's eat action (`ConsumeItem`) ALSO calls `UMOMetabolismComponent::ConsumeFood`
   (before, the player's body got nothing; villagers already fed the metabolism only).
+- **Vitamins and minerals are stores, not daily meters** (Nov 5, N-310; the June audit's L9). With none in the diet a full store reaches the deficiency line (30 %) in: potassium, sodium 14 days; B group 30 (thiamine, the shortest of them, shows in about three weeks to a month); C 60 (scurvy after one to three months); D 90 (no sun in the model yet); A, iron, calcium a year (liver, marrow and bone reserves). Linear, from general medical references and from memory, not from a study: component defaults (`VitaminCStoreDays` ...). A flat 100 % a day until then gave deficiency in 17 hours, and a day without vitamin C stopped wounds healing (`GetWoundHealingMultiplier` falls below 50 % of the store). Food still adds its old amounts, tuned to that daily loss, so stores now refill far faster than a body's would.
 - **Single source of truth is an open fork** (DECISIONS F1): A = derive the meters from the metabolism (recommended; full mapping in
   `Docs/Survival_Single_Source_Proposal.md`), B = clock-scaled counters, C = arcade pacing. Until decided, the moodles and the Status
   panel's Thirst row (HydrationLevel) disagree.
