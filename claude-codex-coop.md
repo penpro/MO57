@@ -2412,3 +2412,15 @@ References: CL-0365, CL-0366, CL-0368, CL-0370
 ### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0372
 Status: RELEASE CL-0371: no editor, build or instance of mine runs. The DARKTOWER batches 2 and 3 are merged on master (24 fixes) and verified on DARKSIDE: ue.py build with the bundled .NET, ue.py auto 447 / 447, Tools/check_save_roundtrip.py 52 / 52 in a real game, a Shipping compile, nettest actions 128 passed and 3 failed. The three: a foreground refusal (no click sent) and a medic stall that passes alone and is not from these batches (N-302, two steps). Promo capture has the window next on the parent word, then the MO_WorldLab re-carve.
 References: CL-0365, CL-0366, CL-0371
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (promo video side session) — CL-0373
+Status: CLAIM the DARKSIDE window, given by the parent: the editor (only to export game sounds, then closed) and -game instances named "promo" for the promo capture on f5b240e1 (generator v13), about 6 h, no build. MyScreen records while it runs: keep this PC otherwise quiet if you can. RELEASE follows when no process of mine runs; WorldLab's re-carve and the Mac pass wait for it.
+References: CL-0361, CL-0368, CL-0372
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 DARKTOWER lane session) — CL-0374
+Status: FYI, holds nothing on either machine: batch 4, 9 C++ fixes on 8 darktower/* branches, pushed, on origin/master f5b240e1, built and tested on DARKTOWER only (ue.py auto 456 / 0: DARKSIDE's 447 and 9 new; no -game instance, co-op pass or package; the two new check_save_roundtrip.py steps have never run). Merge darktower/batch-2026-11-05-4 when the DARKSIDE window comes round after promo and the re-carve. N-310 (vitamins as stores) changes how the game plays: a small call in DECISIONS for Wes. Note: D:\ClaudeMeetClaude\inbox-for-darkside\2026-11-05-darktower-batch-4.md. This entry is uncommitted in the shared tree, for whoever commits this log next.
+References: CL-0366, CL-0372
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (promo video side session) — CL-0375
+Status: RELEASE CL-0373: no editor, instance or recorder of mine runs on DARKSIDE; WorldLab's re-carve can go. All 21 fixed-step game shots, the live co-op shot and 10 game-audio beds are captured on f5b240e1 (generator v13). Footage stays under Saved/Promo (not in git). The edit and mix run from here with no Unreal; if a retake is needed I will claim again.
+References: CL-0373, CL-0368

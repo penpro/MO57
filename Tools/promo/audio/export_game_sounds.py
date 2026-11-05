@@ -12,7 +12,8 @@ ROOT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 OUT = os.path.join(ROOT, "Saved", "Promo", "audio", "game")
 SFX = "/MOFramework/Audio/A001_ForestSounds/Audios/SFX"
 ONESHOTS = ["SFX_Footsteps_GrassTread1", "SFX_Footsteps_GrassTread2", "SFX_Footsteps_LeafCrunch1", "SFX_Footsteps_LeafCrunch2", "SFX_Footsteps_StoneStep1", "SFX_Footsteps_StoneStep2",
-            "SFX_Footsteps_SandTrail1", "SFX_Footsteps_SandTrail2"]
+            "SFX_Footsteps_SandTrail1", "SFX_Footsteps_SandTrail2", "SFX_Object_RockDrop1", "SFX_Object_RockDrop2", "SFX_Object_StoneHit1", "SFX_Object_StoneHit2", "SFX_Object_TrunkThud1", "SFX_Object_TrunkThud2",
+            "SFX_Object_WoodKnock1", "SFX_Object_WoodKnock2", "SFX_Other_BarkChop1", "SFX_Other_BarkChop2", "SFX_Object_RootSnap1", "SFX_Object_BreakTwig1"]
 MUSIC = ["/MOFramework/Audio/Intro01", "/MOFramework/Audio/Cedar_Smoke_Psalm", "/MOFramework/Audio/female_vocalization01", "/MOFramework/Audio/female_vocalization02", "/MOFramework/Audio/flukes_drums01"]
 
 

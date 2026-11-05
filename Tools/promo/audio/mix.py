@@ -26,13 +26,14 @@ AUD = os.path.join(ROOT, "Saved", "Promo", "audio")
 GAME = os.path.join(AUD, "game")
 TARGET_LUFS = -14.0
 TRUE_PEAK = -1.0
+BED_RMS_DB = -24.0     # every recorded bed is brought to this before its level in BEDS: the game's own beds range from -33 to -60 LUFS at the master
 TOTAL = film.seconds(36.0)
 
 # the game's bed under each shot, its level (dB against the music's full level), and how long it crossfades in. Shots not here have no bed.
 BEDS = {
     "G01_pod": ("shore_dawn", -12.0), "G02_survivor": ("shore_dawn", -13.0), "G03_feet": ("meadow_dawn", -14.0),
-    "G04_forest": ("forest_day", -17.0), "G05_alpine": ("wind_high", -15.0), "G06_rainforest": ("rainforest", -15.0), "G07_coast": ("sea", -11.0), "G08_ravine": ("wind_high", -15.0), "G09_islands": ("wind_high", -20.0),
-    "G10_trek": ("wind_high", -24.0), "G11_climb": ("wind_high", -24.0), "G12_swim": ("lake", -22.0), "G13_dig": ("forest_day", -26.0), "G14_wall": ("forest_day", -26.0), "G15_fire": ("fire", -18.0), "G16_wolf": ("forest_day", -24.0),
+    "G04_forest": ("forest_day", -17.0), "G05_sea": ("sea", -13.0), "G06_rainforest": ("rainforest", -15.0), "G07_coast": ("sea", -11.0), "G08_ravine": ("wind_high", -15.0), "G09_islands": ("wind_high", -20.0),
+    "G10_trek": ("wind_high", -24.0), "G11_climb": ("wind_high", -24.0), "G12_swim": ("lake", -22.0), "G14_wall": ("forest_day", -26.0), "G15_fire": ("fire", -18.0), "G16_wolf": ("forest_day", -24.0),
     "G18_cave": ("cave", -14.0), "G19_survivor_meet": ("forest_day", -22.0), "G20_fire_group": ("fire_night", -16.0), "G22_coop": ("wind_high", -22.0),
 }
 # the music's level per bar range (dB), so the words and the world get room: (from bar, to bar, dB at start, dB at end)
@@ -66,6 +67,7 @@ def load_game(name, seconds):
     if os.path.isfile(path):
         x, rate = read_wav(path)
         x = resample(x, rate)
+        x = x * 10.0 ** ((BED_RMS_DB - dsp.rms_db(x)) / 20.0)
         n = int(seconds * SR)
         if len(x) >= n:
             return x[:n], True
@@ -183,13 +185,36 @@ def footsteps(report):
     if a[0] is None:
         report["standin"].append("footsteps (none: waiting for the game's bank export)")
         return out
-    stride = 60.0 / 112.0       # the walk's cadence, set to the capture when known (film time)
-    t = bar_t(shot.bar) + 0.2
+    report["real"].append("SFX_Footsteps_GrassTread (G03_feet)")
+    stride = 0.5                # the walk's cadence, read off the take: a heel strike every 12 film frames, the first at frame 8
+    t = bar_t(shot.bar) + 8.0 / 24.0
     i = 0
     while t < bar_t(shot.bar + shot.bars) - 0.2:
         out.append((t + RNG.normal(0, 0.008), a[i % 2], -18.0 + RNG.normal(0, 1.0)))
         t += stride
         i += 1
+    return out
+
+
+def on_picture(report):
+    """The game's own object sounds on what the picture shows: rods going into the wall, a hand on rock."""
+    out = []
+    wall = next(x for x in film.SHOTS if x.id == "G14_wall")
+    knocks = [oneshot("SFX_Object_WoodKnock%d" % i) for i in (1, 2)]
+    if knocks[0] is not None:
+        t = bar_t(wall.bar) + 0.1
+        i = 0
+        while t < bar_t(wall.bar + 1.0) - 0.1:     # the stakes and rods: the first half of the shot
+            out.append((t, knocks[i % 2], -24.0 + RNG.normal(0, 2.0)))
+            t += 0.24 + RNG.uniform(0, 0.12)
+            i += 1
+        report["real"].append("SFX_Object_WoodKnock (G14_wall)")
+    climb = next(x for x in film.SHOTS if x.id == "G11_climb")
+    hits = [oneshot("SFX_Object_StoneHit%d" % i) for i in (1, 2)]
+    if hits[0] is not None:
+        for k, at in enumerate((0.25, 0.95, 1.7, 2.6)):
+            out.append((bar_t(climb.bar) + at, hits[k % 2], -30.0))
+        report["real"].append("SFX_Object_StoneHit (G11_climb)")
     return out
 
 
@@ -240,7 +265,7 @@ def main():
         part = fade(x[i:j].copy(), 0.04, 0.04)      # the same stretch of a bed stays continuous across shots that share it
         add_at(bed_bus, t0, part, 10.0 ** (db / 20.0))
     sfx = np.zeros((n, 2))
-    for t, y, db in cue_list() + footsteps(report):
+    for t, y, db in cue_list() + footsteps(report) + on_picture(report):
         add_at(sfx, t, y, 10.0 ** (db / 20.0))
     # nothing crosses the hard cut to black at bar 5 but what the score's impact is doing
     cut = int(bar_t(5.0) * SR)
@@ -263,7 +288,7 @@ def main():
         print("pass %d: gain %.2f dB -> %.2f LUFS, %.2f dBTP, LRA %.1f" % (attempt, gain, i1, tp1, lra1), flush=True)
         if abs(i1 - TARGET_LUFS) < 0.25 and tp1 <= TRUE_PEAK + 0.1:
             break
-        i0 = i0 - (i1 - TARGET_LUFS)
+        i0 = i0 + (i1 - TARGET_LUFS)     # the limiter took some: ask for that much more
     print("REPORT game audio:", ", ".join(sorted(set(report["real"]))) or "none yet")
     print("REPORT stand-ins:", ", ".join(sorted(set(report["standin"]))) or "none")
     with open(os.path.join(AUD, "mix_report.json"), "w", encoding="utf-8") as f:

@@ -1,7 +1,7 @@
 # The promo video
 
 > **What this is:** the production book of MO57's promo film: concept, script, shot-by-shot storyboard, how every picture and sound is made, and how to re-use the kit for the next one.
-> **Current state (2026-11-05):** in production. Script, storyboard, Blender kit, score, mix and edit pipeline are built and run on stand-in pictures; the game footage waits for the Unreal window (section 7 says exactly where it stands).
+> **Current state (2026-11-05):** first cut delivered to Wes: 2:00, 4K, all game shots captured on generator v13 from the real game, -14.0 LUFS with the game's own sound. Whether it looks and sounds right is Wes's call (section 7 has the list and says where it falls short).
 > **Entry points:** `Tools/promo/film.py` (the film as data), `Tools/promo/capture.py` + `Content/Python/promo_shot.py` (footage), `Tools/promo/kit/` (Blender), `Tools/promo/audio/` (score and mix), `Tools/promo/edit.py` (assembly, grade, masters). Everything heavy lands in `Saved/Promo/` (not in git).
 > **Related:** `Docs/VISION.md`, `Docs/PROJECT_STATUS.md`, `Docs/Audio.md`, `SteamArt/README.md` (the wordmark and the Field Ledger palette), `Art/References/ImageTo3D/2026-10-18-clone-egg/README.md` (the pod's story).
 
@@ -27,13 +27,25 @@ Three ways to get pictures out of the game were weighed:
 |---|---|---|---|
 | Record a window in real time (MyScreen) | whatever the machine holds at 4K: TSR and Lumen get few frames per second of film | any stutter is in the film for good | no, not alone |
 | Movie Render Queue | the best in principle: temporal and spatial samples | the plugin is not enabled in the project; it renders a level sequence, and this world exists only at run time after a new game (voxels, PCG, the seed); it would take a sequence asset per shot with world-space keys, and MRQ's runtime subsystem has never met this world | kept in reserve |
-| **A fixed time step, recorded** | `-usefixedtimestep -fps=96`: every engine frame is 1/96 s of the world however long the GPU takes over it; a Python sequence (`promo_shot.py`) sets the camera each frame; MyScreen records the window (NVENC, 4:4:4); `capture.py cut` keeps two of every four frames and blends them | a dropped recording frame would break the count: slates at both ends find frame 0 and check the count | **chosen** |
+| A fixed time step, recorded | `-usefixedtimestep -fps=96` with MyScreen on the window (NVENC 4:4:4), slates to find frame 0 | tried first on the islands shot: the chain worked (the count within 2 of 640), but next to a lossless screenshot of the same pose the recording is visibly softer, rock grain smeared (NVENC at cq 12 averaged about 120 kB a frame) | dropped |
+| **A fixed time step, lossless** | the same 96 Hz step, a Python sequence (`promo_shot.py`) setting the camera each frame, and the game's own screenshot (`shot`, a PNG straight from the final buffer) of two of every four simulation frames; each pair blended into one film frame, then ProRes 4444 at 24 fps | about 1 s per screenshot, so a 5 s shot takes about 4 minutes: the fixed step means that costs nothing but time. About 1 screenshot in 2,000 does not come back: the game's log says which, `capture.py` fills it from its neighbour (one film frame without its blend) and reports it | **chosen** |
 
-Why it wins: nothing about the machine can reach the picture, so no stutter is possible. Blending 2 of 4 frames at 96 Hz is an exact 180 degree shutter at 24 fps, true motion blur from real sub-frames (the engine's own motion blur is off), and it lifts an 8-bit recording to about 9 bits before the grade. TSR and Lumen see 96 frames per second of film, so they converge far better than at 24. And the world keeps loading in wall-clock time while film time crawls, which is exactly what beats the old captures' bare terrain and half-grown vegetation (`Docs/DECISIONS.md`, Oct 13: "all fucky looking with bare materials on the terrain and weird ground spawn stuff all over").
+Why it wins: nothing about the machine can reach the picture, so no stutter is possible and no codec touches the source. Blending 2 of 4 frames at 96 Hz is an exact 180 degree shutter at 24 fps, true motion blur from real sub-frames (the engine's own motion blur is off). TSR and Lumen see 96 frames per second of film, so they converge far better than at 24. And the world keeps loading in wall-clock time while film time crawls, which is exactly what beats the old captures' bare terrain and half-grown vegetation (`Docs/DECISIONS.md`, Oct 13: "all fucky looking with bare materials on the terrain and weird ground spawn stuff all over").
+
+**The one exception is G22, the co-op shot:** two real game processes in a LAN session, recorded live from the host (`Tools/promo/coop_take.py`). A client's moves are stamped in real time, so a host held back by screenshots would rubber-band it. It holds about 26 fps at 1440p at the game's own settings with the client throttled, resampled to 24 and scaled up: softer than every other game shot, and it does not pretend otherwise.
 
 Rules each shot obeys (from `Docs/TRAPS.md`): the editor closed (it starves a -game instance's vegetation); the world's second READY line before anything; `r.VolumetricRenderTarget 0` at 4K (`SteamArt/README.md`); the view is a photo camera with the HUD off (`shot` and a window recording with `MO.Cam.LookAt` draw no UMG unless `showui` is set); `settle` seconds on the first pose so PCG finishes round the lens; stills from every take are looked at before it counts. PCG follows the local player's pawn and camera (`Docs/PCG.md`), so the pawn travels under a flying camera (`pawn.under_camera`). Cameras are verbs and in-game Python, never OS input.
 
-Sound is recorded separately in real time, because a fixed step and audio do not mix: `capture.py bed <name>` records the master submix in place.
+Sound is recorded separately in real time, because a fixed step and audio do not mix: `capture.py bed <name>` records the master submix in place (`Tools/promo/audio/record_beds.sh` is the whole set). The sound instance overrides the project's mute-when-unfocused on its command line (`-ini:Engine:[Audio]:UnfocusedVolumeMultiplier=1.0`); the Python name of the recorder is `unreal.AudioMixerLibrary`.
+
+What bit the capture, so the next one doesn't re-learn it:
+
+- `MO.Test.InjectInput`'s seconds are wall-clock, so on a slow fixed step hold a key with `9999` and let it go with the job's `after`. A draft's `after` lets go of a climb too: the next take then hangs still on the rock unless it holds the key again.
+- `TaskStop` on a command that launched an instance kills the instance: run the boot in the foreground.
+- The photo camera is one actor across shots: an exposure override stays until the next job sets it (`promo_shot.py` now always does).
+- Teleport into the far world and the ground may not be there yet: she fell through a lake's bed and a cave's floor. Arrive, wait, then roll; `MO.Water.GoToLake` picks the nearest lake to where the pawn already is.
+- Look at every take before it counts. The review sheet caught a take of the sky, a one-frame-short take, a smear of leaves through the lens and a frozen climber, all of which had "worked".
+
 
 ## 4. Script and storyboard
 
@@ -45,7 +57,7 @@ Lower thirds name each place with what the capture really was: the biome, then s
 
 Acts: The seed (bars 0-5, CG, a low mass and glass tones); Wake (5-10, a thin felted piano over wind and surf); One seed, a whole world (10-18, a pulse builds and breaks open at bar 16 on the floating islands); Nothing is given (18-26, drums under each flat statement); You will need help (26-31, the theme in full); Title (31-36, the hit, the sun rising behind the stone letters, D major at last).
 
-This table is `python Tools/promo/film.py table`; `film.py` is the source. Shots marked (game) are subject to scouting: what looks best in v13 decides the exact place, and what fails the bar is replaced (section 7 keeps the record).
+This table is `python Tools/promo/film.py table`; `film.py` is the source; every camera and action is in `Tools/promo/shots.json`. What v13 and scouting changed from the first storyboard is in section 7.
 
 | # | Time | Dur | Shot | On screen | Camera | How it is got | Text |
 |---|---|---|---|---|---|---|---|
@@ -53,30 +65,29 @@ This table is `python Tools/promo/film.py table`; `film.py` is the source. Shots
 | 2 | 0:07.50 | 6.67 | S02_entry (cg) | One pod, nose first, the stone burning; plasma streaming back, sparks | rides alongside, buffeted more and more | kit: build_coldopen.py entry | NOBODY REMEMBERS WHO. |
 | 3 | 0:14.17 | 2.50 | S03_streak (cg) | The dusk side of the planet from high up: thin lines falling all over the cloud deck, one passes the lens | fixed, a little shake | kit: build_coldopen.py streak |  |
 | 4 | 0:16.67 | 1.67 | B01_black (black) | Black |  |  |  |
-| 5 | 0:18.33 | 5.00 | G01_pod (game) | The open stone pod on the shore at first light, its hatch beside it, the sea behind | slow push in at knee height | start site of the chosen seed, pawn hidden; dawn | YOU WAKE WITH NOTHING. |
-| 6 | 0:23.33 | 5.00 | G02_survivor (game) | The survivor stands by the pod, her back to us, looking inland; bare skin and rough ground; hair moving | slow arc round her at shoulder height | the pawn idle; photo camera |  |
+| 5 | 0:18.33 | 5.00 | G01_pod (game) | The open stone pod in the grass at first light, its hatch beside it; a crag and a floating island behind | slow push in at knee height, past the plants | start site of the chosen seed, pawn hidden; dawn | YOU WAKE WITH NOTHING. |
+| 6 | 0:23.33 | 5.00 | G02_survivor (game) | The survivor by the pod, her back to us, head and shoulders; the sea, then the sun and a floating island beyond her | arc round her at shoulder height | the pawn idle; photo camera |  |
 | 7 | 0:28.33 | 5.00 | G03_feet (game) | Low: bare feet walking through long grass towards the first trees | tracks beside at shin height, grass passing the lens | the pawn walking by MO.Test.InjectInput; camera follows the pawn | ONLY WHAT YOUR HANDS REMEMBER. |
 | 8 | 0:33.33 | 5.00 | G04_forest (game) | Temperate forest from above at golden hour, rolling and endless | drone, slow flight forward over the canopy | photo camera, pawn under the path; PCG primed | ONE SEED. *Temperate forest* |
-| 9 | 0:38.33 | 5.00 | G05_alpine (game) | Bare granite crags and snow, cloud shadow crossing | slow lateral slide | photo camera | A WHOLE WORLD. *Alpine rock* |
-| 10 | 0:43.33 | 3.33 | G06_rainforest (game) | Inside the rainforest: layered ferns, broad leaves, shafts of light | low dolly between trunks | photo camera at the floor | *Rainforest* |
-| 11 | 0:46.67 | 3.33 | G07_coast (game) | The sea on a rocky strand, waves running in, sea stacks | slow push out over the water | photo camera; Oceanology ocean | *Nordic strand* |
-| 12 | 0:50.00 | 3.33 | G08_ravine (game) | Down into a ravine: a 50-100 m slot of ledges and crags, light from above | tips over the edge and sinks | photo camera; generator v13 | *Ravine* |
+| 9 | 0:38.33 | 5.00 | G05_sea (game) | The open sea from a low strand in the early light, swell running in over the shallows | slow drift down towards the water | photo camera; Oceanology ocean | A WHOLE WORLD. *The open sea* |
+| 10 | 0:43.33 | 3.33 | G06_rainforest (game) | Inside the rainforest: ferns and trunks, dappled light | low dolly through the ferns | photo camera at the floor | *Rainforest* |
+| 11 | 0:46.67 | 3.33 | G07_coast (game) | A rock strand at evening, tide pools, a mountain with a floating island over it | slow push | photo camera | *Nordic strand* |
+| 12 | 0:50.00 | 3.33 | G08_ravine (game) | On the floor of a ravine: a 50-100 m slot of rock, the sky a strip above | glides along it | photo camera; generator v13 | *Ravine* |
 | 13 | 0:53.33 | 6.67 | G09_islands (game) | Floating islands torn from the rock, forests on their tops, over the land below | slow rise and turn to reveal, the score breaks open here | photo camera; generator v13; the pawn near the first island | *Floating islands* |
-| 14 | 1:00.00 | 3.33 | G10_trek (game) | One small figure crossing a long hillside at dusk | long lens, nearly locked off | pawn walking; photo camera far away | NO FAST TRAVEL. |
-| 15 | 1:03.33 | 3.33 | G11_climb (game) | The survivor climbing a rock face, hands and feet on the stone | beside and below her, tilting up with her | the real climb on a cliff (Tools/check_cliff_climb.py's setup) |  |
-| 16 | 1:06.67 | 1.67 | G12_swim (game) | Swimming a crawl across a lake | low at the water, tracking | the real swim |  |
-| 17 | 1:08.33 | 3.33 | G13_dig (game) | A pit opening in the hillside: the voxel ground bitten away dig by dig, earth left beside it | low and close, locked off | the real timed dig (time-lapse tag) | NO INSTANT ANYTHING. *TIME-LAPSE* |
-| 18 | 1:11.67 | 3.33 | G14_wall (game) | A wattle wall going up rod by rod, then its daub | slow push | the real building system's stages (time-lapse tag) | *TIME-LAPSE* |
-| 19 | 1:15.00 | 1.67 | G15_fire (game) | The stone-ring campfire catching at dusk | close, low | a lit fire (MO.Fire) |  |
-| 20 | 1:16.67 | 3.33 | G16_wolf (game) | A wolf comes through the trees, head low | low, in front of it | the wolf's real hunt | NO HEALTH REGEN. |
-| 21 | 1:20.00 | 3.33 | G17_wound (game) | The body panel: real wounds by body part, bleeding, what they stop you doing | the screen itself | the real medical panel (shot showui) |  |
-| 22 | 1:23.33 | 3.33 | G18_cave (game) | A torch going down into a dark cave; the rock lit only by it | behind her, moving with her | the real torch and cave | YOU WILL NEED HELP. |
-| 23 | 1:26.67 | 5.00 | G19_survivor_meet (game) | A stranger at the edge of a clearing, turning towards the camera | slow arc | a real survivor near the start | FIND SURVIVORS. |
-| 24 | 1:31.67 | 5.00 | G20_fire_group (game) | Night. Several survivors round a fire; firelight on faces | slow lateral, the fire in front | real recruited survivors, night clock |  |
-| 25 | 1:36.67 | 3.33 | G21_possess (game) | The possession menu: pick another body, and you are them | the screen, then behind the new body | the real menu (shot showui), MO.Possess | PLAY ANY OF THEM. |
-| 26 | 1:40.00 | 3.33 | G22_coop (game) | Two players on a ridge, two real game processes in one world | wide, slow push | a real LAN co-op session (ue.py inst) | OR BRING YOUR FRIENDS. |
-| 27 | 1:43.33 | 10.00 | S04_title (cg) | METAVERSE, ORIGINS in stone, the sun rising behind it | slow push through drifting dust | kit: build_title.py |  |
-| 28 | 1:53.33 | 6.67 | S05_end (cg) | End card: the wordmark, status line, honesty line | still, slow fade | kit: build_endcard.py |  |
+| 14 | 1:00.00 | 3.33 | G10_trek (game) | One small figure crossing a dark rock strand under a pink evening sky | long lens, a slow pan with her | pawn walking (MO.Test.InjectInput); photo camera 60 m away | NO FAST TRAVEL. |
+| 15 | 1:03.33 | 3.33 | G11_climb (game) | The survivor on a mossy rock face, hands and feet finding holds | above and behind, moving with her | the real climb on a cliff, W held, a jump to grab (Tools/check_cliff_climb.py's way) |  |
+| 16 | 1:06.67 | 1.67 | G12_swim (game) | Swimming seen from under the water, the surface a mirror above her | under the surface, tracking | the real swim in an upland lake |  |
+| 17 | 1:08.33 | 6.67 | G14_wall (game) | A wattle wall going up: stakes, the rods woven in, then the moss daub layer by layer | slow push | the real pieces and stages (MO.Test.PlacePiece, MO.Test.PieceProgress); the game's time for this is far longer (time-lapse tag) | NO INSTANT ANYTHING. *TIME-LAPSE* |
+| 18 | 1:15.00 | 1.67 | G15_fire (game) | A stone-ring campfire burning at dusk, in the grass | close, low | a lit fire (MO.Fire.SpawnLit) |  |
+| 19 | 1:16.67 | 3.33 | G16_wolf (game) | A wolf comes through the trees, head low, towards the lens | long lens, panning with it | a real wolf hunting the hidden pawn (MO.Test.SpawnCreature) | NO HEALTH REGEN. |
+| 20 | 1:20.00 | 3.33 | G17_wound (game) | The Wounds tab: what that wolf's bites did, part by part, bleeding in ml/s | the screen itself | the real status panel after real bites (shot showui) |  |
+| 21 | 1:23.33 | 3.33 | G18_cave (game) | A figure walking into the black of a cave tunnel, lit only by her own torch | behind her, moving with her | the real torch and a generated cave (MO.WorldGen.FindCave) | YOU WILL NEED HELP. |
+| 22 | 1:26.67 | 5.00 | G19_survivor_meet (game) | A stranger's face in evening light, her campfire's smoke drifting through | long lens, holds on her | a wild survivor the world spawned at her own campfire | FIND SURVIVORS. |
+| 23 | 1:31.67 | 5.00 | G20_fire_group (game) | Night under an aurora: five survivors round a fire, smoke rising past the treeline | slow lateral slide, wide | real recruited survivors and a real fire; standing them in a ring is staging; night clock |  |
+| 24 | 1:36.67 | 3.33 | G21_possess (game) | The Characters menu: Select, and you are someone else, walking into the dawn | the screen, then behind the new body | the real menu and a real click (shot showui, MO.Test.ClickWidget) | PLAY ANY OF THEM. |
+| 25 | 1:40.00 | 3.33 | G22_coop (game) | Two players on a ridge, two real game processes in one world | wide, slow push | a real LAN co-op session (ue.py inst) | OR BRING YOUR FRIENDS. |
+| 26 | 1:43.33 | 10.00 | S04_title (cg) | METAVERSE, ORIGINS in stone, the sun rising behind it | slow push through drifting dust | kit: build_title.py |  |
+| 27 | 1:53.33 | 6.67 | S05_end (cg) | End card: the wordmark, status line, honesty line | still, slow fade | kit: build_endcard.py |  |
 
 ## 5. The kit: re-using it for the next film
 
@@ -106,14 +117,42 @@ Mix (`audio/mix.py`): music, the game's own sound under each shot (beds recorded
 
 ## 7. Where it stands
 
-(Updated as the work goes.)
+**Delivered Nov 5:** `Saved/Promo/out/MO57_Promo_4K_master_hevc10.mp4`, `MO57_Promo_1080p.mp4`, `contact_sheet.png` (not in git; lossless takes in `Saved/Promo/raw/`, mezzanines in `Saved/Promo/mezz/`, graded shots in `Saved/Promo/graded/`). Captured on master f5b240e1, generator v13, seed 777. Mix: -14.0 LUFS, -1.2 dBTP, LRA 10.5, no stand-in beds (`Saved/Promo/audio/mix_report.json`).
 
-- Built and run: `film.py`, the Blender kit (final CG and type rendering on DARKTOWER as batches `final_cg` and `final_cards`, then `darktower.py pull` into `Saved/Promo/kit/`), the score, the mix (-14.2 LUFS, -1.2 dBTP on stand-in beds), the grade LUTs, `edit.py` on slates with type.
-- Written, not yet run: `capture.py`, `promo_shot.py` (they need the Unreal window, coop CL-0361), `audio/export_game_sounds.py` (needs the editor).
-- Not yet: game footage, recorded beds, the final master.
+**What is not the game:** the first three shots and the title and end card are Blender renders. The score is synthesised. Sound design on the cuts (the pods' roar, the air moves, the UI ticks) is synthesised.
 
-Known constraints found while planning the shots: the bases Jalena and Zuri are topless in game (F49), so the film's women are the femme base, the men Harvey and Trey in their briefs; wide aerials show bare clearings where far vegetation thins (`MO_WorldLab/Saved/IslandsRavines/r9_plants/`), so island shots look up from low ground rather than across the land; there is no work animation (F54): a survivor stands still while a bar fills, so the film shows what the work leaves behind, not the hands doing it.
+**Staged, though real:** the five survivors were stood in a ring round a fire (G20) and two recruits were given their bases and names by test verbs. The wall (G14) runs the real pieces and stages, but its progress is set by `MO.Test.PieceProgress` at a pace far faster than the game's, under a TIME-LAPSE tag. The wounds on the panel (G17) are from a real wolf biting the real pawn; she later bled out, which is why the later shots use other survivors and a fresh world.
+
+**What v13 and scouting changed from the first storyboard:**
+
+- G05 Alpine rock became the open sea. At eye level AlpineRock's plants are black shards at seed 777 and its snow is flat white (`Saved/Promo/scout/alpine_sheet.jpg`); a distant view did not earn the shot.
+- G13, the dig, is cut. An open-ground dig is 0.88 m3 spread over a 2.5 m radius: 26 of them read as nothing, and `MO.Test.TerraformRPC` aimed some far under the ground (Z -1422, -2027). The timed dig found no target on the ravine floor. A pit in the film would have needed faking, so its time went to the wall. Destructible voxel terrain is in the game and not in this film.
+- G08 is on the ravine floor looking along it: from the rim a ravine reads as a ditch.
+- G09, the floating islands, needed no working round: golden hour on seed 777's first island is the film's best shot, and they show on the horizon of G01, G02, G04 and G07 too.
+- G12 went under water when the first test framed it: the surface as a mirror above her.
+- G18 is a generated tunnel at -1.9 EV: at the game's own exposure its torch blows the rock out.
+- G19 is a wild survivor the world spawned at her own campfire. G20 went wide because close up the idle poses and the underwear look wrong; wide, the game's aurora and the fire make the shot.
 
 ### Wes: check by eye and ear
 
-Filled in when the film is delivered.
+No agent has heard the film, and whether it looks right is yours. Nothing below is called verified.
+
+**By ear:**
+
+1. The whole score: synthesised, judged only by levels and a spectrogram (fork F68: the game's tracks are the free alternative, `mix.py --music`).
+2. The bed levels: every bed is normalised, so an event in one (a bird, a gust) may stick out. The lake bed is very quiet at source (-60 LUFS; water sounds were muted on Oct 24, your call) and lifted a long way.
+3. Footsteps on G03 are timed by eye to the heel strikes.
+
+**By eye, the shots I am least sure of:**
+
+1. S02_entry, the weakest CG: the pod can read as an egg in orange wrap. A re-render is about an hour on DARKTOWER if you have a note.
+2. S01 and S04: the planet's atmosphere line is very white.
+3. G08 ravine: the voxel rock looks chewed close up.
+4. G15 fire: the campfire's logs look low-poly this close, and the flames are the old effect.
+5. G20: smoke is heavy, and the ring is staged.
+6. G21 and G22: everyone is in underwear, because that is what the game gives them today. Harvey goes reddish in the low sun in G22, and G22 is the one soft shot.
+7. G17: the panel is real and honest, but it is a plain UI on screen for 3 s.
+8. The flare sweeps at bars 16, 18, 26 and 31 (`edit.py` `FLARE_AT`, `FLARE_OPACITY`).
+9. Type: Windows' Sitka until F69.
+
+**Does the film fall short?** Yes, in these places: S02 is below the bar of the rest; there is no digging, no real crafting or work animation (F54 is still open) and no combat in it; every character is in underwear; G22 is softer. Forks F68 to F71 in `Docs/DECISIONS.md` are yours.

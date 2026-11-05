@@ -29,6 +29,9 @@ TUNE = os.path.join(HERE, "shot_grades.json")
 FONT = r"C\:/Windows/Fonts/bahnschrift.ttf"
 FADES = {"S01_void": (40, 0), "G01_pod": (30, 0), "S05_end": (0, 44)}     # frames of fade from and to black: everywhere else the film cuts
 FLARE_AT = {16.0: "flare_warm", 18.0: "flare_warm_r", 26.0: "flare_teal", 31.0: "flare_warm"}     # a sweep of light across the cut at these bars
+FLARE_OPACITY = 0.42
+# where a card sits, as a share of the picture's height from its centre: each is where its shot is calm, away from a face, the sun, the wolf (looked at, Nov 5)
+CARD_Y = {"T01_trillions": 0.21, "T02_who": 0.31, "T03_nothing": 0.30, "T08_instant": -0.30, "T09_regen": -0.24, "T11_find": -0.34, "T12_any": -0.33, "T13_friends": -0.05}
 
 
 def run(cmd):
@@ -124,15 +127,17 @@ def graph(shot, frames, w, h, base_filter, overlays):
         lab = "o%d" % i
         pre = "[%d:v]trim=start_frame=%d,setpts=PTS-STARTPTS+%d/(24*TB),scale=%d:%d,format=gbrap" % (i, skip, at, w, h)
         if mode == "over":
-            # a soft dark halo under the type so it reads on any picture
+            # a soft dark cloud under the type so it reads on any picture: thin letters blurred, their alpha pushed up so the glow fills in, then blurred again. It rises and falls with the type.
+            y = int(CARD_Y.get(name, 0.0) * h)
+            halo = 1.0 if name.startswith("T") and name[1:3].isdigit() else 0.5
             parts.append(pre + ",split[%sa][%sb]" % (lab, lab))
-            parts.append("[%sb]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.55,gblur=sigma=%d:planes=15[%ss]" % (lab, max(h // 110, 4), lab))
-            parts.append("[%s][%ss]overlay=format=yuv444p10:eof_action=pass[%st]" % (last, lab, lab))
-            parts.append("[%st][%sa]overlay=format=yuv444p10:eof_action=pass[%sr]" % (lab, lab, lab))
+            parts.append("[%sb]gblur=sigma=%d:planes=15,colorlevels=aimax=0.16,colorchannelmixer=rr=0:gg=0:bb=0:aa=%.2f,gblur=sigma=%d:planes=15[%ss]" % (lab, max(h // 90, 4), 0.66 * halo, max(h // 70, 6), lab))
+            parts.append("[%s][%ss]overlay=y=%d:format=yuv444p10:eof_action=pass[%st]" % (last, lab, y, lab))
+            parts.append("[%sa]colorlevels=rimax=0.88:gimax=0.88:bimax=0.88[%sb2];[%st][%sb2]overlay=y=%d:format=yuv444p10:eof_action=pass[%sr]" % (lab, lab, lab, lab, y, lab))
             last = lab + "r"
         else:
             # a flare is light: screen it, weighted by its own alpha
-            parts.append(pre + "[%sc]" % lab)
+            parts.append(pre + ",colorchannelmixer=aa=%.2f[%sc]" % (FLARE_OPACITY, lab))
             parts.append("[%s][%sc]overlay=format=yuv444p10:eof_action=pass[%sr]" % (last, lab, lab))
             last = lab + "r"
     vign = float(t.get("vignette", 0.28 if shot.kind != "black" else 0.0))

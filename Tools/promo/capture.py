@@ -9,6 +9,8 @@
     python Tools/promo/capture.py frames ID [out.png]                                         a sheet of a take's first, middle and last frames, to LOOK at
     python Tools/promo/capture.py bed NAME [--seconds 25] [--at X Y Z] [--clock H M] [--weather P]   the game's own sound where the pawn stands, from its master submix (needs an instance booted with --sound --fps 0): Saved/Promo/audio/game/NAME.wav
     python Tools/promo/capture.py scout NAME [--biome B | --island N | --ravine N | --lake N | --poi P | --at X Y Z] [--hour H] [--weather P] [--wait 45]   looks round a place from 6 views: Saved/Promo/scout/NAME_sheet.jpg + NAME.json (the spot)
+    python Tools/promo/capture.py look NAME X Y Z TX TY TZ [--fov 50] [--hour H] [--weather P] [--wait 6] [--pawn]   one framing: Saved/Promo/scout/NAME.jpg
+    python Tools/promo/capture.py fly X Y Z | walk                                            the pawn hidden and flying at a spot (the world builds round the pawn) | back on its feet
     python Tools/promo/capture.py stop                                                        the instance, gracefully
 
 Why this way (Docs/Promo_Video.md section 3): 96 simulation steps a second, two of every four blended to one film frame at 24 fps, is a 180 degree shutter with real motion through the frame, and any hitch
@@ -51,7 +53,7 @@ def console(line):
 
 def query(code, key, timeout=60):
     _, out = ui.call(NAME, ["py", "-c", code], timeout=timeout)
-    rows = [ln.split(key + " ", 1)[1] for ln in out.splitlines() if (key + " ") in ln]
+    rows = re.findall(r"^%s (.*)$" % re.escape(key), out, re.M)     # whole lines: the bridge also echoes the submitted code, which contains the key
     return rows[-1].strip() if rows else ("ERR " + out[-600:])
 
 
@@ -67,7 +69,7 @@ def boot(a):
     w, h = (int(v) for v in a.res.lower().split("x"))
     extra = ("-usefixedtimestep", "-fps=%d" % a.fps) if a.fps else ()
     if a.sound:
-        extra = tuple(extra) + ("-DeterministicAudio",)
+        extra = tuple(extra) + ("-DeterministicAudio", "-ini:Engine:[Audio]:UnfocusedVolumeMultiplier=1.0")     # the mix runs and is metered without a speaker or the window having focus (the project mutes when unfocused)
     ui.start(NAME, ue.UPROJECT, ue.EDITOR_EXE, creator=True, res=(w, h), nosteam=True, sound=a.sound, extra=extra)
     if not ui.wait_ready(NAME, 600):
         sys.exit("FAIL: the instance did not boot")
@@ -78,8 +80,7 @@ def boot(a):
         sys.exit("FAIL: no character creator")
     time.sleep(8)
     console("MO.Test.ClickWidget BeginButton")
-    off = ui.log_size(NAME)
-    ok = ui.wait_log(NAME, r"\[MOReadiness\] READY", since=off, timeout=900)
+    ok = ui.wait_log(NAME, r"\[MOReadiness\] READY", since=off, timeout=900)     # from before the click: on the fixed step the world can be ready while the creator is still open
     print("READY" if ok else "no READY line; look at the log", flush=True)
     console("MO.Weather.Director 0")
     console("r.setres %dx%dwf" % (w, h))
@@ -127,6 +128,10 @@ def shot(a):
         job["slate"] = False
         job["stills"] = [1]
         job["settle"] = job.get("settle_still", job.get("settle", 15))
+    if a.draft:
+        # the whole action, the real way, but a still only every N film frames: quick to look at before a take
+        job["stills"] = list(range(0, job["frames"], SUB * a.draft))
+        job["settle"] = min(float(job.get("settle", 15)), a.draft_settle)
     with open(os.path.join(WORK, "current_job.json"), "w", encoding="utf-8") as f:
         json.dump(job, f, indent=1)
     if a.dry:
@@ -134,19 +139,32 @@ def shot(a):
         return
     off = ui.log_size(NAME)
     recording = False
-    if not a.still and not a.norec:
+    png = not a.still and not a.norec and not a.recording and not a.draft and job.get("png", True)
+    job["recording"] = bool(a.recording)
+    if a.norec:
+        job["png"] = False
+    with open(os.path.join(WORK, "current_job.json"), "w", encoding="utf-8") as f:
+        json.dump(job, f, indent=1)
+    before = set(screenshots())
+    if a.recording:
         r = subprocess.run([sys.executable, MYSCREEN, "start", "--name", a.id, "--window-exe", "UnrealEditor", "--fps", "240", "--cq", str(a.cq), "--no-cursor", "--max-minutes", "60", "--stall-restart", "0"], capture_output=True, text=True)
         print("MYSCREEN", r.stdout.strip()[-200:], flush=True)
         recording = True
     t0 = time.time()
-    _, out = ui.call(NAME, ["seq", os.path.join(ROOT, SEQ)], timeout=max(1800, job["frames"] * 2))
+    _, out = ui.call(NAME, ["seq", os.path.join(ROOT, SEQ), "--timeout", str(max(1800, job["frames"] * 2))], timeout=max(1800, job["frames"] * 2) + 60)
     print(out[-800:], flush=True)
+    if png:
+        collect(a.id, before, 2 * film_frames, time.time() - t0, off)
+        cut_png(a.id)
     if recording:
         r = subprocess.run([sys.executable, MYSCREEN, "stop"], capture_output=True, text=True)
         print("MYSCREEN", r.stdout.strip()[-400:], flush=True)
         with open(os.path.join(WORK, a.id + ".take.json"), "w", encoding="utf-8") as f:
             json.dump({"session": session_dir(), "frames": job["frames"], "preroll": job.get("preroll", 96), "time": time.strftime("%Y-%m-%d %H:%M:%S"), "wall": time.time() - t0}, f, indent=1)
         cut(a.id)
+    if a.draft:
+        time.sleep(4)
+        draft_sheet(a.id, before)
     if a.still:
         time.sleep(3)
         src = newest_shot()
@@ -156,10 +174,97 @@ def shot(a):
             print("STILL", dest)
 
 
+SCREENSHOTS = os.path.join(ROOT, "Saved", "Screenshots", "WindowsEditor")
+RAW = os.path.join(ROOT, "Saved", "Promo", "raw")
+
+
+def draft_sheet(shot_id, before):
+    """A draft's stills as one sheet: Saved/Promo/shots/ID_draft.jpg."""
+    from PIL import Image
+    now = sorted((f for f in screenshots() if f not in before), key=lambda f: int(re.sub(r"\D", "", f) or 0))
+    W, H, cols = 800, 450, 3
+    rows = (len(now) + cols - 1) // cols
+    sheet = Image.new("RGB", (W * cols, H * max(rows, 1)))
+    for i, f in enumerate(now):
+        path = os.path.join(SCREENSHOTS, f)
+        with Image.open(path) as im:
+            sheet.paste(im.convert("RGB").resize((W, H)), ((i % cols) * W, (i // cols) * H))
+        os.remove(path)
+    out = os.path.join(WORK, shot_id + "_draft.jpg")
+    sheet.save(out, quality=86)
+    print("DRAFT", out, len(now), "stills", flush=True)
+
+
+def screenshots():
+    os.makedirs(SCREENSHOTS, exist_ok=True)
+    return [f for f in os.listdir(SCREENSHOTS) if f.lower().endswith(".png")]
+
+
 def newest_shot():
-    d = os.path.join(ROOT, "Saved", "Screenshots", "WindowsEditor")
-    files = [os.path.join(d, f) for f in os.listdir(d) if f.lower().endswith(".png")]
+    files = [os.path.join(SCREENSHOTS, f) for f in screenshots()]
     return max(files, key=os.path.getmtime) if files else None
+
+
+def lost_frames(off, found):
+    """A screenshot now and then does not come back. The game's log says which frame each one was taken in, so the holes are known: take positions in the pattern (2 of every 4 simulation frames)."""
+    rows = [int(m) for m in re.findall(r"\]\[\s*(\d+)\]LogCore: Display: Tracing Screenshot", ui.read_log_from(NAME, off))]
+    rows = rows[-found:]
+    pos, have = 0, []
+    for i, f in enumerate(rows):
+        if i:
+            pos += (f - rows[i - 1]) % 1000
+        have.append(pos // SUB * SHUTTER + pos % SUB)
+    return have
+
+
+def collect(shot_id, before, expected, wall, off=0):
+    """The take's screenshots, in the order they were asked for, into Saved/Promo/raw/ID/s_#####.png. The sequence has ended when this runs, and the writes are synchronous, so a short wait is enough.
+    A lost frame is filled from its neighbour (one film frame without its blend: the eye cannot see it) and reported; more than 2 lost is a failed take."""
+    deadline = time.time() + 20
+    last = -1
+    while time.time() < deadline:
+        now = [f for f in screenshots() if f not in before]
+        if len(now) >= expected and len(now) == last:
+            break
+        last = len(now)
+        time.sleep(3)
+    now = sorted((f for f in screenshots() if f not in before), key=lambda f: int(re.sub(r"\D", "", f) or 0))
+    dest = os.path.join(RAW, shot_id)
+    shutil.rmtree(dest, ignore_errors=True)
+    os.makedirs(dest)
+    places = list(range(len(now)))
+    filled = []
+    if len(now) != expected and off is not None:
+        places = lost_frames(off, len(now))
+    for i, f in zip(places, now):
+        shutil.move(os.path.join(SCREENSHOTS, f), os.path.join(dest, "s_%05d.png" % i))
+    if len(now) != expected:
+        for i in range(expected):
+            path = os.path.join(dest, "s_%05d.png" % i)
+            if not os.path.isfile(path):
+                near = next((os.path.join(dest, "s_%05d.png" % j) for j in sorted(range(expected), key=lambda j: abs(j - i)) if os.path.isfile(os.path.join(dest, "s_%05d.png" % j))), None)
+                if near:
+                    shutil.copy2(near, path)
+                    filled.append(i)
+    ok = len(now) == expected or (len(filled) <= 2 and len(now) + len(filled) == expected)
+    with open(os.path.join(WORK, shot_id + ".take.json"), "w", encoding="utf-8") as f:
+        json.dump({"raw": dest, "frames": expected, "found": len(now), "filled": filled, "frames_ok": ok, "time": time.strftime("%Y-%m-%d %H:%M:%S"), "wall": wall}, f, indent=1)
+    print("TAKE %s: %d of %d lossless frames%s, %.0f s" % (shot_id, len(now), expected, (", filled " + str(filled)) if filled else "", wall), flush=True)
+    if not ok:
+        print("WARNING: frames lost; retake %s" % shot_id, flush=True)
+
+
+def cut_png(shot_id):
+    """Lossless frames -> mezzanine: each pair blended (SHUTTER of SUB simulation frames: a real 180 degree shutter), ProRes 4444 at 24 fps."""
+    with open(os.path.join(WORK, shot_id + ".take.json"), encoding="utf-8") as f:
+        take = json.load(f)
+    os.makedirs(MEZZ, exist_ok=True)
+    out = os.path.join(MEZZ, shot_id + ".mov")
+    vf = ("format=gbrpf32le,tmix=frames=%d:weights='%s',select='not(mod(n-%d\\,%d))',setpts=N/(24*TB),"
+          "scale=in_range=pc:out_range=tv:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=yuv444p10le") % (SHUTTER, " ".join(["1"] * SHUTTER), SHUTTER - 1, SHUTTER)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "48", "-i", os.path.join(take["raw"], "s_%05d.png"), "-vf", vf, "-r", "24", "-fps_mode", "cfr", "-c:v", "prores_ks", "-profile:v", "4", "-qscale:v", "6", "-vendor", "apl0",
+                    "-color_primaries", "bt709", "-color_trc", "iec61966-2-1", "-colorspace", "bt709", "-color_range", "tv", out], check=True)
+    print("MEZZ", out, os.path.getsize(out) // (1024 * 1024), "MB", flush=True)
 
 
 def probe_lumas(path):
@@ -227,7 +332,7 @@ def frames_sheet(shot_id, out=None):
 
 BED = r'''
 import unreal, os, time
-lib = unreal.AudioMixerBlueprintLibrary
+lib = unreal.AudioMixerLibrary
 if {stage!r} == "start":
     lib.start_recording_output(world, {seconds})
     out("BED recording")
@@ -342,9 +447,68 @@ def scout(a):
     print("SCOUT", out, flush=True)
 
 
+FLY = r"""
+pawn = unreal.GameplayStatics.get_player_pawn(world, 0)
+pawn.get_component_by_class(unreal.CharacterMovementComponent).set_movement_mode(unreal.MovementMode.MOVE_FLYING)
+pawn.set_actor_location(unreal.Vector(%f, %f, %f), False, True)
+pawn.set_actor_hidden_in_game(True)
+for a in pawn.get_attached_actors():
+    a.set_actor_hidden_in_game(True)
+out('FLOWN ok')
+"""
+WALK = r"""
+pawn = unreal.GameplayStatics.get_player_pawn(world, 0)
+pawn.get_component_by_class(unreal.CharacterMovementComponent).set_movement_mode(unreal.MovementMode.MOVE_FALLING)
+pawn.set_actor_hidden_in_game(False)
+for a in pawn.get_attached_actors():
+    a.set_actor_hidden_in_game(False)
+out('WALK ok')
+"""
+
+
+def fly(x, y, z):
+    """The pawn, hidden and flying, at this spot: the world (voxels, vegetation, the streaming) builds round the pawn."""
+    print(query(FLY % (x, y, z), "FLOWN"), flush=True)
+
+
+def look(a):
+    """One framing, to judge it: the photo camera at a pose, a wait for the world to load round it, a still in Saved/Promo/scout/NAME.png (and a small .jpg to read)."""
+    v = [float(x) for x in a.pose]
+    if a.pawn:
+        fly(v[0], v[1], v[2])
+    if a.hour is not None:
+        console("MO.Clock.SetTime %d %d" % (int(a.hour), int((a.hour % 1) * 60)))
+    if a.weather:
+        console("MO.Weather.SetPreset " + a.weather)
+    console("MO.Cam.LookAt %.1f %.1f %.1f %.1f %.1f %.1f %.1f" % (v[0], v[1], v[2], v[3], v[4], v[5], a.fov))
+    time.sleep(a.wait)
+    d = os.path.join(ROOT, "Saved", "Promo", "scout")
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, a.name + ".png")
+    if not shoot_to(path):
+        sys.exit("no screenshot")
+    from PIL import Image
+    with Image.open(path) as im:
+        im.convert("RGB").resize((1600, 900)).save(os.path.join(d, a.name + ".jpg"), quality=88)
+    print("LOOK", os.path.join(d, a.name + ".jpg"), flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="verb")
+    fl = sp.add_parser("fly")
+    fl.add_argument("x")
+    fl.add_argument("y")
+    fl.add_argument("z")
+    sp.add_parser("walk")
+    lk = sp.add_parser("look")
+    lk.add_argument("name")
+    lk.add_argument("pose", nargs=6, help="camera x y z, target x y z")
+    lk.add_argument("--fov", type=float, default=50.0)
+    lk.add_argument("--hour", type=float)
+    lk.add_argument("--weather")
+    lk.add_argument("--wait", type=float, default=6.0)
+    lk.add_argument("--pawn", action="store_true", help="teleport the pawn to the camera first, so the world loads round it")
     so = sp.add_parser("scout")
     so.add_argument("name")
     so.add_argument("--biome")
@@ -377,6 +541,9 @@ def main():
     s.add_argument("--still", action="store_true")
     s.add_argument("--norec", action="store_true")
     s.add_argument("--cq", type=int, default=12)
+    s.add_argument("--draft", type=int, default=0, metavar="N", help="a still every N film frames instead of a take: Saved/Promo/shots/ID_draft.jpg")
+    s.add_argument("--draft-settle", dest="draft_settle", type=float, default=8.0)
+    s.add_argument("--recording", action="store_true", help="MyScreen's window recording instead of lossless screenshots (softer: section 3 of the book says why it is not the default)")
     sp.add_parser("stop")
     c = sp.add_parser("cut")
     c.add_argument("id")
@@ -389,6 +556,12 @@ def main():
     a = ap.parse_args()
     if a.verb == "boot":
         boot(a)
+    elif a.verb == "look":
+        look(a)
+    elif a.verb == "fly":
+        fly(float(a.x), float(a.y), float(a.z))
+    elif a.verb == "walk":
+        print(query(WALK, "WALK"))
     elif a.verb == "bed":
         bed(a)
     elif a.verb == "scout":
@@ -396,7 +569,7 @@ def main():
     elif a.verb == "shot":
         shot(a)
     elif a.verb == "cut":
-        cut(a.id)
+        (cut_png if os.path.isdir(os.path.join(RAW, a.id)) else cut)(a.id)
     elif a.verb == "run":
         console(a.line)
     elif a.verb == "where":

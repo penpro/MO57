@@ -1,0 +1,1247 @@
+{
+ "G01_pod": {
+  "film_frames": 120,
+  "clock": [
+   6,
+   30
+  ],
+  "director": false,
+  "settle": 25,
+  "ease": 0.5,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    28,
+    500,
+    800
+   ]
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -440,
+     -830,
+     650
+    ],
+    "look": [
+     28,
+     -328,
+     610
+    ],
+    "fov": 40
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -300,
+     -700,
+     640
+    ],
+    "look": [
+     28,
+     -328,
+     600
+    ],
+    "fov": 40
+   }
+  ]
+ },
+ "G02_survivor": {
+  "film_frames": 120,
+  "clock": [
+   6,
+   30
+  ],
+  "director": false,
+  "settle": 12,
+  "ease": 0.4,
+  "pawn": {
+   "hide": false,
+   "walk": true,
+   "at": [
+    -260,
+    -420,
+    700
+   ],
+   "yaw": 117
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -110,
+     -560,
+     758
+    ],
+    "look": [
+     -268,
+     -405,
+     752
+    ],
+    "fov": 34
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -245,
+     -635,
+     752
+    ],
+    "look": [
+     -262,
+     -410,
+     752
+    ],
+    "fov": 34
+   }
+  ]
+ },
+ "G04_forest": {
+  "film_frames": 120,
+  "clock": [
+   17,
+   45
+  ],
+  "director": false,
+  "settle": 45,
+  "ease": 0.3,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    12000,
+    132000,
+    9000
+   ],
+   "under_camera": true
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     12000,
+     132000,
+     9000
+    ],
+    "look": [
+     40000,
+     160000,
+     1500
+    ],
+    "fov": 60
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     15500,
+     135500,
+     6200
+    ],
+    "look": [
+     40000,
+     160000,
+     1500
+    ],
+    "fov": 60
+   }
+  ]
+ },
+ "G05_sea": {
+  "film_frames": 120,
+  "clock": [
+   7,
+   15
+  ],
+  "director": false,
+  "settle": 40,
+  "ease": 0.4,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    -5000,
+    -5000,
+    800
+   ]
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -5000,
+     -5000,
+     800
+    ],
+    "look": [
+     -20000,
+     -20000,
+     0
+    ],
+    "fov": 50
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -5500,
+     -5500,
+     640
+    ],
+    "look": [
+     -20000,
+     -20000,
+     0
+    ],
+    "fov": 50
+   }
+  ]
+ },
+ "G06_rainforest": {
+  "film_frames": 80,
+  "clock": [
+   12,
+   0
+  ],
+  "director": false,
+  "settle": 45,
+  "ease": 0.3,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    195000,
+    -5000,
+    900
+   ]
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     195030,
+     -4620,
+     765
+    ],
+    "look": [
+     194700,
+     -9000,
+     860
+    ],
+    "fov": 60
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     194880,
+     -5000,
+     750
+    ],
+    "look": [
+     194700,
+     -9000,
+     860
+    ],
+    "fov": 60
+   }
+  ]
+ },
+ "G07_coast": {
+  "film_frames": 80,
+  "clock": [
+   17,
+   30
+  ],
+  "director": false,
+  "settle": 45,
+  "ease": 0.3,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    -1724000,
+    546000,
+    500
+   ]
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -1724350,
+     545650,
+     530
+    ],
+    "look": [
+     -1710000,
+     560000,
+     300
+    ],
+    "fov": 45
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -1724000,
+     546000,
+     495
+    ],
+    "look": [
+     -1710000,
+     560000,
+     300
+    ],
+    "fov": 45
+   }
+  ]
+ },
+ "G08_ravine": {
+  "film_frames": 80,
+  "clock": [
+   12,
+   30
+  ],
+  "director": false,
+  "settle": 45,
+  "ease": 0.3,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    465820,
+    372640,
+    10500
+   ],
+   "under_camera": true
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     465820,
+     372640,
+     10500
+    ],
+    "look": [
+     472000,
+     370300,
+     11800
+    ],
+    "fov": 75
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     466380,
+     372440,
+     10490
+    ],
+    "look": [
+     472000,
+     370300,
+     11800
+    ],
+    "fov": 75
+   }
+  ]
+ },
+ "G09_islands": {
+  "film_frames": 160,
+  "clock": [
+   17,
+   45
+  ],
+  "director": false,
+  "settle": 60,
+  "ease": 0.4,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    62000,
+    185000,
+    50000
+   ],
+   "under_camera": true
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     62000,
+     185000,
+     50000
+    ],
+    "look": [
+     111785,
+     224533,
+     47000
+    ],
+    "fov": 50
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     70000,
+     190000,
+     58000
+    ],
+    "look": [
+     111785,
+     224533,
+     50000
+    ],
+    "fov": 50
+   }
+  ]
+ },
+ "G03_feet": {
+  "film_frames": 120,
+  "clock": [
+   6,
+   45
+  ],
+  "director": false,
+  "settle": 12,
+  "preroll": 192,
+  "pawn": {
+   "hide": false,
+   "walk": true,
+   "at": [
+    -300,
+    900,
+    760
+   ],
+   "yaw": 0
+  },
+  "preroll_actions": [
+   "MO.Test.InjectInput IA_MOMove 0 1 9999"
+  ],
+  "follow": {
+   "offset": [
+    -10,
+    125,
+    -62
+   ],
+   "look": [
+    70,
+    0,
+    -78
+   ],
+   "smooth": 0.1,
+   "fov": 42
+  },
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ]
+ },
+ "G15_fire": {
+  "film_frames": 40,
+  "clock": [
+   18,
+   40
+  ],
+  "director": false,
+  "settle": 25,
+  "ease": 0.3,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    900,
+    900,
+    900
+   ]
+  },
+  "before": [],
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     640,
+     740,
+     620
+    ],
+    "look": [
+     423,
+     572,
+     585
+    ],
+    "fov": 34
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     630,
+     752,
+     616
+    ],
+    "look": [
+     423,
+     572,
+     585
+    ],
+    "fov": 34
+   }
+  ],
+  "exposure": {
+   "bias": -1.0
+  }
+ },
+ "G16_wolf": {
+  "film_frames": 80,
+  "clock": [
+   15,
+   30
+  ],
+  "director": false,
+  "settle": 10,
+  "preroll": 24,
+  "pawn": {
+   "hide": true,
+   "walk": true,
+   "at": [
+    20000,
+    140000,
+    900
+   ],
+   "yaw": 90
+  },
+  "preroll_actions": [
+   "MO.Test.SpawnCreature /MOFramework/MOBS/Wolf/Wolf.Wolf_C 3400"
+  ],
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     19850,
+     140250,
+     800
+    ],
+    "look": [
+     20000,
+     142700,
+     775
+    ],
+    "fov": 18
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     19850,
+     140250,
+     800
+    ],
+    "look": [
+     20000,
+     142700,
+     775
+    ],
+    "fov": 18
+   }
+  ],
+  "track": {
+   "actor": "Wolf_C",
+   "z": 25,
+   "smooth": 0.12
+  }
+ },
+ "G10_trek": {
+  "film_frames": 80,
+  "clock": [
+   17,
+   55
+  ],
+  "director": false,
+  "settle": 30,
+  "preroll": 192,
+  "pawn": {
+   "hide": false,
+   "walk": true,
+   "at": [
+    -1726800,
+    543800,
+    600
+   ],
+   "yaw": 315
+  },
+  "preroll_actions": [
+   "MO.Test.InjectInput IA_MOMove 0 1 9999"
+  ],
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -1722300,
+     546700,
+     600
+    ],
+    "look": [
+     -1726500,
+     543300,
+     380
+    ],
+    "fov": 16
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -1722300,
+     546700,
+     600
+    ],
+    "look": [
+     -1726000,
+     542800,
+     380
+    ],
+    "fov": 16
+   }
+  ],
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ]
+ },
+ "G11_climb": {
+  "film_frames": 80,
+  "clock": [
+   13,
+   0
+  ],
+  "director": false,
+  "settle": 2,
+  "preroll": 48,
+  "pawn": {
+   "hide": false
+  },
+  "follow": {
+   "offset": [
+    -170,
+    -130,
+    190
+   ],
+   "look": [
+    10,
+    0,
+    10
+   ],
+   "smooth": 0.08,
+   "fov": 50
+  },
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ],
+  "exposure": {
+   "bias": 1.1
+  },
+  "preroll_actions": [
+   "MO.Test.InjectInput IA_MOMove 0 1 9999"
+  ]
+ },
+ "G12_swim": {
+  "film_frames": 40,
+  "clock": [
+   10,
+   30
+  ],
+  "director": false,
+  "settle": 10,
+  "preroll": 144,
+  "pawn": {
+   "hide": false
+  },
+  "before": [],
+  "preroll_actions": [
+   "MO.Test.InjectInput IA_MOMove 0 1 9999"
+  ],
+  "follow": {
+   "offset": [
+    50,
+    330,
+    -85
+   ],
+   "look": [
+    40,
+    0,
+    -25
+   ],
+   "smooth": 0.05,
+   "fov": 52
+  },
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ]
+ },
+ "G17_wound": {
+  "film_frames": 80,
+  "director": false,
+  "settle": 1,
+  "preroll": 12,
+  "showui": true,
+  "pawn": {}
+ },
+ "G19_survivor_meet": {
+  "film_frames": 120,
+  "clock": [
+   17,
+   20
+  ],
+  "director": false,
+  "settle": 10,
+  "preroll": 48,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    14994,
+    123000,
+    700
+   ]
+  },
+  "follow": {
+   "actor": "Female_C_26",
+   "offset": [
+    400,
+    -110,
+    66
+   ],
+   "look": [
+    0,
+    0,
+    64
+   ],
+   "smooth": 0.03,
+   "fov": 17
+  }
+ },
+ "G20_fire_group": {
+  "film_frames": 120,
+  "clock": [
+   21,
+   30
+  ],
+  "director": false,
+  "settle": 16,
+  "ease": 0.4,
+  "pawn": {
+   "hide": true,
+   "fly": true,
+   "at": [
+    14763,
+    123200,
+    700
+   ]
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     14300,
+     122300,
+     300
+    ],
+    "look": [
+     14763,
+     124370,
+     420
+    ],
+    "fov": 30
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     14550,
+     122300,
+     300
+    ],
+    "look": [
+     14763,
+     124370,
+     420
+    ],
+    "fov": 30
+   }
+  ],
+  "exposure": {
+   "bias": -0.1
+  }
+ },
+ "G21_possess": {
+  "film_frames": 80,
+  "director": false,
+  "settle": 10,
+  "preroll": 12,
+  "showui": true,
+  "pawn": {},
+  "actions": [
+   [
+    130,
+    "MO.Test.ClickWidget PossessButton nth=3"
+   ],
+   [
+    132,
+    "MO.HUD.Mode off"
+   ],
+   [
+    140,
+    "MO.Test.InjectInput IA_MOMove 0 1 9999"
+   ]
+  ],
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ]
+ },
+ "G18_cave": {
+  "film_frames": 80,
+  "clock": [
+   13,
+   0
+  ],
+  "director": false,
+  "settle": 10,
+  "preroll": 96,
+  "pawn": {
+   "hide": false,
+   "at": [
+    -203506,
+    425574,
+    1600
+   ],
+   "yaw": 158
+  },
+  "before": [],
+  "preroll_actions": [
+   "MO.Test.InjectInput IA_MOMove 0 1 9999"
+  ],
+  "follow": {
+   "offset": [
+    -175,
+    35,
+    48
+   ],
+   "look": [
+    300,
+    0,
+    48
+   ],
+   "smooth": 0.05,
+   "fov": 68
+  },
+  "after": [
+   "MO.Test.InjectInput IA_MOMove 0 0 0.1"
+  ],
+  "exposure": {
+   "bias": -1.9
+  }
+ },
+ "G13_dig": {
+  "film_frames": 80,
+  "clock": [
+   10,
+   40
+  ],
+  "director": false,
+  "settle": 14,
+  "preroll": 24,
+  "pawn": {
+   "hide": true,
+   "walk": true,
+   "at": [
+    -3400,
+    1800,
+    534
+   ],
+   "yaw": 0
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -3480,
+     1500,
+     574
+    ],
+    "look": [
+     -3100,
+     1800,
+     404
+    ],
+    "fov": 44
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -3480,
+     1500,
+     574
+    ],
+    "look": [
+     -3100,
+     1800,
+     404
+    ],
+    "fov": 44
+   }
+  ],
+  "actions": [
+   [
+    0,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    12,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    24,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    36,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    48,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    60,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    72,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    84,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    96,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    108,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    120,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    132,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    144,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    156,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    168,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    180,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    192,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    204,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    216,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    228,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    240,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    252,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    264,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    276,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    288,
+    "MO.Test.TerraformRPC Dig 300"
+   ],
+   [
+    300,
+    "MO.Test.TerraformRPC Dig 300"
+   ]
+  ]
+ },
+ "G14_wall": {
+  "film_frames": 160,
+  "clock": [
+   7,
+   45
+  ],
+  "director": false,
+  "settle": 12,
+  "preroll": 24,
+  "ease": 0.4,
+  "pawn": {
+   "hide": true
+  },
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     -1465,
+     -700,
+     395
+    ],
+    "look": [
+     -1764,
+     -976,
+     335
+    ],
+    "fov": 44
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     -1505,
+     -740,
+     385
+    ],
+    "look": [
+     -1764,
+     -976,
+     335
+    ],
+    "fov": 44
+   }
+  ],
+  "actions": [
+   [
+    0,
+    "MO.Test.PieceProgress 0.000 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    12,
+    "MO.Test.PieceProgress 0.042 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    25,
+    "MO.Test.PieceProgress 0.083 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    37,
+    "MO.Test.PieceProgress 0.125 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    50,
+    "MO.Test.PieceProgress 0.167 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    62,
+    "MO.Test.PieceProgress 0.208 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    75,
+    "MO.Test.PieceProgress 0.250 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    87,
+    "MO.Test.PieceProgress 0.292 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    100,
+    "MO.Test.PieceProgress 0.333 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    112,
+    "MO.Test.PieceProgress 0.375 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    125,
+    "MO.Test.PieceProgress 0.417 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    137,
+    "MO.Test.PieceProgress 0.458 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    150,
+    "MO.Test.PieceProgress 0.500 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    162,
+    "MO.Test.PieceProgress 0.542 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    175,
+    "MO.Test.PieceProgress 0.583 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    187,
+    "MO.Test.PieceProgress 0.625 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    200,
+    "MO.Test.PieceProgress 0.667 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    212,
+    "MO.Test.PieceProgress 0.708 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    225,
+    "MO.Test.PieceProgress 0.750 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    237,
+    "MO.Test.PieceProgress 0.792 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    250,
+    "MO.Test.PieceProgress 0.833 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    262,
+    "MO.Test.PieceProgress 0.875 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    275,
+    "MO.Test.PieceProgress 0.917 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    287,
+    "MO.Test.PieceProgress 0.958 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    300,
+    "MO.Test.PieceProgress 1.000 BP_Piece_WattleWall_C_1"
+   ],
+   [
+    300,
+    "MO.Test.PieceProgress done BP_Piece_WattleWall_C_1"
+   ],
+   [
+    324,
+    "MO.Test.PieceProgress 0.000 Daub"
+   ],
+   [
+    336,
+    "MO.Test.PieceProgress 0.042 Daub"
+   ],
+   [
+    349,
+    "MO.Test.PieceProgress 0.083 Daub"
+   ],
+   [
+    362,
+    "MO.Test.PieceProgress 0.125 Daub"
+   ],
+   [
+    375,
+    "MO.Test.PieceProgress 0.167 Daub"
+   ],
+   [
+    387,
+    "MO.Test.PieceProgress 0.208 Daub"
+   ],
+   [
+    400,
+    "MO.Test.PieceProgress 0.250 Daub"
+   ],
+   [
+    413,
+    "MO.Test.PieceProgress 0.292 Daub"
+   ],
+   [
+    426,
+    "MO.Test.PieceProgress 0.333 Daub"
+   ],
+   [
+    438,
+    "MO.Test.PieceProgress 0.375 Daub"
+   ],
+   [
+    451,
+    "MO.Test.PieceProgress 0.417 Daub"
+   ],
+   [
+    464,
+    "MO.Test.PieceProgress 0.458 Daub"
+   ],
+   [
+    477,
+    "MO.Test.PieceProgress 0.500 Daub"
+   ],
+   [
+    489,
+    "MO.Test.PieceProgress 0.542 Daub"
+   ],
+   [
+    502,
+    "MO.Test.PieceProgress 0.583 Daub"
+   ],
+   [
+    515,
+    "MO.Test.PieceProgress 0.625 Daub"
+   ],
+   [
+    528,
+    "MO.Test.PieceProgress 0.667 Daub"
+   ],
+   [
+    540,
+    "MO.Test.PieceProgress 0.708 Daub"
+   ],
+   [
+    553,
+    "MO.Test.PieceProgress 0.750 Daub"
+   ],
+   [
+    566,
+    "MO.Test.PieceProgress 0.792 Daub"
+   ],
+   [
+    579,
+    "MO.Test.PieceProgress 0.833 Daub"
+   ],
+   [
+    591,
+    "MO.Test.PieceProgress 0.875 Daub"
+   ],
+   [
+    604,
+    "MO.Test.PieceProgress 0.917 Daub"
+   ],
+   [
+    617,
+    "MO.Test.PieceProgress 0.958 Daub"
+   ],
+   [
+    630,
+    "MO.Test.PieceProgress 1.000 Daub"
+   ]
+  ],
+  "preroll_actions": [
+   "MO.Test.PieceProgress 0 Daub",
+   "MO.Test.PieceProgress 0 BP_Piece_WattleWall_C_1"
+  ]
+ }
+}

@@ -1,0 +1,6 @@
+{
+ "G04_forest": {"eq": "saturation=0.92"},
+ "G11_climb": {"eq": "gamma=1.12"},
+ "G15_fire": {"eq": "saturation=0.9"},
+ "G22_coop": {"eq": "saturation=0.9"}
+}
