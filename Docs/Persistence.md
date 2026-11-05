@@ -22,6 +22,7 @@
   service that needs saving gets an adapter in the upper module), `Colony`, `Designation` (pri 80), `Quest`, `ResourceDepletion`,
   `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`, `StartSite` (pri 90, Oct 24: the clone egg and hatch beside the first
   survivor, `Docs/World_Creation.md` §2).
+- What a pawn has studied is saved (`FMOPersistedPawnRecord::KnowledgeData`, Nov 4, N-292: `UMOKnowledgeComponent` had no save path, so every load forgot it). `MOFramework.Persistence.EveryPawnComponentIsSaved` fails a pawn component with a `BuildSaveData` that nothing saves; adrenaline is the one exception (it does not outlast a fight).
 - A person's character is saved too (`FMOPersistedPawnRecord::PersonalityData`, Nov 4, N-289: it was in no save, so the colony's upkeep gave every colonist a new one at each load).
 - Pawns: the persistence subsystem captures each pawn's components through the shared `ApplyPawnComponentState` on BOTH load paths
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters now save in a

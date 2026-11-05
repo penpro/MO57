@@ -19,6 +19,24 @@ void UMOKnowledgeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME_CONDITION(UMOKnowledgeComponent, AllLearnedKnowledge, COND_OwnerOnly);
 }
 
+void UMOKnowledgeComponent::BuildSaveData(FMOKnowledgeSaveData& OutSaveData) const
+{
+	OutSaveData.ItemKnowledge = ItemKnowledge;
+	OutSaveData.AllLearnedKnowledge = AllLearnedKnowledge;
+	OutSaveData.bHasValidData = true;
+}
+
+bool UMOKnowledgeComponent::ApplySaveDataAuthority(const FMOKnowledgeSaveData& InSaveData)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !InSaveData.bHasValidData)
+	{
+		return false;
+	}
+	ItemKnowledge = InSaveData.ItemKnowledge;
+	AllLearnedKnowledge = InSaveData.AllLearnedKnowledge;
+	return true;
+}
+
 FMOItemKnowledgeProgress* UMOKnowledgeComponent::FindItemKnowledge(FName ItemDefinitionId)
 {
 	for (FMOItemKnowledgeProgress& Progress : ItemKnowledge)

@@ -1378,6 +1378,12 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             CombatComp->BuildSaveData(PawnRecord.CombatData);
             PawnRecord.bHasComponentData = true;
         }
+        // What the pawn has studied: without it every load forgot all of it, the Skills panel's knowledge and what it gates.
+        if (const UMOKnowledgeComponent* KnowledgeComp = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+        {
+            KnowledgeComp->BuildSaveData(PawnRecord.KnowledgeData);
+            PawnRecord.bHasComponentData = true;
+        }
         // A person's character: without it a colonist came back from every load someone else.
         if (const UMOPersonalityComponent* PersonalityComp = Pawn->FindComponentByClass<UMOPersonalityComponent>())
         {
@@ -1834,6 +1840,12 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOCombatComponent* CombatComp = Pawn->FindComponentByClass<UMOCombatComponent>())
     {
         CombatComp->ApplySaveDataAuthority(PawnRecord.CombatData);
+    }
+
+    // What the pawn has studied. No-ops on a record from before it (bHasValidData false).
+    if (UMOKnowledgeComponent* KnowledgeComp = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+    {
+        KnowledgeComp->ApplySaveDataAuthority(PawnRecord.KnowledgeData);
     }
 
     // A person's character. A record from before it holds all zero: left alone, so the colony's upkeep gives them one (first touch).

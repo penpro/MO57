@@ -54,6 +54,7 @@
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
 #include "MOEquipmentComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOQuestTypes.h"
@@ -226,6 +227,10 @@ struct FMOPersistedPawnRecord
     /** A person's character (UMOPersonalityComponent). All zero in a save from before it: the colony's upkeep then gives them one, as it does a new villager. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOPersonalityTraits PersonalityData;
+
+    /** What this pawn has studied (UMOKnowledgeComponent). bHasValidData false in a save from before it: applying no-ops. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOKnowledgeSaveData KnowledgeData;
 
     /** Flag to indicate if component data has been populated (for legacy save compatibility) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
