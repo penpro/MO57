@@ -155,6 +155,8 @@ fired on the server only: a joiner's thermal moodle and status panel never chang
 exertion), caps SpO2 via `UMOVitalsComponent::SetAirwayOxygenReserve`; asphyxia death 75 s after empty -> `DieOf(Drowned)`.
 Drowning comes from the vitals (SpO2), never from a timer. Details and the swim side: `Docs/Water.md` §3.
 
+Saved since Nov 5 (N-297): the reserve and the seconds asphyxiating are on the pawn's record, so a load is not a breath of air; the airway closes again on its own next tick if the head is still under.
+
 ## 6. Illness
 
 Untreated water gives an illness as a condition COURSE on the anatomy component (incubation -> triangular peak at 1/3 -> cleared),

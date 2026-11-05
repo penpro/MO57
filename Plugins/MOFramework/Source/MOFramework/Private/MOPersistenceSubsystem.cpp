@@ -1355,6 +1355,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             MentalStateComp->BuildSaveData(PawnRecord.MentalStateData);
             PawnRecord.bHasComponentData = true;
         }
+        if (const UMORespirationComponent* RespirationComp = Pawn->FindComponentByClass<UMORespirationComponent>())
+        {
+            RespirationComp->BuildSaveData(PawnRecord.RespirationData);
+            PawnRecord.bHasComponentData = true;
+        }
         if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
         {
             SkillsComp->BuildSaveData(PawnRecord.SkillsData);
@@ -1814,6 +1819,11 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
     {
         MentalStateComp->ApplySaveDataAuthority(PawnRecord.MentalStateData);
+    }
+
+    if (UMORespirationComponent* RespirationComp = Pawn->FindComponentByClass<UMORespirationComponent>())
+    {
+        RespirationComp->ApplySaveDataAuthority(PawnRecord.RespirationData);
     }
     // Apply skills
     if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())

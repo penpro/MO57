@@ -8,6 +8,7 @@
 #include "MOInventoryHolderInterface.h"
 #include "MOKnowledgeComponent.h"
 #include "MOPersonalityComponent.h"
+#include "MORespirationComponent.h"
 #include "MOPersistenceTestPawn.generated.h"
 
 /** The least a pawn needs to go through the save's own capture and apply (MOPersistencePawnStateTests.cpp); the survivor itself brings voxel invokers and a MetaHuman with it. */
@@ -23,6 +24,7 @@ public:
 		Knowledge = CreateDefaultSubobject<UMOKnowledgeComponent>(TEXT("Knowledge"));
 		Personality = CreateDefaultSubobject<UMOPersonalityComponent>(TEXT("Personality"));
 		History = CreateDefaultSubobject<UMOCharacterHistoryComponent>(TEXT("History"));
+		Respiration = CreateDefaultSubobject<UMORespirationComponent>(TEXT("Respiration"));
 	}
 
 	UPROPERTY()
@@ -39,6 +41,9 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<UMOCharacterHistoryComponent> History;
+
+	UPROPERTY()
+	TObjectPtr<UMORespirationComponent> Respiration;
 
 	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override { return Identity; }
 	virtual UMOInventoryComponent* GetInventory_Implementation() const override { return Inventory; }

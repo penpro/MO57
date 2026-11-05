@@ -58,6 +58,7 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	Past.PlayerLeftAt = FDateTime(2026, 6, 1, 12, 0, 0);
 	Past.bHasValidData = true;
 	Source->History->ApplySaveDataAuthority(Past);
+	Source->Respiration->DebugSetOxygenReserve(0.3f);
 
 	UMOWorldSaveGame* Save = NewObject<UMOWorldSaveGame>();
 	Persistence->CapturePersistedPawnsAndInventories(World, Save);
@@ -85,6 +86,7 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	FMOCharacterHistorySaveData Kept;
 	Target->History->BuildSaveData(Kept);
 	TestEqual(TEXT("and when a player left it, for While you were away"), Kept.PlayerLeftAt, Past.PlayerLeftAt);
+	TestEqual(TEXT("the breath being held comes back: a load is not a breath of air"), Target->Respiration->GetOxygenReserve(), 0.3f);
 
 	// A record from before these fields leaves a live pawn as it is.
 	FMOPersistedPawnRecord Old;
@@ -92,7 +94,9 @@ bool FMOPersistence_PawnStateSurvivesASave::RunTest(const FString& Parameters)
 	AMOPersistenceTestPawn* Live = World->SpawnActor<AMOPersistenceTestPawn>();
 	Live->Knowledge->AllLearnedKnowledge = { TEXT("BarkFiber") };
 	Live->Personality->SetTraits(Traits);
+	Live->Respiration->DebugSetOxygenReserve(0.6f);
 	Persistence->ApplyPawnComponentState(Live, Old);
+	TestEqual(TEXT("an old record leaves its breath alone"), Live->Respiration->GetOxygenReserve(), 0.6f);
 	TestEqual(TEXT("an old record leaves its knowledge alone"), Live->Knowledge->AllLearnedKnowledge.Num(), 1);
 	TestEqual(TEXT("an old record leaves its character alone"), Live->Personality->GetTraits().Sociability, 0.7f);
 	return true;

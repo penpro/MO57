@@ -53,6 +53,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "MORespirationComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOEquipmentComponent.h"
@@ -195,6 +196,10 @@ struct FMOPersistedPawnRecord
     /** Mental state component (consciousness, shock, effects) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOMentalStateSaveData MentalStateData;
+
+    /** The breath being held (UMORespirationComponent). bHasValidData false in a save from before it: applying no-ops. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMORespirationSaveData RespirationData;
 
     /** Skills component state (skill levels, XP) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
