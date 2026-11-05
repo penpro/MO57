@@ -11,6 +11,7 @@ Written for the DARKTOWER lane's batches 2 and 3 (Nov 2026), which no one had ru
   N-299 a torch lit at a save burns after the load, flame included
   N-297 a load is not a breath of air (the reserve refills in 14 s on land, so this one can come back "could not tell", never a false pass)
   N-293 a carcass: same place, pose, mesh and cuts, and the cut part gone from its menu
+  N-309 the name the world was given at Host comes back with the save
   With no load: N-287 / N-288 a blow trains Melee and a worn-out weapon says so; N-205 a wounded wolf stays on its attacker; N-300 a wolf and a deer let go of a body.
 Every state read is MO.Test.SaveState, the save's own view of each person and carcass. Prints each step and "SAVE ROUNDTRIP PASS" / "FAIL". The editor must be closed.
 """
@@ -35,7 +36,7 @@ def state():
     """{"people": {guid: fields}, "carcasses": [fields], "seed": int} from MO.Test.SaveState."""
     off = ui.log_size(NAME)
     ui.console(NAME, "MO.Test.SaveState")
-    end = ui.wait_log(NAME, r"SAVESTATE end seed=(-?\d+) people=\d+ carcasses=\d+", since=off, timeout=20)
+    end = ui.wait_log(NAME, r'SAVESTATE end seed=(-?\d+) people=\d+ carcasses=\d+(?: world="([^"]*)")?', since=off, timeout=20)
     text = ui.read_log_from(NAME, off)
     people, carcasses = {}, []
     for kind, line in re.findall(r"\[MOTEST\] SAVESTATE (pawn|carcass) ([^\r\n]*)", text):
@@ -44,7 +45,7 @@ def state():
             people[fields["guid"]] = fields
         else:
             carcasses.append(fields)
-    return {"people": people, "carcasses": carcasses, "seed": int(end.group(1)) if end else None}
+    return {"people": people, "carcasses": carcasses, "seed": int(end.group(1)) if end else None, "world": end.group(2) if end else None}
 
 
 def me(st):
@@ -251,6 +252,7 @@ def main():
 
         was, now = before["people"], people
         rep.step("N-291: the loaded world runs the saved seed", after["seed"] == a.seed, str(after["seed"]))
+        rep.step("N-309: the name given at Host comes back with the save", before["world"] == after["world"] == "SaveCheck", f"{before['world']!r} -> {after['world']!r}")
         rep.step("N-292: what the student studied", now[student_guid]["items"] == was[student_guid]["items"] and "Stick01" in now[student_guid]["items"], f"{was[student_guid]['items']} -> {now[student_guid]['items']}")
         rep.step("N-298: its skill clocks", int(now[student_guid]["clocks"]) == int(was[student_guid]["clocks"]) > 0, f"{was[student_guid]['clocks']} -> {now[student_guid]['clocks']}")
         rep.step("its Melee progress", now[student_guid]["melee"] == was[student_guid]["melee"], f"{was[student_guid]['melee']} -> {now[student_guid]['melee']}")

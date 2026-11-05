@@ -175,14 +175,13 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category="MainMenu")
 	bool bIsLoadingIntoGameplay = false;
 
-	/** Slot name for pending new game save (derived from world name). */
+	/** Slot for the pending new game (`World_<time>`, a world's identity: F24), or the slot to load. Its name for the Load list is PendingWorldName. */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	FString PendingNewGameSlot;
 
 	/**
 	 * Pre-generated name for the initial survivor pawn on new-game start.
-	 * Set by MONewGamePanel so the save slot can include the character's
-	 * name (e.g. "Alex_Smith-01"). Consumed by MOSpawnManagerSubsystem when
+	 * Set by MONewGamePanel. Consumed by MOSpawnManagerSubsystem when
 	 * the first survivor spawns — cleared after use so subsequent spawns
 	 * get fresh random names.
 	 *

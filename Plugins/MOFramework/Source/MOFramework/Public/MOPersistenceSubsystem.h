@@ -233,6 +233,13 @@ public:
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool RenameSaveSlot(const FString& SlotName, const FText& NewDisplayName);
 
+    /** What the Load list calls this world: the name typed at New Game or Host, or its last rename, carried by every save (N-309). Empty: its slot's name. */
+    FString GetWorldDisplayName() const { return CurrentWorldDisplayName; }
+    void SetWorldDisplayName(const FString& InName) { CurrentWorldDisplayName = InName; }
+
+    /** The display name a save of this world writes into SlotName. */
+    FString ResolveSaveDisplayName(const FString& SlotName) const { return CurrentWorldDisplayName.IsEmpty() ? SlotName : CurrentWorldDisplayName; }
+
     /** Check if a save slot exists. */
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     bool DoesSaveSlotExist(const FString& SlotName) const;
@@ -467,6 +474,10 @@ private:
     // The world being played (see GetCurrentWorldId)
     UPROPERTY()
     FGuid CurrentWorldId;
+
+    // What the Load list calls it (see GetWorldDisplayName)
+    UPROPERTY()
+    FString CurrentWorldDisplayName;
 
 	/** Registered save domains (weak — owners control lifetime). */
 	TArray<TWeakInterfacePtr<IMOSaveDomain>> SaveDomains;

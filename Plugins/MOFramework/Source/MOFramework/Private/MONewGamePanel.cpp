@@ -14,6 +14,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/Texture2D.h"
 #include "Kismet/GameplayStatics.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 
 UMONewGamePanel::UMONewGamePanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -236,47 +238,14 @@ void UMONewGamePanel::HandleStartGameClicked()
 		Settings->PendingWorldCreation = Creation;   // the game mode consumes it once (MOWorldCreationTypes.h)
 		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] World creation: %s"), *FMOWorldCreation::Describe(Creation));
 
-		// Pre-generate the starting survivor's name so the save slot can use
-		// it (e.g. "Alex_Smith-01"). Spawn manager consumes
+		// Pre-generate the starting survivor's name. The spawn manager consumes
 		// Settings->PendingSurvivorName when the first survivor pawn spawns.
 		const FString SurvivorName = UMOSpawnManagerSubsystem::GenerateRandomSurvivorName();
 		Settings->PendingSurvivorName = SurvivorName;
 
-		// Build slot name from the survivor name (sanitized) + iteration suffix.
-		// Format: "<First>_<Last>-01". Filesystem-safe characters only.
-		auto Sanitize = [](FString In) -> FString
-		{
-			In = In.Replace(TEXT(" "), TEXT("_"));
-			In = In.Replace(TEXT("/"), TEXT("_"));
-			In = In.Replace(TEXT("\\"), TEXT("_"));
-			In = In.Replace(TEXT(":"), TEXT("_"));
-			In = In.Replace(TEXT("*"), TEXT("_"));
-			In = In.Replace(TEXT("?"), TEXT("_"));
-			In = In.Replace(TEXT("\""), TEXT("_"));
-			In = In.Replace(TEXT("<"), TEXT("_"));
-			In = In.Replace(TEXT(">"), TEXT("_"));
-			In = In.Replace(TEXT("|"), TEXT("_"));
-			return In;
-		};
-
-		const FString SanitizedSurvivor = Sanitize(SurvivorName);
-		const FString BaseSlot = FString::Printf(TEXT("%s-01"), *SanitizedSurvivor);
-
-		// If "-01" already exists in the save directory, bump to -02, -03, etc.
-		// Iteration is local to MONewGamePanel — the save subsystem will
-		// overwrite-on-confirm if the player picks the same name twice.
-		FString SlotName = BaseSlot;
-		int32 Iter = 2;
-		while (UGameplayStatics::DoesSaveGameExist(SlotName, 0) && Iter < 100)
-		{
-			SlotName = FString::Printf(TEXT("%s-%02d"), *SanitizedSurvivor, Iter++);
-		}
-
-		Settings->PendingNewGameSlot = SlotName;
-
 		UE_LOG(LogMOFramework, Log,
-			TEXT("[MONewGamePanel] World='%s' Seed=%d Survivor='%s' Slot='%s'"),
-			*WorldName, Seed, *SurvivorName, *SlotName);
+			TEXT("[MONewGamePanel] World='%s' Seed=%d Survivor='%s'"),
+			*WorldName, Seed, *SurvivorName);
 	}
 
 	// Broadcast start game request
@@ -332,10 +301,10 @@ void UMONewGamePanel::SetWorldName(const FString& Name)
 
 void UMONewGamePanel::GenerateDefaultWorldName()
 {
-	// Generate a default name like "World 1", "World 2", etc.
-	// For now just use a timestamp-based name
-	static int32 WorldCounter = 1;
-	const FString DefaultName = FString::Printf(TEXT("World %d"), WorldCounter++);
+	// "World 4" with three saves on this machine: the name now reaches the Load list (N-309), where a counter from 1 at each launch would list "World 1" many times.
+	TArray<FString> Saves;
+	IFileManager::Get().FindFiles(Saves, *(FPaths::ProjectSavedDir() / TEXT("SaveGames") / TEXT("*.sav")), /*Files=*/true, /*Directories=*/false);
+	const FString DefaultName = FString::Printf(TEXT("World %d"), Saves.Num() + 1);
 
 	SetWorldName(DefaultName);
 	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] Generated default world name: %s"), *DefaultName);
