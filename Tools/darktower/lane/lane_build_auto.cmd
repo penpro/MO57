@@ -8,11 +8,12 @@ set UE_SDKS_ROOT=C:\Users\Wes\mo57_lane\sdks
 cd /d %MO_LANE%
 echo [lane] %DATE% %TIME% build starts
 git log --oneline -1
-python -u %MO_LANE%\Tools\ue.py build
+rem Below normal priority: DARKTOWER may be rendering (the promo's Blender tasks): they keep the machine first.
+start "" /b /wait /belownormal python -u %MO_LANE%\Tools\ue.py build
 set BUILD_EXIT=%ERRORLEVEL%
 echo [lane] %DATE% %TIME% BUILD_EXIT=%BUILD_EXIT%
 if not "%BUILD_EXIT%"=="0" exit /b %BUILD_EXIT%
-python -u %MO_LANE%\Tools\ue.py auto --filter MOFramework
+start "" /b /wait /belownormal python -u %MO_LANE%\Tools\ue.py auto --filter MOFramework
 set AUTO_EXIT=%ERRORLEVEL%
 echo [lane] %DATE% %TIME% AUTO_EXIT=%AUTO_EXIT%
 exit /b %AUTO_EXIT%
