@@ -17,6 +17,7 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "GameFramework/Actor.h"
 #include "GenericTeamAgentInterface.h"
+#include "UObject/UnrealType.h"
 
 // Oct 18 2026: one bare-hand punch killed a deer (a Blueprint override of 500 on the survivor's fist), the death named no killer
 // (the attacker never reached the anatomy), a spear did a fifth of a punch (ArmorPenetration scaled unarmored damage), no creature
@@ -206,6 +207,28 @@ bool FMOCombatBareHandCannotDestroyVitalPart::RunTest(const FString& Parameters)
 		}
 	}
 	TestTrue(TEXT("the vital parts are in DT_BodyParts"), VitalParts >= 6);
+	return true;
+}
+
+// A body is nobody's quarry (N-300): a wolf stood biting a corpse for good, a deer ran from one, and a threat destroyed outright left the behaviour tree on HasTarget with no target.
+// Expected: dead or gone is gone; failing before: no such check anywhere.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCreatureLetsGoOfTheDead, "MOFramework.Creature.Pursuit.LetsGoOfTheDead",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCreatureLetsGoOfTheDead::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("nothing there: gone"), AMOCreatureController::IsQuarryGone(nullptr));
+	AActor* Thing = NewObject<AActor>();
+	TestFalse(TEXT("any other live actor stands"), AMOCreatureController::IsQuarryGone(Thing));
+
+	AMOCharacter* Someone = NewObject<AMOCharacter>(GetTransientPackage());
+	TestFalse(TEXT("someone alive is a quarry"), AMOCreatureController::IsQuarryGone(Someone));
+	const FBoolProperty* Dead = FindFProperty<FBoolProperty>(AMOCharacter::StaticClass(), TEXT("bIsDead"));
+	if (TestNotNull(TEXT("the character has its dead flag"), Dead))
+	{
+		Dead->SetPropertyValue_InContainer(Someone, true);
+		TestTrue(TEXT("the same someone, dead: gone"), AMOCreatureController::IsQuarryGone(Someone));
+	}
 	return true;
 }
 

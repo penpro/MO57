@@ -73,6 +73,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   speed through its own gaits (walk 0.3 at WalkSpeed, jog 0.6, sprint 1.0; below the walk proportionally quieter; crouched x0.5), heard
   within HearingRange x loudness. A deer (HearingRange 20 m) hears a sprinting player or a running wolf at 20 m, a walk at 6 m, a
   crouched creep at ~1.5 m. A wolf used to be stuck at the walk value (its gait state is player-only).
+- **A body is nobody's quarry** (`AMOCreatureController::IsQuarryGone`, Nov 5, N-300): a dead pawn is not taken and is let go within a fifth of a second, and a threat destroyed outright reaches the blackboard (one more push after it goes). Until then a wolf stood biting a corpse for good, a deer ran from one, and a tree stayed on HasTarget with no target.
 - **A wound names its cause**: every hit carries its attacker (`FMOCombatHitInfo::Instigator`, the wolf's bite passes the wolf) into
   `UMOAnatomyComponent::InflictDamage(..., DamageInstigator)`, kept as `GetLastDamageInstigator()`. A creature's death names it as the
   killer (was always None).
