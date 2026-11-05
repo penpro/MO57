@@ -23,6 +23,7 @@
   `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`, `StartSite` (pri 90, Oct 24: the clone egg and hatch beside the first
   survivor, `Docs/World_Creation.md` §2), `Carcasses` (pri 95, Nov 5, N-293: each carcass's row, place, decay, cut parts and body; until then a kill and its butchering were gone at a load).
 - What a pawn has studied is saved (`FMOPersistedPawnRecord::KnowledgeData`, Nov 4, N-292: `UMOKnowledgeComponent` had no save path, so every load forgot it). `MOFramework.Persistence.EveryPawnComponentIsSaved` fails a pawn component with a `BuildSaveData` that nothing saves; adrenaline is the one exception (it does not outlast a fight).
+- A pawn's event log, bonds and when a player left it are on its own record (`FMOPersistedPawnRecord::HistoryData`, Nov 5, N-295): the colony's save held them only for a world with a settlement, so a lone player's history and "While you were away" did not survive a load. An older save's `FMOColonySaveData::VillagerHistory` still applies.
 - A person's character is saved too (`FMOPersistedPawnRecord::PersonalityData`, Nov 4, N-289: it was in no save, so the colony's upkeep gave every colonist a new one at each load).
 - Pawns: the persistence subsystem captures each pawn's components through the shared `ApplyPawnComponentState` on BOTH load paths
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters now save in a

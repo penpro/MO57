@@ -108,6 +108,24 @@ void UMORespirationComponent::SetAirwayClosedBy(FName Source, bool bClosed)
 	}
 }
 
+void UMORespirationComponent::BuildSaveData(FMORespirationSaveData& OutSaveData) const
+{
+	OutSaveData.OxygenReserve = OxygenReserve;
+	OutSaveData.SecondsAsphyxiating = SecondsAsphyxiating;
+	OutSaveData.bHasValidData = true;
+}
+
+bool UMORespirationComponent::ApplySaveDataAuthority(const FMORespirationSaveData& InSaveData)
+{
+	if (GetOwnerRole() != ROLE_Authority || !InSaveData.bHasValidData)
+	{
+		return false;
+	}
+	SecondsAsphyxiating = FMath::Max(0.0f, InSaveData.SecondsAsphyxiating);
+	DebugSetOxygenReserve(InSaveData.OxygenReserve);   // the reserve and the SpO2 it caps, together
+	return true;
+}
+
 void UMORespirationComponent::DebugSetOxygenReserve(float NewReserve)
 {
 	OxygenReserve = FMath::Clamp(NewReserve, 0.0f, 1.0f);
