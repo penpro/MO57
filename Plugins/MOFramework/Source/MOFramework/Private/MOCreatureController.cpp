@@ -292,13 +292,13 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		// TARGET STICKINESS: Don't switch targets unless we don't have one or current is invalid
 		if (CurrentThreatActor.IsValid() && CurrentThreatActor.Get() != Actor)
 		{
-			// We already have a valid target - only switch if new target is MUCH closer (50% closer)
-			float CurrentDistance = FVector::Dist(ControlledPawn->GetActorLocation(), CurrentThreatActor->GetActorLocation());
-			float NewDistance = FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation());
-
-			if (NewDistance >= CurrentDistance * 0.5f)
+			// We already have a valid target - only switch if the new one is MUCH closer, and not at all away from whoever attacked it (N-205, seen Oct 24: a
+			// wolf a joiner had just cut took a deer walking past as its quarry, though its log said it "turns on" the joiner "for 45 s").
+			const float CurrentDistance = FVector::Dist(ControlledPawn->GetActorLocation(), CurrentThreatActor->GetActorLocation());
+			const float NewDistance = FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation());
+			if (!ReplacesQuarry(CurrentDistance, NewDistance, IsProvokedBy(CurrentThreatActor.Get())))
 			{
-				return;   // new target isn't significantly closer - keep current target
+				return;
 			}
 		}
 
@@ -809,6 +809,11 @@ void AMOCreatureController::ScanForQuarry()
 	{
 		TakeQuarry(Nearest);
 	}
+}
+
+bool AMOCreatureController::ReplacesQuarry(float CurrentDistanceCm, float NewDistanceCm, bool bCurrentIsAttacker)
+{
+	return !bCurrentIsAttacker && NewDistanceCm < CurrentDistanceCm * 0.5f;
 }
 
 bool AMOCreatureController::IsProvokedBy(const AActor* Actor) const
