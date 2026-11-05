@@ -24,6 +24,7 @@
 #include "MOSkillsComponent.h"
 #include "MOVitalsComponent.h"
 #include "Components/PoseableMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
