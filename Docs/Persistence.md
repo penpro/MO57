@@ -72,6 +72,7 @@
 - **Systemic pattern to check new code against:** live-path side effects must be replayed by restore paths (loaded buildings lost
   collision, woken mobs stayed throttled, possession spawns skipped component restoration): one shared "enter state X" routine called by
   both live and load paths (`code_health` pattern #1).
+- A save's world seed is the one the world published (`AMOGameState::GetWorldSeedInfo`), not `UMOGameSettings::PendingWorldSeed` (Nov 4, N-291): Options' Defaults, pressed in a world, zeroed that field, and the next save wrote seed 0.
 
 ## 1b. Where saves live, and the Oct 28 carry-over
 
