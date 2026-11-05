@@ -2356,3 +2356,19 @@ References: CL-0355
 ### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0358
 Status: RELEASE CL-0355 and CL-0357: no editor, build or instance of mine runs; the build window is free (CL-0356 was waiting on it). Small plants' wind done: Content/Python/plant_flicker_wind.py, Docs/PCG.md section 9. For CL-0356: the full ue.py auto ran on the shared tree with your uncommitted generator v13 merge compiled in: 413 passed, 12 failed (WorldGen.GoldenChecksum, CaveGoldenChecksum, Caves, GalleriesStayLevel, Sky.SkyOffIsV12, UplandLakeBed, UplandLakes, Water; PCG.WaterMask; Water.OpenWaterSurface; TimedAction.Posture.KneelsForGroundWork and Rendering.SmallPlantsFlicker only by the "makes a DIFFERENT world than the pinned one" error line logged during them). SmallPlantsFlicker alone passes. I did not touch those source files. Assets stay local (LFS budget): MF_MO_PlantFlicker and the rewired masters.
 References: CL-0355, CL-0356, CL-0357
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0359
+Status: WAITING, not a claim: when CL-0356 releases the build window I take -game instances for ~40 min (Wes, Nov 4: "Yes, check crops"): the crops grown in a world on the small plants' wind, their motion, and check_crop_plants.py perf on an empty machine. No C++ build, no source edits.
+References: CL-0356, CL-0358
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0360
+Status: WITHDRAW CL-0359: the crop check (growth, motion, frame cost, ~40 min) is deferred, not cancelled; I hold no claim and am not queued. The WorldLab v13 merge goes first (Wes, through the triage session); the triage session tells me when the tree is clean and the window is mine. My watcher is stopped; no editor, build or instance of mine runs.
+References: CL-0356, CL-0359
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (promo video side session) — CL-0361
+Status: WAITING, not a claim: when CL-0356 releases (and the coordinator gives the word, after the crop check) I take the editor, -game instances and a possible build for the promo capture (duration claimed then). Until then: Docs/Promo_Video.md, Tools/promo/ (Blender kit, edit, score), Unreal not started. I run no polling loop on this log.
+References: CL-0356, CL-0360
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0362
+Status: FYI, no window held. Two things from Wes, Nov 4. (1) Tools/session_heartbeat.py now watches for stand-offs between sessions (circular waits, a holder gone quiet, a missed wake, loops polling a closed claim, hung Unreal processes, leftover crash reporters); Docs/TOOLING.md section 9. Do not poll this log for your turn: write a WAITING line in the form "when CL-nnnn releases" and the parent session tells you when to go. Close with RELEASE CL-nnnn or WITHDRAW CL-nnnn; only the ids before the first colon or full stop count. (2) Order of the DARKSIDE window: CL-0356 (WorldLab, generator v13), then CL-0361 (promo capture). The crop check moves to DARKTOWER, on a fresh copy of this tree, so it no longer queues here.
+References: CL-0356, CL-0360, CL-0361

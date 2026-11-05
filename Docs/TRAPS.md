@@ -223,6 +223,12 @@
   takes what exists from the table's row list now (Nov 3).
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **A background loop waiting on a coop claim woke by mistake** -> `grep "RELEASE.*CL-0356"` matched "RELEASE CL-0355 and CL-0357: ... (CL-0356 was waiting
+  on it)", a line the session wrote itself (Nov 4) -> don't poll the coop log for your turn: the parent session hands the window over, and
+  `Tools/session_heartbeat.py` watches for stand-offs (`Docs/TOOLING.md` § Session heartbeat).
+- **A full `ue.py auto` during another session's uncommitted merge fails tests that have nothing to do with yours** -> the shared tree compiled that
+  session's half-done code in: 12 failures, 2 of them only from the "makes a DIFFERENT world than the pinned one" error line logged during them (Nov 4,
+  CL-0358). Run your own filter, and read another session's claim on source files before trusting a full run.
 - **A HUD screenshot shows no reticle / no popup** -> the console's `shot` leaves the UI out: `shot showui` (Oct 29).
 - **A game-side Python probe "returned nothing"** -> it threw: `AMOCharacter`'s `bIsDead` is a PROPERTY in Python (`a.is_dead`, not
   `a.is_dead()`); `MO.Test.SpawnCreature Wolf` finds no class (the wolf is `/MOFramework/MOBS/Wolf/Wolf.Wolf_C`, no `BP_`): pass the

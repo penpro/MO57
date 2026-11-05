@@ -423,6 +423,39 @@ Wes (2026-10-09): "there's not much point in doing overnight sessions if I have 
 `Tools/ov_run.sh` snapshots each task into `Saved/Logs/ov_history/<stamp>.sh` + `.log`. Approving the runner approves whatever the task holds:
 keep to the standing rules (`Docs/DECISIONS.md` "Earlier": never Wes's saves, own PIDs only, local / free only).
 
+### Session heartbeat: are the sessions stuck on each other?
+
+Wes, Nov 4: "there's two sub tasks fighting and timing out, pick one to actually do the things", then "create a heartbeat to check subprocesses for
+stalemate conditions". `python Tools/session_heartbeat.py` checks once (exit 0 clear, 3 stalemate, 2 can't tell). The session that started the others
+runs it with `run_in_background`, so it costs nothing while all is well and its exit wakes that session:
+
+```bash
+python Tools/session_heartbeat.py --watch --self <this session's id> --session "WorldLab=c1ceb288" --session "crop-plant=dd9a61c9"
+```
+
+`--session LABEL=ID` says whose transcript shows that a coop author is working (LABEL: part of the author's name); without one, any session's activity
+holds the alarm. It reads the coop log, the process table and each transcript's modified time, writes one line per tick to
+`Saved/SessionHeartbeat/heartbeat.log`, and stops nothing. A finding stays quiet for `--snooze-min` (30) after it is reported, unless it clears and comes back.
+
+| Finding | What it means |
+|---|---|
+| `CIRCULAR_WAIT` | A waits on a claim of B, B waits on a claim of A |
+| `BLOCKED_ON_IDLE` | someone waits on an open claim, its holder hasn't moved for `--stall-min` (20), and no build or commandlet runs |
+| `MISSED_WAKE` | what a session waited for was released, and that session hasn't moved for `--stall-min` |
+| `WAITER_ON_RELEASED` | a polling loop still runs though every claim it names is closed |
+| `WAITER_FLAPPING` | three loops on one claim in an hour: a session keeps waking and waiting again |
+| `HUNG_PROCESS` | an Unreal process used under 1 s of CPU in `--hung-min` (15) |
+| `LEFTOVER_REPORTER` | a crash reporter outlived the process it watched: it holds binaries and UBT refuses (TRAPS §2) |
+
+**When it fires, the parent session picks one:** the one furthest along, or the one whose uncommitted edits are already in the shared tree. It tells the
+other to stop its loop and write `WITHDRAW CL-nnnn`, and tells it when to go. Re-arm the watch afterwards; it dies with the session that ran it.
+
+**So the heartbeat can read a wait, write it this way:** `Status: WAITING, not a claim: when CL-nnnn releases I take ...` (or `the build window when
+CL-nnnn releases` inside a CLAIM), and close it with `Status: RELEASE CL-nnnn[ and CL-mmmm]: ...` or `Status: WITHDRAW CL-nnnn: ...`. Only the ids before the
+first colon or full stop count as closed. An open `UnrealEditor.exe` (an editor or a `-game` instance) doesn't count as work, since it ticks whether anyone
+uses it or not. A long soak driven only by a background wait can therefore raise a false `BLOCKED_ON_IDLE`: it costs one look. Tests:
+`python -m unittest discover -s Tools/tests -p "test_session_heartbeat.py"` (the coop lines of the Nov 4 stand-off, replayed).
+
 ## 10. Steam patch notes (Wes N9, 2026-10-17)
 
 The old PATCH_NOTES.md is archived (`Docs/Archive/PATCH_NOTES.md`). When Wes asks for Steam patch notes: read the last entry of `Docs/STEAM_RELEASES.md` (date / time / commit of the
