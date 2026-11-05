@@ -229,6 +229,24 @@ public:
 	// This component now reads the shared TimeScale from the world subsystem
 	// so all medical components stay in lockstep.
 
+	/** How long a full store of each lasts with none in the diet, in game days, down to the deficiency line (30 %): the body's own reserves, not a daily meter (N-310; the numbers and where they come from: Docs/Medical_And_Survival.md section 3). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float VitaminAStoreDays = 365.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float VitaminBStoreDays = 30.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float VitaminCStoreDays = 60.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float VitaminDStoreDays = 90.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float IronStoreDays = 365.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float CalciumStoreDays = 365.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float PotassiumStoreDays = 14.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
+	float SodiumStoreDays = 14.0f;
+
 	/** Daily water requirement in mL (normal ~2500mL/day). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
 	float DailyWaterRequirement = 2500.0f;
@@ -512,8 +530,13 @@ private:
 	/** Process hydration loss. */
 	void ProcessHydration(float DeltaTime);
 
-	/** Process vitamin/mineral decay over time. */
+	friend class FMOMetabolismNutrientStoresLast;
+
+	/** Process vitamin/mineral use over time: the body's stores run down over days to months. */
 	void ProcessNutrientDecay(float DeltaTime);
+
+	/** Game seconds of use not yet taken from the stores: a second's use of a year's store is below a float's resolution at 100 %. */
+	float NutrientUseSeconds = 0.0f;
 
 	/** Process fitness decay if not training. */
 	void ProcessFitnessDecay(float DeltaTime);

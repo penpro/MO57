@@ -741,19 +741,31 @@ void UMOMetabolismComponent::ProcessHydration(float DeltaTime)
 
 void UMOMetabolismComponent::ProcessNutrientDecay(float DeltaTime)
 {
-	// Vitamins and minerals deplete over time (daily requirements)
-	// Lose ~100% per day = ~0.00116% per second
-	float DecayPerSecond = 100.0f / 86400.0f;
-	float Decay = DecayPerSecond * DeltaTime;
+	// These are stores, not daily meters (N-310). A flat 100 % a day (the June audit's L9) brought deficiency in 17 hours and, at no vitamin C for a day, wounds that
+	// stopped healing (GetWoundHealingMultiplier): a game-y rate, where a full body goes weeks to a year on its reserves (Principle 11).
+	// Taken an hour at a time: a second's use of a year's store is below a float's resolution at 100 %.
+	constexpr float StepSeconds = 3600.0f;
+	NutrientUseSeconds += DeltaTime;
+	if (NutrientUseSeconds < StepSeconds)
+	{
+		return;
+	}
+	const float UsedSeconds = NutrientUseSeconds;
+	NutrientUseSeconds = 0.0f;
 
-	Nutrients.VitaminA = FMath::Max(0.0f, Nutrients.VitaminA - Decay);
-	Nutrients.VitaminB = FMath::Max(0.0f, Nutrients.VitaminB - Decay);
-	Nutrients.VitaminC = FMath::Max(0.0f, Nutrients.VitaminC - Decay);
-	Nutrients.VitaminD = FMath::Max(0.0f, Nutrients.VitaminD - Decay * 0.5f);  // D stored longer
-	Nutrients.Iron = FMath::Max(0.0f, Nutrients.Iron - Decay * 0.5f);  // Iron stored in body
-	Nutrients.Calcium = FMath::Max(0.0f, Nutrients.Calcium - Decay);
-	Nutrients.Potassium = FMath::Max(0.0f, Nutrients.Potassium - Decay);
-	Nutrients.Sodium = FMath::Max(0.0f, Nutrients.Sodium - Decay);
+	constexpr float DeficiencyLine = 30.0f;
+	const auto Use = [UsedSeconds](float& Store, float StoreDays)
+	{
+		Store = FMath::Max(0.0f, Store - (100.0f - DeficiencyLine) / (FMath::Max(1.0f, StoreDays) * 86400.0f) * UsedSeconds);
+	};
+	Use(Nutrients.VitaminA, VitaminAStoreDays);
+	Use(Nutrients.VitaminB, VitaminBStoreDays);
+	Use(Nutrients.VitaminC, VitaminCStoreDays);
+	Use(Nutrients.VitaminD, VitaminDStoreDays);
+	Use(Nutrients.Iron, IronStoreDays);
+	Use(Nutrients.Calcium, CalciumStoreDays);
+	Use(Nutrients.Potassium, PotassiumStoreDays);
+	Use(Nutrients.Sodium, SodiumStoreDays);
 }
 
 void UMOMetabolismComponent::ProcessFitnessDecay(float DeltaTime)
