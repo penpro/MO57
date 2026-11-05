@@ -3,6 +3,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "MOSurvivalStatsComponent.h"
+#include "MOPersonalityComponent.h"
 #include "MOPersistenceSubsystem.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
@@ -90,6 +91,34 @@ bool FMOSurvivalSaveRoundTrip::RunTest(const FString&)
 	TestEqual(TEXT("Class-authored hunger limit is preserved"), Target->Hunger.Max, 80.0f);
 	TestEqual(TEXT("Class-authored decay rate is preserved"), Target->Hunger.DecayRate, 0.125f);
 	TestEqual(TEXT("Class-authored stamina recovery is preserved"), Target->Stamina.RegenRate, 4.25f);
+	return true;
+}
+
+// A colonist's character survives a load (the June audit's M18: it was in no save, and the colony's upkeep rolled a new one every load). This covers the record and the component; the
+// subsystem's two lines (capture, ApplyPawnComponentState) are private and want a save + load in a game: expected the same traits after, failing before different ones.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPersonalitySaved, "MOFramework.Colony.PersonalitySaved", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOPersonalitySaved::RunTest(const FString&)
+{
+	using namespace MOSurvivalPersistenceTests;
+	FWorld World;
+	APawn* Source = World.World->SpawnActor<APawn>();
+	UMOPersonalityComponent* From = NewObject<UMOPersonalityComponent>(Source);
+	FMOPersonalityTraits Traits;
+	Traits.Conscientiousness = -0.4f;
+	Traits.Sociability = 0.7f;
+	Traits.Stability = -0.9f;
+	From->SetTraits(Traits);
+
+	FMOPersistedPawnRecord Record;
+	From->BuildSaveData(Record.PersonalityData);
+	const FMOPersistedPawnRecord Loaded = RoundTrip(Record);
+
+	APawn* Target = World.World->SpawnActor<APawn>();
+	UMOPersonalityComponent* To = NewObject<UMOPersonalityComponent>(Target);
+	TestTrue(TEXT("the record's traits apply"), To->ApplySaveDataAuthority(Loaded.PersonalityData));
+	TestEqual(TEXT("conscientiousness"), To->GetTraits().Conscientiousness, -0.4f);
+	TestEqual(TEXT("sociability"), To->GetTraits().Sociability, 0.7f);
+	TestEqual(TEXT("stability"), To->GetTraits().Stability, -0.9f);
 	return true;
 }
 

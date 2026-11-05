@@ -223,6 +223,10 @@ struct FMOPersistedPawnRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOCombatSaveData CombatData;
 
+    /** A person's character (UMOPersonalityComponent). All zero in a save from before it: the colony's upkeep then gives them one, as it does a new villager. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOPersonalityTraits PersonalityData;
+
     /** Flag to indicate if component data has been populated (for legacy save compatibility) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     bool bHasComponentData = false;
