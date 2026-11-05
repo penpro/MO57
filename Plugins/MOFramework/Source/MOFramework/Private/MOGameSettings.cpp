@@ -110,11 +110,13 @@ void UMOGameSettings::SetToDefaults()
 	bEnableMotionBlur = true;
 	bGraphicsQualityChosen = false;   // Reset -> the quality is detected for this hardware again (Super::SetToDefaults restored the engine's fallback groups)
 
-	// Audio
-	MasterVolume = 1.0f;
-	MusicVolume = 0.8f;
-	SFXVolume = 1.0f;
-	AmbientVolume = 1.0f;
+	// Audio: the header's tuned mix. This ran on every first launch too (no .ini yet: UGameUserSettings::ValidateSettings), so until Nov 2026 a new
+	// player and Options' Reset got music at 0.8 against the tuned 0.15, ambient 1.0 against 0.2 and effects 1.0 against 0.5, and the weather slider stayed put.
+	MasterVolume = DefaultMasterVolume;
+	MusicVolume = DefaultMusicVolume;
+	SFXVolume = DefaultSFXVolume;
+	AmbientVolume = DefaultAmbientVolume;
+	WeatherVolume = DefaultWeatherVolume;
 
 	// Main Menu / First Run
 	bPlayIntro = true;

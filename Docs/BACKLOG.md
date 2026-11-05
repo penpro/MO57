@@ -519,6 +519,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
+| N-280 | FIXED (Nov 4, `darktower/audio-defaults`; by automation, by ear on Wes's list) | Claude | A first launch and Options' Reset played music at 0.8 against the tuned 0.15, ambient 1.0 against 0.2, effects 1.0 against 0.5 (the June audit's M17 line, still true): `SetToDefaults` had its own numbers and the engine calls it when no ini exists. One set (`UMOGameSettings::Default*Volume`); test `MOFramework.Settings.ResetIsTheTunedMix` | `Docs/Audio.md` section 2 | M17 |
 | N-130 | WAITING | Wes | Verify the XAudio2 backend at launch + Wes's relaunch test -- checked Oct 22: every editor log since Oct 21 reads "Initializing audio mixer using platform API: 'XAudio2'". Left: Wes's relaunch test (the "dddd" replay of WASAPI) | `Docs/Audio.md` | G18 |
 | N-131 | CLOSED-2026-10-22 | Claude | ~20 s of thin menu audio after a map load (UDW DSP) -- measured Oct 22 as UDW poisoning the mix for ~15 s after most menu loads: tracked as N-189 | Audio §2 | |
 | N-132 | DONE-2026-10-20 | Claude | Footsteps on props / buildings (needs physical materials) and creatures -- props underfoot by mesh path (aac87064), creatures by distance covered (33ad4d7b). | Audio §3 | P-9, G18 |

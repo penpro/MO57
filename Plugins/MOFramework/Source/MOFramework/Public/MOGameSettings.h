@@ -107,21 +107,29 @@ public:
 	// AUDIO OPTIONS
 	// ============================================================================
 
+	/** The mix a new player starts with and Options' Reset returns to: the one place these numbers live. The engine calls SetToDefaults on a first
+	 *  run (no GameUserSettings.ini: UGameUserSettings::ValidateSettings), so a second set of numbers there WAS the first-run mix. */
+	static constexpr float DefaultMasterVolume = 1.0f;
+	static constexpr float DefaultMusicVolume = 0.15f;
+	static constexpr float DefaultSFXVolume = 0.50f;
+	static constexpr float DefaultAmbientVolume = 0.20f;
+	static constexpr float DefaultWeatherVolume = 0.50f;
+
 	/** Master volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MasterVolume = 1.0f;
+	float MasterVolume = DefaultMasterVolume;
 
 	/** Music volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MusicVolume = 0.15f;
+	float MusicVolume = DefaultMusicVolume;
 
 	/** Sound effects volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float SFXVolume = 0.50f;
+	float SFXVolume = DefaultSFXVolume;
 
 	/** Ambient/environment volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float AmbientVolume = 0.20f;
+	float AmbientVolume = DefaultAmbientVolume;
 
 	/**
 	 * Weather audio volume (0-1) — controls UDW's weather sounds (rain, thunder,
@@ -129,7 +137,7 @@ public:
 	 * class (UMOAudioSettings::WeatherSoundClasses).
 	 */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float WeatherVolume = 0.50f;
+	float WeatherVolume = DefaultWeatherVolume;
 
 	// ============================================================================
 	// MAIN MENU / FIRST RUN
