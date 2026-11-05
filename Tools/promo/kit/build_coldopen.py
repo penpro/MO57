@@ -139,7 +139,7 @@ def shell_mesh(name, a, length, power=0.5, segments=96, rings=64, x0=-1.2):
     return ob
 
 
-def flame_material(name, a=0.98, length=11.0, gain=2.3, x0=-1.16):
+def flame_material(name, a=float(cfg.get("bow_a", 0.98)), length=float(cfg.get("flame_len", 11.0)), gain=float(cfg.get("flame_gain", 3.2)), x0=-1.16):
     """An emission volume: a sheath of fire hugging the bow shock, torn by noise that runs back along +X, cooling and thinning down the wake; a core of fire in the wake behind the pod."""
     m, n, out = kit.new_material(name)
     tc = n.add("TexCoord")
@@ -150,20 +150,21 @@ def flame_material(name, a=0.98, length=11.0, gain=2.3, x0=-1.16):
     xn = n.math("MAXIMUM", n.math("SUBTRACT", x, x0), 0.0)
     t = n.math("DIVIDE", xn, length, clamp=True)
     bow = n.math("MULTIPLY", n.math("SQRT", xn), a)
-    width = n.math("ADD", 0.05, n.math("MULTIPLY", t, 0.42))
+    width = n.math("ADD", float(cfg.get("sheath_w0", 0.035)), n.math("MULTIPLY", t, float(cfg.get("sheath_w1", 0.26))))
     d = n.math("DIVIDE", n.math("SUBTRACT", r, bow), width)
     sheath = n.math("POWER", 2.718, n.math("MULTIPLY", n.math("MULTIPLY", d, d), -1.0))
     core_w = n.math("ADD", 0.22, n.math("MULTIPLY", t, 0.55))
     core_d = n.math("DIVIDE", r, core_w)
     behind = n.add("MapRange", Value=x, From_Min=0.95, From_Max=2.0, To_Min=0.0, To_Max=1.0, p_clamp=True).outputs[0]
-    core = n.math("MULTIPLY", n.math("POWER", 2.718, n.math("MULTIPLY", n.math("MULTIPLY", core_d, core_d), -1.0)), n.math("MULTIPLY", behind, 0.75))
+    core = n.math("MULTIPLY", n.math("POWER", 2.718, n.math("MULTIPLY", n.math("MULTIPLY", core_d, core_d), -1.0)), n.math("MULTIPLY", behind, float(cfg.get("core", 0.3))))
     body = n.math("MAXIMUM", sheath, core)
     time_node = n.value(0.0, "Time")
-    mp = n.add("CombineXYZ", X=n.math("ADD", n.math("MULTIPLY", x, 0.42), n.math("MULTIPLY", time_node.outputs[0], -0.17)), Y=n.math("MULTIPLY", y, 2.5), Z=n.math("MULTIPLY", z, 2.5))
+    across = float(cfg.get("streak", 5.5))
+    mp = n.add("CombineXYZ", X=n.math("ADD", n.math("MULTIPLY", x, 0.3), n.math("MULTIPLY", time_node.outputs[0], -0.17)), Y=n.math("MULTIPLY", y, across), Z=n.math("MULTIPLY", z, across))
     tear = n.add("TexNoise", Vector=mp.outputs[0], Scale=2.6, Detail=9.0, Roughness=0.6, Distortion=0.7)
     fine = n.add("TexNoise", Vector=mp.outputs[0], Scale=9.0, Detail=6.0, Roughness=0.55)
-    torn = n.add("MapRange", Value=n.math("ADD", n.math("MULTIPLY", tear.outputs["Fac"], 0.75), n.math("MULTIPLY", fine.outputs["Fac"], 0.25)), From_Min=0.47, From_Max=0.74, To_Min=0.0, To_Max=1.0, p_clamp=True, p_interpolation_type="SMOOTHSTEP").outputs[0]
-    fade = n.math("POWER", n.math("SUBTRACT", 1.0, t, clamp=True), 2.4)
+    torn = n.add("MapRange", Value=n.math("ADD", n.math("MULTIPLY", tear.outputs["Fac"], 0.75), n.math("MULTIPLY", fine.outputs["Fac"], 0.25)), From_Min=float(cfg.get("torn_lo", 0.5)), From_Max=float(cfg.get("torn_hi", 0.72)), To_Min=0.0, To_Max=1.0, p_clamp=True, p_interpolation_type="SMOOTHSTEP").outputs[0]
+    fade = n.math("POWER", n.math("SUBTRACT", 1.0, t, clamp=True), float(cfg.get("fade", 2.8)))
     plasma = n.value(1.0, "Plasma")
     density = n.math("MULTIPLY", n.math("MULTIPLY", body, torn), n.math("MULTIPLY", fade, plasma.outputs[0]))
     # hottest at the nose: the air is stopped there, and the fire is brightest and whitest
@@ -198,7 +199,8 @@ def entry():
     pod.rotation_euler = (0.25, math.radians(-16), 0)
     tumble(pod, (0.0035, 0.0, 0.0), axis="X")
     hn = kit_pod.heat_node(pod)
-    for f, v in ((1, 0.25), (int(FRAMES * 0.45), 0.8), (FRAMES, 1.0)):
+    heat = float(cfg.get("heat", 0.55))
+    for f, v in ((1, 0.2 * heat), (int(FRAMES * 0.45), 0.8 * heat), (FRAMES, heat)):
         hn.outputs[0].default_value = v
         hn.outputs[0].keyframe_insert("default_value", frame=f)
     # the fire round it: one volume, aligned with the fall

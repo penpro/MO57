@@ -44,7 +44,8 @@ What bit the capture, so the next one doesn't re-learn it:
 - `TaskStop` on a command that launched an instance kills the instance: run the boot in the foreground.
 - The photo camera is one actor across shots: an exposure override stays until the next job sets it (`promo_shot.py` now always does).
 - Teleport into the far world and the ground may not be there yet: she fell through a lake's bed and a cave's floor. Arrive, wait, then roll; `MO.Water.GoToLake` picks the nearest lake to where the pawn already is.
-- Look at every take before it counts. The review sheet caught a take of the sky, a one-frame-short take, a smear of leaves through the lens and a frozen climber, all of which had "worked".
+- The edit lost picture frames silently, three ways: `overlay=eof_action=pass` drops a frame where a card ends inside a shot, `-r 24` resampled away others, and a `split` to a null sink cost the CG shots their last frames. Each slipped every later cut against the music. Now: `eof_action=repeat`, `-fps_mode passthrough`, no stray split, 16 spare frames at the head of a graph, and `render_shot` reads the count back and stops if it is wrong. `check_motion.py --sources` matches every graded frame to its source: all moving shots are exact; the test cannot tell near-still shots (the title, the panel) from their neighbours, and for those the exact frame count is the check.
+- Look at every take before it counts. The review sheet caught a take of the sky, a one-frame-short take, a smear of leaves through the lens and a frozen climber, all of which had "worked". For what a still cannot show, `python Tools/promo/check_motion.py` lists frozen frames and jumps in a finished cut.
 
 
 ## 4. Script and storyboard
@@ -145,14 +146,15 @@ No agent has heard the film, and whether it looks right is yours. Nothing below 
 
 **By eye, the shots I am least sure of:**
 
-1. S02_entry, the weakest CG: the pod can read as an egg in orange wrap. A re-render is about an hour on DARKTOWER if you have a note.
+1. S02_entry, the CG I reworked last: the first version read as an egg in orange wrap, so it was rendered again with a narrow comet tail (`{"bow_a": 0.54, "flame_gain": 5.5, "core": 0.7, "heat": 0.42, "streak": 6.5}` in `build_coldopen.py`). Still the CG shot to look at hardest; another pass is 80 minutes on DARKTOWER.
 2. S01 and S04: the planet's atmosphere line is very white.
 3. G08 ravine: the voxel rock looks chewed close up.
 4. G15 fire: the campfire's logs look low-poly this close, and the flames are the old effect.
 5. G20: smoke is heavy, and the ring is staged.
 6. G21 and G22: everyone is in underwear, because that is what the game gives them today. Harvey goes reddish in the low sun in G22, and G22 is the one soft shot.
-7. G17: the panel is real and honest, but it is a plain UI on screen for 3 s.
-8. The flare sweeps at bars 16, 18, 26 and 31 (`edit.py` `FLARE_AT`, `FLARE_OPACITY`).
-9. Type: Windows' Sitka until F69.
+7. G17: the panel is real and honest, but it is a plain UI on screen for 3 s, with the bar through the text (N-306).
+8. G21: the game's HUD reticle fades out over about a third of a second after the click, faint at the top of the frame.
+9. The flare sweeps at bars 16, 18, 26 and 31 (`edit.py` `FLARE_AT`, `FLARE_OPACITY`).
+10. Type: Windows' Sitka until F69.
 
-**Does the film fall short?** Yes, in these places: S02 is below the bar of the rest; there is no digging, no real crafting or work animation (F54 is still open) and no combat in it; every character is in underwear; G22 is softer. Forks F68 to F71 in `Docs/DECISIONS.md` are yours.
+**Does the film fall short?** Yes, in these places: there is no digging, no real crafting or work animation (F54 is still open) and no combat in it, because none of them yet look good on camera; every character is in underwear; the CG is good, not AAA; G22 is softer than the rest. Forks F68 to F71 in `Docs/DECISIONS.md` are yours.

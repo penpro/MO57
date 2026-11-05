@@ -344,6 +344,9 @@
   probed Nov 4 it read `Z:` and `\\DARKSIDE\DarksideProduction`, opened a window, and `motion_probe.py clip` captured it (only while he is logged on). DARKTOWER's engine has none of the five Voxel shader
   hooks, so the first `ue.py inst start` there edits `D:\UE_5.8\Engine\Shaders\Private`. Frame-time benches stay on DARKSIDE (Wes: "inconsistent metrics don't work").
 
+- **On a fixed time step `MO.Test.InjectInput`'s seconds are wall-clock** (`FPlatformTime`), not game time (Nov 5, promo capture): 16 s ran out 4 s of game time into a slow take and she stopped dead. Hold with `9999`, let go explicitly.
+- **Stopping a background Bash task that had launched an instance took the instance with it once** (Nov 5, `capture.py boot` moved to the background, then TaskStop: the game's log ends at that moment). Boot in the foreground; a later task's stop was fine with the instance started elsewhere.
+- **A body that has bled out falls through the world when you move it** (Nov 5): real wolf bites on a hidden pawn run their course during a long session. Its capsule still reads `Pawn`, `MO.Possess.Take` back to it quietly does nothing, and it drops through a lake's bed. Check the pawn is alive before blaming the voxels.
 ## 6. Co-op and RPC
 
 - **A host climbing showed as FALLING on the joiner, and resting on a wall dropped to the ground there** -> another machine's copy (a
@@ -725,6 +728,7 @@
   volume lives on the LOADED class and an unreferenced class is garbage-collected and reloads at its authored volume -> hold it
   (`ApplySliderVolumes`). Test EverySoundOnASlider. (Oct 25)
 
+- **`-DeterministicAudio` is still muted by the focus policy** (Nov 5): an unfocused instance reports `OUTPUT SILENT` and records -inf, whatever the docs say about the meter. Add `-ini:Engine:[Audio]:UnfocusedVolumeMultiplier=1.0` to the launch to read or record the mix. Python's name for the recorder is `unreal.AudioMixerLibrary`, not `AudioMixerBlueprintLibrary`.
 ## 15. Performance measurement
 
 - **Hitch counters look normal** -> game / render / GPU counters lag the frame-time measurement by one frame -> log a ring of frames;

@@ -106,25 +106,25 @@ def graph(shot, frames, w, h, base_filter, overlays):
     """The per-shot filter graph. Input 0 is the picture; inputs 1.. are overlay sequences."""
     t = tune(shot.id)
     lut = os.path.join(LUTS, shot.grade + ".cube").replace("\\", "/").replace(":", "\\:")
-    chain = [base_filter]
+    # spare frames ahead of the overlays: the graph can lose the last few frames of its main stream as it closes (2-5 of a shot, varying run to run, Nov 5), and one frame short
+    # slips every later cut against the music. Now it only ever loses spares; the trim at the end cuts to length, and render_shot reads the count back.
+    chain = [base_filter, "tpad=stop=16:stop_mode=clone"]
     if shot.kind == "game":
         if "eq" in t:
             chain.append("eq=" + t["eq"])
         chain.append("lut3d='%s':interp=tetrahedral" % lut)
     if t.get("in_frames") is not None:
         pass
-    parts = ["[0:v]%s,split[a0][b0]" % ",".join(chain)]
     # the bloom: highlights only, at quarter size, screened back
     bloom = float(t.get("bloom", 0.22 if shot.kind == "game" else 0.0))
+    parts = ["[0:v]%s,split[a0][b0]" % ",".join(chain)] if bloom > 0 else ["[0:v]%s[pic]" % ",".join(chain)]     # no split to nowhere: it cost a shot its last frames
     if bloom > 0:
         parts.append("[b0]scale=%d:%d:flags=bilinear,curves=all='0/0 0.62/0 1/1',gblur=sigma=%d,scale=%d:%d:flags=bicubic,format=yuv444p10le[gl]" % (w // 4, h // 4, max(h // 90, 4), w, h))
         parts.append("[a0]format=gbrp10le[a1];[gl]format=gbrp10le[gl2];[a1][gl2]blend=all_mode=screen:all_opacity=%.3f,format=yuv444p10le[pic]" % bloom)
-    else:
-        parts.append("[b0]nullsink")
-        parts.append("[a0]null[pic]")
     last = "pic"
     for i, (name, at, skip, mode) in enumerate(overlays, 1):
         lab = "o%d" % i
+        # eof_action=repeat below, not pass: where an overlay ended inside a shot, pass dropped a frame of the picture (found Nov 5 by matching graded frames to their sources). A card's last frame is clear, so holding it shows nothing.
         pre = "[%d:v]trim=start_frame=%d,setpts=PTS-STARTPTS+%d/(24*TB),scale=%d:%d,format=gbrap" % (i, skip, at, w, h)
         if mode == "over":
             # a soft dark cloud under the type so it reads on any picture: thin letters blurred, their alpha pushed up so the glow fills in, then blurred again. It rises and falls with the type.
@@ -132,13 +132,13 @@ def graph(shot, frames, w, h, base_filter, overlays):
             halo = 1.0 if name.startswith("T") and name[1:3].isdigit() else 0.5
             parts.append(pre + ",split[%sa][%sb]" % (lab, lab))
             parts.append("[%sb]gblur=sigma=%d:planes=15,colorlevels=aimax=0.16,colorchannelmixer=rr=0:gg=0:bb=0:aa=%.2f,gblur=sigma=%d:planes=15[%ss]" % (lab, max(h // 90, 4), 0.66 * halo, max(h // 70, 6), lab))
-            parts.append("[%s][%ss]overlay=y=%d:format=yuv444p10:eof_action=pass[%st]" % (last, lab, y, lab))
-            parts.append("[%sa]colorlevels=rimax=0.88:gimax=0.88:bimax=0.88[%sb2];[%st][%sb2]overlay=y=%d:format=yuv444p10:eof_action=pass[%sr]" % (lab, lab, lab, lab, y, lab))
+            parts.append("[%s][%ss]overlay=y=%d:format=yuv444p10:eof_action=repeat[%st]" % (last, lab, y, lab))
+            parts.append("[%sa]colorlevels=rimax=0.88:gimax=0.88:bimax=0.88[%sb2];[%st][%sb2]overlay=y=%d:format=yuv444p10:eof_action=repeat[%sr]" % (lab, lab, lab, lab, y, lab))
             last = lab + "r"
         else:
             # a flare is light: screen it, weighted by its own alpha
             parts.append(pre + ",colorchannelmixer=aa=%.2f[%sc]" % (FLARE_OPACITY, lab))
-            parts.append("[%s][%sc]overlay=format=yuv444p10:eof_action=pass[%sr]" % (last, lab, lab))
+            parts.append("[%s][%sc]overlay=format=yuv444p10:eof_action=repeat[%sr]" % (last, lab, lab))
             last = lab + "r"
     vign = float(t.get("vignette", 0.28 if shot.kind != "black" else 0.0))
     tail = "format=yuv444p10le"
@@ -169,11 +169,19 @@ def render_shot(shot, w, h, animatic, force):
     args = ["ffmpeg", "-y", "-loglevel", "error"] + in_args
     for name, at, skip, mode in overlays:
         args += ["-framerate", "24", "-i", os.path.join(KIT, "cards", name, "f_%04d.png")]
-    args += ["-filter_complex", g, "-map", "[out]", "-frames:v", str(frames), "-r", "24", "-c:v", "prores_ks", "-profile:v", "3", "-qscale:v", "7", "-vendor", "apl0", "-pix_fmt", "yuv422p10le", out]
+    args += ["-filter_complex", g, "-map", "[out]", "-frames:v", str(frames), "-fps_mode", "passthrough", "-c:v", "prores_ks", "-profile:v", "3", "-qscale:v", "7", "-vendor", "apl0", "-pix_fmt", "yuv422p10le", out]
     run(args)
+    got = frame_count(out)
+    if got != frames:
+        sys.exit("%s came out %d frames, the film wants %d: every later cut would slip against the music" % (shot.id, got, frames))
     with open(stamp_path, "w") as f:
         f.write(stamp)
     return out, True
+
+
+def frame_count(path):
+    r = subprocess.run(["ffprobe", "-v", "error", "-count_packets", "-select_streams", "v", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", path], capture_output=True, text=True)
+    return int(r.stdout.strip() or 0)
 
 
 def sources_stamp(shot, overlays):
@@ -206,10 +214,10 @@ def master(animatic=False):
     grain = "noise=c0s=5:c0f=t+u:c1s=2:c1f=t+u:c2s=2:c2f=t+u"   # applied to the 8-bit web files only as dither; the 10-bit master keeps its own
     # the 4K master: HEVC 10-bit, high bit rate (NVENC, so it does not take the night); the web files from it
     m4k = os.path.join(OUT, "MO57_Promo_4K_master_hevc10.mp4")
-    run(["ffmpeg", "-y", "-loglevel", "error", "-i", cut, "-i", audio, "-map", "0:v", "-map", "1:a", "-c:v", "hevc_nvenc", "-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "14", "-b:v", "90M", "-maxrate", "160M", "-profile:v", "main10", "-pix_fmt", "p010le",
+    run(["ffmpeg", "-y", "-loglevel", "error", "-i", cut, "-i", audio, "-map", "0:v", "-map", "1:a", "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709", "-c:v", "hevc_nvenc", "-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "14", "-b:v", "90M", "-maxrate", "160M", "-profile:v", "main10", "-pix_fmt", "p010le",
          "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart", m4k])
     web = os.path.join(OUT, "MO57_Promo_1080p.mp4")
-    run(["ffmpeg", "-y", "-loglevel", "error", "-i", cut, "-i", audio, "-map", "0:v", "-map", "1:a", "-vf", "scale=1920:1080:flags=lanczos:sws_dither=ed,format=yuv420p," + grain, "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high",
+    run(["ffmpeg", "-y", "-loglevel", "error", "-i", cut, "-i", audio, "-map", "0:v", "-map", "1:a", "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale=1920:1080:flags=lanczos:sws_dither=ed,format=yuv420p," + grain, "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high",
          "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart", web])
     print("MASTER", m4k, "\nWEB", web)
 
