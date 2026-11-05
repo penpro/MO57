@@ -1413,6 +1413,8 @@ bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		HitInfo.Instigator = Owner;
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
+		TrainFromBlow(Result, true);
+		TargetCombat->TrainFromBlow(Result, false);
 		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 		// UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s hit %s (%s, %.1f damage): %s"), *Owner->GetName(), *HitActor->GetName(),
 		// 	*UEnum::GetValueAsString(HitBodyPart), HitInfo.BaseDamage, *UEnum::GetValueAsString(Result));
@@ -1521,14 +1523,29 @@ void UMOCombatComponent::PlayAttackAnimation()
 	}
 }
 
-void UMOCombatComponent::GrantCombatXP(float Amount)
+void UMOCombatComponent::TrainFromBlow(EMOAttackResult Result, bool bIsStriker)
 {
-	if (!CachedSkillsComp)
+	static const FName Melee(TEXT("Melee"));
+	static const FName Defense(TEXT("Defense"));
+	if (bIsStriker)
 	{
-		return;
+		if (Result == EMOAttackResult::Hit)
+		{
+			GrantCombatXP(Melee, XPPerLandedBlow);
+		}
 	}
+	else if (Result == EMOAttackResult::Blocked || Result == EMOAttackResult::Parried || Result == EMOAttackResult::Dodged || Result == EMOAttackResult::Glanced)
+	{
+		GrantCombatXP(Defense, XPPerBlowTurnedAside);
+	}
+}
 
-	// TODO: Grant XP to appropriate combat skill
+void UMOCombatComponent::GrantCombatXP(FName SkillId, float Amount)
+{
+	if (CachedSkillsComp && GetOwner() && GetOwner()->HasAuthority())
+	{
+		CachedSkillsComp->AddExperience(SkillId, Amount);
+	}
 }
 
 bool UMOCombatComponent::LoadWeaponProfile(FName ProfileId, FMOWeaponDamageProfileRow& OutProfile) const

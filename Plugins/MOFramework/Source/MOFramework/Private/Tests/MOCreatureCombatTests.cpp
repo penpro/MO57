@@ -8,6 +8,9 @@
 #include "MOCreatureController.h"
 #include "MOMedicalDatabaseSettings.h"
 #include "MOMetaHumanCharacter.h"
+#include "MOSkillsComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/DataTable.h"
 #include "Engine/SCS_Node.h"
@@ -90,6 +93,57 @@ bool FMOCombatHitCarriesInstigator::RunTest(const FString& Parameters)
 	// Damage from nobody (a fall) is nobody's doing.
 	Anatomy->InflictDamage(EMOBodyPartType::CalfLeft, 5.0f, EMOWoundType::Blunt);
 	TestNull(TEXT("environment damage names nobody"), Anatomy->GetLastDamageInstigator());
+	return true;
+}
+
+// A fight trains the fighters (N-288): GrantCombatXP was empty, so Melee and Defense stood at nothing for ever. Failing before: 0 XP after any number of blows.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatBlowsTrain, "MOFramework.Combat.Skill.BlowsTrain",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCombatBlowsTrain::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("MOCombatBlowsTrainWorld"));
+	GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Fighter = World->SpawnActor<AActor>();
+	UMOSkillsComponent* Skills = NewObject<UMOSkillsComponent>(Fighter);
+	UMOCombatComponent* Combat = NewObject<UMOCombatComponent>(Fighter);
+	Fighter->AddInstanceComponent(Skills);
+	Fighter->AddInstanceComponent(Combat);
+	Skills->RegisterComponent();
+	Combat->RegisterComponent();
+	Fighter->DispatchBeginPlay();
+
+	const auto TotalXP = [Skills](FName Skill)
+	{
+		FMOSkillProgress Progress;
+		return Skills->GetSkillProgress(Skill, Progress) ? Progress.CurrentXP + Progress.Level * 1000.0f : 0.0f;   // a level-up moves XP into the level
+	};
+	const FName Melee(TEXT("Melee"));
+	const FName Defense(TEXT("Defense"));
+
+	Combat->TrainFromBlow(EMOAttackResult::Missed, true);
+	Combat->TrainFromBlow(EMOAttackResult::Blocked, true);
+	TestEqual(TEXT("a blow that does not land teaches the striker nothing"), TotalXP(Melee), 0.0f);
+	Combat->TrainFromBlow(EMOAttackResult::Hit, true);
+	TestTrue(TEXT("a blow that lands trains Melee"), TotalXP(Melee) > 0.0f);
+	TestEqual(TEXT("and not Defense"), TotalXP(Defense), 0.0f);
+
+	Combat->TrainFromBlow(EMOAttackResult::Hit, false);
+	TestEqual(TEXT("a blow taken square teaches the target nothing"), TotalXP(Defense), 0.0f);
+	Combat->TrainFromBlow(EMOAttackResult::Blocked, false);
+	TestTrue(TEXT("a blow blocked trains Defense"), TotalXP(Defense) > 0.0f);
+
+	// A creature (no skills component) fights on with no skill to train.
+	AActor* Wolf = World->SpawnActor<AActor>();
+	UMOCombatComponent* WolfCombat = NewObject<UMOCombatComponent>(Wolf);
+	Wolf->AddInstanceComponent(WolfCombat);
+	WolfCombat->RegisterComponent();
+	Wolf->DispatchBeginPlay();
+	WolfCombat->TrainFromBlow(EMOAttackResult::Hit, true);
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
 	return true;
 }
 
