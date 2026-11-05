@@ -305,6 +305,7 @@ void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
     bSuppressDestroyedGuidRecording = false;
     CurrentSlotName = NewSlotName;
     CurrentWorldId = FGuid::NewGuid();   // a new world's id; a load adopts the save's (LoadWorldFromSlotWithResult)
+    CurrentWorldDisplayName.Reset();     // the same: named by the caller, or adopted from the save
 
     UE_LOG(LogMOFramework, Log,
         TEXT("[MOPersistence] ResetForNewWorld: session state cleared, slot is now '%s'"),
@@ -391,8 +392,8 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // METADATA
     // ============================================================================
 
-    // Display name - use slot name if not explicitly set
-    SaveObject->DisplayName = SlotName;
+    // Display name: the world's own, and the slot's name only if it has none. This wrote the slot's name every time, so the next autosave undid a rename (N-309).
+    SaveObject->DisplayName = ResolveSaveDisplayName(SlotName);
 
     // Timestamp
     SaveObject->SaveTimestamp = FDateTime::Now();
@@ -661,6 +662,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     }
 
     LoadedWorldSave = LoadedTyped;
+    CurrentWorldDisplayName = LoadedTyped->DisplayName;
     if (LoadedTyped->WorldId.IsValid())
     {
         CurrentWorldId = LoadedTyped->WorldId;   // this world's identity (a save from before world ids keeps the one ResetForNewWorld minted)
@@ -2363,6 +2365,10 @@ bool UMOPersistenceSubsystem::RenameSaveSlot(const FString& SlotName, const FTex
     }
 
     LoadedTyped->DisplayName = NewDisplayName.ToString();
+    if (SlotName == CurrentSlotName)
+    {
+        CurrentWorldDisplayName = LoadedTyped->DisplayName;   // the world being played: its next save keeps the new name
+    }
 
     const bool bSaved = WriteSaveSlot(LoadedTyped, SlotName);
     if (!bSaved)

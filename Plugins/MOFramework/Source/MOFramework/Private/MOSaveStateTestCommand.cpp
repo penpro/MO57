@@ -18,6 +18,7 @@
 #include "MOIdentityComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOMetabolismComponent.h"
+#include "MOPersistenceSubsystem.h"
 #include "MOPersonalityComponent.h"
 #include "MORespirationComponent.h"
 #include "MOSkillsComponent.h"
@@ -188,7 +189,10 @@ static FAutoConsoleCommandWithWorldAndArgs GMOTestSaveState(
 			++Carcasses;
 		}
 		const AMOGameState* State = World->GetGameState<AMOGameState>();
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE end seed=%d people=%d carcasses=%d"), State ? State->GetWorldSeedInfo().Seed : 0, People, Carcasses);
+		const UGameInstance* Game = World->GetGameInstance();
+		const UMOPersistenceSubsystem* Persistence = Game ? Game->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE end seed=%d people=%d carcasses=%d world=\"%s\""), State ? State->GetWorldSeedInfo().Seed : 0, People, Carcasses,
+			Persistence ? *Persistence->GetWorldDisplayName() : TEXT(""));
 	}));
 
 #endif
