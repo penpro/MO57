@@ -331,6 +331,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
+| N-308 | FIXED (Nov 5, `darktower/no-replicated-maps`; by automation, the log line to be seen gone in the next `nettest actions`) | Claude | Every co-op log carried `LogProperty: Error: Replicated TMaps are not supported.` (Nov 5 on host and joiner, at the first survivor job): `FMOSurvivorCraftExecution::CompletedProducts` and `FMOCraftingQueueEntry::IngredientsPerCraft` sat in replicated fast arrays. Only the server reads either, so nothing was lost; both are `NotReplicated` now, which leaves the save alone. Test `MOFramework.Net.NothingReplicatedIsAMap` walks every replicated property and RPC parameter so a map that a client does need cannot go unnoticed. Also: the host applied key bindings for each joiner's controller, a false "ApplyBinding failed - no local player" warning a join | `Docs/Coop_And_Networking.md` § 5 | Nov 5 logs |
 | N-110 | OPEN | Claude | Friend invite / Steam-overlay join (`InviteUserToGame`) | `Docs/Coop_And_Networking.md` §1 | |
 | N-111 | OPEN | Claude | Host-a-SAVE over real Steam not exercised (only Null OSS + a real click) | Coop §1 | |
 | N-112 | OPEN | Claude | Residual: 1 of 6 joins sees 17-50 cm ground mismatch for ~10 s | Coop §3 | |

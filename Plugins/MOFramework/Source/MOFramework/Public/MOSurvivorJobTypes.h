@@ -142,7 +142,8 @@ struct MOFRAMEWORK_API FMOSurvivorCraftExecution
 	UPROPERTY() float HandlingSeconds = 0;
 	UPROPERTY() FGuid QueueEntryId;
 	UPROPERTY() TArray<FGuid> BorrowedContainers;
-	UPROPERTY() TMap<FName, int32> CompletedProducts;
+	/** Server only, for the save: the engine cannot replicate a map (MOFramework.Net.NothingReplicatedIsAMap). */
+	UPROPERTY(NotReplicated) TMap<FName, int32> CompletedProducts;
 	UPROPERTY() bool bCraftCompleted = false;
 };
 

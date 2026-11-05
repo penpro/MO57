@@ -143,6 +143,8 @@
 - Authority clusters from the audit (H17 terraform rate limit fixed Oct 13; H18 combat, H19 building, H20 crafting queue guards; C7
   possession TSubclassOf host-only Oct 14): `Docs/BACKLOG.md` keeps the residuals.
 
+**Nothing replicated holds a map** (Nov 5, N-308). The engine cannot replicate a `TMap` or `TSet`: a map inside a replicated struct or an RPC parameter sends nothing and logs `LogProperty: Error: Replicated TMaps are not supported.`, and UHT only refuses one directly on a class. A map in such a struct is `UPROPERTY(NotReplicated)` when only the server needs it, an array when a client does; `MOFramework.Net.NothingReplicatedIsAMap` walks every replicated property and RPC parameter of the three modules.
+
 ## 6. How co-op is tested (rules)
 
 ```bash
