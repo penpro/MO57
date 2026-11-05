@@ -539,6 +539,16 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Combat|Query")
 	float GetSkillDamageBonus() const;
 
+	/** What a blow teaches (N-288), server only: the striker's Melee when it lands; the target's Defense when turned aside (blocked, parried, dodged, glanced). A creature has no skills. */
+	void TrainFromBlow(EMOAttackResult Result, bool bIsStriker);
+
+	/** Melee XP for a blow that lands, Defense XP for one turned aside. DT_Skills' curves turn these into levels. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Combat|Skill")
+	float XPPerLandedBlow = 2.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Combat|Skill")
+	float XPPerBlowTurnedAside = 2.0f;
+
 	/**
 	 * Get time until we can attack again.
 	 */
@@ -754,8 +764,8 @@ private:
 	/** Play the appropriate attack animation montage. */
 	void PlayAttackAnimation();
 
-	/** Grant combat skill XP. */
-	void GrantCombatXP(float Amount);
+	/** Grant XP in a fighting skill, on the server. */
+	void GrantCombatXP(FName SkillId, float Amount);
 
 	/** Load weapon profile from DataTable. */
 	bool LoadWeaponProfile(FName ProfileId, FMOWeaponDamageProfileRow& OutProfile) const;

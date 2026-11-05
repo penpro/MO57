@@ -102,6 +102,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   `MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart` checks every survivor pawn's own fist against the vital parts.
 - **ArmorPenetration** only matters through armor ("0 = stopped by any armor, 1 = ignores armor"): `GetFinalDamage` no longer multiplies
   by it (no hit carries target armor yet). It did: a wooden spear's 10 at 0.1 landed 1, a fifth of a punch.
+- **What a fight teaches** (Nov 4, N-288): a blow that lands gives the striker 2 Melee XP, a blow blocked, parried, dodged or glanced gives the target 2 Defense XP (`TrainFromBlow`, per blow, no toast: fights are fast; Claude's numbers, a component default). `GrantCombatXP` was empty, so both skills stood at nothing. What the levels DO is fork F65: damage and block still ignore them (`GetSkillDamageBonus` returns 0).
 - **The weapon in the hand**: the item in the right-hand equipment slot IS the main-hand weapon (`SyncMainHandFromEquipment`, server, on
   every right-hand change and at BeginPlay): an item with `bIsWeapon` + `WeaponProfileId` (DT_Weapons) is equipped and drawn; anything
   else fights bare. Nothing called `EquipMainHandWeapon` before, so every spear fought with the fist; the five spear rows in DT_Items
