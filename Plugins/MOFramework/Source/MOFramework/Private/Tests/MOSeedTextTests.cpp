@@ -9,9 +9,42 @@
 
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
+#include "HAL/PlatformTime.h"
 #include "MOGameSettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+// A new world's seed draws from the whole positive int32 range (the panel's FMath::Rand() was 15 bits on Windows: 32,768 worlds), owes nothing to the
+// FMath::RandInit a new game makes, and is never 0 (which asks the new-game flow to pick one). Expected: seeds past 32767; failing: every one <= 32767.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSettings_RandomSeedRange,
+	"MOFramework.Settings.RandomSeedRange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSettings_RandomSeedRange::RunTest(const FString& Parameters)
+{
+	UMOGameSettings* Settings = NewObject<UMOGameSettings>(GetTransientPackage());
+	TSet<int32> Seen;
+	int32 Past15Bits = 0;
+	for (int32 I = 0; I < 256; ++I)
+	{
+		const int32 Seed = Settings->GenerateRandomSeed();
+		TestTrue(TEXT("a random seed is positive and never 0"), Seed > 0);
+		TestEqual(TEXT("the panel's seed is the one it stores"), Settings->PendingWorldSeed, Seed);
+		Past15Bits += Seed > 32767 ? 1 : 0;
+		Seen.Add(Seed);
+	}
+	TestTrue(TEXT("seeds run past the 15 bits of rand() (a uniform 31-bit draw: all but ~1 in 65536)"), Past15Bits >= 250);
+	TestTrue(TEXT("256 draws are nearly all different"), Seen.Num() >= 250);
+
+	// A new game calls FMath::RandInit(world seed): the next world's seed must not follow from it.
+	FMath::RandInit(4242);
+	const int32 First = UMOGameSettings::MakeRandomWorldSeed();
+	FMath::RandInit(4242);
+	const int32 Second = UMOGameSettings::MakeRandomWorldSeed();
+	TestNotEqual(TEXT("the same RandInit does not give the same next seed"), First, Second);
+	FMath::RandInit(FPlatformTime::Cycles());   // leave the global stream as nothing in particular
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSettings_SeedTextRoundTrip,
 	"MOFramework.Settings.SeedTextRoundTrip",

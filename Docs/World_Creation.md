@@ -91,6 +91,9 @@ it is a property of the world chosen before its first step, not a mid-game skip.
 
 ## 3. The panel
 
+The seed the panel offers is a positive 31-bit number (`UMOGameSettings::MakeRandomWorldSeed`, Nov 4, N-281: until then `FMath::Rand()`, 15 bits on Windows, so the
+panel only ever offered 32,768 worlds, and a new game's `FMath::RandInit` made the next one follow from the last). A hosted new world draws from the same place; typed seeds are unchanged.
+
 `WBP_NewGamePanel` (960 x 860, scrolls): name, seed, the starting-biome cards (`WBP_BiomeCard`: the biome's `PreviewImage` from DT_Biomes and
 an MOButton with its name; the coast first, `CoastPreviewImage`), the World knobs and the Pace knobs (`WBP_WorldKnobRow`: label, slider in
 the knob's steps, value), Defaults, Back, Start. A biome is offered when its DT_Biomes row has a `PreviewImage`; the pictures are 1280x720
