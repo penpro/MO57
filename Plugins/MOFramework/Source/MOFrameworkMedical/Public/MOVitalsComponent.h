@@ -651,6 +651,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Vitals|Temperature")
 	EMOThermalComfort GetThermalComfort() const;
 
+	/** The comfort bucket for a core temperature and a thermal load (N-178), given the bucket the pawn is in now: entering takes the line, leaving takes a margin past
+	 *  it, so a value sitting on a line (the load moves with every gust) does not flicker the moodle on and off. */
+	static EMOThermalComfort ClassifyThermalComfort(float CoreC, float ThermalLoad, const FMOThermalComfortThresholds& Thresholds, EMOThermalComfort Current);
+
 	// ============================================================================
 	// GLUCOSE API
 	// ============================================================================
