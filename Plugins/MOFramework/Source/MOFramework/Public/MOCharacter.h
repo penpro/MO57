@@ -670,6 +670,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsDead() const { return bIsDead; }
 
+	/** Is this actor a dead body? The question for every system about to treat a pawn as someone: the dead stay where they fell (N-155), so a valid pawn is no proof of life. False for anything that is not a character. */
+	static bool IsDeadBody(const AActor* Actor);
+
 	/**
 	 * The survivor is still in the character creator: not in the world yet, so no creature takes it for quarry (Wes, Oct 27 2026: "we need to
 	 * make sure we're not getting mauled by bears during character creation"). Server state (the creatures' AI runs there); the creator panel

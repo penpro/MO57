@@ -1,4 +1,5 @@
 #include "MORecruitmentComponent.h"
+#include "MOCharacter.h"
 #include "MOColonyManagerSubsystem.h"
 #include "MOQuestSubsystem.h"
 #include "MOFramework.h"
@@ -131,15 +132,16 @@ FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* Interact
 		return Result;
 	}
 
-	if (RecruitmentState == EMORecruitmentState::Recruited)
+	// The body's own state, not only the recruitment's: nothing set this one at a death, so a stranger's corpse answered E, asked for a campfire and joined (N-304).
+	if (RecruitmentState == EMORecruitmentState::Dead || AMOCharacter::IsDeadBody(GetOwner()))
 	{
-		Result.Outcome = EMORecruitmentOutcome::AlreadyRecruited;
+		Result.Outcome = EMORecruitmentOutcome::Unavailable;
 		return Result;
 	}
 
-	if (RecruitmentState == EMORecruitmentState::Dead)
+	if (RecruitmentState == EMORecruitmentState::Recruited)
 	{
-		Result.Outcome = EMORecruitmentOutcome::Unavailable;
+		Result.Outcome = EMORecruitmentOutcome::AlreadyRecruited;
 		return Result;
 	}
 
