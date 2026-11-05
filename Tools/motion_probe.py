@@ -13,10 +13,24 @@ anywhere (the tracker, not the wind): compare the same patches near and far, nev
 interval) are counted, and so are the jumps that fall on them (frame pacing, not the material). Measure with r.AntiAliasingMethod 0
 (TSR blends small steps away) and keep every patch off the HUD (the FPS counter's 0.25 s refresh reads as a periodic jump). Pick textured
 patches (leaves, twigs against the sky); a patch that drifts onto flat sky stops tracking (its line goes dead flat).
+
+    python Tools/motion_probe.py clip <pid> <seconds> <out.mp4> [--crop w h x y]   a colour clip of the window (ffmpeg), for a person to judge
+    python Tools/motion_probe.py activity <burst.npz> [--crop w h x y]             per-pixel motion of a burst: tracking measures coherent motion
+                                                                                    only (a flicker of many blades cancels out), this measures it all
+
+Activity (Nov 4 2026, the plants' wind, Docs/PCG.md section 9): how far pixels swing (temporal std, grey levels), how fast (the share of each
+pixel's temporal power under 0.7 Hz = slow sway, over 1.2 Hz = flicker) and where (the 64 px tiles moving at a moment against the tiles that
+ever move: 1.0 = all of them all the time, the constant sway; low = "here and there"). Compare the same camera before and after, at
+r.AntiAliasingMethod 0. Needs a python with numpy (Blender's); ffmpeg on PATH for clip and compare.
+
+    python Tools/motion_probe.py compare <before.mp4> <after.mp4> <out.png>        the same camera before and after, as a player sees it (TSR on): reach and speed, and
+                                                                                    a picture: a frame of each, then each clip's motion over 9 s, over 0.75 s at 2 s and at 6 s
+                                                                                    (a window that lights up all over is everything moving; patches are "here and there")
 """
 import argparse
 import ctypes
 import ctypes.wintypes as wt
+import subprocess
 import sys
 import time
 
@@ -25,7 +39,7 @@ import numpy as np
 PATCH = 64
 
 
-def capture(pid, seconds, out_path):
+def capture(pid, seconds, out_path, colour_clip=False, crop=None):
     user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
     user32.SetProcessDPIAware()
     found = []
@@ -64,10 +78,27 @@ def capture(pid, seconds, out_path):
         times.append(time.perf_counter() - t0)
         gdi32.GetDIBits(mdc, bmp, 0, ht, buf, ctypes.byref(bi), 0)
         a = np.frombuffer(buf, dtype=np.uint8).reshape(ht, w, 4)
-        frames.append((0.299 * a[:, :, 2] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 0]).astype(np.uint8))
+        if colour_clip:
+            rgb = a[:, :, 2::-1]
+            if crop:
+                rgb = rgb[crop[3]:crop[3] + crop[1], crop[2]:crop[2] + crop[0]]
+            frames.append(rgb.copy())
+        else:
+            frames.append((0.299 * a[:, :, 2] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 0]).astype(np.uint8))
     gdi32.DeleteObject(bmp)
     gdi32.DeleteDC(mdc)
     user32.ReleaseDC(h, hdc)
+    if colour_clip:
+        fps = (len(frames) - 1) / max(times[-1] - times[0], 1e-6)
+        fh, fw = frames[0].shape[:2]
+        p = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (fw, fh), "-r", "%.2f" % fps,
+                              "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", out_path], stdin=subprocess.PIPE)
+        for f in frames:
+            p.stdin.write(f.tobytes())
+        p.stdin.close()
+        p.wait()
+        print("clip %s: %d frames, %.1f fps, %dx%d" % (out_path, len(frames), fps, fw, fh))
+        return
     np.savez_compressed(out_path, frames=np.stack(frames), times=np.array(times), size=np.array([w, ht]), t0_epoch=t0_epoch)
     print("captured %d frames in %.2f s of %dx%d -> %s" % (len(frames), times[-1], w, ht, out_path))
 
@@ -165,6 +196,70 @@ def track(path, patches, plot):
         print("plot -> " + plot)
 
 
+def activity(path, crop=None):
+    d = np.load(path)
+    frames, times = d["frames"], d["times"]
+    if crop:
+        frames = frames[:, crop[3]:crop[3] + crop[1], crop[2]:crop[2] + crop[0]]
+    changed = np.concatenate([[True], np.abs(np.diff(frames[:, ::8, ::8].astype(np.int16), axis=0)).mean(axis=(1, 2)) > 0.02])   # PrintWindow outruns the game
+    frames, times = frames[changed], times[changed]
+    n, h, w = frames.shape
+    dt = (times[-1] - times[0]) / (n - 1)
+    hz = np.fft.rfftfreq(n, dt)
+    slow_p, fast_p, swing = 0.0, 0.0, 0.0
+    tiles = []
+    for y in range(0, h - PATCH + 1, PATCH):        # tile by tile, so a burst of 500 full frames fits in memory
+        for x in range(0, w - PATCH + 1, PATCH):
+            t = frames[:, y:y + PATCH, x:x + PATCH].astype(np.float32)
+            t -= t.mean(axis=0, keepdims=True)
+            power = (np.abs(np.fft.rfft(t, axis=0)) ** 2).mean(axis=(1, 2))
+            slow_p += power[(hz > 0.05) & (hz < 0.7)].sum()
+            fast_p += power[hz > 1.2].sum()
+            swing += float(t.std(axis=0).mean())
+            tiles.append(np.abs(np.diff(t, axis=0)).mean(axis=(1, 2)))
+    tiles = np.stack(tiles)                         # tile x frame: mean |frame difference|
+    floor = max(0.25, float(np.percentile(tiles, 5)) * 2)
+    moving = tiles > floor
+    ever = moving.mean(axis=1) > 0.02
+    at_once = float(moving.mean(axis=0).mean())
+    print("activity %d frames, %.1f fps: swing %.2f grey levels, speed %.3f levels/frame, slow (<0.7 Hz) %.0f %% of the motion's power, flicker (>1.2 Hz) "
+          "%.0f %%, tiles moving at a moment %.0f %% (floor %.2f), of those that ever move %.0f %%" % (
+              n, 1 / dt, swing / len(tiles), float(tiles.mean()), 100 * slow_p / max(slow_p + fast_p, 1e-6), 100 * fast_p / max(slow_p + fast_p, 1e-6),
+              100 * at_once, floor, 100 * at_once / max(float(ever.mean()), 1e-6)))
+
+
+def compare(a_path, b_path, out_path, w=640, h=360, seconds=9.5, fps=30):
+    def grey(path):
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-t", str(seconds), "-vf", "fps=%d,scale=%d:%d" % (fps, w, h), "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True)
+        return np.frombuffer(r.stdout, np.uint8).reshape(-1, h, w).astype(np.float32)
+
+    def frame(path):
+        r = subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", "2", "-i", path, "-frames:v", "1", "-vf", "scale=%d:%d" % (w, h), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True)
+        return np.frombuffer(r.stdout, np.uint8).reshape(h, w, 3)
+
+    def heat(m, scale=8.0):
+        v = np.clip(m / scale, 0, 1)
+        return (np.stack([v, v ** 2, 0.25 * (1 - v)], -1) * 255).astype(np.uint8)
+
+    a, b = grey(a_path), grey(b_path)
+    da, db = np.abs(np.diff(a, axis=0)), np.abs(np.diff(b, axis=0))
+
+    def window(d, s):
+        return d[int(s * fps):int((s + 0.75) * fps)].mean(axis=0)
+
+    img = np.vstack([np.hstack([frame(a_path), frame(b_path)]), np.hstack([heat(da.mean(axis=0)), heat(db.mean(axis=0))]),
+                     np.hstack([heat(window(da, 2)), heat(window(db, 2))]), np.hstack([heat(window(da, 6)), heat(window(db, 6))])])
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (img.shape[1], img.shape[0]), "-i", "-", "-frames:v", "1", out_path], input=img.tobytes())
+
+    def moving(d):      # the share of 32 px tiles over 1 level / frame, averaged over 0.25 s steps: how much of the view moves at a moment
+        n = int(0.25 * fps)
+        steps = [d[i:i + n].mean(axis=0) for i in range(0, len(d) - n, n)]
+        return float(np.mean([(s[:h // 32 * 32, :w // 32 * 32].reshape(h // 32, 32, w // 32, 32).mean(axis=(1, 3)) > 1.0).mean() for s in steps]))
+
+    print("compare: reach (temporal std) %.2f -> %.2f grey levels, speed %.2f -> %.2f levels/frame, of the view moving at a moment %.0f %% -> %.0f %%" % (
+        a.std(axis=0).mean(), b.std(axis=0).mean(), da.mean(), db.mean(), 100 * moving(da), 100 * moving(db)))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -176,9 +271,27 @@ def main():
     tr.add_argument("burst")
     tr.add_argument("patches", help="x:y[,x:y...] top-left corners of 64 px patches, window pixels")
     tr.add_argument("--plot")
+    cl = sub.add_parser("clip")
+    cl.add_argument("pid", type=int)
+    cl.add_argument("seconds", type=float)
+    cl.add_argument("out")
+    cl.add_argument("--crop", type=int, nargs=4, metavar=("W", "H", "X", "Y"))
+    ac = sub.add_parser("activity")
+    ac.add_argument("burst")
+    ac.add_argument("--crop", type=int, nargs=4, metavar=("W", "H", "X", "Y"))
+    cm = sub.add_parser("compare")
+    cm.add_argument("before")
+    cm.add_argument("after")
+    cm.add_argument("out")
     a = ap.parse_args()
-    if a.cmd == "capture":
+    if a.cmd == "compare":
+        compare(a.before, a.after, a.out)
+    elif a.cmd == "capture":
         capture(a.pid, a.seconds, a.out)
+    elif a.cmd == "clip":
+        capture(a.pid, a.seconds, a.out, colour_clip=True, crop=a.crop)
+    elif a.cmd == "activity":
+        activity(a.burst, a.crop)
     else:
         track(a.burst, [tuple(int(v) for v in p.split(":")) for p in a.patches.split(",")], a.plot)
 

@@ -8,6 +8,9 @@
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialFunction.h"
+#include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#include "Materials/MaterialExpressionStaticSwitchParameter.h"
 #include "Engine/StaticMesh.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -151,6 +154,118 @@ bool FMORendering_FlowersNotNanite::RunTest(const FString& Parameters)
 		}
 	}
 	AddInfo(FString::Printf(TEXT("%d MA_Flowers mesh(es) checked"), Checked));
+	return true;
+}
+
+// The small plants' wind (Wes, Nov 4 2026: "small plants don't move like that, it's all too much and too slow, it should be non-uniform flickers here
+// and there, not a constant slow swaying movement"). Content/Python/plant_flicker_wind.py puts one function, MF_MO_PlantFlicker, on every small plant;
+// trees keep their sway. A vendor reimport brings the old graph back; a new small plant under a tree master would keep swaying.
+// Rule checked: masters with only small plants feed World Position Offset straight from the function; masters shared with trees switch it, default off,
+// and the switch is on for every slot of every seedling and sapling mesh and off for every other mesh.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMORendering_SmallPlantsFlicker,
+	"MOFramework.Rendering.SmallPlantsFlicker",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMORendering_SmallPlantsFlicker::RunTest(const FString& Parameters)
+{
+	const UMaterialFunction* Flicker = LoadObject<UMaterialFunction>(nullptr, TEXT("/Game/Materials/Wind/MF_MO_PlantFlicker.MF_MO_PlantFlicker"));
+	if (!Flicker)
+	{
+		// The LFS budget keeps new .uassets on DARKSIDE for now (BACKLOG "Waiting on Wes"): another clone has neither the function nor the rewired masters.
+		AddWarning(TEXT("MF_MO_PlantFlicker is not on this clone: run Content/Python/plant_flicker_wind.py"));
+		return true;
+	}
+	const auto CallsFlicker = [Flicker](const UMaterialExpression* Expression)
+	{
+		const UMaterialExpressionMaterialFunctionCall* Call = Cast<UMaterialExpressionMaterialFunctionCall>(Expression);
+		return Call && Call->MaterialFunction == Flicker;
+	};
+	const TCHAR* SmallOnly[] = {
+		TEXT("/Game/Materials/FabOverrides/M_MS_Foliage.M_MS_Foliage"),
+		TEXT("/Game/PN_MeadowFlowers/Materials/flowerMaterials/MA_Flowers.MA_Flowers"),
+		TEXT("/Game/Custom/CustomMaterials/Materials/Master_Materials/Custom_MS_Master/M_MS_Foliage_Overwrite/M_MS_CustomFoliage.M_MS_CustomFoliage"),
+		TEXT("/Game/Custom/CustomMaterials/Materials/Master_Materials/Custom_MS_Master/M_MS_Foliage_Overwrite/M_MS_CustomFoliageNoOpacity.M_MS_CustomFoliageNoOpacity"),
+	};
+	for (const TCHAR* Path : SmallOnly)
+	{
+		const UMaterial* Master = LoadObject<UMaterial>(nullptr, Path);
+		if (TestNotNull(FString::Printf(TEXT("%s loads"), Path), Master))
+		{
+			TestTrue(FString::Printf(TEXT("%s: World Position Offset is the flicker -- run Content/Python/plant_flicker_wind.py"), Path), CallsFlicker(Master->GetEditorOnlyData()->WorldPositionOffset.Expression));
+		}
+	}
+	const FName Switch(TEXT("Small Plant Flicker"));
+	const TCHAR* WithTrees[] = {
+		TEXT("/Game/MSPresets/MS_Foliage_Material_LATEST/MasterMaterials/M_Foliage.M_Foliage"),
+		TEXT("/Game/MSPresets/MS_Foliage_Material_LATEST/MasterMaterials/M_Foliage_TwoSided.M_Foliage_TwoSided"),
+		TEXT("/Game/MSPresets/MS_Foliage_Material/MasterMaterials/MA_Foliage.MA_Foliage"),
+	};
+	TSet<const UMaterial*> Switched;
+	for (const TCHAR* Path : WithTrees)
+	{
+		const UMaterial* Master = LoadObject<UMaterial>(nullptr, Path);
+		if (!TestNotNull(FString::Printf(TEXT("%s loads"), Path), Master))
+		{
+			continue;
+		}
+		Switched.Add(Master);
+		bool bFound = false;
+		for (const UMaterialExpression* Expression : Master->GetExpressions())
+		{
+			const UMaterialExpressionStaticSwitchParameter* Parameter = Cast<UMaterialExpressionStaticSwitchParameter>(Expression);
+			if (Parameter && Parameter->ParameterName == Switch)
+			{
+				bFound = true;
+				TestFalse(FString::Printf(TEXT("%s: the switch is off by default (trees sway)"), Path), Parameter->DefaultValue != 0);
+				TestTrue(FString::Printf(TEXT("%s: the switch's True pin is the flicker"), Path), CallsFlicker(Parameter->A.Expression));
+				TestTrue(FString::Printf(TEXT("%s: the switch's False pin is the vendor's wind"), Path), Parameter->B.Expression != nullptr);
+			}
+		}
+		TestTrue(FString::Printf(TEXT("%s has the switch \"%s\" -- run Content/Python/plant_flicker_wind.py"), Path, *Switch.ToString()), bFound);
+	}
+
+	IAssetRegistry& Registry = IAssetRegistry::GetChecked();
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
+	Filter.PackagePaths.Add(TEXT("/Game/BlackAlder/Geometry"));
+	Filter.PackagePaths.Add(TEXT("/Game/CommonHazel/Geometry"));
+	Filter.PackagePaths.Add(TEXT("/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry"));
+	Filter.bRecursivePaths = true;
+	TArray<FAssetData> Meshes;
+	Registry.GetAssets(Filter, Meshes);
+	int32 SmallSlots = 0, TreeSlots = 0;
+	for (const FAssetData& Asset : Meshes)
+	{
+		const UStaticMesh* Mesh = Cast<UStaticMesh>(Asset.GetAsset());
+		if (!Mesh)
+		{
+			continue;
+		}
+		const FString Name = Asset.AssetName.ToString();
+		const bool bSmall = Name.Contains(TEXT("Seedling")) || Name.Contains(TEXT("Sapling"));
+		for (const FStaticMaterial& Slot : Mesh->GetStaticMaterials())
+		{
+			if (!Slot.MaterialInterface || !Switched.Contains(Slot.MaterialInterface->GetMaterial()))
+			{
+				continue;
+			}
+			bool bOn = false;
+			FGuid Guid;
+			Slot.MaterialInterface->GetStaticSwitchParameterValue(FHashedMaterialParameterInfo(Switch), bOn, Guid);
+			++(bSmall ? SmallSlots : TreeSlots);
+			if (bOn != bSmall)
+			{
+				AddError(FString::Printf(TEXT("%s slot %s (%s): flicker %s, a %s -- run Content/Python/plant_flicker_wind.py"), *Name, *Slot.MaterialSlotName.ToString(), *Slot.MaterialInterface->GetName(),
+					bOn ? TEXT("on") : TEXT("off"), bSmall ? TEXT("seedling or sapling should flicker") : TEXT("tree should sway")));
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d seedling / sapling slot(s) flicker, %d tree slot(s) sway"), SmallSlots, TreeSlots));
+	if (Meshes.Num() > 0)
+	{
+		TestTrue(TEXT("the small woody meshes were found (the check is not vacuous)"), SmallSlots >= 20);
+		TestTrue(TEXT("the trees were found (the check is not vacuous)"), TreeSlots >= 20);
+	}
 	return true;
 }
 #endif // WITH_EDITOR

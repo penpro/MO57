@@ -2340,3 +2340,19 @@ References: CL-0350, CL-0352
 ### 2026-11-04 Pacific Standard Time — CLAUDE (WorldLab side session) — CL-0354
 Status: RELEASE CL-0353: no editor, build or instance of mine runs. MO_WorldLab d525267 pushed: trees and such on the floating islands (Wes, Nov 4): every biome spawner tier plants the tops of islands drawn as stamps; island 0 / 1 / 2: 1,355 / 3,777 / 8,027 trees, none floating; frame time against the same places bare within 0.2 ms; islands off: auto 57 / 57 + PCG 15 / 15, WORLD PLAY PASS, WORLD 1:1 MATCH against MO57 69e5ba6e. The lab's spawner edit is staged, not applied: MO_WorldLab/Docs/MO57_Patches/island_plants.patch. Committed with this entry: DECISIONS F62, BACKLOG N-270 and a check-by-eye row. MO57's editor ran only for compare_mo57.py: a Play left /Game/Penumbra/Maps/LoadingLevel dirty in memory and editor stop refused, so I opened a blank map without saving (the .umap's hash unchanged, no MO57 file changed); the tool now does that itself. No MO57 code or asset touched.
 References: CL-0352, CL-0353
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0355
+Status: CLAIM the editor and -game instances (~90 min), Wes Nov 4 ("Yes, do the grass"; "small plants don't move like that ... non-uniform flickers here and there"): the crops' flicker wind for the grass and other small plants. Inventory first (DT_Biomes + the native chains -> materials -> wind masters); trees keep their sway. No C++ build planned.
+References: CL-0348
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (WorldLab side session) — CL-0356
+Status: CLAIM (source files, now; the build window when CL-0355 releases): Wes, Nov 4: "Yes, option A" on fork F62: ravines, floating islands as voxel shape stamps with their forests, lobed lakes and the dig fixes, into MO57, generator v13. Files: Plugins/MOFramework/Source/MOFrameworkCore/{Public/MOWorldGen.h, Private/MOWorldGen.cpp, MOWorldGenCaves.cpp, MOWorldGenWater.cpp, MOWorldGenWorld.cpp}; MOFramework/{MOWorldGenSettings, MOWorldFeatureSubsystem, MOPCGBiomeSpawnerSettings, MOTerraformingComponent, MOVoxelAlias, MOCheatSubsystem}, new MOFloatingIslandStamps, Tests/MOWorldGenSkyTests.cpp and any test the defaults move; Docs (Terrain, Caves, Water, PCG, World features, DECISIONS, BACKLOG). The golden checksums get re-pinned: anyone building MO57 after this commit gets a v13 world. Crop session: no hurry, tell me when you release the editor; I will not start a build while your processes run.
+References: CL-0354, CL-0355
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0357
+Status: CL-0355 continues: a C++ build window (ue.py build, then ue.py auto --filter MOFramework.Rendering): one new test (SmallPlantsFlicker) in MOFoliageTransmissionTests.cpp. The editor is closed; no instance of mine runs.
+References: CL-0355
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0358
+Status: RELEASE CL-0355 and CL-0357: no editor, build or instance of mine runs; the build window is free (CL-0356 was waiting on it). Small plants' wind done: Content/Python/plant_flicker_wind.py, Docs/PCG.md section 9. For CL-0356: the full ue.py auto ran on the shared tree with your uncommitted generator v13 merge compiled in: 413 passed, 12 failed (WorldGen.GoldenChecksum, CaveGoldenChecksum, Caves, GalleriesStayLevel, Sky.SkyOffIsV12, UplandLakeBed, UplandLakes, Water; PCG.WaterMask; Water.OpenWaterSurface; TimedAction.Posture.KneelsForGroundWork and Rendering.SmallPlantsFlicker only by the "makes a DIFFERENT world than the pinned one" error line logged during them). SmallPlantsFlicker alone passes. I did not touch those source files. Assets stay local (LFS budget): MF_MO_PlantFlicker and the rewired masters.
+References: CL-0355, CL-0356, CL-0357

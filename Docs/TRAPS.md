@@ -663,6 +663,8 @@
   (`delete_material_expression`) on a material loaded from disk asserts `!IsRooted()` and takes the editor down. -> Build a script's
   material once, tag its version (`EditorAssetLibrary.set_metadata_tag`), and when the graph changes delete the .uasset on disk with the
   editor closed (`import_blender_buildings.surface_master`). (Nov 3)
+- **A per-instance value in a material** -> `Transform Position` from Local space is the COMPONENT's on an ISM (its comment in `HLSLMaterialTranslator.cpp` says otherwise, and the plants measured
+  otherwise): everything in a PCG cell read one origin, from the cell's corner. -> Source = Instance space. The Local Position node's own origin option defaults to Instance. (Nov 4, `plant_flicker_wind.py`)
 
 ## 13. UI (CommonUI / UMG)
 

@@ -2,9 +2,10 @@
 
     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python Tools/crop_finish_blender.py -- <prepped.glb> <out.glb> <out_ORT.png> [rough_lo rough_hi translucency [reference_photo]]
 
-Why (Nov 3 2026, DECISIONS "Crop plants are made with TRELLIS"): crops use the same foliage master as the world's grass, so they sway with
-the world's wind and light through their leaves. That master reads two things a TRELLIS mesh does not have:
-  - Vertex colours, the Megascans plant convention (measured Nov 3 on the Dry / Wild Grass meshes exported from the project):
+Why (Nov 3 2026, DECISIONS "Crop plants are made with TRELLIS"): crops use the same foliage master as the world's grass, so they move with
+the small plants' wind and pass light through their leaves. That master knows two things a TRELLIS mesh does not have:
+  - Vertex colours, the Megascans plant convention (measured Nov 3 on the Dry / Wild Grass meshes exported from the project). Since Nov 4 the wind
+    reads none of them (Content/Python/plant_flicker_wind.py, from the local position); they stay so a crop is a mesh of the same kind as the grass:
       A = height from the base, 0..1 (corr. with z 1.00): the primary bend weight (QMF_WindAnimation);
       R = a gradient along each blade, base 0 -> tip 1 (corr. with z ~0.5 and with distance from the axis ~0.45): the secondary flutter;
       G, B = a random value per blade (dozens of distinct levels): the phase. A TRELLIS plant is one fused shell, so G and B here are

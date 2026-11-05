@@ -5,15 +5,13 @@
      and the save silently fails -- TRAPS "Asset saves silently don't happen")
 
 Why (Nov 3 2026, DECISIONS "Crop plants are made with TRELLIS"): the crop plants share the world grass's master
-(/Game/Materials/FabOverrides/M_MS_Foliage, the master of the Dry / Wild Grass the field plot used as stand-ins), so they sway with the
-world's wind (QMF_WindAnimation: measured precision-safe far from the origin, Docs/PCG.md section 9) and pass light through their
-leaves (two-sided foliage shading). Tools/crop_finish_blender.py gave the mesh the vertex colours that master reads and wrote the ORT
-mask (opacity / roughness / translucency) this imports. Per call:
+(/Game/Materials/FabOverrides/M_MS_Foliage, the master of the Dry / Wild Grass the field plot used as stand-ins), so they move with
+the small plants' wind (Content/Python/plant_flicker_wind.py) and pass light through their leaves (two-sided foliage shading).
+Tools/crop_finish_blender.py wrote the ORT mask (opacity / roughness / translucency) this imports. Per call:
   - imports <ort_png> next to the mesh's textures as T_<mesh>_ORT (Masks compression, sRGB off);
   - creates MI_<mesh> on M_MS_Foliage with the stand-in grass's settings (MI_tbbqejqr's scalars, vectors and static switches),
     the mesh's own base colour and normal, and the ORT mask; "mask out Twigs" off (the twig mask keys on vertex colours this mesh
-    uses for wind only, and would cut holes), the distance-based WPO fade on (a field of swaying Nanite plants costs; far ones
-    stand still) and a short camera fade (15-60 cm, not the grass's 40-160 cm that speckled heads 1-2 m away);
+    does not paint for it, and would cut holes) and a short camera fade (15-60 cm, not the grass's 40-160 cm that speckled heads 1-2 m away);
   - Nanite on, collision off (crops are walked through), the slot -> the MI; saves what it touched.
 Output lines start with CROPPREP. Idempotent.
 """
@@ -21,17 +19,13 @@ import os
 
 import unreal
 
-# The crops' own copy of the grass master (Content/Python/crop_wind_material.py): the same shading, a wind of non-uniform flickers.
-PARENT = "/Game/ImageTo3D/Crops/M_MO_CropFoliage"
+# The world grass's master; its wind is every small plant's (Content/Python/plant_flicker_wind.py: flickers here and there, sized by the mesh).
+PARENT = "/Game/Materials/FabOverrides/M_MS_Foliage"
 LIKE = "/Game/Fab/Megascans/Plants/Dry_Grass_tbbqejqr/Medium/tbbqejqr_tier_2/Materials/MI_tbbqejqr"
-# Wind (Wes, Nov 4: "all the crops move WAY too much ... they should move about 20% as much and a little faster, not a long swaying
-# motion like it's a ship at sea, little ripples"): the speed is the world's (MPC Wind Speed Plants, shared by every plant), so a crop
-# keeps 20 % of the grass's primary bend and adds the master's faster secondary flutter.
-SWITCH_OVERRIDES = {"mask out Twigs": False, "use Distance Based WPO Fade": True, "secondary Animation": True}
+SWITCH_OVERRIDES = {"mask out Twigs": False}
 # The grass's camera fade (dither from 40 to 160 cm) speckled crop heads 1-2 m from the camera (Nov 3 A/B): a crop keeps a short one,
 # so a camera inside a standing field still sees through the stalks right in front of it.
-SCALAR_OVERRIDES = {"WPO Fade Disable Distance": 4000.0, "CameraFadeStartCm": 15.0, "CameraFadeEndCm": 60.0,
-                    "Local Primary Wind Strength": 0.2, "Local Secondary Wind Strength": 1.0}
+SCALAR_OVERRIDES = {"CameraFadeStartCm": 15.0, "CameraFadeEndCm": 60.0}
 
 eal = unreal.EditorAssetLibrary
 mel = unreal.MaterialEditingLibrary

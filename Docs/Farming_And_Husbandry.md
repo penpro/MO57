@@ -85,23 +85,17 @@ three stages each (the plot's `StageMeshes`: Sprouted, Growing, Ripe), made by o
    survive (~1.5M faces, ~8 min a plant).
 4. **Prep** (`prep`): `glb_item_prep_blender.py` (orient keep, the crop's height, **40k triangles**: 150k looks the same; 3k tears the thin
    leaf shells apart) then `Tools/crop_finish_blender.py`: the bottom 2 % cut (soil left over), the Megascans vertex-colour convention
-   baked in (A = height, the primary bend; R = blade gradient; G / B = smooth noise, the phase), the ORT mask built from TRELLIS's ORM
+   baked in (A = height; R = blade gradient; G / B = smooth noise: the vendor wind's inputs, which the small plants' wind no longer reads), the ORT mask built from TRELLIS's ORM
    (roughness remapped to 0.6-0.9: TRELLIS's is glossy), and the base colour matched to the photo (one gain per channel + one saturation
    scale: matching each channel's spread made rainbow heads). Previews use a copy without vertex colours: glTF multiplies the base colour
    by COLOR_0, Unreal does not.
 5. **Import** (`import`, `Content/Python/crop_mesh_prepare.py`): each plant is an instance of the world grass's master,
-   `/Game/Materials/FabOverrides/M_MS_Foliage` (two-sided foliage, the world's wind through `QMF_WindAnimation`, precision-safe far from
-   the origin: `Docs/PCG.md` section 9), with the stand-in grass's settings, no twig mask, a WPO fade from 40 m and a camera fade of
-   15-60 cm (the grass's 40-160 cm speckled heads 1-2 m away), and the leaf transmission capped at strength 0.5 like every foliage
+   `/Game/Materials/FabOverrides/M_MS_Foliage` (two-sided foliage, the small plants' wind: `Docs/PCG.md` section 9), with the stand-in grass's
+   settings, no twig mask and a camera fade of 15-60 cm (the grass's 40-160 cm speckled heads 1-2 m away), and the leaf transmission capped at strength 0.5 like every foliage
    instance (`fix_foliage_transmission.py`, test `FoliageTransmissionCapped`: the copied grass values were 1.0). Nanite on, no collision.
 6. **Wind** (Wes, Nov 4: "all the crops move WAY too much ... about 20% as much and a little faster ... little ripples"; then "small plants
-   don't move like that ... non-uniform flickers here and there, not a constant slow swaying movement"): the grass master's speed is the
-   world's (`Wind Speed Plants` in its MPC, shared by every plant), and its per-material knobs only scaled the slow sway (`motion_probe`:
-   under 3 % of the motion above 0.5 Hz at any strength). So the crops have their own copy of the master, `/Game/ImageTo3D/Crops/
-   M_MO_CropFoliage` (`Content/Python/crop_wind_material.py`): the same shading, its offset a fast flutter (2.0 and 3.3 Hz, phased per plant
-   and per part) gated by a drifting noise field (only the plants in its patches move), times A^2 (heads, not stems) and the world's plant
-   wind strength. World position reduced before time is added, Time wrapping on whole cycles (`Docs/PCG.md` section 9). Old against new:
-   `Saved/CropTest/wind/wind_old_vs_new.mp4` (Wes judges it; the grass gets the same once the crops look right).
+   don't move like that ... non-uniform flickers here and there, not a constant slow swaying movement"): the crops got a fast flutter gated by a drifting noise field first, and
+   after Wes's "Yes, do the grass" every small plant took the same function, so the crops are plain instances of the grass's master again. `Docs/PCG.md` section 9 has it all.
 Checked in a real world with `Tools/check_crop_plants.py` (`grow`: one crop sown and aged through its stages; `ab`: candidates side by
 side on fallow plots; `perf`: the GPU cost of a row of plots). Nov 4: `grow` 4/4 (Wild grain sown through the plot's menu and drawn as the
 barley at Sprouted, Growing and Ripe); every stage at its in-game height in `Saved/CropTest/ab_capped/`. At 4 m each reads as its crop;

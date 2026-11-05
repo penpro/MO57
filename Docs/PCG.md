@@ -358,9 +358,31 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   PivotPainter2 package: an Add of a time-only and a pivot-only operand must take the pivot operand straight from the `MO_WindPrecision`
   Fmod (a synthetic graph checks the detector both ways first). Oct 18: 10 functions, 3 sites (MF_AdvancedWind_Level, both
   PN_WindAnimation), all reduced. A reimported vendor graph fails it: rerun `foliage_wind_precision.py` (add the function to its list).
-- **The crops' own wind (Nov 4, `M_MO_CropFoliage`, `Content/Python/crop_wind_material.py`)** follows the rule by construction: the world
-  position is `Fmod` 4000 before the drifting noise's time term is added, and its `Time` wraps every 600 s, a whole number of cycles of
-  both flutter waves (2.0 and 3.3 Hz), so the flutter never jumps (the gust field reshuffles once in 10 minutes).
+- **The small plants' wind (Nov 4 2026, `/Game/Materials/Wind/MF_MO_PlantFlicker`, `Content/Python/plant_flicker_wind.py`; Wes: "small plants don't move
+  like that, it's all too much and too slow, it should be non-uniform flickers here and there, not a constant slow swaying movement").** One function on every
+  small plant in place of four vendor winds, whose speed is the world's and whose knobs only scale a slow sway. Grass, wild / dry / thatching grass, dead shrubs,
+  raspberry, knee-high locust and the crops (`M_MS_Foliage`), flowers (`MA_Flowers`), ferns and elderberry (`M_MS_CustomFoliage`, `...NoOpacity`) take it outright;
+  seedlings and saplings take it through the static switch `Small Plant Flicker` on the masters they share with trees (`M_Foliage`, `M_Foliage_TwoSided`,
+  `MA_Foliage`: default off, on for all 34 of their instances). **Trees keep their sway.** Test `MOFramework.Rendering.SmallPlantsFlicker`.
+  - **What it does:** two fast waves (2.0 and 3.3 Hz) phased per plant and per part of the plant, a horizontal offset growing with the height above the pivot
+    (2.7 cm at the tip of a 85 cm barley, 0.6 cm on a 30 cm tuft, capped at 3.5 cm; broad leaves and fronds take Strength 0.006 against 0.035), times a noise gate
+    (patches of ~1.5 m lasting 2-3 s, broken up per plant) and a distance fade (20-40 m). `Wind Strength Plants` (the world's MPC) scales it. Precision by
+    construction: the world position is `Fmod` 4000 before the noise's time term is added, and `Time` wraps every 600 s, a whole number of cycles of both waves.
+  - **Measured** (`Tools/check_plant_wind.py`, seed 777, the same cameras, TSR on; reach = per-pixel temporal std, grey levels; speed = levels / frame):
+
+    | Spot | Reach | Speed | Of the view moving at a moment | GPU ms, old -> new (`M_MS_Foliage` and `MA_Flowers` swapped back from git for the A/B) |
+    |---|---|---|---|---|
+    | Meadow | 14.95 -> 1.70 | 1.17 -> 0.36 | 60 % -> 8 % | 8.4 -> 8.6 |
+    | Locust woodland | 10.39 -> 1.23 | 0.76 -> 0.19 | 27 % -> 3 % | 7.6 -> 7.7 |
+    | Dry scrub | 16.28 -> 3.66 | 1.43 -> 0.74 | 55 % -> 19 % | 8.3 -> 8.6 |
+    | Rainforest | 6.50 -> 2.49 | 0.40 -> 0.66 | 8 % -> 25 % | 9.2 -> 7.7 (mostly noise: its ferns were new in both runs) |
+
+    The rainforest's big fern was nearly still under its old wind, so there it moves less far but more often. Motion over 0.7 Hz against under it, AA off: old 17-40 % flicker,
+    new 72-92 %. The vertex shader is 335 instructions against the vendor wind's 251. Clip for the eye: `Saved/PlantWind/before_vs_after.mp4`; motion maps `Saved/PlantWind/map_before_vs_after_*.png`.
+  - **Traps met:** a material's `Transform Position` from Local space is the COMPONENT's on an ISM, so a whole 64 m PCG cell shared one gate and one fade from its corner (the dry scrub's plants read
+    0.14 levels / frame, 1.24 with both forced open): per plant needs Instance space. Deleting nodes of a material loaded from disk takes the editor down (`Docs/TRAPS.md`): the function is built once
+    per `GRAPH_VERSION`; a new graph means deleting its `.uasset` on disk with the editor closed, new defaults only a rerun. `FindBiomeSpot` searches from where the pawn stands, so the same
+    cameras need the same order of biomes. `create_dynamic_material_instance` on a slot holding a MID parents the new one to it: its parameters carry over.
 - **Pivot Painter data textures** are data, sampled at each branch's own texel: no mips, never streamed, sRGB off, nearest filter.
   `Content/Python/pivot_painter_textures.py` (editor, idempotent) enforces exactly that on every texture in a `PivotPainter` folder and
   reports the rest: the compression differs by design (positions 16-bit `TC_HDR`, axis / extent 8-bit `TC_VECTOR_DISPLACEMENTMAP`,

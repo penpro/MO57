@@ -80,6 +80,11 @@
 
 ## Decisions, newest first
 
+### 2026-11-04
+- **Small plants flicker, trees sway** (Wes, Nov 4: "small plants don't move like that, it's all too much and too slow, it should be non-uniform flickers here and there, not a
+  constant slow swaying movement"; "Yes, do the grass"). Every grass, flower, fern, shrub, seedling, sapling and crop takes one wind function, `MF_MO_PlantFlicker`. "Small" is
+  by master, and by mesh name (Seedling, Sapling) on the masters shared with trees; a tree's wind was not part of the call and stays as it was. `Docs/PCG.md` section 9.
+
 ### 2026-11-03
 - **Crop plants are made with TRELLIS, and any model may be downloaded for it** (Wes, Nov 3, picking F55 D: "TRELLIS crops"; then "download
   any and all models you want for the best results and if results are questionable refine things and do A/B testing until we have
