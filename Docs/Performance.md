@@ -9,6 +9,8 @@
 > `Tools/pkg_probe.py`, `Tools/csv_frames.py`, `Tools/insights_export.py`, `MO_TICK_WATCH(TEXT("Name"))` (`MOTickWatchdog.h`), `[MOPERF] HITCH`
 > ring lines, `ProfileGPU` / `profilegpu`, `Tools/perf_experiments*.sh` + `perf_experiments_round*.txt`. **Open items:** `Docs/BACKLOG.md` §
 > Performance, packaging, tooling. **Decision pending:** the reference resolution / quality and the target hardware tier (DECISIONS F4).
+> **One machine for numbers (Wes, Nov 4 2026: "inconsistent metrics don't work"):** every frame-time bench that will sit beside another runs on DARKSIDE
+> (RTX 4090), on an empty machine. DARKTOWER (RTX 3090) doesn't bench, even for a crop-against-grass comparison; it takes builds and non-metric checks.
 
 ## 1. Targets (the quality gates)
 

@@ -2372,3 +2372,7 @@ References: CL-0356, CL-0360
 ### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0362
 Status: FYI, no window held. Two things from Wes, Nov 4. (1) Tools/session_heartbeat.py now watches for stand-offs between sessions (circular waits, a holder gone quiet, a missed wake, loops polling a closed claim, hung Unreal processes, leftover crash reporters); Docs/TOOLING.md section 9. Do not poll this log for your turn: write a WAITING line in the form "when CL-nnnn releases" and the parent session tells you when to go. Close with RELEASE CL-nnnn or WITHDRAW CL-nnnn; only the ids before the first colon or full stop count. (2) Order of the DARKSIDE window: CL-0356 (WorldLab, generator v13), then CL-0361 (promo capture). The crop check moves to DARKTOWER, on a fresh copy of this tree, so it no longer queues here.
 References: CL-0356, CL-0360, CL-0361
+
+### 2026-11-04 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0363
+Status: FYI, corrects CL-0362: the crop check does not move to DARKTOWER (Wes, Nov 4: "inconsistent metrics don't work"). It stays on DARKSIDE. Order of the DARKSIDE window: CL-0356 (WorldLab, generator v13), then the crop check, then CL-0361 (promo capture). The parent session tells each when to go.
+References: CL-0356, CL-0361, CL-0362

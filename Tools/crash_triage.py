@@ -31,6 +31,8 @@ import ue_crash_bundle as cb  # noqa: E402
 
 FRAME_RE = re.compile(r"\[Callstack\] 0x[0-9a-fA-F]+ (?:[\w.\-]+!)?([^\r\n\[]+?)(?: \[|\r|\n|$)")
 WHAT_RE = re.compile(r"(Unhandled Exception: [^\r\n]{0,120}|Assertion failed: [^\r\n]{0,160}|Ensure condition failed: [^\r\n]{0,160}|Fatal error[^\r\n]{0,100})")
+COMMAND_LINE_RE = re.compile(r"Command Line:([^\r\n]{0,4000})")
+AGENT_INSTANCE_RE = re.compile(r"claude[\\/]+(\w+)[\\/]+game\.log")
 MACHINES_FILE = os.environ.get("MO57_CRASH_MACHINES") or os.path.join(os.path.expanduser("~"), ".mo57", "crash_machines.json")
 
 
@@ -85,9 +87,31 @@ def crash_signature(bundle: cb.Bundle):
     xml = cb.context_xml(bundle)
     props = cb.context_properties(xml)
     text = "\n".join(bundle.text(n) for n in bundle.names() if n.endswith(".log"))
-    frames = [f.strip()[:110] for f in FRAME_RE.findall(text)[:3]]
+    # An engine without symbols prints UnknownFunction: the frames worth reading are the named ones under it. A fatal crash's log has none (they are in the context).
+    named = [f for f in FRAME_RE.findall(text) if "UnknownFunction" not in f]
+    named = named or [line.split("!", 1)[1] for line in props.get("CallStack", "").splitlines() if "!" in line]
+    frames = [f.strip()[:110] for f in named[:3]]
     what = WHAT_RE.search(text)
-    return (props.get("ExecutableName", ""), props.get("EngineMode", ""), props.get("BuildConfiguration", ""), (what.group(1) if what else "")[:70], tuple(frames))
+    what = what.group(1) if what else props.get("ErrorMessage", "").splitlines()[0] if props.get("ErrorMessage", "").strip() else ""
+    return (props.get("ExecutableName", ""), props.get("EngineMode", ""), props.get("BuildConfiguration", ""), what[:70], tuple(frames))
+
+
+def run_kind(bundle: cb.Bundle) -> str:
+    """Which agent run crashed, from the command line in its log: "instance <name>" (ue.py inst logs to ...claude/<name>/game.log), "editor" (only ue.py passes
+    -ModelContextProtocolStartServer) or "tests" (a commandlet running automation); "" for anything else, such as Wes at the keyboard or a player's packaged game."""
+    text = "\n".join(bundle.text(n) for n in bundle.names() if n.endswith(".log"))
+    m = COMMAND_LINE_RE.search(text)
+    if not m:
+        return ""
+    line = m.group(1)
+    instance = AGENT_INSTANCE_RE.search(line)
+    if instance:
+        return "instance " + instance.group(1)
+    if "-ModelContextProtocolStartServer" in line:
+        return "editor"
+    if "-unattended" in line and "Automation" in line:
+        return "tests"
+    return ""
 
 
 def main(argv=None) -> int:
@@ -112,7 +136,11 @@ def main(argv=None) -> int:
     senders = collections.Counter(who[meta["id"]] for meta, b, e in reports)
     others = sum(n for (mine, _), n in senders.items() if not mine)
     print("from: " + (", ".join(f"{label} {n}" for (_, label), n in senders.most_common()) or "(nothing)") +
-          (f"  -- {others} from other players" if others else "  -- none from other players") + "\n")
+          (f"  -- {others} from other players" if others else "  -- none from other players"))
+    runs = {meta["id"]: run_kind(bundle) for meta, bundle in crashes}
+    print(f"agents' test runs: {sum(1 for r in runs.values() if r)} of {len(crashes)} crashes")
+    kinds = collections.Counter(cb.context_properties(cb.context_xml(bundle)).get("CrashType", "?") for _, bundle in crashes)
+    print("types (an Ensure doesn't stop the game): " + (", ".join(f"{k} {n}" for k, n in kinds.most_common()) or "(none)") + "\n")
 
     if not args.bugreports:
         groups = collections.defaultdict(list)
@@ -125,6 +153,8 @@ def main(argv=None) -> int:
                 print("       ", f)
             print(f"        first {min(m['receivedAt'] for m in metas)}   last {max(m['receivedAt'] for m in metas)}   ids {[m['id'][:8] for m in metas][:4]}")
             print(f"        from {', '.join(f'{label} x{n}' for label, n in collections.Counter(who[m['id']][1] for m in metas).most_common())}")
+            run_counts = collections.Counter(runs[m["id"]] or "not an agent" for m in metas)
+            print("        runs " + ", ".join(f"{run} x{n}" for run, n in run_counts.most_common()))
         print()
 
     if not args.crashes:

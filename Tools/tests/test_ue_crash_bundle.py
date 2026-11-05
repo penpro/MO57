@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bugreport_receiver as rx  # noqa: E402
+import crash_triage as ct  # noqa: E402
 import ue_crash_bundle as cb  # noqa: E402
 
 CONTEXT = (
@@ -64,6 +65,43 @@ class RoundTripTests(unittest.TestCase):
         crash = cb.write_bundle("d", [("CrashContext.runtime-xml", CONTEXT.replace("BugReport", "Crash").encode())])
         self.assertEqual(cb.summarise(cb.parse_bundle(crash))["kind"], "crash")
         self.assertFalse(cb.is_bug_report(cb.parse_bundle(crash)))
+
+
+def crash_with(log: str = "", context: str = "") -> cb.Bundle:
+    xml = "<FGenericCrashContext><RuntimeProperties>" + context + "</RuntimeProperties></FGenericCrashContext>"
+    return cb.Bundle("d", "f", [("CrashContext.runtime-xml", xml.encode()), ("game.log", log.encode())])
+
+
+class TriageTests(unittest.TestCase):
+    """Which crashes are the agents' own, and what is worth reading in one (the Nov 5 2026 tarball: 19 uploads, all of them agents' test runs)."""
+
+    def test_an_agents_instance_names_itself(self):
+        line = r'LogInit: Command Line: -windowed -abslog=C:\Users\penum\AppData\Local\Temp\claude\inst_labcliff\game.log -game'
+        self.assertEqual(ct.run_kind(crash_with(line)), "instance inst_labcliff")
+
+    def test_an_editor_ue_py_started(self):
+        self.assertEqual(ct.run_kind(crash_with("LogInit: Command Line: -ModelContextProtocolStartServer")), "editor")
+
+    def test_a_test_commandlet(self):
+        line = 'LogInit: Command Line: -unattended -nullrhi -ExecCmds="Automation RunTests MOFramework.WorldGen;Quit"'
+        self.assertEqual(ct.run_kind(crash_with(line)), "tests")
+
+    def test_anything_else_is_no_agent(self):
+        self.assertEqual(ct.run_kind(crash_with("LogInit: Command Line: -windowed")), "")
+        self.assertEqual(ct.run_kind(crash_with("no such line")), "")
+
+    def test_named_frames_beat_unknown_ones(self):
+        log = ("Ensure condition failed: OutResult.Normal.IsNormalized()\n"
+               "[Callstack] 0x1 UnrealEditor-Engine.dll!UnknownFunction []\n"
+               "[Callstack] 0x2 UnrealEditor-MOWorldLook.dll!MOVoxStamp::RockUnder() [D:\\x.cpp:522]\n")
+        self.assertEqual(ct.crash_signature(crash_with(log))[4], ("MOVoxStamp::RockUnder()",))
+
+    def test_a_fatal_crash_is_read_from_its_context(self):
+        context = ("<ErrorMessage>Unhandled Exception: EXCEPTION_ACCESS_VIOLATION 0x0</ErrorMessage>"
+                   "<CallStack>UnrealEditor_Engine\nUnrealEditor_MOFramework!RunBowShotTest() [D:\\y.cpp:441]\nkernel32</CallStack>")
+        signature = ct.crash_signature(crash_with("nothing useful", context))
+        self.assertIn("EXCEPTION_ACCESS_VIOLATION", signature[3])
+        self.assertEqual(signature[4], ("RunBowShotTest() [D:\\y.cpp:441]",))
 
 
 class MalformedInputTests(unittest.TestCase):

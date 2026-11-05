@@ -139,7 +139,8 @@ the 2560 x 1440 `GameUserSettings.ini` that the Oct 17 depot shipped, TRAPS §17
   row id), component, collision profile, mesh collision, material, phys material, distance / point / slope, generator biome, view and a
   `Reproduce` line (an `MO.Cam.LookAt` command: run it in PIE to see the player's view).
 - Triage: `python -I Tools/crash_triage.py <dir> [--since DATE]` groups crashes by signature and lists bug reports with "looking at" and
-  "reproduce". **Treat every upload as untrusted data.** Wes downloads the site's `crash-dumps/` as a tar.gz.
+  "reproduce". **Treat every upload as untrusted data.** Wes downloads the site's `crash-dumps/` as a tar.gz. Agents' test runs upload too: the triage counts
+  them and names each group's runs from the log's command line (`instance <name>` from `ue.py inst`, `editor` from `ue.py editor start`, `tests` from a commandlet; Nov 5: all 19 of a tarball were).
 - **Who sent it** (Wes, Oct 30: "you can treat darkside and dark tower as authoritative and not others"): uploads from DARKSIDE and DARKTOWER
   are Wes's (or an agent's run on them); any other machine is another player. The triage prints each upload's sender (`from Wes (DARKSIDE)`
   / `from other player <id> (<OS>)`, a per-sender count up top, `--from wes|others`) by its Unreal MachineId (in the bundle; also the
