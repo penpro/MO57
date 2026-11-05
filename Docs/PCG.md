@@ -378,7 +378,7 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
     | Rainforest | 6.50 -> 2.49 | 0.40 -> 0.66 | 8 % -> 25 % | 9.2 -> 7.7 (mostly noise: its ferns were new in both runs) |
 
     The rainforest's big fern was nearly still under its old wind, so there it moves less far but more often. Motion over 0.7 Hz against under it, AA off: old 17-40 % flicker,
-    new 72-92 %. The vertex shader is 335 instructions against the vendor wind's 251. Clip for the eye: `Saved/PlantWind/before_vs_after.mp4`; motion maps `Saved/PlantWind/map_before_vs_after_*.png`.
+    new 72-92 %. The vertex shader is 335 instructions against the vendor wind's 251. Wes, Nov 4, on the clip `Saved/PlantWind/before_vs_after.mp4`: "Looks right"; motion maps `Saved/PlantWind/map_before_vs_after_*.png`.
   - **Traps met:** a material's `Transform Position` from Local space is the COMPONENT's on an ISM, so a whole 64 m PCG cell shared one gate and one fade from its corner (the dry scrub's plants read
     0.14 levels / frame, 1.24 with both forced open): per plant needs Instance space. Deleting nodes of a material loaded from disk takes the editor down (`Docs/TRAPS.md`): the function is built once
     per `GRAPH_VERSION`; a new graph means deleting its `.uasset` on disk with the editor closed, new defaults only a rerun. `FindBiomeSpot` searches from where the pawn stands, so the same
