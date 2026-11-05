@@ -108,7 +108,7 @@ public:
 	// ============================================================================
 
 	/** Current decay stage. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category="MO|Carcass|State")
+	UPROPERTY(ReplicatedUsing=OnRep_DecayStage, BlueprintReadOnly, Category="MO|Carcass|State")
 	EMOCarcassDecayStage DecayStage = EMOCarcassDecayStage::Fresh;
 
 	/** Parts that have been harvested. */
@@ -122,6 +122,23 @@ public:
 	/** Get current decay stage. */
 	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
 	EMOCarcassDecayStage GetDecayStage() const { return DecayStage; }
+
+	/** The body the animal left: mesh, materials and its pose where it fell. Set once on the server; replicated so every machine draws it (the mesh and pose were set on the
+	 *  server only until Nov 2026, so a joiner's copy of a carcass had no body: the animal vanished when its ragdoll was replaced), and saved. */
+	UPROPERTY(ReplicatedUsing=OnRep_Body)
+	FMOCarcassBody Body;
+
+	/** Server: take Body from what CarcassMesh shows now (InitializeFromCreature's copy). */
+	void CaptureBody();
+
+	/** Dress CarcassMesh from Body: the one way a body is drawn on a client and after a load. */
+	void ApplyBody();
+
+	/** This carcass in a save (UMOCarcassSaveDomain). */
+	void BuildSaveRecord(FMOCarcassSaveRecord& OutRecord) const;
+
+	/** Server: become the saved carcass; a part cut stays cut, and the decay goes on where it stood. */
+	void ApplySaveRecord(const FMOCarcassSaveRecord& InRecord);
 
 	// ============================================================================
 	// API
@@ -177,6 +194,12 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_Body();
+
+	UFUNCTION()
+	void OnRep_DecayStage();
 
 private:
 	// ============================================================================

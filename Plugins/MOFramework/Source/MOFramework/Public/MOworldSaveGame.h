@@ -67,6 +67,7 @@
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
 #include "MOStartSiteTypes.h"             // FMOStartSiteSaveData
+#include "MOCarcassTypes.h"               // FMOCarcassSaveData
 #include "MOItemInstanceState.h"
 #include "MOSurvivalStatsComponent.h"
 #include "MOWorldCreationTypes.h"
@@ -517,6 +518,10 @@ public:
      */
     UPROPERTY()
     FMOStartSiteSaveData StartSiteData;
+
+    /** The carcasses lying in the world. Owned + serialized by UMOCarcassSaveDomain via IMOSaveDomain. Empty for older saves. */
+    UPROPERTY()
+    FMOCarcassSaveData CarcassData;
 
     // --- Terraform excavation designations (unit 3) ---
 
