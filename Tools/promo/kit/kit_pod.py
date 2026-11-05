@@ -132,7 +132,7 @@ def pod_material(heat=True):
     n.link(surface, cracked.inputs[1])
     n.link(dark, cracked.inputs[2])
     # the seam: a thread of old metal with the mineral inlay's teal in its deepest line
-    inlay_glow = n.value(0.35, "Inlay")
+    inlay_glow = n.value(0.12, "Inlay")
     em = n.add("Emission", Color=kit.linear(kit.TEAL_HI), Strength=kit.Nodes(t).math("MULTIPLY", inlay_glow.outputs[0], 3.0))
     metal = n.add("BsdfPrincipled", Base_Color=(0.32, 0.27, 0.20, 1), Metallic=1.0, Roughness=0.32).outputs[0]
     deep = n.math("GREATER_THAN", seam, 0.72)

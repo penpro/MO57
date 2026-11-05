@@ -370,7 +370,7 @@ def granite(name="MO_Granite", coord_scale=1.0, tint=(1, 1, 1), heat_axis=None, 
         lo, hi = heat_axis
         along = n.add("MapRange", Value=x, From_Min=lo, From_Max=hi, To_Min=1.0, To_Max=0.0, p_clamp=True).outputs[0]
         edge = n.add("TexNoise", Vector=warped, Scale=4.0, Detail=7.0, Roughness=0.66)
-        char = n.ramp(n.math("ADD", along, n.math("MULTIPLY", n.math("SUBTRACT", edge.outputs["Fac"], 0.5), 0.9)), [(0.0, 0.0), (0.42, 0.0), (0.72, 1.0), (1.0, 1.0)])
+        char = n.ramp(n.math("ADD", along, n.math("MULTIPLY", n.math("SUBTRACT", edge.outputs["Fac"], 0.5), 0.9)), [(0.0, 0.0), (0.30, 0.0), (0.60, 1.0), (1.0, 1.0)])
         burnt = n.ramp(pits.outputs["Fac"], [(0.2, (0.006, 0.005, 0.005, 1)), (0.55, (0.03, 0.022, 0.018, 1)), (0.8, (0.11, 0.055, 0.02, 1))])
         tinted2 = n.mix(char, tinted, burnt)
         n.link(tinted2, bsdf.inputs["Base Color"])
@@ -378,14 +378,17 @@ def granite(name="MO_Granite", coord_scale=1.0, tint=(1, 1, 1), heat_axis=None, 
         n.link(rough, rough2.inputs[0])
         rough2.inputs[1].default_value = 0.6
         n.link(rough2.outputs[0], bsdf.inputs["Roughness"])
-        cracks = n.add("TexVoronoi", Vector=warped, Scale=11.0, p_feature="DISTANCE_TO_EDGE", Randomness=0.9).outputs["Distance"]
-        line = n.add("MapRange", Value=cracks, From_Min=0.0, From_Max=0.045, To_Min=1.0, To_Max=0.0, p_clamp=True).outputs[0]
-        ember = n.add("MapRange", Value=pits.outputs["Fac"], From_Min=0.42, From_Max=0.62, To_Min=0.0, To_Max=0.22, p_clamp=True).outputs[0]
+        crack_warp = n.mix(0.5, warped, edge.outputs["Color"], blend="LINEAR_LIGHT")
+        cracks = n.add("TexVoronoi", Vector=crack_warp, Scale=23.0, p_feature="DISTANCE_TO_EDGE", Randomness=1.0).outputs["Distance"]
+        thin = n.add("MapRange", Value=cracks, From_Min=0.0, From_Max=0.022, To_Min=1.0, To_Max=0.0, p_clamp=True).outputs[0]
+        patch = n.add("MapRange", Value=stain.outputs["Fac"], From_Min=0.46, From_Max=0.58, To_Min=0.0, To_Max=1.0, p_clamp=True).outputs[0]     # only some of the cracks are alight
+        line = n.math("MULTIPLY", thin, patch)
+        ember = n.add("MapRange", Value=pits.outputs["Fac"], From_Min=0.52, From_Max=0.72, To_Min=0.0, To_Max=0.05, p_clamp=True).outputs[0]
         heat_node = n.value(0.0, "Heat")
         temperature = n.math("ADD", n.math("MULTIPLY", along, 1700.0), 1000.0)
         black = n.add("Blackbody", Temperature=temperature)
         glow = n.math("MULTIPLY", n.math("POWER", along, 2.2), n.math("MULTIPLY", heat_node.outputs[0], n.math("ADD", ember, line)))
-        strength = n.math("MULTIPLY", glow, 9.0)
+        strength = n.math("MULTIPLY", glow, 6.0)
         emission = n.add("Emission", Color=black.outputs[0], Strength=strength)
     b = n.add("Bump", Height=height, Strength=0.55 * bump, Distance=0.02 / max(coord_scale, 1e-3))
     n.link(b.outputs[0], bsdf.inputs["Normal"])

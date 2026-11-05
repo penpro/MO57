@@ -1,6 +1,7 @@
 """MO57 promo: render every text card and lower third in film.py with the kit, and the overlays (flare, embers, dust). Eevee, one job per card: type is quick.
 
-    python Tools/promo/render_cards.py [--local] [--only ID,ID] [--scale 1.0] [--stills]     frames in Saved/Promo/kit/cards/<id>/f_####.png
+    python Tools/promo/render_cards.py [--only ID,ID] [--scale 1.0] [--stills]     frames in Saved/Promo/kit/cards/<id>/f_####.png
+    python Tools/promo/render_cards.py --batch cards.json [--only ...]             write the jobs for `darktower.py batch`, one after another on that GPU; `darktower.py pull` each into the folder above
 
 --stills renders only the middle frame of each (to look at the type before committing to all of it). On this PC by default (--darktower to use that GPU instead; Eevee needs a GPU either way).
 A lower third's second line comes from the capture log (Saved/Promo/shots/<id>.json: seed, clock, weather); until a shot has one it reads the planned line.
@@ -71,9 +72,17 @@ def main():
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--stills", action="store_true")
     ap.add_argument("--darktower", action="store_true")
+    ap.add_argument("--batch")
+    ap.add_argument("--no-lowers", action="store_true")
     a = ap.parse_args()
     only = set(a.only.split(",")) if a.only else None
     all_jobs = jobs(a.scale)
+    if a.batch:
+        rows = [[name, script, dict(cfg, overwrite=True)] for name, (script, cfg) in all_jobs.items() if (not only or name in only) and not (a.no_lowers and name.startswith("L_"))]
+        with open(a.batch, "w", encoding="utf-8") as f:
+            json.dump(rows, f, indent=1)
+        print("BATCH", a.batch, len(rows), "jobs")
+        return
     fonts = os.path.join(ROOT, "Saved", "Promo", "fonts")
     env = dict(os.environ, MO57_PROMO_FONTS=fonts)
     for name, (script, cfg) in all_jobs.items():

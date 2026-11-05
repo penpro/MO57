@@ -27,6 +27,7 @@ LUTS = os.path.join(P, "luts")
 KIT = os.path.join(P, "kit")
 TUNE = os.path.join(HERE, "shot_grades.json")
 FONT = r"C\:/Windows/Fonts/bahnschrift.ttf"
+FADES = {"S01_void": (40, 0), "G01_pod": (30, 0), "S05_end": (0, 44)}     # frames of fade from and to black: everywhere else the film cuts
 FLARE_AT = {16.0: "flare_warm", 18.0: "flare_warm_r", 26.0: "flare_teal", 31.0: "flare_warm"}     # a sweep of light across the cut at these bars
 
 
@@ -45,7 +46,7 @@ def seq(folder):
     frames = sorted(f for f in os.listdir(path) if f.startswith("f_") and f.endswith(".png"))
     if not frames:
         return None
-    return os.path.join(path, "f_%04d.png"), len(frames)
+    return os.path.join(path, "f_%04d.png"), len(frames), int(frames[0][2:6])
 
 
 def source_args(shot, frames, w, h, animatic):
@@ -58,7 +59,7 @@ def source_args(shot, frames, w, h, animatic):
         return ["-i", mezz], fit
     s = seq(shot.id)
     if s:
-        return ["-framerate", "24", "-i", s[0]], fit
+        return ["-framerate", "24", "-start_number", str(s[2]), "-i", s[0]], fit
     if not animatic:
         sys.exit("no picture for %s (use --animatic for slates)" % shot.id)
     return ["-f", "lavfi", "-i", "color=c=0x1a2422:s=%dx%d:r=24:d=%f" % (w, h, frames / 24.0)], (
@@ -138,6 +139,11 @@ def graph(shot, frames, w, h, base_filter, overlays):
     tail = "format=yuv444p10le"
     if vign:
         tail = "vignette=angle=%.3f:mode=forward,format=yuv444p10le" % vign
+    fade_in, fade_out = FADES.get(shot.id, (0, 0))
+    if fade_in:
+        tail += ",fade=t=in:s=0:n=%d" % fade_in
+    if fade_out:
+        tail += ",fade=t=out:s=%d:n=%d" % (frames - fade_out, fade_out)
     parts.append("[%s]%s,trim=end_frame=%d,setpts=N/(24*TB)[out]" % (last, tail, frames))
     return ";".join(parts)
 

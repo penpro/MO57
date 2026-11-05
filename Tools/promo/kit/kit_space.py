@@ -110,7 +110,8 @@ def atmosphere_material(sun_dir, radius_ratio, gain=1.0, arc_dir=(0, 0, 1)):
     # over the disc itself: only a faint veil, rising towards the edge
     over_disc = n.math("POWER", n.math("DIVIDE", edge, max(limb, 1e-4), clamp=True), 7.0)
     on_disc = n.math("LESS_THAN", edge, limb)
-    radial = n.math("ADD", n.math("MULTIPLY", on_disc, n.math("MULTIPLY", over_disc, 0.22)), n.math("MULTIPLY", n.math("SUBTRACT", 1.0, on_disc), above))
+    radial = n.math("ADD", n.math("MULTIPLY", on_disc, n.math("MULTIPLY", over_disc, 0.05)), n.math("MULTIPLY", n.math("SUBTRACT", 1.0, on_disc), above))
+    colour = n.mix(on_disc, colour, (0.25, 0.45, 1.0, 1))
     arc = n.add("VectorMath", p_operation="DOT_PRODUCT", Vector=geo.outputs["Normal"], Vector_001=arc_dir).outputs["Value"]
     along = n.add("MapRange", Value=arc, From_Min=0.05, From_Max=0.995, To_Min=0.0, To_Max=1.0, p_clamp=True, p_interpolation_type="SMOOTHSTEP").outputs[0]
     strength = n.math("MULTIPLY", radial, n.math("MULTIPLY", n.math("ADD", 0.05, n.math("POWER", along, 1.3)), 7.5 * gain))

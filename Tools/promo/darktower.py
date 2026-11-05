@@ -2,6 +2,7 @@
 
     python Tools/promo/darktower.py sync                       the kit's scripts and fonts to D:/MO57Promo (Blender 5.2 is already a portable folder there)
     python Tools/promo/darktower.py run NAME SCRIPT '<json>'   a scheduled task (it outlives the SSH session): Tools/promo/kit/SCRIPT with that config; frames in D:/MO57Promo/out/NAME
+    python Tools/promo/darktower.py batch NAME jobs.json       many kit jobs one after another in one scheduled task: jobs.json is [[job_name, script, {config}], ...]; each job's frames in D:/MO57Promo/out/job_name
     python Tools/promo/darktower.py state NAME                 the task's state, frames written so far, the log's last lines
     python Tools/promo/darktower.py wait NAME [SECONDS]        returns when the task stopped (a foreground wait, for one job you just started)
     python Tools/promo/darktower.py pull NAME [DEST]           scp the frames back (default Saved/Promo/kit/NAME)
@@ -63,6 +64,36 @@ Start-Sleep -Seconds 2
     print("RUN", name, ssh(ps).strip())
 
 
+def batch(name, path):
+    with open(path, encoding="utf-8") as f:
+        jobs = json.load(f)
+    lines = ["@echo off", 'set "MO57_PROMO_FONTS=%s\\fonts"' % REMOTE_WIN, "cd /d " + REMOTE_WIN]
+    with tempfile.TemporaryDirectory() as td:
+        paths = []
+        for job_name, script, cfg in jobs:
+            cfg = dict(cfg, out="%s/out/%s" % (REMOTE, job_name))
+            jp = os.path.join(td, job_name + ".json")
+            with open(jp, "w", encoding="utf-8") as f:
+                json.dump(cfg, f)
+            paths.append(jp)
+            lines.append('"%s" -b --factory-startup --python "%s\\kit\\%s" -- "%s\\jobs\\%s.json" > "%s\\logs\\%s.log" 2>&1' % (BLENDER, REMOTE_WIN, script, REMOTE_WIN, job_name, REMOTE_WIN, job_name))
+        bat = os.path.join(td, name + ".cmd")
+        with open(bat, "w", encoding="ascii", newline="\r\n") as f:
+            f.write("\n".join(lines) + "\n")
+        subprocess.run(["scp", "-q"] + paths + ["darktower:%s/jobs/" % REMOTE], check=True)
+        subprocess.run(["scp", "-q", bat, "darktower:%s/jobs/" % REMOTE], check=True)
+    ps = r'''
+$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c "{root}\jobs\{name}.cmd"' -WorkingDirectory '{root}'
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 36) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Unregister-ScheduledTask -TaskName 'MO57Promo_{name}' -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName 'MO57Promo_{name}' -Action $action -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName 'MO57Promo_{name}'
+Start-Sleep -Seconds 2
+(Get-ScheduledTask -TaskName 'MO57Promo_{name}').State
+'''.format(root=REMOTE_WIN, name=name)
+    print("BATCH", name, len(jobs), "jobs:", ssh(ps).strip())
+
+
 def state(name):
     ps = r'''
 (Get-ScheduledTask -TaskName 'MO57Promo_{name}' -ErrorAction SilentlyContinue).State
@@ -98,6 +129,8 @@ def main():
         sync()
     elif a[0] == "run":
         run(a[1], a[2], json.loads(a[3]) if len(a) > 3 else {})
+    elif a[0] == "batch":
+        batch(a[1], a[2])
     elif a[0] == "state":
         print(state(a[1]))
     elif a[0] == "wait":

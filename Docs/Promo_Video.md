@@ -108,8 +108,11 @@ Mix (`audio/mix.py`): music, the game's own sound under each shot (beds recorded
 
 (Updated as the work goes.)
 
-- Built: script, storyboard, `film.py`, Blender kit, type, score, mix, edit, capture driver.
+- Built and run: `film.py`, the Blender kit (final CG and type rendering on DARKTOWER as batches `final_cg` and `final_cards`, then `darktower.py pull` into `Saved/Promo/kit/`), the score, the mix (-14.2 LUFS, -1.2 dBTP on stand-in beds), the grade LUTs, `edit.py` on slates with type.
+- Written, not yet run: `capture.py`, `promo_shot.py` (they need the Unreal window, coop CL-0361), `audio/export_game_sounds.py` (needs the editor).
 - Not yet: game footage, recorded beds, the final master.
+
+Known constraints found while planning the shots: the bases Jalena and Zuri are topless in game (F49), so the film's women are the femme base, the men Harvey and Trey in their briefs; wide aerials show bare clearings where far vegetation thins (`MO_WorldLab/Saved/IslandsRavines/r9_plants/`), so island shots look up from low ground rather than across the land; there is no work animation (F54): a survivor stands still while a bar fills, so the film shows what the work leaves behind, not the hands doing it.
 
 ### Wes: check by eye and ear
 

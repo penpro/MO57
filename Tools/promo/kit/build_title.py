@@ -157,7 +157,7 @@ if not LOGO_ONLY:
     sun_rise = Vector((0, 1, LIMB + 0.0050)).normalized()
     sun_start = Vector((0, 1, LIMB - 0.016)).normalized()
     space.planet(center, R, sun_rise, detail=1.0, gain=1.0, segments=int(cfg.get("segments", 1024)))
-    lamp, disc = space.sun(sun_rise, strength=2.2, disc=420.0, angular_deg=0.8)
+    lamp, disc = space.sun(sun_rise, strength=0.7, disc=420.0, angular_deg=0.8)
     # the disc comes over the limb on the hit, then keeps rising slowly
     for f, d in ((1, sun_start), (HIT, Vector((0, 1, LIMB - 0.0015)).normalized()), (HIT + 26, Vector((0, 1, LIMB + 0.0035)).normalized()), (FRAMES, sun_rise)):
         disc.location = d * 40000.0
@@ -206,7 +206,7 @@ for light_ob in (key_ob, fill_ob, rim_ob):
 
 # ---------- dust in the air: small lit motes drifting across the light ----------
 mote_m, n, out = kit.new_material("MO_Dust")
-n.link(n.add("BsdfDiffuse", Color=(0.7, 0.65, 0.55, 1)).outputs[0], out.inputs["Surface"])
+n.link(n.add("Emission", Color=(1.0, 0.86, 0.68, 1), Strength=1.1).outputs[0], out.inputs["Surface"])
 bm = bmesh.new()
 bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0)
 me = bpy.data.meshes.new("mote")

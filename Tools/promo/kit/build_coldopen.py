@@ -51,7 +51,7 @@ def void():
     kit.set_interp(disc, "LINEAR")
     # a soft blue bounce from the planet's lit limb, so the near pods' undersides are not pure black
     fill = bpy.data.lights.new("Bounce", "SUN")
-    fill.energy = 0.55
+    fill.energy = 2.4
     fill.color = (0.45, 0.6, 1.0)
     fob = bpy.data.objects.new("Bounce", fill)
     bpy.context.collection.objects.link(fob)
@@ -139,7 +139,7 @@ def shell_mesh(name, a, length, power=0.5, segments=96, rings=64, x0=-1.2):
     return ob
 
 
-def flame_material(name, a=0.98, length=13.0, gain=9.0, x0=-1.16):
+def flame_material(name, a=0.98, length=11.0, gain=2.3, x0=-1.16):
     """An emission volume: a sheath of fire hugging the bow shock, torn by noise that runs back along +X, cooling and thinning down the wake; a core of fire in the wake behind the pod."""
     m, n, out = kit.new_material(name)
     tc = n.add("TexCoord")
@@ -150,10 +150,10 @@ def flame_material(name, a=0.98, length=13.0, gain=9.0, x0=-1.16):
     xn = n.math("MAXIMUM", n.math("SUBTRACT", x, x0), 0.0)
     t = n.math("DIVIDE", xn, length, clamp=True)
     bow = n.math("MULTIPLY", n.math("SQRT", xn), a)
-    width = n.math("ADD", 0.075, n.math("MULTIPLY", t, 0.75))
+    width = n.math("ADD", 0.05, n.math("MULTIPLY", t, 0.42))
     d = n.math("DIVIDE", n.math("SUBTRACT", r, bow), width)
     sheath = n.math("POWER", 2.718, n.math("MULTIPLY", n.math("MULTIPLY", d, d), -1.0))
-    core_w = n.math("ADD", 0.34, n.math("MULTIPLY", t, 1.0))
+    core_w = n.math("ADD", 0.22, n.math("MULTIPLY", t, 0.55))
     core_d = n.math("DIVIDE", r, core_w)
     behind = n.add("MapRange", Value=x, From_Min=0.95, From_Max=2.0, To_Min=0.0, To_Max=1.0, p_clamp=True).outputs[0]
     core = n.math("MULTIPLY", n.math("POWER", 2.718, n.math("MULTIPLY", n.math("MULTIPLY", core_d, core_d), -1.0)), n.math("MULTIPLY", behind, 0.75))
@@ -162,11 +162,14 @@ def flame_material(name, a=0.98, length=13.0, gain=9.0, x0=-1.16):
     mp = n.add("CombineXYZ", X=n.math("ADD", n.math("MULTIPLY", x, 0.42), n.math("MULTIPLY", time_node.outputs[0], -0.17)), Y=n.math("MULTIPLY", y, 2.5), Z=n.math("MULTIPLY", z, 2.5))
     tear = n.add("TexNoise", Vector=mp.outputs[0], Scale=2.6, Detail=9.0, Roughness=0.6, Distortion=0.7)
     fine = n.add("TexNoise", Vector=mp.outputs[0], Scale=9.0, Detail=6.0, Roughness=0.55)
-    torn = n.add("MapRange", Value=n.math("ADD", n.math("MULTIPLY", tear.outputs["Fac"], 0.75), n.math("MULTIPLY", fine.outputs["Fac"], 0.25)), From_Min=0.40, From_Max=0.70, To_Min=0.0, To_Max=1.0, p_clamp=True, p_interpolation_type="SMOOTHSTEP").outputs[0]
+    torn = n.add("MapRange", Value=n.math("ADD", n.math("MULTIPLY", tear.outputs["Fac"], 0.75), n.math("MULTIPLY", fine.outputs["Fac"], 0.25)), From_Min=0.47, From_Max=0.74, To_Min=0.0, To_Max=1.0, p_clamp=True, p_interpolation_type="SMOOTHSTEP").outputs[0]
     fade = n.math("POWER", n.math("SUBTRACT", 1.0, t, clamp=True), 2.4)
     plasma = n.value(1.0, "Plasma")
     density = n.math("MULTIPLY", n.math("MULTIPLY", body, torn), n.math("MULTIPLY", fade, plasma.outputs[0]))
-    temperature = n.math("ADD", 1700.0, n.math("MULTIPLY", n.math("POWER", n.math("SUBTRACT", 1.0, t, clamp=True), 2.5), 3600.0))
+    # hottest at the nose: the air is stopped there, and the fire is brightest and whitest
+    nose = n.math("POWER", n.math("SUBTRACT", 1.0, n.math("DIVIDE", xn, 1.6, clamp=True)), 2.0)
+    density = n.math("MULTIPLY", density, n.math("ADD", 1.0, n.math("MULTIPLY", nose, 5.0)))
+    temperature = n.math("ADD", n.math("ADD", 1350.0, n.math("MULTIPLY", n.math("POWER", n.math("SUBTRACT", 1.0, t, clamp=True), 3.0), 1700.0)), n.math("MULTIPLY", nose, 1800.0))
     col = n.add("Blackbody", Temperature=temperature)
     em = n.add("Emission", Color=col.outputs[0], Strength=n.math("MULTIPLY", density, gain))
     n.link(em.outputs[0], out.inputs["Volume"])
@@ -266,8 +269,8 @@ def streak():
     center = Vector((0, 0, -R - 90.0))
     sun_dir = Vector((-0.70, 0.71, -0.012)).normalized()     # just under the horizon, ahead and to the left: the world's dusk
     space.stars(1.2, 0.8)
-    space.planet(center, R, sun_dir, detail=5.0, gain=0.5, arc_dir=(-0.75, 0.2, 0.63), segments=int(cfg.get("segments", 512)))
-    lamp, disc = space.sun(sun_dir, strength=1.5, disc=60.0)
+    space.planet(center, R, sun_dir, detail=5.0, gain=0.22, arc_dir=(-0.75, 0.2, 0.63), segments=int(cfg.get("segments", 512)))
+    lamp, disc = space.sun(sun_dir, strength=0.55, disc=60.0)
     lamp.data.color = (1.0, 0.62, 0.36)
     cam = space.camera(lens=28.0, loc=(0, 0, 0), target=(-160, 600, -40))
     kit.wobble(cam, "rotation_euler", 0, 40.0, 0.001)
@@ -276,7 +279,7 @@ def streak():
     z = n.add("SeparateXYZ", Vector=m_tc.outputs["Object"]).outputs[2]
     fade = n.add("MapRange", Value=z, From_Min=0.0, From_Max=1.0, To_Min=1.0, To_Max=0.0, p_clamp=True).outputs[0]
     col = n.ramp(fade, [(0.0, (0.9, 0.25, 0.05, 1)), (0.7, (1.0, 0.65, 0.3, 1)), (1.0, (1.0, 0.95, 0.85, 1))])
-    em = n.add("Emission", Color=col, Strength=n.math("MULTIPLY", n.math("POWER", fade, 2.0), 90.0))
+    em = n.add("Emission", Color=col, Strength=n.math("MULTIPLY", n.math("POWER", fade, 2.0), 5.5))
     add = n.add("AddShader")
     n.link(em.outputs[0], add.inputs[0])
     n.link(n.add("BsdfTransparent").outputs[0], add.inputs[1])
@@ -307,18 +310,18 @@ def streak():
         return ob
 
     # the far rain of pods: thin lines coming down all over the cloud deck
-    for i in range(int(cfg.get("rain", 420))):
+    for i in range(int(cfg.get("rain", 260))):
         far = 260.0 * (8.0 ** rng.random())    # many far, a few near
         x = rng.uniform(-1.25, 1.25) * far * 0.75
         top = -60.0 + rng.uniform(-0.05, 0.42) * far       # some already low over the deck, some high in the frame
         p0 = Vector((x, far, top))
         p1 = p0 + Vector((rng.uniform(-0.05, -0.02) * far, 0, -rng.uniform(0.09, 0.17) * far))
         f0 = rng.randint(-40, FRAMES - 10)
-        add_streak(p0, p1, f0, f0 + rng.randint(30, 64), 0.0022 * far, 0.05 * far)
+        add_streak(p0, p1, f0, f0 + rng.randint(30, 64), 0.00075 * far, 0.075 * far)
     # one close: it crosses the frame and burns out over the lens
-    add_streak(Vector((62.0, 118.0, 46.0)), Vector((-6.0, 16.0, -7.0)), 18, FRAMES, 0.38, 26.0)
+    add_streak(Vector((62.0, 118.0, 46.0)), Vector((-6.0, 16.0, -7.0)), 18, FRAMES, 0.20, 34.0)
     head_mat, n, out = kit.new_material("MO_StreakHead")
-    n.link(n.add("Emission", Color=(1, 0.92, 0.78, 1), Strength=900.0).outputs[0], out.inputs["Surface"])
+    n.link(n.add("Emission", Color=(1, 0.92, 0.78, 1), Strength=70.0).outputs[0], out.inputs["Surface"])
     bm = bmesh.new()
     bmesh.ops.create_icosphere(bm, subdivisions=3, radius=0.42)
     hm = bpy.data.meshes.new("head")
@@ -334,7 +337,7 @@ def streak():
     for fc in kit.fcurves(head.animation_data.action):
         for k in fc.keyframe_points:
             k.interpolation = "LINEAR"
-    space.glow(threshold=1.3, strength=0.7, size=8, streaks=True, streak_strength=0.3)
+    space.glow(threshold=1.6, strength=0.5, size=6, streaks=False)
 
 
 {"void": void, "entry": entry, "streak": streak}[SHOT]()
