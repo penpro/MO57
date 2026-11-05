@@ -38,6 +38,7 @@
 #include "MOEquipmentComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOCombatComponent.h"               // (H30/H38) combat weapon-wear restore
+#include "MOPersonalityComponent.h"
 #include "MOSurvivorJobQueueComponent.h"     // (H39) survivor job-queue restore
 #include "MOCreature.h"
 #include "MOBuildableActor.h"
@@ -1377,6 +1378,12 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             CombatComp->BuildSaveData(PawnRecord.CombatData);
             PawnRecord.bHasComponentData = true;
         }
+        // A person's character: without it a colonist came back from every load someone else.
+        if (const UMOPersonalityComponent* PersonalityComp = Pawn->FindComponentByClass<UMOPersonalityComponent>())
+        {
+            PersonalityComp->BuildSaveData(PawnRecord.PersonalityData);
+            PawnRecord.bHasComponentData = true;
+        }
         // (H39) Capture survivor job queue (queued jobs + home binding).
         if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
         {
@@ -1827,6 +1834,16 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOCombatComponent* CombatComp = Pawn->FindComponentByClass<UMOCombatComponent>())
     {
         CombatComp->ApplySaveDataAuthority(PawnRecord.CombatData);
+    }
+
+    // A person's character. A record from before it holds all zero: left alone, so the colony's upkeep gives them one (first touch).
+    if (UMOPersonalityComponent* PersonalityComp = Pawn->FindComponentByClass<UMOPersonalityComponent>())
+    {
+        const FMOPersonalityTraits& Saved = PawnRecord.PersonalityData;
+        if (Saved.Conscientiousness != 0.0f || Saved.Sociability != 0.0f || Saved.Stability != 0.0f)
+        {
+            PersonalityComp->ApplySaveDataAuthority(Saved);
+        }
     }
 
     // (H39) Apply survivor job queue (queued jobs + home binding). No-ops on

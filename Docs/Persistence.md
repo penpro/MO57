@@ -22,6 +22,7 @@
   service that needs saving gets an adapter in the upper module), `Colony`, `Designation` (pri 80), `Quest`, `ResourceDepletion`,
   `TerrainModification`, `VoxelSculpt`, `Weather`, `WorldRemovals`, `StartSite` (pri 90, Oct 24: the clone egg and hatch beside the first
   survivor, `Docs/World_Creation.md` §2).
+- A person's character is saved too (`FMOPersistedPawnRecord::PersonalityData`, Nov 4, N-289: it was in no save, so the colony's upkeep gave every colonist a new one at each load).
 - Pawns: the persistence subsystem captures each pawn's components through the shared `ApplyPawnComponentState` on BOTH load paths
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters now save in a
   valid/versioned snapshot (six values plus nutrition), through the same restore path, without changing rates or offline policy.
