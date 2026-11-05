@@ -60,6 +60,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   Deer_Doe has none: **`ABP_DeerDoe` has no `DefaultSlot` node** (wolf's has), so a deer would show no montage at all -- add the slot in the graph
   editor (not scriptable; N-096), then its row. Proof: `nettest actions` `_client_sees_creature_flinch` (the joiner's log: "anim cue N on this
   client: ANIM_Wolf_GetHitLeft", then AM_WolfBite); `MOFramework.Creature.HitSide`.
+- **A carcass's body** (`AMOCarcassActor::Body`, Nov 5, N-294 / N-293): the mesh, materials and the pose the ragdoll settled in, taken once on the server, replicated (a joiner's copy had no mesh, so the animal vanished when its ragdoll was replaced) and saved. `ApplyBody` is the one way it is drawn on a client and after a load; a client now follows the decay stage's look too (`OnRep_DecayStage`).
 - **A killed wolf leaves a carcass** (`DT_Carcasses` "Wolf": the deer's parts at a ~40 kg animal's yields; DECISIONS Oct 20). Before, it
   ragdolled and left nothing.
 

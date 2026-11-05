@@ -29,6 +29,10 @@
 #include "CoreMinimal.h"
 #include "MOCarcassTypes.generated.h"
 
+class UDataTable;
+class UMaterialInterface;
+class USkeletalMesh;
+
 /**
  * Decay stage of a carcass.
  * Determines which parts can be harvested and their quality.
@@ -129,4 +133,62 @@ struct MOFRAMEWORK_API FMOCarcassPartEntry
 		}
 		return ItemDefinitionId;
 	}
+};
+
+/**
+ * What a carcass looks like, independent of the creature it came from (AMOCarcassActor::Body): set once on the server, replicated, saved.
+ */
+USTRUCT()
+struct MOFRAMEWORK_API FMOCarcassBody
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TSoftObjectPtr<USkeletalMesh> Mesh;
+
+	/** Slot by slot; a dynamic instance is saved as its parent asset. */
+	UPROPERTY()
+	TArray<TSoftObjectPtr<UMaterialInterface>> Materials;
+
+	/** The pose it fell in, by bone index, in the mesh component's space. Floats: a body is small next to the world, and this goes over the network once per carcass. */
+	UPROPERTY()
+	TArray<FTransform3f> BoneTransforms;
+};
+
+/** One carcass in a save (UMOCarcassSaveDomain). */
+USTRUCT()
+struct MOFRAMEWORK_API FMOCarcassSaveRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FTransform Transform;
+
+	UPROPERTY()
+	TSoftObjectPtr<UDataTable> Table;
+
+	UPROPERTY()
+	FName RowName;
+
+	UPROPERTY()
+	EMOCarcassDecayStage DecayStage = EMOCarcassDecayStage::Fresh;
+
+	UPROPERTY()
+	TArray<FName> HarvestedParts;
+
+	UPROPERTY()
+	float TimeSinceDeath = 0.0f;
+
+	UPROPERTY()
+	FMOCarcassBody Body;
+};
+
+/** The carcasses lying in a world, for its save. */
+USTRUCT()
+struct MOFRAMEWORK_API FMOCarcassSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FMOCarcassSaveRecord> Carcasses;
 };

@@ -16,6 +16,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Engine/DataTable.h"
+#include "Engine/SkeletalMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 
@@ -101,6 +103,96 @@ void AMOCarcassActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(AMOCarcassActor, CarcassDefinition);
 	DOREPLIFETIME(AMOCarcassActor, DecayStage);
 	DOREPLIFETIME(AMOCarcassActor, HarvestedParts);
+	DOREPLIFETIME(AMOCarcassActor, Body);
+}
+
+void AMOCarcassActor::OnRep_Body()
+{
+	ApplyBody();
+}
+
+void AMOCarcassActor::OnRep_DecayStage()
+{
+	UpdateVisualForDecayStage();
+}
+
+void AMOCarcassActor::CaptureBody()
+{
+	Body = FMOCarcassBody();
+	USkeletalMesh* Mesh = CarcassMesh ? Cast<USkeletalMesh>(CarcassMesh->GetSkinnedAsset()) : nullptr;
+	if (!Mesh)
+	{
+		return;
+	}
+	Body.Mesh = Mesh;
+	for (int32 Slot = 0; Slot < CarcassMesh->GetNumMaterials(); ++Slot)
+	{
+		// A dynamic instance has no path to come back by: its parent asset does.
+		UMaterialInterface* Material = CarcassMesh->GetMaterial(Slot);
+		while (const UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Material))
+		{
+			Material = Dynamic->Parent;
+		}
+		Body.Materials.Add(TSoftObjectPtr<UMaterialInterface>(Material));
+	}
+	const int32 NumBones = CarcassMesh->GetNumBones();
+	Body.BoneTransforms.Reserve(NumBones);
+	for (int32 BoneIdx = 0; BoneIdx < NumBones; ++BoneIdx)
+	{
+		Body.BoneTransforms.Add(FTransform3f(CarcassMesh->GetBoneTransformByName(CarcassMesh->GetBoneName(BoneIdx), EBoneSpaces::ComponentSpace)));
+	}
+}
+
+void AMOCarcassActor::ApplyBody()
+{
+	USkeletalMesh* Mesh = Body.Mesh.LoadSynchronous();
+	if (!Mesh || !CarcassMesh)
+	{
+		return;
+	}
+	CarcassMesh->SetSkinnedAssetAndUpdate(Mesh, false);
+	for (int32 Slot = 0; Slot < Body.Materials.Num(); ++Slot)
+	{
+		if (UMaterialInterface* Material = Body.Materials[Slot].LoadSynchronous())
+		{
+			CarcassMesh->SetMaterial(Slot, Material);
+		}
+	}
+	// In bone order: a parent's pose is set before its children are made relative to it.
+	const int32 NumBones = FMath::Min(CarcassMesh->GetNumBones(), Body.BoneTransforms.Num());
+	for (int32 BoneIdx = 0; BoneIdx < NumBones; ++BoneIdx)
+	{
+		CarcassMesh->SetBoneTransformByName(CarcassMesh->GetBoneName(BoneIdx), FTransform(Body.BoneTransforms[BoneIdx]), EBoneSpaces::ComponentSpace);
+	}
+	UpdateVisualForDecayStage();   // a rotting body's material goes over the slot just set
+}
+
+void AMOCarcassActor::BuildSaveRecord(FMOCarcassSaveRecord& OutRecord) const
+{
+	OutRecord.Transform = GetActorTransform();
+	OutRecord.Table = TSoftObjectPtr<UDataTable>(FSoftObjectPath(CarcassDefinition.DataTable.Get()));
+	OutRecord.RowName = CarcassDefinition.RowName;
+	OutRecord.DecayStage = DecayStage;
+	OutRecord.HarvestedParts = HarvestedParts;
+	OutRecord.TimeSinceDeath = TimeSinceDeath;
+	OutRecord.Body = Body;
+}
+
+void AMOCarcassActor::ApplySaveRecord(const FMOCarcassSaveRecord& InRecord)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	SetActorTransform(InRecord.Transform);
+	CarcassDefinition.DataTable = InRecord.Table.LoadSynchronous();
+	CarcassDefinition.RowName = InRecord.RowName;
+	DecayStage = InRecord.DecayStage;
+	HarvestedParts = InRecord.HarvestedParts;
+	TimeSinceDeath = InRecord.TimeSinceDeath;
+	Body = InRecord.Body;
+	ApplyBody();
+	UpdateVisualForDecayStage();   // a skeleton has no Body to wait for
 }
 
 // ============================================================================
@@ -421,6 +513,8 @@ void AMOCarcassActor::InitializeFromCreature(AMOCreature* DeadCreature)
 		CarcassMesh->SetCollisionObjectType(ECC_WorldDynamic);
 		CarcassMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 		CarcassMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+		CaptureBody();   // what a joiner and a save draw it from
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Copied %d bone transforms from ragdoll to poseable mesh"), NumBones);
 	}

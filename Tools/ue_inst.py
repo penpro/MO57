@@ -2834,6 +2834,13 @@ def _client_sees_creature_flinch(rep, host, client):
     rep.step("client: ... and the joiner's copy of it knows its parts (the Wolf carcass row)", "'Wolf'" in rows,
              (re.search(r"CARCASSES [^\r\n]*", rows) or re.search(r"[\s\S]{0,160}$", rows)).group(0)
              + ((" | host: " + (re.search(r"HOSTCARCASS[^\r\n]*", where) or re.search(r"[\s\S]{0,120}$", where)).group(0)) if where else ""))
+    # N-294: the joiner draws the body too (AMOCarcassActor::Body replicates the mesh and pose; its copy had no mesh until Nov 2026, and nothing here looked).
+    body = _probe(client, "p = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                          "out('CARCASSBODY %s' % [str(c.get_editor_property('carcass_mesh').get_skinned_asset()) for c in "
+                          "unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor) if str(c.get_editor_property('carcass_definition').row_name) == 'Wolf' "
+                          "and (c.get_actor_location() - p.get_actor_location()).length() < 15000])")
+    rep.step("client: ... and the joiner draws its body (a mesh on its copy of the carcass)", "SkeletalMesh" in body,
+             (re.search(r"CARCASSBODY [^\r\n]*", body) or re.search(r"[\s\S]{0,160}$", body)).group(0))
     _probe(host, "[a.destroy_actor() for c in (unreal.MOPredatorCreature, unreal.MOPreyCreature, unreal.MOCarcassActor) "
                  "for a in unreal.GameplayStatics.get_all_actors_of_class(world, c) "
                  "if (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 3000]; out('TIDY')")
