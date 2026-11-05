@@ -331,10 +331,17 @@ void UMOGameSettings::ClearAllCustomBindings()
 // WORLD SEED
 // ============================================================================
 
+int32 UMOGameSettings::MakeRandomWorldSeed()
+{
+	// Not FMath::Rand(): that is rand(), 15 bits on Windows, so the New Game panel only ever offered 32,768 worlds; and a new game seeds it with the world
+	// seed (AMOGameMode, FMath::RandInit), so the next "random" seed followed from the last world played. A GUID owes neither anything.
+	const int32 Seed = static_cast<int32>(GetTypeHash(FGuid::NewGuid()) & 0x7FFFFFFF);
+	return Seed != 0 ? Seed : 1;
+}
+
 int32 UMOGameSettings::GenerateRandomSeed()
 {
-	// Generate a random seed using current time and random int
-	PendingWorldSeed = FMath::Rand();
+	PendingWorldSeed = MakeRandomWorldSeed();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Generated random seed: %d"), PendingWorldSeed);
 	return PendingWorldSeed;
 }

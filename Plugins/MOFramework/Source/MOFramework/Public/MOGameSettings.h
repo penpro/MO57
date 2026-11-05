@@ -207,6 +207,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	int32 GenerateRandomSeed();
 
+	/** A new world's random seed: a positive 31-bit number, never 0 (0 asks the new-game flow to pick one). The one source for every new world. */
+	static int32 MakeRandomWorldSeed();
+
 	/** Convert a seed string to integer (hashes non-numeric strings). A number written with digit grouping ("15,204", "15 204", "15.204")
 	 *  is that number: until Oct 15 2026 the New Game panel displayed seeds grouped and then parsed its own text back, so "15,204" was
 	 *  hashed as a word and started a different world from the one shown. */

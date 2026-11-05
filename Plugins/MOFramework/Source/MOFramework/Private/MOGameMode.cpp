@@ -184,8 +184,7 @@ void AMOGameMode::HandlePendingNewGame()
 		int32 EffectiveSeed = Settings->PendingWorldSeed;
 		if (EffectiveSeed == 0)
 		{
-			// Use time-based seed for truly random generation
-			EffectiveSeed = static_cast<int32>(FDateTime::Now().GetTicks() & 0x7FFFFFFF);
+			EffectiveSeed = UMOGameSettings::MakeRandomWorldSeed();
 			Settings->PendingWorldSeed = EffectiveSeed;  // Store for voxel stamp use
 			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Generated random seed: %d"), EffectiveSeed);
 			MOHARVEST_LOG(this, "Seed", "NEW-GAME path: PendingWorldSeed was 0, generated random=%d", EffectiveSeed);
