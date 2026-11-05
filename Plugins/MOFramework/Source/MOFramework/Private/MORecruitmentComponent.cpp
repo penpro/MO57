@@ -75,6 +75,7 @@ void UMORecruitmentComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	// Check quest timeout
 	if (RecruitmentState == EMORecruitmentState::QuestActive)
 	{
+		QuestElapsedSeconds += DeltaTime;
 		CheckQuestTimeout();
 	}
 }
@@ -85,6 +86,7 @@ void UMORecruitmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 
 	DOREPLIFETIME(UMORecruitmentComponent, RecruitmentState);
 	DOREPLIFETIME(UMORecruitmentComponent, ActiveQuest);
+	DOREPLIFETIME(UMORecruitmentComponent, QuestElapsedSeconds);
 }
 
 void UMORecruitmentComponent::OnRep_RecruitmentState()
@@ -190,7 +192,7 @@ FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* Interact
 		{
 			// Start quest
 			SetRecruitmentState(EMORecruitmentState::QuestActive);
-			QuestStartTime = FDateTime::Now();
+			QuestElapsedSeconds = 0.0f;
 			NotifySpawnManagerOfInteraction();
 
 			// Met before it was asked (a campfire already stands): she joins on the spot (Wes: "if it's already done have the quest complete right
@@ -322,8 +324,7 @@ float UMORecruitmentComponent::GetQuestTimeRemaining() const
 		return 0.0f;
 	}
 
-	const FTimespan Elapsed = FDateTime::Now() - QuestStartTime;
-	const float Remaining = ActiveQuest.TimeoutSeconds - Elapsed.GetTotalSeconds();
+	const float Remaining = ActiveQuest.TimeoutSeconds - QuestElapsedSeconds;
 	return FMath::Max(0.0f, Remaining);
 }
 
@@ -583,11 +584,11 @@ void UMORecruitmentComponent::BuildSaveData(FMORecruitmentSaveData& OutSaveData)
 {
 	OutSaveData.RecruitmentState = RecruitmentState;
 	OutSaveData.ActiveQuest = ActiveQuest;
-	OutSaveData.QuestStartTimeTicks = QuestStartTime.GetTicks();
+	OutSaveData.QuestElapsedSeconds = QuestElapsedSeconds;
 	OutSaveData.bHasValidData = true;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] BuildSaveData: State=%d, QuestType=%d, StartTime=%lld"),
-		(int32)RecruitmentState, (int32)ActiveQuest.QuestType, OutSaveData.QuestStartTimeTicks);
+	UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] BuildSaveData: State=%d, QuestType=%d, Elapsed=%.0f s"),
+		(int32)RecruitmentState, (int32)ActiveQuest.QuestType, OutSaveData.QuestElapsedSeconds);
 }
 
 bool UMORecruitmentComponent::ApplySaveDataAuthority(const FMORecruitmentSaveData& InSaveData)
@@ -608,7 +609,7 @@ bool UMORecruitmentComponent::ApplySaveDataAuthority(const FMORecruitmentSaveDat
 	const EMORecruitmentState OldState = RecruitmentState;
 	RecruitmentState = InSaveData.RecruitmentState;
 	ActiveQuest = InSaveData.ActiveQuest;
-	QuestStartTime = FDateTime(InSaveData.QuestStartTimeTicks);
+	QuestElapsedSeconds = InSaveData.QuestElapsedSeconds;   // a save from before reads 0: a fresh ask, the kind way to be wrong
 
 	UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] ApplySaveDataAuthority: State=%d, QuestType=%d, TimeRemaining=%.1f sec"),
 		(int32)RecruitmentState, (int32)ActiveQuest.QuestType, GetQuestTimeRemaining());

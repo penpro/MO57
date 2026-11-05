@@ -246,7 +246,7 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   Met already: "Ohh, you already built one!?" and she joins on the spot (`EMORecruitmentOutcome::QuestAlreadyMet`). Back early: the
   reminder; back with it built: "You built one!" and she joins. The ask is for the first settlers: once the colony has
   `RecruitGateMinRoster` (3) a stranger drops it and the trust gate decides (V2.3; she greets you and says "I don't know your people yet",
-  the notification gives the numbers). The ask's timeout (10 real hours, then she is lost) is unchanged. Test
+  the notification gives the numbers). The ask's timeout is 10 hours with the world running, then she is lost; until Nov 5 (N-311) it ran on the wall clock, game closed or not, so a night away lost her at the next load. Test
   `MOFramework.Colony.SurvivorDialogue`.
 - **A survivor near every player** (Oct 29, Wes: "i haven't seen one in ages and another player asked about them also saying he's never seen
   one ... let's make it so there's always one within 200m with the campfire going"). Why none were met: the survivor category spawned one in
