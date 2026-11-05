@@ -158,6 +158,19 @@ struct MOFRAMEWORKMEDICAL_API FMOVitalsSaveData
 	/** How wet the clothing is (0-1). A save from before this field loads dry. */
 	UPROPERTY()
 	float WetnessLevel = 0.0f;
+
+	/** The whole-body failure clocks (StepSystemicFailure): a save and a load during one is not a recovery. */
+	UPROPERTY()
+	float CirculatoryFailureSeconds = 0.0f;
+
+	UPROPERTY()
+	float RespiratoryFailureSeconds = 0.0f;
+
+	UPROPERTY()
+	float HeatStrokeDoseMinutes = 0.0f;
+
+	UPROPERTY()
+	EMOSystemicFailure FatalSystemicFailure = EMOSystemicFailure::None;
 };
 
 // ============================================================================

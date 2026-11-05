@@ -2,10 +2,53 @@
 // under 50 % or 20-30 % of the blood left was broadcast every tick to no listener: none of them ever killed. These are the clock's rules.
 
 #include "Misc/AutomationTest.h"
+#include "GameFramework/Actor.h"
 #include "MOVitalsComponent.h"
 #include "HAL/IConsoleManager.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+// A body failing goes on failing through a save (N-296): the clocks were in no save, so a load restarted every one, a free five minutes each time. Expected: fatal just past the limit counted
+// across the load; failing before: alive, the clock back at nothing.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOVitals_SystemicClocksSaved,
+	"MOFramework.Medical.Vitals.SystemicFailure.ClocksSaved",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOVitals_SystemicClocksSaved::RunTest(const FString& Parameters)
+{
+	float Limit = 300.0f;
+	if (IConsoleVariable* A = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.Medical.CardiacArrestDeathSeconds"))) { Limit = A->GetFloat(); }
+	const auto Bleeding = []()
+	{
+		UMOVitalsComponent* V = NewObject<UMOVitalsComponent>(NewObject<AActor>());
+		V->Vitals.MaxBloodVolume = 5000.0f;
+		V->Vitals.BloodVolume = 1200.0f;   // 24 % left: circulatory failure
+		V->Vitals.HeartRate = 72.0f;
+		V->Vitals.SpO2 = 98.0f;
+		V->Vitals.RespiratoryRate = 14.0f;
+		return V;
+	};
+
+	UMOVitalsComponent* Before = Bleeding();
+	TestEqual(TEXT("most of the window: alive"), Before->StepSystemicFailure(Limit - 1.0f), EMOSystemicFailure::None);
+	FMOVitalsSaveData Saved;
+	Before->BuildSaveData(Saved);
+	TestEqual(TEXT("the save holds the clock"), Saved.CirculatoryFailureSeconds, Limit - 1.0f);
+
+	UMOVitalsComponent* After = Bleeding();
+	TestTrue(TEXT("the save applies"), After->ApplySaveDataAuthority(Saved));
+	TestEqual(TEXT("loaded: the clock stands where it stood"), After->GetCirculatoryFailureSeconds(), Limit - 1.0f);
+	TestEqual(TEXT("two seconds on, across the load: fatal"), After->StepSystemicFailure(2.0f), EMOSystemicFailure::Exsanguination);
+
+	// A fatal cause is kept too, and an older save has none of it.
+	FMOVitalsSaveData Fatal;
+	After->BuildSaveData(Fatal);
+	UMOVitalsComponent* Reloaded = Bleeding();
+	Reloaded->ApplySaveDataAuthority(Fatal);
+	TestEqual(TEXT("the cause survives"), Reloaded->GetFatalSystemicFailure(), EMOSystemicFailure::Exsanguination);
+	TestEqual(TEXT("and it is fatal only once"), Reloaded->StepSystemicFailure(60.0f), EMOSystemicFailure::None);
+	return true;
+}
 
 namespace
 {

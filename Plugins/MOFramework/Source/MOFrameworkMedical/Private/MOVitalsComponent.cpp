@@ -523,6 +523,10 @@ void UMOVitalsComponent::BuildSaveData(FMOVitalsSaveData& OutSaveData) const
 	OutSaveData.Exertion = Exertion;
 	OutSaveData.Activity = Activity;
 	OutSaveData.WetnessLevel = WetnessLevel;
+	OutSaveData.CirculatoryFailureSeconds = CirculatoryFailureSeconds;
+	OutSaveData.RespiratoryFailureSeconds = RespiratoryFailureSeconds;
+	OutSaveData.HeatStrokeDoseMinutes = HeatStrokeDoseMinutes;
+	OutSaveData.FatalSystemicFailure = FatalSystemicFailure;
 }
 
 bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData)
@@ -536,6 +540,10 @@ bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveD
 	Exertion = InSaveData.Exertion;
 	Activity = InSaveData.Activity;
 	SetWetnessLevel(InSaveData.WetnessLevel);   // soaked when saved is soaked when loaded: quitting is not a way to dry off
+	CirculatoryFailureSeconds = InSaveData.CirculatoryFailureSeconds;
+	RespiratoryFailureSeconds = InSaveData.RespiratoryFailureSeconds;
+	HeatStrokeDoseMinutes = InSaveData.HeatStrokeDoseMinutes;
+	FatalSystemicFailure = InSaveData.FatalSystemicFailure;
 
 	// Update blood loss stage
 	PreviousBloodLossStage = GetBloodLossStage();
