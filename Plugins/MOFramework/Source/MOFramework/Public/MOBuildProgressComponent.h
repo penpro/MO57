@@ -189,6 +189,7 @@ public:
 	 *   Death        -> Cancel (no resume — the builder is gone).
 	 *   EnteredCombat-> Pause (a fight is starting; come back to it).
 	 *   LostControl  -> Pause (pawn unpossessed; preserve for whoever takes over).
+	 *   Death        -> Pause (the work and its materials stand for whoever takes it up: N-306).
 	 *   UserCancel   -> Ignored here (UI calls CancelConstruction directly).
 	 *   External     -> Pause (default for unknown reasons).
 	 */

@@ -4,7 +4,9 @@
 #include "Misc/AutomationTest.h"
 #include "MOBuildPieceActor.h"
 #include "MOBuildProgressComponent.h"
+#include "MOInterruptTypes.h"
 #include "MORecipeDefinitionRow.h"
+#include "UObject/UnrealType.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuildPiece_PostItems,
 	"MOFramework.Building.PieceSupportPostItems",
@@ -68,5 +70,38 @@ bool FMOBuildPiece_ExtraWork::RunTest(const FString& Parameters)
 	UMOBuildProgressComponent* None = NewObject<UMOBuildProgressComponent>();
 	None->InitializeFromRecipe(Recipe);
 	TestEqual(TEXT("CONTROL: no extra work, no branches"), None->GetRequiredCount(TEXT("StraightBranch01")), 0);
+	return true;
+}
+
+// A builder's death took the building with it (N-306, the June audit's M23): the Death interrupt cancelled with no refund, on the word of a "death pipeline" that owns no such thing.
+// Expected: paused, with the materials and the work still there; failing before: Ghost, no deposits, no elapsed time.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBuildingBuilderDeathKeepsTheWork, "MOFramework.Building.BuilderDeathKeepsTheWork",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBuildingBuilderDeathKeepsTheWork::RunTest(const FString& Parameters)
+{
+	AActor* Site = NewObject<AActor>(GetTransientPackage());
+	UMOBuildProgressComponent* Build = NewObject<UMOBuildProgressComponent>(Site);
+	const FStructProperty* ProgressProp = FindFProperty<FStructProperty>(UMOBuildProgressComponent::StaticClass(), TEXT("Progress"));
+	if (!TestNotNull(TEXT("the component has its progress"), ProgressProp))
+	{
+		return false;
+	}
+	FMOBuildProgress& Progress = *ProgressProp->ContainerPtrToValuePtr<FMOBuildProgress>(Build);
+	Progress.State = EMOBuildState::Constructing;
+	Progress.TotalBuildTime = 100.0f;
+	Progress.ElapsedTime = 30.0f;
+	Progress.DepositedMaterials.Add(FName(TEXT("Stick01")), 5);
+
+	Build->NotifyInterrupt_Implementation(FMOInterruptContext(EMOInterruptReason::Death, nullptr));
+
+	TestEqual(TEXT("the build is paused, not back to a ghost"), static_cast<int32>(Build->GetProgressData().State), static_cast<int32>(EMOBuildState::Paused));
+	TestEqual(TEXT("the materials stay on the site"), Build->GetDepositedCount(FName(TEXT("Stick01"))), 5);
+	TestEqual(TEXT("the work done stands"), Build->GetProgressData().ElapsedTime, 30.0f);
+
+	// CONTROL: a cancel is what empties a site, so the expectations above can fail.
+	Build->CancelConstruction(/*bRefundMaterials=*/false);
+	TestEqual(TEXT("CONTROL: a cancel empties the site"), Build->GetDepositedCount(FName(TEXT("Stick01"))), 0);
+	TestEqual(TEXT("CONTROL: and goes back to a ghost"), static_cast<int32>(Build->GetProgressData().State), static_cast<int32>(EMOBuildState::Ghost));
 	return true;
 }
