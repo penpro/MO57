@@ -31,9 +31,14 @@
 
 - **Ultra Dynamic Sky + Ultra Dynamic Weather** (`Content/UltraDynamicSky`) register the weather provider
   (`IMOWeatherProviderInterface`) that drives ambient temperature. Feels-like temperature is based on the GLOBAL temperature: UDS
-  location queries blend canopy toward interior warmth (see `MOWeatherIntegrationSubsystem`).
+  location queries blend canopy toward interior warmth (see `MOWeatherIntegrationSubsystem`). Its terms have no steps (`FMOFeelsLike::ComputeTerms`, Nov 4, N-282): wind chill
+  comes on from nothing at 10 C and is in full at 5 C, wet cold from 20 C to 15 C, the heat index from 25 C up. Until then each switched on at its threshold: in a full wind the
+  feels-like fell 20 C as the air cooled through 10 C, and the body's heat balance met that as a step. Exposure has no floor either: until then wind or rain at or under 0.1 did nothing, and now
+  wind there chills up to 2 C and rain up to 0.5 C at any cold temperature (a wind-blocked shelter in a strong wind is the case that matters). Test `MOFramework.Weather.FeelsLikeHasNoSteps`.
 - Every MO system reads and writes weather through `IMOWeatherProviderInterface` / `UMOWeatherIntegrationSubsystem`; the host's
   changes go through `BP_WeatherBridge` into UDW `Change Weather` (server-authoritative).
+- The sky follows the clock through a throttle (`RequestUdsSync`, one game minute). A clock that moves BACK (a load, a dev time change) syncs at once (`IsUdsSyncDue`, Nov 4, N-286): until then
+  the negative elapsed time read as "too soon" and the sky froze until the clock caught up with the last sync.
 - **Weather director** (`UMOWeatherDirectorSubsystem`): holds a weather for a spell of GAME time, then follows a Markov chain over
   the UDS presets (~45 % fair / 13 % wet / 0.5 % thunderstorm over a long run); a wet front falls as snow below ~0.5 C. It respects
   a weather set by anyone else (adopts it, holds it 6 game hours). `MO.Weather.Director 0|1` (cvar), `.Info`, `.Next`.

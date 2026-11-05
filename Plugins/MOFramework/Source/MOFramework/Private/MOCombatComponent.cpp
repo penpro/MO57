@@ -17,6 +17,8 @@ namespace
 #include "MOSkillsComponent.h"
 #include "MOCombatMedicalTypes.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOPlayerController.h"
+#include "MONotificationWidget.h"
 #include "MOItemDefinitionRow.h"
 #include "Engine/DataTable.h"
 #include "Net/UnrealNetwork.h"
@@ -1132,7 +1134,7 @@ void UMOCombatComponent::ExecuteAttack()
 
 		// Process each hit - draw blue sphere at impact points
 		bool bStruck = false;
-		for (const FHitResult& Hit : HitResults)
+		for (const FHitResult& Hit : OneHitPerActor(HitResults))
 		{
 			// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 			// #if ENABLE_DRAW_DEBUG
@@ -1330,6 +1332,8 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		return;
 	}
 
+	const FName HeldItem = CachedEquipmentComp ? CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemDefinitionId : NAME_None;   // gone from the slot once it breaks
+
 	// The held item keeps its own wear: wear it there (a worn-out item leaves the hand, and SyncMainHandFromEquipment goes back to the bare hand).
 	if (CachedEquipmentComp && CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemGuid == MainHandWeapon.ItemGuid)
 	{
@@ -1338,7 +1342,7 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		{
 			if (bDestroyed)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
+				HandleWeaponBroke(HeldItem);
 			}
 			else
 			{
@@ -1348,13 +1352,45 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		}
 	}
 
+	const bool bWasBroken = MainHandWeapon.IsBroken();
 	MainHandWeapon.CurrentDurability = FMath::Max(0, MainHandWeapon.CurrentDurability - Amount);
 
-	if (MainHandWeapon.IsBroken())
+	if (!bWasBroken && MainHandWeapon.IsBroken())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
-		// TODO: Broadcast weapon broke event
+		HandleWeaponBroke(HeldItem);
 	}
+}
+
+void UMOCombatComponent::HandleWeaponBroke(FName ItemDefinitionId)
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] %s: its %s broke"), *GetNameSafe(GetOwner()), *ItemDefinitionId.ToString());
+	OnWeaponBroke.Broadcast(ItemDefinitionId);
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
+	{
+		const FText Name = ItemDefinitionId.IsNone() ? NSLOCTEXT("MOCombat", "TheWeapon", "weapon") : UMOItemDatabaseSettings::GetItemDisplayName(ItemDefinitionId);
+		PC->ClientShowNotification(FText::Format(NSLOCTEXT("MOCombat", "WeaponBroke", "Your {0} broke."), Name), 4.0f, EMONotificationType::Warning);
+	}
+}
+
+TArray<FHitResult> UMOCombatComponent::OneHitPerActor(const TArray<FHitResult>& Hits)
+{
+	TArray<FHitResult> Result;
+	Result.Reserve(Hits.Num());
+	for (const FHitResult& Hit : Hits)
+	{
+		const AActor* Actor = Hit.GetActor();
+		FHitResult* Same = Actor ? Result.FindByPredicate([Actor](const FHitResult& Kept) { return Kept.GetActor() == Actor; }) : nullptr;
+		if (!Same)
+		{
+			Result.Add(Hit);
+		}
+		else if (Same->BoneName.IsNone() && !Hit.BoneName.IsNone())
+		{
+			*Same = Hit;
+		}
+	}
+	return Result;
 }
 
 bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection)
@@ -1413,6 +1449,8 @@ bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		HitInfo.Instigator = Owner;
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
+		TrainFromBlow(Result, true);
+		TargetCombat->TrainFromBlow(Result, false);
 		// DEBUG (punch, disabled Oct 18): re-enable to trace swings
 		// UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s hit %s (%s, %.1f damage): %s"), *Owner->GetName(), *HitActor->GetName(),
 		// 	*UEnum::GetValueAsString(HitBodyPart), HitInfo.BaseDamage, *UEnum::GetValueAsString(Result));
@@ -1521,14 +1559,29 @@ void UMOCombatComponent::PlayAttackAnimation()
 	}
 }
 
-void UMOCombatComponent::GrantCombatXP(float Amount)
+void UMOCombatComponent::TrainFromBlow(EMOAttackResult Result, bool bIsStriker)
 {
-	if (!CachedSkillsComp)
+	static const FName Melee(TEXT("Melee"));
+	static const FName Defense(TEXT("Defense"));
+	if (bIsStriker)
 	{
-		return;
+		if (Result == EMOAttackResult::Hit)
+		{
+			GrantCombatXP(Melee, XPPerLandedBlow);
+		}
 	}
+	else if (Result == EMOAttackResult::Blocked || Result == EMOAttackResult::Parried || Result == EMOAttackResult::Dodged || Result == EMOAttackResult::Glanced)
+	{
+		GrantCombatXP(Defense, XPPerBlowTurnedAside);
+	}
+}
 
-	// TODO: Grant XP to appropriate combat skill
+void UMOCombatComponent::GrantCombatXP(FName SkillId, float Amount)
+{
+	if (CachedSkillsComp && GetOwner() && GetOwner()->HasAuthority())
+	{
+		CachedSkillsComp->AddExperience(SkillId, Amount);
+	}
 }
 
 bool UMOCombatComponent::LoadWeaponProfile(FName ProfileId, FMOWeaponDamageProfileRow& OutProfile) const

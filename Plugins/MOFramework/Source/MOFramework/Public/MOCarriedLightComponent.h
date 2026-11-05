@@ -23,6 +23,16 @@ class UStaticMeshComponent;
 class UStaticMesh;
 struct FMOLightSourceProfile;
 
+/** Whether the light in the hands was burning when the world was saved. Its wear is the held item's own (the equipment's save). */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOCarriedLightSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	bool bLit = false;
+};
+
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOCarriedLightComponent : public UActorComponent, public IMOLocalLightSource
 {
@@ -38,6 +48,13 @@ public:
 
 	/** The unlit light source in the pawn's hands that could be lit now (right hand first), and which hand. False when none (or it is burnt out). */
 	bool FindUnlitHeld(EMOEquipmentSlot& OutSlot, FMOEquippedItem& OutItem) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Light|Save")
+	void BuildSaveData(FMOCarriedLightSaveData& OutSaveData) const;
+
+	/** Server, after the equipment is restored: a torch burning when the world was saved burns after the load (a save in a dark cave came back dark). */
+	UFUNCTION(BlueprintCallable, Category="MO|Light|Save")
+	bool ApplySaveDataAuthority(const FMOCarriedLightSaveData& InSaveData);
 
 	/** Lights the light source in the hands (server; the caller has checked for a flame to light it from). False when there is none to light. */
 	bool LightHeld();

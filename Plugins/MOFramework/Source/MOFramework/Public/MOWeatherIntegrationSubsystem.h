@@ -64,11 +64,15 @@ class UMaterialParameterCollection;
 struct FMOFeelsLike
 {
 	float AirC = 0.0f;         // the global air temperature
-	float WindChillC = 0.0f;   // <= 0: wind exposure below 10 C
-	float WetColdC = 0.0f;     // <= 0: rain on you below 20 C
+	float WindChillC = 0.0f;   // <= 0: wind exposure below 10 C (in full from 5 C down)
+	float WetColdC = 0.0f;     // <= 0: rain on you below 20 C (in full from 15 C down)
 	float HeatIndexC = 0.0f;   // >= 0: humid air above 25 C
 	float FeelsLikeC = 0.0f;
 	FMOWeatherExposure Exposure;
+
+	/** The terms from AirC and Exposure, FeelsLikeC their sum. Every term grows from nothing as its condition comes on: the air warms and cools by degrees, so
+	 *  the body must not meet a step (Humidity is only read in the heat). */
+	MOFRAMEWORK_API void ComputeTerms(TFunctionRef<float()> Humidity);
 };
 
 // ============================================================================
@@ -435,6 +439,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Weather|UDSSync")
 	void RequestUdsSync();
+
+	/** The throttle: true once MinHours of game time have passed since the last sync, or when the clock now reads EARLIER than it (a load, a dev time change): the sky is
+	 *  then simply wrong, and waiting for the clock to catch up would freeze it until it did. */
+	static bool IsUdsSyncDue(const FDateTime& Now, const FDateTime& LastSync, float MinHours);
 
 	/**
 	 * Game hours elapsed since the last successful UDS push. Useful for

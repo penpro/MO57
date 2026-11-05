@@ -54,12 +54,18 @@ void AMOCreatureController::Tick(float DeltaTime)
 		{
 			ForgetOutOfTheWorldThreat();   // seen before its creator opened (or a dev reopened it): let it go now
 		}
+		// Dead: until Nov 2026 a wolf stood biting a body for good (JudgeChase never gives up within reach), and a deer ran from one.
+		if (CurrentThreatActor.IsValid() && IsQuarryGone(CurrentThreatActor.Get()))
+		{
+			ForgetThreatBecause(TEXT("it is dead"));
+		}
 		if (bPursuesThreats && !CurrentThreatActor.IsValid() && !IsDead())
 		{
 			ScanForQuarry();   // someone seen far off may have come within its aggro range
 		}
 		UpdatePursuit();   // may give the chase up (and clear the threat)
-		if (CurrentThreatActor.IsValid())
+		// Once more after it goes: a threat destroyed outright (a deer replaced by its carcass) leaves nothing to clear it, and the tree stayed on HasTarget with no target.
+		if (CurrentThreatActor.IsValid() || bBlackboardShowsTarget)
 		{
 			UpdateBlackboardThreatInfo();
 		}
@@ -119,7 +125,8 @@ void AMOCreatureController::SetupPerception()
 		HearingConfig->DetectionByAffiliation = SenseAllAffiliations();
 	}
 
-	// Bind to perception updates
+	// Bind to perception updates (RemoveDynamic first: a controller that possesses again would bind twice)
+	PerceptionComp->OnTargetPerceptionUpdated.RemoveDynamic(this, &AMOCreatureController::OnTargetPerceptionUpdated);
 	PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &AMOCreatureController::OnTargetPerceptionUpdated);
 
 	FinalizePerceptionSetup();
@@ -292,13 +299,13 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		// TARGET STICKINESS: Don't switch targets unless we don't have one or current is invalid
 		if (CurrentThreatActor.IsValid() && CurrentThreatActor.Get() != Actor)
 		{
-			// We already have a valid target - only switch if new target is MUCH closer (50% closer)
-			float CurrentDistance = FVector::Dist(ControlledPawn->GetActorLocation(), CurrentThreatActor->GetActorLocation());
-			float NewDistance = FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation());
-
-			if (NewDistance >= CurrentDistance * 0.5f)
+			// We already have a valid target - only switch if the new one is MUCH closer, and not at all away from whoever attacked it (N-205, seen Oct 24: a
+			// wolf a joiner had just cut took a deer walking past as its quarry, though its log said it "turns on" the joiner "for 45 s").
+			const float CurrentDistance = FVector::Dist(ControlledPawn->GetActorLocation(), CurrentThreatActor->GetActorLocation());
+			const float NewDistance = FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation());
+			if (!ReplacesQuarry(CurrentDistance, NewDistance, IsProvokedBy(CurrentThreatActor.Get())))
 			{
-				return;   // new target isn't significantly closer - keep current target
+				return;
 			}
 		}
 
@@ -402,6 +409,7 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	}
 
 	bool bHasTarget = CurrentThreatActor.IsValid();
+	bBlackboardShowsTarget = bHasTarget;
 	float DistanceToTarget = GetDistanceToThreat();
 	bool bIsInAttackRange = bHasTarget && (DistanceToTarget <= AttackRange);
 
@@ -734,6 +742,10 @@ bool AMOCreatureController::MayTakeAsQuarry(const AActor* Actor) const
 	{
 		return false;   // never its own kind
 	}
+	if (IsQuarryGone(Actor))
+	{
+		return false;   // a body is nobody's quarry and nothing to flee
+	}
 	// A survivor still in the character creator is not in the world yet: no quarry, nothing to flee (Wes, Oct 27: no bears in the creator).
 	if (IsOutOfTheWorld(Other))
 	{
@@ -811,6 +823,11 @@ void AMOCreatureController::ScanForQuarry()
 	}
 }
 
+bool AMOCreatureController::ReplacesQuarry(float CurrentDistanceCm, float NewDistanceCm, bool bCurrentIsAttacker)
+{
+	return !bCurrentIsAttacker && NewDistanceCm < CurrentDistanceCm * 0.5f;
+}
+
 bool AMOCreatureController::IsProvokedBy(const AActor* Actor) const
 {
 	const UWorld* World = GetWorld();
@@ -832,9 +849,24 @@ bool AMOCreatureController::IsOutOfTheWorld(const AActor* Actor)
 	return Survivor && Survivor->IsInCharacterCreator();
 }
 
+bool AMOCreatureController::IsQuarryGone(const AActor* Quarry)
+{
+	if (!IsValid(Quarry))
+	{
+		return true;
+	}
+	const AMOCharacter* Character = Cast<AMOCharacter>(Quarry);
+	return Character && Character->IsDead();
+}
+
 void AMOCreatureController::ForgetOutOfTheWorldThreat()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s lets %s go: in the character creator"), *GetNameSafe(GetPawn()), *GetNameSafe(CurrentThreatActor.Get()));
+	ForgetThreatBecause(TEXT("in the character creator"));
+}
+
+void AMOCreatureController::ForgetThreatBecause(const TCHAR* Why)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCreatureController] %s lets %s go: %s"), *GetNameSafe(GetPawn()), *GetNameSafe(CurrentThreatActor.Get()), Why);
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);

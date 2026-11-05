@@ -204,6 +204,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnAttackBlocked, AActor*, Attack
 /** Fired when successfully parrying. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnParrySuccess, AActor*, Attacker);
 
+/** Fired on the server when the held weapon wears out (the item, None if the hand's weapon had no item). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnWeaponBroke, FName, ItemDefinitionId);
+
 /** Fired when entering/exiting combat. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnCombatEngaged, bool, bInCombat);
 
@@ -290,6 +293,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
 	FMOOnAttackHit OnAttackHit;
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
+	FMOOnWeaponBroke OnWeaponBroke;
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
 	FMOOnDamageReceived OnDamageReceived;
@@ -505,6 +511,12 @@ public:
 	/** The main-hand weapon state (equipped from the right hand by SyncMainHandFromEquipment). */
 	const FMOWeaponState& GetMainHandWeapon() const { return MainHandWeapon; }
 
+	/** One blow lands on an actor once: a sweep can touch one body twice (its capsule and its mesh). The hit that names a bone is kept, as it knows the part; otherwise the first. Order kept. */
+	static TArray<FHitResult> OneHitPerActor(const TArray<FHitResult>& Hits);
+
+	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. Wearing out says so (HandleWeaponBroke). */
+	void ApplyWeaponDurabilityLoss(int32 Amount);
+
 	// ============================================================================
 	// QUERY API
 	// ============================================================================
@@ -538,6 +550,16 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Combat|Query")
 	float GetSkillDamageBonus() const;
+
+	/** What a blow teaches (N-288), server only: the striker's Melee when it lands; the target's Defense when turned aside (blocked, parried, dodged, glanced). A creature has no skills. */
+	void TrainFromBlow(EMOAttackResult Result, bool bIsStriker);
+
+	/** Melee XP for a blow that lands, Defense XP for one turned aside. DT_Skills' curves turn these into levels. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Combat|Skill")
+	float XPPerLandedBlow = 2.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|Combat|Skill")
+	float XPPerBlowTurnedAside = 2.0f;
 
 	/**
 	 * Get time until we can attack again.
@@ -737,8 +759,8 @@ private:
 	/** Consume stamina for an action. */
 	bool ConsumeStamina(float Amount);
 
-	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. */
-	void ApplyWeaponDurabilityLoss(int32 Amount);
+	/** The held weapon just wore out: tells listeners and whoever plays this pawn. A spear gone from the hand mid-fight must not be a surprise. */
+	void HandleWeaponBroke(FName ItemDefinitionId);
 
 	/** Server: the right hand changed. */
 	UFUNCTION()
@@ -754,8 +776,8 @@ private:
 	/** Play the appropriate attack animation montage. */
 	void PlayAttackAnimation();
 
-	/** Grant combat skill XP. */
-	void GrantCombatXP(float Amount);
+	/** Grant XP in a fighting skill, on the server. */
+	void GrantCombatXP(FName SkillId, float Amount);
 
 	/** Load weapon profile from DataTable. */
 	bool LoadWeaponProfile(FName ProfileId, FMOWeaponDamageProfileRow& OutProfile) const;

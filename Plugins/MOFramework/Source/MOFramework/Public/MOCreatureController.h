@@ -195,6 +195,12 @@ public:
 	 */
 	bool IsProvokedBy(const AActor* Actor) const;
 
+	/** A quarry to let go of: gone from the world, or dead. A body is no threat and nothing to chase. */
+	static bool IsQuarryGone(const AActor* Quarry);
+
+	/** Does a newly perceived pawn replace the current quarry? Only one much nearer (half the distance), and never while the current one is who attacked it. */
+	static bool ReplacesQuarry(float CurrentDistanceCm, float NewDistanceCm, bool bCurrentIsAttacker);
+
 	/** How long a pack call holds the threat for a wolf that has not seen it yet (s): long enough to run to the fight. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Perception")
 	float PackCallMemorySeconds = 20.f;
@@ -339,6 +345,9 @@ protected:
 	/** True once the initial blackboard values were pushed. The blackboard asset is bound AFTER OnPossess (the behavior tree starts later), so this is done on the first tick it exists. */
 	bool bBlackboardPrimed = false;
 
+	/** The blackboard's HasTarget as last pushed: a threat that goes pushes false once. */
+	bool bBlackboardShowsTarget = false;
+
 	/** Pending perception settings to apply after SetupPerception. */
 	float PendingSightRadius = -1.f;
 	float PendingLoseSightRadius = -1.f;
@@ -412,6 +421,9 @@ private:
 
 	/** Drop a current threat that went out of the world (no give-up cooldown: it is quarry again once it Begins). */
 	void ForgetOutOfTheWorldThreat();
+
+	/** Drop the current threat now, with a line in the log saying why. */
+	void ForgetThreatBecause(const TCHAR* Why);
 
 	/** Forget the threat after Seconds unless something renews it (a sighting, a sound, a wound). */
 	void StartThreatForgetTimer(AActor* Threat, float Seconds);

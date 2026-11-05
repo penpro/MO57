@@ -126,6 +126,6 @@ private:
 	UPROPERTY()
 	TArray<FMOCharacterRelationship> Relationships;
 
-	/** Game time a player last left this pawn (MinValue = none this session; not saved, so a reload starts the count fresh). */
+	/** Game time a player last left this pawn (MinValue = none this session; saved with the history, so a reload keeps the count fresh). */
 	FDateTime PlayerLeftAt = FDateTime::MinValue();
 };

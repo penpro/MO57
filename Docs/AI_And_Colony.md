@@ -60,6 +60,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   Deer_Doe has none: **`ABP_DeerDoe` has no `DefaultSlot` node** (wolf's has), so a deer would show no montage at all -- add the slot in the graph
   editor (not scriptable; N-096), then its row. Proof: `nettest actions` `_client_sees_creature_flinch` (the joiner's log: "anim cue N on this
   client: ANIM_Wolf_GetHitLeft", then AM_WolfBite); `MOFramework.Creature.HitSide`.
+- **A carcass's body** (`AMOCarcassActor::Body`, Nov 5, N-294 / N-293): the mesh, materials and the pose the ragdoll settled in, taken once on the server, replicated (a joiner's copy had no mesh, so the animal vanished when its ragdoll was replaced) and saved. `ApplyBody` is the one way it is drawn on a client and after a load; a client now follows the decay stage's look too (`OnRep_DecayStage`).
 - **A killed wolf leaves a carcass** (`DT_Carcasses` "Wolf": the deer's parts at a ~40 kg animal's yields; DECISIONS Oct 20). Before, it
   ragdolled and left nothing.
 
@@ -72,6 +73,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   speed through its own gaits (walk 0.3 at WalkSpeed, jog 0.6, sprint 1.0; below the walk proportionally quieter; crouched x0.5), heard
   within HearingRange x loudness. A deer (HearingRange 20 m) hears a sprinting player or a running wolf at 20 m, a walk at 6 m, a
   crouched creep at ~1.5 m. A wolf used to be stuck at the walk value (its gait state is player-only).
+- **A body is nobody's quarry** (`AMOCreatureController::IsQuarryGone`, Nov 5, N-300): a dead pawn is not taken and is let go within a fifth of a second, and a threat destroyed outright reaches the blackboard (one more push after it goes). Until then a wolf stood biting a corpse for good, a deer ran from one, and a tree stayed on HasTarget with no target.
 - **A wound names its cause**: every hit carries its attacker (`FMOCombatHitInfo::Instigator`, the wolf's bite passes the wolf) into
   `UMOAnatomyComponent::InflictDamage(..., DamageInstigator)`, kept as `GetLastDamageInstigator()`. A creature's death names it as the
   killer (was always None).
@@ -92,6 +94,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 ### Melee damage (Oct 18 2026)
 
+- **One blow, one strike on a body** (`OneHitPerActor`, Nov 5, N-301): a sweep can touch a body twice, and each hit struck it.
 - **The blow**: `UMOCombatComponent::ProcessHit` -> `BaseDamage` x distance falloff (1.0 at the body, 0.7 at full range) -> the target's
   `ReceiveAttack` -> `UMOCombatMedicalHelpers::ApplyCombatDamage` -> `InflictDamage(part, BaseDamage x CriticalMultiplier, wound type of
   the damage category)` -> the part loses that x the wound's `BaseDamageMultiplier` (DT_Wounds: Blunt 0.8). A creature dies when a vital
@@ -102,11 +105,13 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   `MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart` checks every survivor pawn's own fist against the vital parts.
 - **ArmorPenetration** only matters through armor ("0 = stopped by any armor, 1 = ignores armor"): `GetFinalDamage` no longer multiplies
   by it (no hit carries target armor yet). It did: a wooden spear's 10 at 0.1 landed 1, a fifth of a punch.
+- **What a fight teaches** (Nov 4, N-288): a blow that lands gives the striker 2 Melee XP, a blow blocked, parried, dodged or glanced gives the target 2 Defense XP (`TrainFromBlow`, per blow, no toast: fights are fast; Claude's numbers, a component default). `GrantCombatXP` was empty, so both skills stood at nothing. What the levels DO is fork F65: damage and block still ignore them (`GetSkillDamageBonus` returns 0).
 - **The weapon in the hand**: the item in the right-hand equipment slot IS the main-hand weapon (`SyncMainHandFromEquipment`, server, on
   every right-hand change and at BeginPlay): an item with `bIsWeapon` + `WeaponProfileId` (DT_Weapons) is equipped and drawn; anything
   else fights bare. Nothing called `EquipMainHandWeapon` before, so every spear fought with the fist; the five spear rows in DT_Items
   were also not weapons (`bIsWeapon` false, slot None) until Oct 18. A weapon wears only when a blow lands, on the held item's own
-  durability (a worn-out item leaves the hand; an item that keeps none, like the spears, wears the profile's MaxDurability counter).
+  durability (a worn-out item leaves the hand; an item that keeps none, like the spears, wears the profile's MaxDurability counter). Wearing out says so (Nov 4, N-287): "Your Flint Spear broke." on
+  the player's screen and `OnWeaponBroke` (it was a log line; the next blow was a punch).
   Measured Oct 18 (solo instance, deer frozen in front): fist 3.9 -> 3.1 HP off the torso; wooden spear light thrust 8.3 -> 10.0 HP
   (Puncture x1.2) with a bleeding puncture wound; before the reset the fist did 386.8 -> 309.4 and killed it.
 

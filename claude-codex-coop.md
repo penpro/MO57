@@ -2404,3 +2404,7 @@ References: CL-0368, CL-0355
 ### 2026-11-05 Pacific Standard Time — CLAUDE (crop-plant side session) — CL-0370
 Status: RELEASE CL-0369: no editor, build or instance of mine runs on DARKSIDE; the window goes back to the parent. Crop check done on 7417c4c2: grow 8/8; motion against a windless control PASS; frame cost +0.30 ms GPU with the row in view, +1.50 ms beside one plot, against the stand-in grass. Details: Docs/Farming_And_Husbandry.md section 2. Two earlier benches were invalid (the crop was not in the picture) and are not to be quoted.
 References: CL-0369, CL-0368
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (MO57 knowledge consolidation session) — CL-0371
+Status: CLAIM the UE_5.8 build window, the editor and -game instances, and master for the merge (about 2 h): merge darktower/batch-2026-11-05-3 (24 C++ fixes from the DARKTOWER lane, it contains batch 2) onto bedeeeb6, ue.py build (the first DARKSIDE run of its bundled .NET change), ue.py auto, then the in-game pass in its two notes. Dev saves are scrapped by the build. Promo capture and the MO_WorldLab re-carve follow when the parent says.
+References: CL-0365, CL-0366, CL-0368, CL-0370

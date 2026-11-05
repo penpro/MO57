@@ -43,9 +43,8 @@
  * [2024-02] TAG INHERITANCE: Tags come from both the ISM component AND its
  *   owner actor. Check TargetTags array in FMOHarvestContext.
  *
- * [2024-02] TOOL DEGRADATION: Tool durability is consumed during harvest.
- *   If tool breaks mid-harvest, operation continues (tool required only
- *   to START harvest).
+ * [2024-02, corrected Nov 2026] TOOL DEGRADATION: not built. Nothing here wears the tool (only a
+ *   blow and a torch's burn wear an item); whether work should is fork F66 (Docs/DECISIONS.md).
  *
  * [2024-02] KEEP-ON-HARVEST: Some recipes have bKeepOnHarvest=true (e.g.,
  *   gather sticks doesn't destroy tree). Instance is only removed if

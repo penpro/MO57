@@ -138,6 +138,30 @@ struct MOFRAMEWORKMEDICAL_API FMODigestingFoodSaveEntry
 	float RemainingFiber = 0.0f;
 
 	UPROPERTY()
+	float RemainingVitaminA = 0.0f;
+
+	UPROPERTY()
+	float RemainingVitaminB = 0.0f;
+
+	UPROPERTY()
+	float RemainingVitaminC = 0.0f;
+
+	UPROPERTY()
+	float RemainingVitaminD = 0.0f;
+
+	UPROPERTY()
+	float RemainingIron = 0.0f;
+
+	UPROPERTY()
+	float RemainingCalcite = 0.0f;
+
+	UPROPERTY()
+	float RemainingPotassium = 0.0f;
+
+	UPROPERTY()
+	float RemainingSodium = 0.0f;
+
+	UPROPERTY()
 	float DigestTime = 0.0f;
 
 	UPROPERTY()

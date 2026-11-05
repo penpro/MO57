@@ -179,18 +179,22 @@ void UMOWeatherIntegrationSubsystem::RequestUdsSync()
 	}
 
 	const FDateTime Now = Clock->GetGameDateTime();
-	const FTimespan Elapsed = Now - LastUdsSyncDateTime;
-	const float ElapsedHours = static_cast<float>(Elapsed.GetTotalHours());
 
 	// Throttle: bail if the window hasn't elapsed. Multiple requests within
 	// the window are silently dropped — that's the whole point. The throttle
 	// is what protects UDS from being spammed.
-	if (ElapsedHours < MinHoursBetweenUdsSyncs)
+	if (!IsUdsSyncDue(Now, LastUdsSyncDateTime, MinHoursBetweenUdsSyncs))
 	{
 		return;
 	}
 
 	DoUdsSyncInternal(Now);
+}
+
+bool UMOWeatherIntegrationSubsystem::IsUdsSyncDue(const FDateTime& Now, const FDateTime& LastSync, float MinHours)
+{
+	const float ElapsedHours = static_cast<float>((Now - LastSync).GetTotalHours());
+	return ElapsedHours < 0.0f || ElapsedHours >= MinHours;
 }
 
 float UMOWeatherIntegrationSubsystem::GetGameHoursSinceLastUdsSync() const
@@ -634,39 +638,43 @@ FMOFeelsLike UMOWeatherIntegrationSubsystem::GetFeelsLikeBreakdown(const FVector
 	FMOFeelsLike Out;
 	Out.AirC = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
 	Out.Exposure = GetWeatherExposureAtLocation(Location);
-	float Temperature = Out.AirC;
-
-	// Wind chill calculation (simplified)
-	// Real wind chill only applies below 10°C with wind
-	if (Temperature < 10.0f && Out.Exposure.Wind > 0.1f)
+	Out.ComputeTerms([this]()
 	{
-		// Approximate wind chill: each 10% wind exposure drops feels-like by ~2°C
-		Out.WindChillC = -Out.Exposure.Wind * 20.0f;
-		Temperature += Out.WindChillC;
-	}
+		// Cloud coverage and rain indicate humidity (we have no humidity of our own)
+		const FMOWeatherState Weather = GetCurrentWeatherState();
+		return FMath::Max(Weather.CloudCoverage, Weather.RainIntensity);
+	});
+	return Out;
+}
 
-	// Wet/rain makes cold feel colder
-	if (Temperature < 20.0f && Out.Exposure.Rain > 0.1f)
+void FMOFeelsLike::ComputeTerms(TFunctionRef<float()> Humidity)
+{
+	// Nothing from Start up, in full Band degrees below it. Until Nov 2026 each term switched on at its threshold: in a full wind the feels-like fell 20 C as the
+	// air cooled through 10 C, and the body's heat balance (which reads this) met that as a step. (Real wind chill at 10 C is a couple of degrees, not 20.)
+	const auto ComingOn = [](float Temp, float Start, float Band)
 	{
-		// Being wet in cold weather drops feels-like by up to 5°C
-		Out.WetColdC = -Out.Exposure.Rain * 5.0f;
-		Temperature += Out.WetColdC;
-	}
+		return FMath::Clamp((Start - Temp) / Band, 0.0f, 1.0f);
+	};
 
-	// Heat index (simplified) - humidity makes hot feel hotter
-	// We don't have humidity directly, but rain indicates high humidity
+	float Temperature = AirC;
+
+	// Wind chill (simplified): each 10 % of wind exposure takes ~2 C off
+	WindChillC = -Exposure.Wind * 20.0f * ComingOn(Temperature, 10.0f, 5.0f);
+	Temperature += WindChillC;
+
+	// Wet in the cold: up to 5 C colder
+	WetColdC = -Exposure.Rain * 5.0f * ComingOn(Temperature, 20.0f, 5.0f);
+	Temperature += WetColdC;
+
+	// Heat index (simplified): humidity makes hot feel hotter, from nothing at 25 C
+	HeatIndexC = 0.0f;
 	if (Temperature > 25.0f)
 	{
-		// Cloud coverage and rain indicate humidity
-		const FMOWeatherState Weather = GetCurrentWeatherState();
-		const float Humidity = FMath::Max(Weather.CloudCoverage, Weather.RainIntensity);
-		// Each 10% humidity above 25°C adds ~1°C feels-like
-		Out.HeatIndexC = Humidity * 10.0f * ((Temperature - 25.0f) / 15.0f);
-		Temperature += Out.HeatIndexC;
+		HeatIndexC = Humidity() * 10.0f * ((Temperature - 25.0f) / 15.0f);
+		Temperature += HeatIndexC;
 	}
 
-	Out.FeelsLikeC = Temperature;
-	return Out;
+	FeelsLikeC = Temperature;
 }
 
 float UMOWeatherIntegrationSubsystem::GetColdStress(const FVector& Location) const

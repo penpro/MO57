@@ -5,6 +5,8 @@
 #include "Engine/DataTable.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "MOCombatComponent.h"
+#include "UObject/UnrealType.h"
 #include "MOEquipmentComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOInventoryRequest.h"
@@ -93,6 +95,59 @@ namespace MOEquipmentTransactionTests
 		for (const FMOEquipmentPendingSwap& Pending : State.PendingSwaps) Owners += Pending.Item.ItemGuid == Guid ? 1 : 0;
 		return Owners;
 	}
+}
+
+// A weapon that wears out says so (N-287): it left the hand mid-fight with only a log line, and the next blow was a punch. Expected: OnWeaponBroke once, with the item, on the blow that
+// finished it; failing before: no event at all.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOEquipmentWeaponBrokeIsSaid, "MOFramework.Equipment.WeaponBrokeIsSaid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOEquipmentWeaponBrokeIsSaid::RunTest(const FString& Parameters)
+{
+	using namespace MOEquipmentTransactionTests;
+	FWorld World;
+	const FPawn Pawn = World.Spawn();
+	UDataTable* Table = GetDefault<UMOItemDatabaseSettings>()->GetItemDefinitionsDataTable();
+	if (!TestNotNull(TEXT("the item table loads"), Table)) return false;
+	TArray<FName> Names = Table->GetRowNames();
+	Names.Sort([](FName A, FName B) { return A.LexicalLess(B); });
+	FName Weapon = NAME_None;
+	for (FName Name : Names)
+	{
+		const FMOItemDefinitionRow* Def = Table->FindRow<FMOItemDefinitionRow>(Name, TEXT("WeaponBroke"));
+		if (Def && Def->bIsWeapon && !Def->WeaponProfileId.IsNone() && Def->bEquippable && Def->EquipmentSlotType == EMOEquipmentSlotType::Held && Def->MaxStackSize == 1)
+		{
+			Weapon = Name;
+			break;
+		}
+	}
+	if (!TestFalse(TEXT("a held weapon exists in DT_Items"), Weapon.IsNone())) return false;
+
+	UMOCombatComponent* Combat = NewObject<UMOCombatComponent>(Pawn.Pawn);
+	// The survivor's Blueprint sets the weapons table; a bare component has none, and would fight bare.
+	const FSoftObjectProperty* WeaponsTable = FindFProperty<FSoftObjectProperty>(UMOCombatComponent::StaticClass(), TEXT("WeaponProfilesDataTable"));
+	if (!TestNotNull(TEXT("the combat component has its weapons table property"), WeaponsTable)) return false;
+	WeaponsTable->SetPropertyValue_InContainer(Combat, FSoftObjectPtr(FSoftObjectPath(TEXT("/MOFramework/Data/DT_Weapons.DT_Weapons"))));
+	Pawn.Pawn->AddInstanceComponent(Combat);
+	Combat->RegisterComponent();
+	auto* Probe = NewObject<UMOEquipmentWearProbe>();
+	Combat->OnWeaponBroke.AddDynamic(Probe, &UMOEquipmentWearProbe::WeaponBroke);
+
+	const FGuid Guid = FGuid::NewGuid();
+	FMOInventoryAddOptions Options;
+	Options.State.Durability = 2;
+	Pawn.Inventory->TryAddItem(Guid, Weapon, 1, Options);
+	if (!TestTrue(TEXT("the weapon goes to the hand"), Pawn.Equipment->EquipFromInventory(Pawn.Inventory, Guid, EMOEquipmentSlot::RightHand))) return false;
+	Advance(Pawn.Equipment, 1.1f);
+	if (!TestEqual(TEXT("the hand's weapon is that item"), Combat->GetMainHandWeapon().ItemGuid, Guid)) return false;
+
+	Combat->ApplyWeaponDurabilityLoss(1);
+	TestEqual(TEXT("a worn weapon that holds says nothing"), Probe->Broke.Num(), 0);
+	Combat->ApplyWeaponDurabilityLoss(1);
+	TestEqual(TEXT("the blow that finishes it says so, once"), Probe->Broke.Num(), 1);
+	TestEqual(TEXT("and names the item"), Probe->Broke.Num() > 0 ? Probe->Broke[0] : NAME_None, Weapon);
+	TestFalse(TEXT("it has left the hand"), Pawn.Equipment->GetEquippedItem(EMOEquipmentSlot::RightHand).IsValid());
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOEquipmentInvalidSlots, "MOFramework.Equipment.InvalidSlots",

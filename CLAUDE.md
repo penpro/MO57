@@ -83,6 +83,7 @@ Production-ready software: fix systems, not symptoms. These override convenience
     `git lfs lock <path>` before editing, `git lfs unlock` after the push.
   - Live claims between the machines go through the inbox (instant); `claude-codex-coop.md` stays the record (it travels only by git).
   - DARKTOWER's GPU jobs pause while its editor runs; builds and `ue.py auto` don't need the editor open.
+  - Its Visual Studio's MSVC is too old for 5.8: a C++ build there needs DARKSIDE's 14.44 as a private `UE_SDKS_ROOT` folder (`Docs/TOOLING.md` § A C++ lane on DARKTOWER, `Tools/darktower/lane/`).
 - Run commands with `ssh darktower "<powershell>"` (key login, `~/.ssh/config` alias; the remote shell is PowerShell 5.1). Copy files
   with `scp darktower:C:/path/file ./dest` (and back). An SSH session there cannot see the share (a key login carries no network
   credentials: `Access is denied`), so ssh commands move files with scp. DARKTOWER's own desktop Claude session sees this PC's `D:\`

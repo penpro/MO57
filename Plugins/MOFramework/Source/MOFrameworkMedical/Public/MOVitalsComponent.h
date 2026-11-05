@@ -154,6 +154,23 @@ struct MOFRAMEWORKMEDICAL_API FMOVitalsSaveData
 
 	UPROPERTY()
 	FMOActivityState Activity;
+
+	/** How wet the clothing is (0-1). A save from before this field loads dry. */
+	UPROPERTY()
+	float WetnessLevel = 0.0f;
+
+	/** The whole-body failure clocks (StepSystemicFailure): a save and a load during one is not a recovery. */
+	UPROPERTY()
+	float CirculatoryFailureSeconds = 0.0f;
+
+	UPROPERTY()
+	float RespiratoryFailureSeconds = 0.0f;
+
+	UPROPERTY()
+	float HeatStrokeDoseMinutes = 0.0f;
+
+	UPROPERTY()
+	EMOSystemicFailure FatalSystemicFailure = EMOSystemicFailure::None;
 };
 
 // ============================================================================
@@ -650,6 +667,10 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Vitals|Temperature")
 	EMOThermalComfort GetThermalComfort() const;
+
+	/** The comfort bucket for a core temperature and a thermal load (N-178), given the bucket the pawn is in now: entering takes the line, leaving takes a margin past
+	 *  it, so a value sitting on a line (the load moves with every gust) does not flicker the moodle on and off. */
+	static EMOThermalComfort ClassifyThermalComfort(float CoreC, float ThermalLoad, const FMOThermalComfortThresholds& Thresholds, EMOThermalComfort Current);
 
 	// ============================================================================
 	// GLUCOSE API

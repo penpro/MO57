@@ -107,21 +107,29 @@ public:
 	// AUDIO OPTIONS
 	// ============================================================================
 
+	/** The mix a new player starts with and Options' Reset returns to: the one place these numbers live. The engine calls SetToDefaults on a first
+	 *  run (no GameUserSettings.ini: UGameUserSettings::ValidateSettings), so a second set of numbers there WAS the first-run mix. */
+	static constexpr float DefaultMasterVolume = 1.0f;
+	static constexpr float DefaultMusicVolume = 0.15f;
+	static constexpr float DefaultSFXVolume = 0.50f;
+	static constexpr float DefaultAmbientVolume = 0.20f;
+	static constexpr float DefaultWeatherVolume = 0.50f;
+
 	/** Master volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MasterVolume = 1.0f;
+	float MasterVolume = DefaultMasterVolume;
 
 	/** Music volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MusicVolume = 0.15f;
+	float MusicVolume = DefaultMusicVolume;
 
 	/** Sound effects volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float SFXVolume = 0.50f;
+	float SFXVolume = DefaultSFXVolume;
 
 	/** Ambient/environment volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float AmbientVolume = 0.20f;
+	float AmbientVolume = DefaultAmbientVolume;
 
 	/**
 	 * Weather audio volume (0-1) — controls UDW's weather sounds (rain, thunder,
@@ -129,7 +137,7 @@ public:
 	 * class (UMOAudioSettings::WeatherSoundClasses).
 	 */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float WeatherVolume = 0.50f;
+	float WeatherVolume = DefaultWeatherVolume;
 
 	// ============================================================================
 	// MAIN MENU / FIRST RUN
@@ -206,6 +214,9 @@ public:
 	/** Generate a random world seed. */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	int32 GenerateRandomSeed();
+
+	/** A new world's random seed: a positive 31-bit number, never 0 (0 asks the new-game flow to pick one). The one source for every new world. */
+	static int32 MakeRandomWorldSeed();
 
 	/** Convert a seed string to integer (hashes non-numeric strings). A number written with digit grouping ("15,204", "15 204", "15.204")
 	 *  is that number: until Oct 15 2026 the New Game panel displayed seeds grouped and then parsed its own text back, so "15,204" was

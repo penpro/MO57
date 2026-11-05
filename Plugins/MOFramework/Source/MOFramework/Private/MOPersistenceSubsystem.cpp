@@ -38,6 +38,8 @@
 #include "MOEquipmentComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOCombatComponent.h"               // (H30/H38) combat weapon-wear restore
+#include "MOPersonalityComponent.h"
+#include "MOCharacterHistoryComponent.h"
 #include "MOSurvivorJobQueueComponent.h"     // (H39) survivor job-queue restore
 #include "MOCreature.h"
 #include "MOBuildableActor.h"
@@ -430,8 +432,10 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     }
     SaveObject->WorldId = CurrentWorldId;
 
-    // World seed (for voxel terrain regeneration)
-    SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
+    // World seed (for voxel terrain regeneration): the seed this world published (AMOGameMode, for every machine), not a settings field a new-game flow writes.
+    const AMOGameState* SeedState = World ? World->GetGameState<AMOGameState>() : nullptr;
+    const int32 PublishedSeed = SeedState ? SeedState->GetWorldSeedInfo().Seed : 0;
+    SaveObject->WorldSeed = PublishedSeed != 0 ? PublishedSeed : UMOGameSettings::GetWorldSeed();
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
     // What the world was created with: its shape is already folded into the published params below (UMOWorldGenSettings::SetActiveWorldShape).
     if (const AMOGameState* State = World ? World->GetGameState<AMOGameState>() : nullptr)
@@ -1351,6 +1355,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             MentalStateComp->BuildSaveData(PawnRecord.MentalStateData);
             PawnRecord.bHasComponentData = true;
         }
+        if (const UMORespirationComponent* RespirationComp = Pawn->FindComponentByClass<UMORespirationComponent>())
+        {
+            RespirationComp->BuildSaveData(PawnRecord.RespirationData);
+            PawnRecord.bHasComponentData = true;
+        }
         if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
         {
             SkillsComp->BuildSaveData(PawnRecord.SkillsData);
@@ -1359,6 +1368,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
         {
             EquipmentComp->BuildSaveData(PawnRecord.EquipmentData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (const UMOCarriedLightComponent* LightComp = Pawn->FindComponentByClass<UMOCarriedLightComponent>())
+        {
+            LightComp->BuildSaveData(PawnRecord.CarriedLightData);
             PawnRecord.bHasComponentData = true;
         }
         if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
@@ -1377,10 +1391,28 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             CombatComp->BuildSaveData(PawnRecord.CombatData);
             PawnRecord.bHasComponentData = true;
         }
+        // What the pawn has studied: without it every load forgot all of it, the Skills panel's knowledge and what it gates.
+        if (const UMOKnowledgeComponent* KnowledgeComp = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+        {
+            KnowledgeComp->BuildSaveData(PawnRecord.KnowledgeData);
+            PawnRecord.bHasComponentData = true;
+        }
+        // A person's character: without it a colonist came back from every load someone else.
+        if (const UMOPersonalityComponent* PersonalityComp = Pawn->FindComponentByClass<UMOPersonalityComponent>())
+        {
+            PersonalityComp->BuildSaveData(PawnRecord.PersonalityData);
+            PawnRecord.bHasComponentData = true;
+        }
         // (H39) Capture survivor job queue (queued jobs + home binding).
         if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
         {
             JobQueueComp->BuildSaveData(PawnRecord.JobQueueData);
+            PawnRecord.bHasComponentData = true;
+        }
+        // Its event log and relationships, settlement or none.
+        if (const UMOCharacterHistoryComponent* HistoryComp = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>())
+        {
+            HistoryComp->BuildSaveData(PawnRecord.HistoryData);
             PawnRecord.bHasComponentData = true;
         }
 
@@ -1793,6 +1825,11 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     {
         MentalStateComp->ApplySaveDataAuthority(PawnRecord.MentalStateData);
     }
+
+    if (UMORespirationComponent* RespirationComp = Pawn->FindComponentByClass<UMORespirationComponent>())
+    {
+        RespirationComp->ApplySaveDataAuthority(PawnRecord.RespirationData);
+    }
     // Apply skills
     if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
     {
@@ -1802,6 +1839,12 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
     if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
     {
         EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
+    }
+
+    // After the equipment: the flame goes on the torch that is in the hand.
+    if (UMOCarriedLightComponent* LightComp = Pawn->FindComponentByClass<UMOCarriedLightComponent>())
+    {
+        LightComp->ApplySaveDataAuthority(PawnRecord.CarriedLightData);
     }
     // Apply recruitment state
     if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
@@ -1829,11 +1872,33 @@ void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPers
         CombatComp->ApplySaveDataAuthority(PawnRecord.CombatData);
     }
 
+    // What the pawn has studied. No-ops on a record from before it (bHasValidData false).
+    if (UMOKnowledgeComponent* KnowledgeComp = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+    {
+        KnowledgeComp->ApplySaveDataAuthority(PawnRecord.KnowledgeData);
+    }
+
+    // A person's character. A record from before it holds all zero: left alone, so the colony's upkeep gives them one (first touch).
+    if (UMOPersonalityComponent* PersonalityComp = Pawn->FindComponentByClass<UMOPersonalityComponent>())
+    {
+        const FMOPersonalityTraits& Saved = PawnRecord.PersonalityData;
+        if (Saved.Conscientiousness != 0.0f || Saved.Sociability != 0.0f || Saved.Stability != 0.0f)
+        {
+            PersonalityComp->ApplySaveDataAuthority(Saved);
+        }
+    }
+
     // (H39) Apply survivor job queue (queued jobs + home binding). No-ops on
     // records saved before this field existed (bHasValidData=false).
     if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
     {
         JobQueueComp->ApplySaveDataAuthority(PawnRecord.JobQueueData);
+    }
+
+    // Its event log and relationships. No-ops on a record from before them (bHasValidData false): the colony's domain applies those.
+    if (UMOCharacterHistoryComponent* HistoryComp = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>())
+    {
+        HistoryComp->ApplySaveDataAuthority(PawnRecord.HistoryData);
     }
 
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),

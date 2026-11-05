@@ -70,6 +70,22 @@ struct MOFRAMEWORKMEDICAL_API FMOBreathMath
 	static float SecondsToEmpty(const FMOBreathParams& P, float Exertion01);
 };
 
+/** The breath a pawn was holding when the world was saved: a load is not a breath of air. bHasValidData false in a save from before it. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORKMEDICAL_API FMORespirationSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float OxygenReserve = 1.0f;
+
+	UPROPERTY()
+	float SecondsAsphyxiating = 0.0f;
+
+	UPROPERTY()
+	bool bHasValidData = false;
+};
+
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORKMEDICAL_API UMORespirationComponent : public UActorComponent
 {
@@ -77,6 +93,13 @@ class MOFRAMEWORKMEDICAL_API UMORespirationComponent : public UActorComponent
 
 public:
 	UMORespirationComponent();
+
+	UFUNCTION(BlueprintCallable, Category="MO|Breath|Save")
+	void BuildSaveData(FMORespirationSaveData& OutSaveData) const;
+
+	/** Server. The airway itself is not saved: whatever closes it (a head under water) closes it again on its next tick. */
+	UFUNCTION(BlueprintCallable, Category="MO|Breath|Save")
+	bool ApplySaveDataAuthority(const FMORespirationSaveData& InSaveData);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

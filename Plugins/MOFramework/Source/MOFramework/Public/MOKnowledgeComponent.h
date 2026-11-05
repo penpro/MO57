@@ -111,6 +111,22 @@ struct MOFRAMEWORK_API FMOItemKnowledgeProgress
 	float LastInspectionSkillLevel = 0.0f;
 };
 
+/** What a pawn has learned, in a save (FMOPersistedPawnRecord::KnowledgeData). */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOKnowledgeSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FMOItemKnowledgeProgress> ItemKnowledge;
+
+	UPROPERTY()
+	TArray<FName> AllLearnedKnowledge;
+
+	UPROPERTY()
+	bool bHasValidData = false;
+};
+
 /**
  * Enum describing the learning potential from an item.
  */
@@ -215,6 +231,14 @@ class MOFRAMEWORK_API UMOKnowledgeComponent : public UActorComponent
 
 public:
 	UMOKnowledgeComponent();
+
+	/** What this pawn has studied, for the save. */
+	UFUNCTION(BlueprintCallable, Category="MO|Knowledge|Save")
+	void BuildSaveData(FMOKnowledgeSaveData& OutSaveData) const;
+
+	/** Server: restore it. A record from before knowledge was saved holds no valid data and leaves the pawn alone. */
+	UFUNCTION(BlueprintCallable, Category="MO|Knowledge|Save")
+	bool ApplySaveDataAuthority(const FMOKnowledgeSaveData& InSaveData);
 
 	/** Array of item inspection progress. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Knowledge")

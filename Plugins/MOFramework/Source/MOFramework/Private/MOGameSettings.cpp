@@ -110,19 +110,19 @@ void UMOGameSettings::SetToDefaults()
 	bEnableMotionBlur = true;
 	bGraphicsQualityChosen = false;   // Reset -> the quality is detected for this hardware again (Super::SetToDefaults restored the engine's fallback groups)
 
-	// Audio
-	MasterVolume = 1.0f;
-	MusicVolume = 0.8f;
-	SFXVolume = 1.0f;
-	AmbientVolume = 1.0f;
+	// Audio: the header's tuned mix. This ran on every first launch too (no .ini yet: UGameUserSettings::ValidateSettings), so until Nov 2026 a new
+	// player and Options' Reset got music at 0.8 against the tuned 0.15, ambient 1.0 against 0.2 and effects 1.0 against 0.5, and the weather slider stayed put.
+	MasterVolume = DefaultMasterVolume;
+	MusicVolume = DefaultMusicVolume;
+	SFXVolume = DefaultSFXVolume;
+	AmbientVolume = DefaultAmbientVolume;
+	WeatherVolume = DefaultWeatherVolume;
 
 	// Main Menu / First Run
 	bPlayIntro = true;
 	bHasCompletedFirstRun = false;
-	bPendingNewGame = false;
-	PendingNewGameSlot.Empty();
-	PendingWorldName.Empty();
-	PendingWorldSeed = 0;
+	// Not the Pending* fields: they are the new-game flow's, not options, and PendingWorldSeed is the seed of the world being played (Options' Defaults, pressed in a world, took it
+	// to 0, and the next save wrote seed 0: that world's terrain was gone at the next load).
 
 	// Gameplay
 	CameraSensitivity = 1.0f;
@@ -331,10 +331,17 @@ void UMOGameSettings::ClearAllCustomBindings()
 // WORLD SEED
 // ============================================================================
 
+int32 UMOGameSettings::MakeRandomWorldSeed()
+{
+	// Not FMath::Rand(): that is rand(), 15 bits on Windows, so the New Game panel only ever offered 32,768 worlds; and a new game seeds it with the world
+	// seed (AMOGameMode, FMath::RandInit), so the next "random" seed followed from the last world played. A GUID owes neither anything.
+	const int32 Seed = static_cast<int32>(GetTypeHash(FGuid::NewGuid()) & 0x7FFFFFFF);
+	return Seed != 0 ? Seed : 1;
+}
+
 int32 UMOGameSettings::GenerateRandomSeed()
 {
-	// Generate a random seed using current time and random int
-	PendingWorldSeed = FMath::Rand();
+	PendingWorldSeed = MakeRandomWorldSeed();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Generated random seed: %d"), PendingWorldSeed);
 	return PendingWorldSeed;
 }

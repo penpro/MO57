@@ -8,12 +8,16 @@
 #include "MOCreatureController.h"
 #include "MOMedicalDatabaseSettings.h"
 #include "MOMetaHumanCharacter.h"
+#include "MOSkillsComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/DataTable.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "GameFramework/Actor.h"
 #include "GenericTeamAgentInterface.h"
+#include "UObject/UnrealType.h"
 
 // Oct 18 2026: one bare-hand punch killed a deer (a Blueprint override of 500 on the survivor's fist), the death named no killer
 // (the attacker never reached the anatomy), a spear did a fifth of a punch (ArmorPenetration scaled unarmored damage), no creature
@@ -93,6 +97,82 @@ bool FMOCombatHitCarriesInstigator::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A fight trains the fighters (N-288): GrantCombatXP was empty, so Melee and Defense stood at nothing for ever. Failing before: 0 XP after any number of blows.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatBlowsTrain, "MOFramework.Combat.Skill.BlowsTrain",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCombatBlowsTrain::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("MOCombatBlowsTrainWorld"));
+	GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	AActor* Fighter = World->SpawnActor<AActor>();
+	UMOSkillsComponent* Skills = NewObject<UMOSkillsComponent>(Fighter);
+	UMOCombatComponent* Combat = NewObject<UMOCombatComponent>(Fighter);
+	Fighter->AddInstanceComponent(Skills);
+	Fighter->AddInstanceComponent(Combat);
+	Skills->RegisterComponent();
+	Combat->RegisterComponent();
+	Fighter->DispatchBeginPlay();
+
+	const auto TotalXP = [Skills](FName Skill)
+	{
+		FMOSkillProgress Progress;
+		return Skills->GetSkillProgress(Skill, Progress) ? Progress.CurrentXP + Progress.Level * 1000.0f : 0.0f;   // a level-up moves XP into the level
+	};
+	const FName Melee(TEXT("Melee"));
+	const FName Defense(TEXT("Defense"));
+
+	Combat->TrainFromBlow(EMOAttackResult::Missed, true);
+	Combat->TrainFromBlow(EMOAttackResult::Blocked, true);
+	TestEqual(TEXT("a blow that does not land teaches the striker nothing"), TotalXP(Melee), 0.0f);
+	Combat->TrainFromBlow(EMOAttackResult::Hit, true);
+	TestTrue(TEXT("a blow that lands trains Melee"), TotalXP(Melee) > 0.0f);
+	TestEqual(TEXT("and not Defense"), TotalXP(Defense), 0.0f);
+
+	Combat->TrainFromBlow(EMOAttackResult::Hit, false);
+	TestEqual(TEXT("a blow taken square teaches the target nothing"), TotalXP(Defense), 0.0f);
+	Combat->TrainFromBlow(EMOAttackResult::Blocked, false);
+	TestTrue(TEXT("a blow blocked trains Defense"), TotalXP(Defense) > 0.0f);
+
+	// A creature (no skills component) fights on with no skill to train.
+	AActor* Wolf = World->SpawnActor<AActor>();
+	UMOCombatComponent* WolfCombat = NewObject<UMOCombatComponent>(Wolf);
+	Wolf->AddInstanceComponent(WolfCombat);
+	WolfCombat->RegisterComponent();
+	Wolf->DispatchBeginPlay();
+	WolfCombat->TrainFromBlow(EMOAttackResult::Hit, true);
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
+	return true;
+}
+
+// One blow lands on a body once (N-301, the June audit's L12): each hit of the sweep went to ProcessHit, so a swing that touched a body twice struck it twice. Expected: one hit per actor; failing before: the loop took them all.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatOneHitPerActor, "MOFramework.Combat.Damage.OneHitPerActor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCombatOneHitPerActor::RunTest(const FString& Parameters)
+{
+	AActor* Wolf = NewObject<AActor>();
+	AActor* Deer = NewObject<AActor>();
+	const auto HitOn = [](AActor* Actor, FName Bone)
+	{
+		FHitResult Hit(Actor, nullptr, FVector::ZeroVector, FVector::UpVector);
+		Hit.BoneName = Bone;
+		return Hit;
+	};
+
+	const TArray<FHitResult> Kept = UMOCombatComponent::OneHitPerActor({ HitOn(Wolf, NAME_None), HitOn(Deer, NAME_None), HitOn(Wolf, TEXT("spine_03")), HitOn(Wolf, TEXT("head")) });
+	if (TestEqual(TEXT("one hit for each of the two bodies"), Kept.Num(), 2))
+	{
+		TestTrue(TEXT("in the order they were touched"), Kept[0].GetActor() == Wolf && Kept[1].GetActor() == Deer);
+		TestEqual(TEXT("the first hit that names a bone is the one kept"), Kept[0].BoneName, FName(TEXT("spine_03")));
+	}
+	TestEqual(TEXT("a sweep that touched nothing strikes nothing"), UMOCombatComponent::OneHitPerActor({}).Num(), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCombatBareHandCannotDestroyVitalPart, "MOFramework.Combat.Damage.BareHandCannotDestroyVitalPart",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
@@ -155,6 +235,28 @@ bool FMOCombatBareHandCannotDestroyVitalPart::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A body is nobody's quarry (N-300): a wolf stood biting a corpse for good, a deer ran from one, and a threat destroyed outright left the behaviour tree on HasTarget with no target.
+// Expected: dead or gone is gone; failing before: no such check anywhere.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCreatureLetsGoOfTheDead, "MOFramework.Creature.Pursuit.LetsGoOfTheDead",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCreatureLetsGoOfTheDead::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("nothing there: gone"), AMOCreatureController::IsQuarryGone(nullptr));
+	AActor* Thing = NewObject<AActor>();
+	TestFalse(TEXT("any other live actor stands"), AMOCreatureController::IsQuarryGone(Thing));
+
+	AMOCharacter* Someone = NewObject<AMOCharacter>(GetTransientPackage());
+	TestFalse(TEXT("someone alive is a quarry"), AMOCreatureController::IsQuarryGone(Someone));
+	const FBoolProperty* Dead = FindFProperty<FBoolProperty>(AMOCharacter::StaticClass(), TEXT("bIsDead"));
+	if (TestNotNull(TEXT("the character has its dead flag"), Dead))
+	{
+		Dead->SetPropertyValue_InContainer(Someone, true);
+		TestTrue(TEXT("the same someone, dead: gone"), AMOCreatureController::IsQuarryGone(Someone));
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCreatureHearsUnteamedPawns, "MOFramework.Creature.Perception.HearsUnteamedPawns",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
@@ -209,6 +311,19 @@ bool FMOCreatureChaseGivesUp::RunTest(const FString& Parameters)
 	LastGain = 0.0;
 	Verdict = AMOCreatureController::JudgeChase(500.0f, 20100.0f, 1.0, Reach, Leash, NoGain, Mark, LastGain);
 	TestTrue(TEXT("201 m from the den it turns back"), Verdict != nullptr && FCString::Strcmp(Verdict, TEXT("too far from home")) == 0);
+	return true;
+}
+
+// A creature keeps the one who attacked it (N-205, Oct 24: a wolf a joiner had just cut took a deer walking past as its quarry). Failing before: the deer at half the distance won.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCreatureKeepsItsAttacker, "MOFramework.Creature.Pursuit.KeepsItsAttacker",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCreatureKeepsItsAttacker::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("a hunting wolf takes much nearer prey"), AMOCreatureController::ReplacesQuarry(1000.0f, 400.0f, false));
+	TestFalse(TEXT("a hunting wolf keeps its quarry over something a little nearer"), AMOCreatureController::ReplacesQuarry(1000.0f, 600.0f, false));
+	TestFalse(TEXT("exactly half is not much nearer"), AMOCreatureController::ReplacesQuarry(1000.0f, 500.0f, false));
+	TestFalse(TEXT("a wolf that was attacked keeps its attacker, however near the deer"), AMOCreatureController::ReplacesQuarry(1000.0f, 100.0f, true));
 	return true;
 }
 

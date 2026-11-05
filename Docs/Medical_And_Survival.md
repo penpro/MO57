@@ -43,7 +43,7 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
 (`IMOSkillLevelSource`).
 **Until Oct 19 2026 the feels-like temperature never felt the weather** (N-175): the shelter test read every pawn as indoors (its rays
 started inside the pawn's own interaction sphere), so the wet-cold (-5 C x rain exposure below 20 C) and wind-chill (-20 C x wind
-exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain" at 11.2 C feels 7.7 C; in a cave 10.9 C
+exposure below 10 C; both come on over 5 C since Nov 4, no steps, N-282) terms never ran. They run now: a pawn in the open in "Rain" at 11.2 C feels 7.7 C; in a cave 10.9 C
 (`Docs/Weather_And_Time.md` §2).
 
 ## 2. Death: one path with a cause (commit 4f948b11)
@@ -52,6 +52,8 @@ exposure below 10 C) terms never ran. They run now: a pawn in the open in "Rain"
   Causes: BodyPartDestroyed (anatomy `OnInstantDeath`), Drowned (respiration), BledOut / CardiacArrest / RespiratoryFailure / HeatStroke
   (vitals `OnSystemicDeath`), Hypothermia (a cardiac arrest with the core under 30 C: "Froze to death"). The recap prints the cause.
   **Never broadcast anatomy `OnInstantDeath` for a non-organ death.**
+- **A destroyed organ's clock** (`UMOAnatomyComponent::CheckDeathConditions`; Nov 4, N-284): a body-part row's `DeathTimerOnDestruction` starts it; a paired organ (lungs, kidneys) only when its pair is gone too (`DeathClockSecondsFor`: a person lives on one lung). The clock is saved (`FMOAnatomySaveData::DeathClockPart` / `DeathClockRemaining`) and goes on where it stood; test `MOFramework.Medical.Anatomy.FatalOrgans`.
+- **The clocks are saved** (Nov 5, N-296): a load during a circulatory, respiratory or heat failure goes on from where it stood (`FMOVitalsSaveData`).
 - **Systemic clocks** (`UMOVitalsComponent::StepSystemicFailure`): circulatory (HR < 10 or blood < 30 %) 300 s, respiratory
   (SpO2 < 50 or RR < 4) 240 s; game-scaled, reset on recovery, single-fire. Instant bleed-out still at <= 20 % blood.
 - **Thermal extremes kill** (N-063, checked Oct 20): cold through the heart -- under a 32 C core the rate falls 10 / min per degree, so near
@@ -146,13 +148,15 @@ Water coupling: `ApplyWaterToExposure` (Ambient -> water temperature 0.7 x air +
 **A joiner's own state (N-177 / N-178, Oct 19):** `WetnessLevel` replicates to its owner (it was server-only: a joiner never saw the wet
 moodle), and `Vitals` has `OnRep_Vitals`, which fires the same `OnVitalsChanged` / `OnThermalComfortChanged` the host's tick fires (they
 fired on the server only: a joiner's thermal moodle and status panel never changed). Verified on a joiner in rain: its own wetness
-0.12 -> 0.40, thermal load 1.2, comfort Cold, both moodles on its screen.
+0.12 -> 0.40, thermal load 1.2, comfort Cold, both moodles on its screen. **Saved since Nov 4 (N-285):** `FMOVitalsSaveData::WetnessLevel`; until then a load dried the clothing at once (test `MOFramework.Medical.Vitals.WetnessSaved`).
 
 ## 5. Breath and drowning
 
 `UMORespirationComponent`: oxygen reserve, `SetAirwayClosedBy(source, bool)`; a closed airway drains it (110 s at rest, /4 at full
 exertion), caps SpO2 via `UMOVitalsComponent::SetAirwayOxygenReserve`; asphyxia death 75 s after empty -> `DieOf(Drowned)`.
 Drowning comes from the vitals (SpO2), never from a timer. Details and the swim side: `Docs/Water.md` §3.
+
+Saved since Nov 5 (N-297): the reserve and the seconds asphyxiating are on the pawn's record, so a load is not a breath of air; the airway closes again on its own next tick if the head is still under.
 
 ## 6. Illness
 

@@ -86,6 +86,10 @@ play, NOT RENDERING; a summary every 30 s). Submix listeners get the POST-effect
   start, on every world and from each setter, and holds them (`SliderSoundClasses`). Test `MOFramework.Audio.EverySoundOnASlider` (every
   sound's class reaches a slider; the Weather slider sets UDS_Weather). Consequence: the ocean / lake waves now follow Ambient and the rain
   follows Weather (default 0.5) -- quieter than before at the default sliders, because before they ignored them.
+- **A new player's mix and Options' Reset were louder than the tuned one (Nov 4, N-280).** `UMOGameSettings::SetToDefaults` had its own numbers
+  (music 0.8, effects 1.0, ambient 1.0, weather untouched) against the fields' tuned 0.15 / 0.5 / 0.2 / 0.5, and the engine calls it on every first run, when
+  no `GameUserSettings.ini` exists (`UGameUserSettings::ValidateSettings`). One set of numbers now (`UMOGameSettings::Default*Volume`), test
+  `MOFramework.Settings.ResetIsTheTunedMix`. A player with an existing ini keeps their sliders.
 - The ambience driver flapped Water <-> Outdoor every second (rings depended on the previous state): `DistanceToWaterCm` measures once on
   fixed 7 m rings + a 4 s minimum dwell. Ambience states: Cave (> 12 m under the generator surface; leaves at 8 m), Water (within 35 m of
   water; leaves beyond 56 m), else the clock's Day / Night; Indoor is left to buildings.

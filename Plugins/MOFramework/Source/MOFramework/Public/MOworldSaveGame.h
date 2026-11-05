@@ -53,8 +53,11 @@
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "MORespirationComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOCarriedLightComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOQuestTypes.h"
 #include "MOWeatherTypes.h"
@@ -66,6 +69,7 @@
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
 #include "MOStartSiteTypes.h"             // FMOStartSiteSaveData
+#include "MOCarcassTypes.h"               // FMOCarcassSaveData
 #include "MOItemInstanceState.h"
 #include "MOSurvivalStatsComponent.h"
 #include "MOWorldCreationTypes.h"
@@ -195,6 +199,10 @@ struct FMOPersistedPawnRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOMentalStateSaveData MentalStateData;
 
+    /** The breath being held (UMORespirationComponent). bHasValidData false in a save from before it: applying no-ops. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMORespirationSaveData RespirationData;
+
     /** Skills component state (skill levels, XP) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOSkillsSaveData SkillsData;
@@ -202,6 +210,10 @@ struct FMOPersistedPawnRecord
     /** Equipment component state (equipped items per slot) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOEquipmentSaveData EquipmentData;
+
+    /** Whether the light in the hands was burning (UMOCarriedLightComponent). False in a save from before it. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOCarriedLightSaveData CarriedLightData;
 
     /** Recruitment component state (for survivors) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
@@ -215,6 +227,10 @@ struct FMOPersistedPawnRecord
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOSurvivorJobQueueSaveData JobQueueData;
 
+    /** This pawn's event log and relationships (UMOCharacterHistoryComponent), whoever it is. bHasValidData false in a save from before it: the colony's VillagerHistory holds them there. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOCharacterHistorySaveData HistoryData;
+
     /**
      * (H38) Combat component state — weapon wear (durability) for main/off hand
      * and combat decay timer. Persisted so weapon durability survives reload.
@@ -222,6 +238,14 @@ struct FMOPersistedPawnRecord
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOCombatSaveData CombatData;
+
+    /** A person's character (UMOPersonalityComponent). All zero in a save from before it: the colony's upkeep then gives them one, as it does a new villager. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOPersonalityTraits PersonalityData;
+
+    /** What this pawn has studied (UMOKnowledgeComponent). bHasValidData false in a save from before it: applying no-ops. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOKnowledgeSaveData KnowledgeData;
 
     /** Flag to indicate if component data has been populated (for legacy save compatibility) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
@@ -508,6 +532,10 @@ public:
      */
     UPROPERTY()
     FMOStartSiteSaveData StartSiteData;
+
+    /** The carcasses lying in the world. Owned + serialized by UMOCarcassSaveDomain via IMOSaveDomain. Empty for older saves. */
+    UPROPERTY()
+    FMOCarcassSaveData CarcassData;
 
     // --- Terraform excavation designations (unit 3) ---
 

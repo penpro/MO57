@@ -208,6 +208,15 @@ Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/U
 5. **Package once** only if a fix depends on cooked / Shipping behaviour (`Docs/Packaging.md`).
 6. **Commit each verified fix on its own** with its docs; a fix that failed waits for the next batch (no rebuild for one fix).
 
+### A C++ lane on DARKTOWER (Nov 4 2026: its first compile; `Tools/darktower/lane/`)
+When DARKSIDE's Unreal window is taken, C++ can be built and tested on DARKTOWER (build and `ue.py auto` only: no benches there, Wes Nov 4; no instances without the shader hooks below).
+What it took, in order:
+1. **A tree of its own:** `lane_copy.ps1` copies `C:\UEProjects\MO57` to `C:\UEProjects\MO57_Lane` (64 GB, 6 min, local). That clone is Wes's to reset, never built in.
+2. **DARKSIDE's assets:** `list_tree.py` on both sides, compare by size, add the paths `git diff <lane HEAD> origin/master` names and the working tree's changed assets, write `overlay.txt`; `lane_overlay.py` copies them through the share, 30 MB/s (12.8 GB, 7 min, including the local-only assets the LFS budget holds back). It must run in Wes's session (`session_task.ps1`: an SSH login cannot see the share). `lane_fix_pointers.py` then replaces any LFS pointer.
+3. **Text at master, assets alone:** `lane_git_first.ps1` (HEAD and index moved, text files checked out; LFS never smudged), then `lane_sync.ps1 -Ref darktower/<topic>` for each batch.
+4. **The toolchain:** DARKTOWER's Visual Studio has MSVC 14.33 / 14.34, and 5.8 needs 14.38 or later (`Visual Studio x64 must be installed`). Nothing is installed: DARKSIDE's `VC/Tools/MSVC/14.44.35207` (x64 only, 650 MB as a tar) goes in `C:\Users\Wes\mo57_lane\sdks\HostWin64\Win64\VS2022\14.44.35207`, and `UE_SDKS_ROOT` points there for this process (`lane_build_auto.cmd`; UBT's AutoSDK search). `ue.py build` uses the engine's own .NET 10 (`_ubt_env`).
+5. **Write source elsewhere:** a sparse clone on DARKSIDE (`git clone --shared --no-checkout`, sparse Docs, Tools, Config, Source, Plugins/*/Source, Content/Python, LFS smudge skipped) so no other session's build sees it; push `darktower/<topic>` branches; fetch them on the lane.
+
 ### Where a batch's time goes, and the speed-ups (the loop deep dive, Oct 22 2026)
 Measured on one batch (BR23 batch 2): build 48 s (37 actions, UBA local, adaptive unity); automation 313 s (351 tests); full host + joiner
 nettest ~28 min (boot + join ~3 min, the pair READY in 47-50 s against 12-16 s for one instance alone); an editor start for a DataTable

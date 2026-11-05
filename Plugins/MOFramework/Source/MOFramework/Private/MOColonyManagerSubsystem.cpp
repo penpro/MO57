@@ -950,16 +950,7 @@ FMOColonySaveData UMOColonyManagerSubsystem::BuildSaveData() const
 	Data.Residency = Residency;
 	Data.VillagerMood = VillagerMood;
 	Data.VillagerUnhousedHours = VillagerUnhousedHours;
-	for (APawn* Villager : GetColonyRoster())
-	{
-		const FGuid PawnGuid = GetPawnGuid(Villager);
-		if (const UMOCharacterHistoryComponent* History = Villager->FindComponentByClass<UMOCharacterHistoryComponent>())
-		{
-			FMOCharacterHistorySaveData HistoryData;
-			History->BuildSaveData(HistoryData);
-			Data.VillagerHistory.Add(PawnGuid, HistoryData);
-		}
-	}
+	// A pawn's history is on its own record now (FMOPersistedPawnRecord::HistoryData): this map went with the colony's save, so a player with no settlement lost theirs at every load.
 	Data.bHasValidData = Settlement.IsValid() || Residency.Num() > 0;
 	return Data;
 }
@@ -976,8 +967,8 @@ bool UMOColonyManagerSubsystem::ApplySaveDataAuthority(const FMOColonySaveData& 
 	Residency = InData.Residency;
 	VillagerMood = InData.VillagerMood;
 	VillagerUnhousedHours = InData.VillagerUnhousedHours;
-	// History replays onto the components once pawns are respawned; the roster
-	// walk finds them by GUID.
+	// A save from before FMOPersistedPawnRecord::HistoryData: its history replays onto the components once pawns
+	// are respawned; the roster walk finds them by GUID. A newer save's map is empty.
 	for (APawn* Villager : GetColonyRoster())
 	{
 		const FGuid PawnGuid = GetPawnGuid(Villager);
