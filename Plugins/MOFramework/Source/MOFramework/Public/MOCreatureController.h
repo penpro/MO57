@@ -195,6 +195,9 @@ public:
 	 */
 	bool IsProvokedBy(const AActor* Actor) const;
 
+	/** Does a newly perceived pawn replace the current quarry? Only one much nearer (half the distance), and never while the current one is who attacked it. */
+	static bool ReplacesQuarry(float CurrentDistanceCm, float NewDistanceCm, bool bCurrentIsAttacker);
+
 	/** How long a pack call holds the threat for a wolf that has not seen it yet (s): long enough to run to the fight. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Perception")
 	float PackCallMemorySeconds = 20.f;

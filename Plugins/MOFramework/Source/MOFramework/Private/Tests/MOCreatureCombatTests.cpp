@@ -212,6 +212,19 @@ bool FMOCreatureChaseGivesUp::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A creature keeps the one who attacked it (N-205, Oct 24: a wolf a joiner had just cut took a deer walking past as its quarry). Failing before: the deer at half the distance won.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCreatureKeepsItsAttacker, "MOFramework.Creature.Pursuit.KeepsItsAttacker",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCreatureKeepsItsAttacker::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("a hunting wolf takes much nearer prey"), AMOCreatureController::ReplacesQuarry(1000.0f, 400.0f, false));
+	TestFalse(TEXT("a hunting wolf keeps its quarry over something a little nearer"), AMOCreatureController::ReplacesQuarry(1000.0f, 600.0f, false));
+	TestFalse(TEXT("exactly half is not much nearer"), AMOCreatureController::ReplacesQuarry(1000.0f, 500.0f, false));
+	TestFalse(TEXT("a wolf that was attacked keeps its attacker, however near the deer"), AMOCreatureController::ReplacesQuarry(1000.0f, 100.0f, true));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCharacterFootfallLoudness, "MOFramework.Creature.Perception.FootfallLoudness",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
