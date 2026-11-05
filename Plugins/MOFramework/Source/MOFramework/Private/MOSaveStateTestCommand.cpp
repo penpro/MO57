@@ -20,6 +20,7 @@
 #include "MOMetabolismComponent.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPersonalityComponent.h"
+#include "MORecruitmentComponent.h"
 #include "MORespirationComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOVitalsComponent.h"
@@ -125,6 +126,12 @@ namespace MOSaveStateTest
 				VitaminC += Food.RemainingVitaminC;
 			}
 			Line += FString::Printf(TEXT(" digesting=%d vitaminc=%.2f"), Data.DigestingFood.Num(), VitaminC);
+		}
+		if (const UMORecruitmentComponent* Recruitment = Pawn.FindComponentByClass<UMORecruitmentComponent>())
+		{
+			FMORecruitmentSaveData Data;
+			Recruitment->BuildSaveData(Data);
+			Line += Data.RecruitmentState == EMORecruitmentState::QuestActive ? FString::Printf(TEXT(" ask=%.1f"), Data.QuestElapsedSeconds) : FString(TEXT(" ask=none"));
 		}
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE %s"), *Line);
 	}

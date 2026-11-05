@@ -8,6 +8,7 @@ Written for the DARKTOWER lane's batches 2 and 3 (Nov 2026), which no one had ru
   N-292 what a pawn studied; N-298 a skill's decay clock; N-289 a colonist's character; N-285 wet clothing
   N-284 one lung is no clock, two is 180 s, and the load does not restart it; N-296 a bleeding body's circulatory clock goes on through a load
   N-295 a lone player's left-behind pawn: its history survives and it says "While you were away"
+  N-311 a stranger's ask: its clock goes on through a load, and the time away does not count
   N-299 a torch lit at a save burns after the load, flame included
   N-297 a load is not a breath of air (the reserve refills in 14 s on land, so this one can come back "could not tell", never a false pass)
   N-293 a carcass: same place, pose, mesh and cuts, and the cut part gone from its menu
@@ -50,6 +51,19 @@ def state():
 
 def me(st):
     return next((p for p in st["people"].values() if p.get("player") == "1"), None)
+
+
+def asker(dist):
+    """A stranger who has asked the player for a campfire (every survivor asks while the colony is small), its name and GUID."""
+    off = ui.log_size(NAME)
+    ui.console(NAME, f"MO.Colony.SpawnSurvivor {dist}")
+    m = ui.wait_log(NAME, r"COLONY SpawnSurvivor (\S+)", since=off, timeout=20)
+    name = m.group(1).strip() if m else None
+    if not name or name == "FAILED":
+        return None, None
+    py(who(name) + f"q = [a for a in {PEOPLE} if a.is_player_controlled()][0]; p.get_component_by_class(unreal.MORecruitmentComponent).begin_interaction(q); out('ASKED')")
+    time.sleep(2)
+    return name, next((g for g, p in state()["people"].items() if p["name"] == name), None)
 
 
 def who(name):
@@ -144,6 +158,8 @@ def main():
         student, student_guid = first["name"], first["guid"]
 
         # ---- the people, each with one thing to remember
+        # The stranger first: with three settlers the trust gate decides and she asks for nothing.
+        _, asker_guid = asker(1700)
         bleeder, bleeder_guid = survivor(500)
         lungs, lungs_guid = survivor(800)
         character, character_guid = survivor(1100)
@@ -219,6 +235,9 @@ def main():
         # ---- N-291: Options' Defaults in a world, then the save
         py("s = unreal.GameUserSettings.get_game_user_settings(); s.set_to_defaults(); out('DEFAULTS pressed')")
         before = state()
+        asked_at_save = before["people"].get(asker_guid, {}).get("ask", "none")
+        rep.step("CONTROL: the stranger has asked, and her clock runs", asked_at_save not in ("none", "0.0"), asked_at_save)
+        saved_at = time.time()
         rep.step("CONTROL: the bleeder's circulatory clock is running", float(before["people"][bleeder_guid]["circ"]) > 30.0, before["people"][bleeder_guid]["circ"])
         off = ui.log_size(NAME)
         ui.console(NAME, f"MO.Save.SaveAs {SLOT}")
@@ -257,6 +276,10 @@ def main():
         rep.step("N-298: its skill clocks", int(now[student_guid]["clocks"]) == int(was[student_guid]["clocks"]) > 0, f"{was[student_guid]['clocks']} -> {now[student_guid]['clocks']}")
         rep.step("its Melee progress", now[student_guid]["melee"] == was[student_guid]["melee"], f"{was[student_guid]['melee']} -> {now[student_guid]['melee']}")
         rep.step("N-285: wet stays wet", abs(float(now[student_guid]["wet"]) - float(was[student_guid]["wet"])) < 0.05 and float(was[student_guid]["wet"]) > 0.7, f"{was[student_guid]['wet']} -> {now[student_guid]['wet']}")
+        asked_now, away = after["people"].get(asker_guid, {}).get("ask", "none"), time.time() - saved_at
+        rep.step("N-311: the ask's clock goes on from where it stood, and the time away does not count",
+                 asked_now != "none" and asked_at_save != "none" and float(asked_at_save) <= float(asked_now) < float(asked_at_save) + 0.8 * away,
+                 f"{asked_at_save} s at the save, {asked_now} s {away:.0f} s later")
         rep.step("N-289: a colonist's character", now[character_guid]["traits"] == "-0.40,0.70,-0.90", now[character_guid]["traits"])
 
         saved_clock, loaded_clock = clock_seconds(was[lungs_guid]), clock_seconds(now[lungs_guid])
