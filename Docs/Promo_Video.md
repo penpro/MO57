@@ -152,7 +152,7 @@ No agent has heard the film, and whether it looks right is yours. Nothing below 
 4. G15 fire: the campfire's logs look low-poly this close, and the flames are the old effect.
 5. G20: smoke is heavy, and the ring is staged.
 6. G21 and G22: everyone is in underwear, because that is what the game gives them today. Harvey goes reddish in the low sun in G22, and G22 is the one soft shot.
-7. G17: the panel is real and honest, but it is a plain UI on screen for 3 s, with the bar through the text (N-306).
+7. G17: the panel is real and honest, but it is a plain UI on screen for 3 s, with the bar through the text (N-315).
 8. G21: the game's HUD reticle fades out over about a third of a second after the click, faint at the top of the frame.
 9. The flare sweeps at bars 16, 18, 26 and 31 (`edit.py` `FLARE_AT`, `FLARE_OPACITY`).
 10. Type: Windows' Sitka until F69.

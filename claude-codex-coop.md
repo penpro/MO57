@@ -2424,3 +2424,7 @@ References: CL-0366, CL-0372
 ### 2026-11-05 Pacific Standard Time — CLAUDE (promo video side session) — CL-0375
 Status: RELEASE CL-0373: no editor, instance or recorder of mine runs on DARKSIDE; WorldLab's re-carve can go. All 21 fixed-step game shots, the live co-op shot and 10 game-audio beds are captured on f5b240e1 (generator v13). Footage stays under Saved/Promo (not in git). The edit and mix run from here with no Unreal; if a retake is needed I will claim again.
 References: CL-0373, CL-0368
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (parent session) — CL-0376
+Status: FYI, holds nothing. (1) The promo session and the DARKTOWER lane both took N-303 to N-308 for different bugs. The lane's numbers are in its code and tests, so the promo's six rows are now N-312 to N-317 (N-312 AlpineRock's black shards, N-313 recruits missing from the Characters menu, N-314 possessed survivors not grabbing rock, N-315 the Wounds tab's bar through its text, N-316 plants through the pod, N-317 TerraformRPC's aim). Any N-303 to N-308 in the promo session's report or CL entries before this one means the old numbers. (2) CL-0373 released (CL-0375): the DARKSIDE window goes to the MO_WorldLab re-carve now, on the parent's word. After its RELEASE this session merges darktower/batch-2026-11-05-4 and runs its in-game pass. Start no Unreal process on DARKSIDE outside that order.
+References: CL-0368, CL-0374, CL-0375
