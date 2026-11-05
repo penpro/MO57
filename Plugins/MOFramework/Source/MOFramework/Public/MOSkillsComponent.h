@@ -118,6 +118,10 @@ struct MOFRAMEWORK_API FMOSkillsSaveData
 
 	UPROPERTY()
 	TArray<FMOSkillProgress> Skills;
+
+	/** When each skill was last used, in game seconds (the decay clock): without it every load gave every skill a fresh grace. Empty in a save from before it: their grace starts at first sight, as it did. */
+	UPROPERTY()
+	TMap<FName, double> LastUsedGameSeconds;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnSkillLevelUp, FName, SkillId, int32, OldLevel, int32, NewLevel);

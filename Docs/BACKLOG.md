@@ -252,6 +252,7 @@ F26 how long studying an item takes · F27 cliff bands that read as a staircase 
 
 | ID | Status | Owner | Item | Detail | Aliases |
 |---|---|---|---|---|---|
+| N-298 | FIXED (Nov 5, `darktower/skill-clocks-saved`; by automation) | Claude | A load forgave a skill's decay: `LastUsedGameSeconds` was in no save, so `ApplyDecayPass` gave every skill a fresh grace from the moment of the load, and a player who reloaded now and then never lost any. `FMOSkillsSaveData::LastUsedGameSeconds`; test `MOFramework.Skills.UnusedClockSaved` | `Docs/Crafting_And_Progression.md` | - |
 | N-070 | WAITING | Wes | Heat ladder values + kiln stations (F10); era play time (F16); chariot (F17); attempt-anything (F18) | PROGRESSION_ROADMAP | Night report #3 |
 | N-071 | OPEN | Claude | GAP producers: feathers (birds), horn, flax / nettle, wool (sheep), resin tap target (HarvestSap) -> unblocks the 10 blocked recipes | ROADMAP §5 | |
 | N-072 | OPEN | Claude | Agriculture: seeds, crops, fields (hoe and sickle exist) | ROADMAP §3 Era 3 | |
