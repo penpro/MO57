@@ -18,6 +18,7 @@
 #include "MOVitalsComponent.h"
 #include "MOWaterSubsystem.h"
 #include "MOWorldGen.h"
+#include "MOLakeShapeTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -307,13 +308,13 @@ bool FMOSwim_OpenWaterSurface::RunTest(const FString& Parameters)
 			++CentreWrong;
 		}
 		// 90 % of the way to the shore along the long axis is still the lake; 20 % past the shore is the ocean plane again (the bank is dry land well above sea level, and the ocean mesh is hidden by the terrain there).
-		const double Ax = L.Center.X + 0.9 * L.RadiusCm * L.CosAngle, Ay = L.Center.Y + 0.9 * L.RadiusCm * L.SinAngle;
-		if (!FMOWorldGen::GetWaterSurfaceCm(*P, Ax, Ay, Seed, Z) || !FMath::IsNearlyEqual(Z, L.SurfaceCm, 0.01f))
+		const FVector2D InLake = MOLakeTest::PointAtQ(L, 0.9f);
+		if (!FMOWorldGen::GetWaterSurfaceCm(*P, InLake.X, InLake.Y, Seed, Z) || !FMath::IsNearlyEqual(Z, L.SurfaceCm, 0.01f))
 		{
 			++EdgeWrong;
 		}
-		const double Bx = L.Center.X + 1.2 * L.RadiusCm * L.CosAngle, By = L.Center.Y + 1.2 * L.RadiusCm * L.SinAngle;
-		if (!FMOWorldGen::GetWaterSurfaceCm(*P, Bx, By, Seed, Z) || !FMath::IsNearlyEqual(Z, P->Tuning.SeaLevelCm, 0.01f))
+		const FVector2D PastShore = MOLakeTest::PointAtQ(L, 1.2f);
+		if (!FMOWorldGen::GetWaterSurfaceCm(*P, PastShore.X, PastShore.Y, Seed, Z) || !FMath::IsNearlyEqual(Z, P->Tuning.SeaLevelCm, 0.01f))
 		{
 			++OutsideWrong;
 		}

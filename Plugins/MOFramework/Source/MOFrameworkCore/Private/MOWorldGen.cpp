@@ -217,6 +217,19 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	{
 		H = FnvAddFloat(FnvAddFloat(H, T.CaveEntranceCellCm), T.CaveEntranceChance);
 	}
+	// Ravines, floating islands and lobed lakes (v13): only while on, the same way.
+	if (T.bEnableWater && T.LakeLobes > 1)
+	{
+		H = FnvAddFloat(H, (float)T.LakeLobes);
+	}
+	if (T.RavineChance > 0.0f)
+	{
+		for (const float V : { T.RavineCellCm, T.RavineChance, T.RavineLengthMaxCm, T.RavineHalfWidthMaxCm, T.RavineDepthMaxCm }) { H = FnvAddFloat(H, V); }
+	}
+	if (T.IslandChance > 0.0f)
+	{
+		for (const float V : { T.IslandCellCm, T.IslandChance, T.IslandRadiusMinCm, T.IslandRadiusMaxCm, T.IslandHeightMinCm, T.IslandHeightMaxCm }) { H = FnvAddFloat(H, V); }
+	}
 	for (const FVector2D& K : T.ContinentSplineM) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FVector2D& K : T.ErosionReliefSpline) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FMOWorldGenBiome& B : Biomes)

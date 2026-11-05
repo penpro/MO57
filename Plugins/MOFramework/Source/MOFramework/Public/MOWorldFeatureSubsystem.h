@@ -151,6 +151,13 @@ private:
 	/** Spawned actors by (feature index, slot x, slot y, member): each member of a cluster streams on its own distance. */
 	TMap<FIntVector4, TWeakObjectPtr<AActor>> Spawned;
 
+	/** Floating islands: the voxel shape stamps of each island within reach of a player, by island cell, each machine its own (MOFloatingIslandStamps.cpp). */
+	TMap<FIntPoint, TArray<TWeakObjectPtr<AActor>>> IslandStamps;
+	int32 IslandStampsSeed = 0;
+	FVector2D IslandStampsOrigin = FVector2D::ZeroVector;
+	void UpdateIslandStamps();
+	void ClearIslandStamps();
+
 	bool EnsurePlacer();
 
 	/** Dev overrides of rows' authored ground (DevOverrideAuthoredGround): applied over the catalog for the terrain. */

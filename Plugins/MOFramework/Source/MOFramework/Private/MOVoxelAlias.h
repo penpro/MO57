@@ -44,6 +44,8 @@ namespace MOVoxel
 	 *  net-addressable (AActor::SetNetAddressable), so the plugin replicates its sculpt data host -> joiners. Null without a world. */
 	AActor* EnsureVolumeSculptActor(UWorld* World);
 	inline const TCHAR* VolumeSculptName = TEXT("MO_VolumeSculpt");
+	/** The volume sculpt's priority in its layer: above every world stamp (the cave stamp, mesh / shape stamps), so the player's edits apply last. */
+	inline constexpr int32 SculptPriority = 1000000;
 
 	/** Co-op (#132's remainder, Nov 3): the level's sculpts carry their edits to every joiner through the plugin's own channel (UVoxelChannel on
 	 *  the game's net connection, Steam's too). Call on EVERY machine before the actors' BeginPlay (the plugin picks its server / client data
@@ -54,6 +56,11 @@ namespace MOVoxel
 	/** Type checks without naming the Voxel class. */
 	bool IsHeightSculptActor(const AActor* Actor);
 	bool IsVolumeSculptActor(const AActor* Actor);
+
+	/** The height layer's surface at (X, Y) (cm): the height terrain with its sculpt's edits, without the volume layer's stamps (caves carved out,
+	 *  mesh / shape stamps added). The height sculpt's own layer, in the voxel world's stack. False with no height sculpt or no answer. Blocks for
+	 *  one voxel query (Nov 4: a dig decides from it whether the rock aimed at is the height terrain's). */
+	bool HeightLayerSurfaceCm(UWorld* World, double X, double Y, float& OutHeightCm);
 
 	// --- height sculpting (Center is XY world space) --------------------------
 	void HeightSculpt(AActor* SculptActor, const FVector2D& Center, float Radius, float Strength, bool bAdd);

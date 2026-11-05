@@ -10,6 +10,13 @@ namespace
 	// A biome test world (MO.BiomeTest): every column is this biome. Read when the params are built, i.e. at the next world start.
 	TAutoConsoleVariable<FString> CVarWorldGenForceBiome(TEXT("mo.WorldGen.ForceBiome"), TEXT(""),
 		TEXT("Dev: a biome test world -- every column is this biome (DT_Biomes row id); empty = off. Takes effect at the next world start (MO.BiomeTest does both)."), ECVF_Default);
+	// v13's features, for a control run and a frame bench (a machine's own: never in a co-op session unless every machine sets the same). -1 = the settings' own.
+	TAutoConsoleVariable<float> CVarWorldGenIslandChance(TEXT("mo.WorldGen.IslandChance"), -1.0f,
+		TEXT("Dev: floating islands per island cell for the next world (0..1; 0 = none, -1 = the settings' own)."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarWorldGenRavineChance(TEXT("mo.WorldGen.RavineChance"), -1.0f,
+		TEXT("Dev: ravines per ravine cell for the next world (0..1; 0 = none, -1 = the settings' own)."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarWorldGenLakeLobes(TEXT("mo.WorldGen.LakeLobes"), -1,
+		TEXT("Dev: how many lobes make a lake's shore for the next world (1 = the ellipse, -1 = the settings' own)."), ECVF_Default);
 
 	FMOWorldShape GActiveWorldShape;
 	FVector2D GActiveWorldOrigin = FVector2D::ZeroVector;
@@ -58,6 +65,18 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 		Params->UplandLakeBedSurfaceType = Settings->UplandLakeBedSurfaceType;
 	}
 	FMOWorldCreation::ApplyShape(GActiveWorldShape, Params->Tuning);   // this world's biome size, height, mountains, lakes, caves, vegetation
+	if (CVarWorldGenIslandChance.GetValueOnGameThread() >= 0.0f)
+	{
+		Params->Tuning.IslandChance = FMath::Clamp(CVarWorldGenIslandChance.GetValueOnGameThread(), 0.0f, 1.0f);
+	}
+	if (CVarWorldGenRavineChance.GetValueOnGameThread() >= 0.0f)
+	{
+		Params->Tuning.RavineChance = FMath::Clamp(CVarWorldGenRavineChance.GetValueOnGameThread(), 0.0f, 1.0f);
+	}
+	if (CVarWorldGenLakeLobes.GetValueOnGameThread() >= 1)
+	{
+		Params->Tuning.LakeLobes = FMath::Clamp(CVarWorldGenLakeLobes.GetValueOnGameThread(), 1, 4);
+	}
 
 	TArray<FName> BiomeIds;
 	UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);

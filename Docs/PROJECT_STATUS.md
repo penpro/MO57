@@ -17,7 +17,7 @@
 | Items with real mesh + icon | 135 of 216 (Oct 14); 81 on gray placeholders | `Docs/Item_Art_Pipeline.md` |
 | Frame time (packaged Dev, 1080p, 4090) | ~77-100 fps per biome, p95 11-14 ms (Oct 14) | `Docs/Performance.md` |
 | New-game READY (packaged) | ~17 s (7.1 s before the Oct 14 coverage pass) | `Docs/PCG.md` §8 |
-| World generator | v11 | `MOWorldGen.h` |
+| World generator | v13 (floating islands, ravines, lobed lakes: F62 A, Nov 4) | `MOWorldGen.h` |
 | Engine | UE 5.8.3 launcher install | DECISIONS N4 |
 
 ## Tracks

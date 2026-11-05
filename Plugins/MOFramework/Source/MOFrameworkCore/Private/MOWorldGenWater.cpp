@@ -18,8 +18,12 @@ namespace
 {
 	enum : uint32
 	{
-		SaltRiverA = 0x8101u, SaltRiverB = 0x8102u, SaltRiverWidth = 0x8103u, SaltBasin = 0x8201u, SaltUpland = 0x8301u, SaltLakeBed = 0x8401u
+		SaltRiverA = 0x8101u, SaltRiverB = 0x8102u, SaltRiverWidth = 0x8103u, SaltBasin = 0x8201u, SaltUpland = 0x8301u, SaltLakeBed = 0x8401u,
+		SaltLakeShore = 0x8501u
 	};
+
+	void MakeLakeLobes(const FMOWorldGenTuning& T, FMOWorldGenDomain::FLake& L, uint32 Hash);   // below
+	float BankReachAlong(const FMOWorldGenDomain::FLake& L, float DirU, float DirV);            // below
 
 	/** 0 = pond tier, 1 = lake tier. */
 	struct FTier
@@ -35,6 +39,8 @@ namespace
 
 	/** Bank reach: a basin is only evaluated out to this many radii (beyond it the ground is untouched). The cell jitter margin (20%) must cover it. */
 	constexpr float BasinReachRadii = 2.5f;
+	/** A lobed lake's steepest bank before the shore's rag (rise per run). See MakeLakeLobes. */
+	constexpr float LobedBankMaxSlope = 0.55f;
 
 	/**
 	 * The upland lake site of this cell (tier 2): see the header comment. false = this cell has none. Deterministic in (params, seed, cell) only.
@@ -76,6 +82,7 @@ namespace
 			const float* Dir = GGrad2[HashLattice2(CellX, CellY, SK + 3u) & 15u];
 			L.CosAngle = Dir[0];
 			L.SinAngle = Dir[1];
+			MakeLakeLobes(T, L, HashLattice2(CellX, CellY, SK + 4u));
 			L.DepthCm = T.UplandLakeDepthBaseCm + T.UplandLakeDepthPerRadius * L.RadiusCm;
 
 			// 1. Roll downhill from a jittered start: a few steps of "move to the lowest of 8 neighbours", so the lake settles into the low spot nearby.
@@ -130,7 +137,7 @@ namespace
 				for (int32 I = 0; I < Grid; ++I)
 				{
 					const float U = Reach * (2.0f * (float)I / (float)(Grid - 1) - 1.0f), V = Reach * (2.0f * (float)J / (float)(Grid - 1) - 1.0f);
-					Take(GroundAt(U, V), U * U + V * V >= 0.9f);
+					Take(GroundAt(U, V), FMOWorldGenDomain::LakeShapeQ2(L, U, V) >= 0.9f);
 				}
 			}
 			for (int32 D = 0; D < 16; ++D)
@@ -160,7 +167,7 @@ namespace
 					for (int32 I = 0; I < DenseGrid; ++I)
 					{
 						const float U = 2.0f * (float)I / (float)(DenseGrid - 1) - 1.0f, V = 2.0f * (float)J / (float)(DenseGrid - 1) - 1.0f;
-						if (U * U + V * V >= 1.0f)
+						if (FMOWorldGenDomain::LakeShapeQ2(L, U, V) >= 1.0f)
 						{
 							MinDense = FMath::Min(MinDense, GroundAt(U, V));
 						}
@@ -177,7 +184,7 @@ namespace
 						{
 							const double Dx = Half.X * (2.0 * (double)I / (double)(PlaneGrid - 1) - 1.0), Dy = Half.Y * (2.0 * (double)J / (double)(PlaneGrid - 1) - 1.0);
 							const float Lx = (float)((double)L.CosAngle * Dx + (double)L.SinAngle * Dy) / L.RadiusCm, Ly = (float)(-(double)L.SinAngle * Dx + (double)L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
-							if (Lx * Lx + Ly * Ly >= 1.0f)
+							if (FMOWorldGenDomain::LakeShapeQ2(L, Lx, Ly) >= 1.0f)
 							{
 								MinDense = FMath::Min(MinDense, Base(Px + Dx, Py + Dy) - 30.0f);   // an extra 30 cm: this grid is coarser than the ground's crags (one lake in 2464 still showed 15 cm of ground out of the water at 30)
 							}
@@ -194,12 +201,13 @@ namespace
 				}
 			}
 
-			// 3. Walled in: at the outer reach of the bank the ground must still be under the bank (else the bank would end in a cliff).
+			// 3. Walled in: at the outer reach of the bank (for a lobed lake, q = 2.5 round its lobes: BankReachAlong) the ground must still be under the bank (else the bank would end in a cliff).
 			bool bWalled = true;
-			const float BankAtReach = L.SurfaceCm + 0.85f * T.BasinBankSlope * L.RadiusCm * (BasinReachRadii - 1.0f);
+			const float BankAtReach = L.SurfaceCm + 0.85f * T.BasinBankSlope * L.BankScale * L.RadiusCm * (BasinReachRadii - 1.0f);
 			for (int32 D = 0; D < 16 && bWalled; ++D)
 			{
-				bWalled = GroundAt(BasinReachRadii * GGrad2[D][0], BasinReachRadii * GGrad2[D][1]) <= BankAtReach;
+				const float BankReach = BankReachAlong(L, GGrad2[D][0], GGrad2[D][1]);
+				bWalled = GroundAt(BankReach * GGrad2[D][0], BankReach * GGrad2[D][1]) <= BankAtReach;
 			}
 			if (!bWalled)
 			{
@@ -274,6 +282,7 @@ namespace
 			const float* Dir = GGrad2[HashLattice2(CellX, CellY, S + 3u) & 15u];   // the long axis points along one of 16 literal unit directions
 			L.CosAngle = Dir[0];
 			L.SinAngle = Dir[1];
+			MakeLakeLobes(T, L, HashLattice2(CellX, CellY, S + 4u));
 			L.DepthCm = T.BasinDepthBaseCm + T.BasinDepthPerRadius * L.RadiusCm;
 			L.SurfaceCm = T.SeaLevelCm;
 
@@ -296,6 +305,69 @@ namespace
 		return E.bHasLake;
 	}
 
+	/** A lake's lobes (LakeLobes > 1): a main lobe 0.45-0.6 of the ellipse and 1-3 others (0.3-0.5) pushed out to the ellipse's edge, spread round it, so
+	 *  the overlapping circles show (round 3's first cut -- a main lobe of 0.6-0.72 with the others well inside -- read as one oval in the lab, Nov 4).
+	 *  Every lobe ends inside the unit circle, ragged edge and all, and overlaps the main one, so the lake is one water. */
+	void MakeLakeLobes(const FMOWorldGenTuning& T, FMOWorldGenDomain::FLake& L, uint32 Hash)
+	{
+		L.NumLobes = 1;
+		L.LobeU[0] = L.LobeV[0] = 0.0f;
+		L.LobeR[0] = 1.0f;
+		L.ShapeSalt = Hash;
+		if (T.LakeLobes <= 1)
+		{
+			return;
+		}
+		// At least three where three are allowed: a two-lobe lake reads as one oval (the lab, Nov 4).
+		const int32 MinLobes = FMath::Min(3, T.LakeLobes);
+		L.NumLobes = (uint8)FMath::Clamp(MinLobes + (int32)(Hash % (uint32)FMath::Max(1, T.LakeLobes - MinLobes + 1)), 2, 4);
+		L.LobeR[0] = 0.45f + 0.15f * Unit16(Hash >> 8);
+		const float Spin = 2.0f * UE_PI * Unit16(Hash >> 4);
+		for (int32 K = 1; K < L.NumLobes; ++K)
+		{
+			const uint32 H = HashLattice2((int64)Hash, K, 0x51u);
+			// Spread round the main lobe (an even share each, +-0.4 rad), not bunched on one side.
+			const float Angle = Spin + 2.0f * UE_PI * (float)(K - 1) / (float)(L.NumLobes - 1) + 0.8f * (Unit16(H) - 0.5f);
+			const float R = 0.3f + 0.2f * Unit16(H >> 16);
+			// Its centre so far out that its ragged edge (up to 1 / 0.88 of its radius) still ends inside the unit circle -- the water plane.
+			const float D = (1.0f - 1.15f * R) * (0.75f + 0.2f * Unit16(HashLattice2((int64)Hash, K, 0x52u)));
+			L.LobeU[K] = D * FMath::Cos(Angle);
+			L.LobeV[K] = D * FMath::Sin(Angle);
+			L.LobeR[K] = R;
+		}
+		// The bank rises with q, and across the ellipse's short axis q runs 1 / (lobe radius x aspect) per radius: a small lobe would make BasinBankSlope 3-5 times steeper than the
+		// ellipse's own (52 deg, MOFramework.WorldGen.UplandLakes, Nov 4). Lower the whole bank so the lake's steepest side stays a bank. It is lower at the reach too, so the fit's
+		// walled test asks for less ground.
+		float MinLobe = L.LobeR[0];
+		for (int32 K = 1; K < L.NumLobes; ++K)
+		{
+			MinLobe = FMath::Min(MinLobe, L.LobeR[K]);
+		}
+		L.BankScale = FMath::Min(1.0f, LobedBankMaxSlope * MinLobe * L.Aspect / FMath::Max(0.01f, T.BasinBankSlope));
+	}
+
+	/** How far from a lake's centre, along a unit direction of its unit frame, its bank ends (q = BasinReachRadii). The ellipse: BasinReachRadii. Lobes: where the ray leaves the last of their circles
+	 *  grown to the reach (all overlap the main one, which holds the centre); the shore's rag is left to the walled test's 15 % margin. */
+	float BankReachAlong(const FMOWorldGenDomain::FLake& L, float DirU, float DirV)
+	{
+		if (L.NumLobes <= 1)
+		{
+			return BasinReachRadii;
+		}
+		float Reach = 0.0f;
+		for (int32 K = 0; K < L.NumLobes; ++K)
+		{
+			const float Along = L.LobeU[K] * DirU + L.LobeV[K] * DirV;
+			const float Grown = BasinReachRadii * L.LobeR[K];
+			const float Disc = Along * Along - (L.LobeU[K] * L.LobeU[K] + L.LobeV[K] * L.LobeV[K] - Grown * Grown);
+			if (Disc > 0.0f)
+			{
+				Reach = FMath::Max(Reach, Along + FMath::Sqrt(Disc));
+			}
+		}
+		return Reach;
+	}
+
 	/** The basin height at (X,Y) for the basin in this tier's cell: a bowl under the water surface inside the shore (q < 1), a bank rising from it outside. +inf if none. */
 	float BasinHeight(const FMOWorldGenParams& P, int32 Tier, double X, double Y, int32 Seed)
 	{
@@ -310,7 +382,7 @@ namespace
 		const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
 		const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
 		const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
-		const float Q2 = Lx * Lx + Ly * Ly;
+		const float Q2 = FMOWorldGenDomain::LakeShapeQ2(L, Lx, Ly);
 		if (Q2 >= BasinReachRadii * BasinReachRadii)
 		{
 			return TNumericLimits<float>::Max();
@@ -319,7 +391,7 @@ namespace
 		{
 			return L.SurfaceCm - L.DepthCm * (1.0f - Q2);
 		}
-		return L.SurfaceCm + T.BasinBankSlope * L.RadiusCm * (FMath::Sqrt(Q2) - 1.0f);
+		return L.SurfaceCm + T.BasinBankSlope * L.BankScale * L.RadiusCm * (FMath::Sqrt(Q2) - 1.0f);
 	}
 
 	/** The river bed height at (X,Y): a channel along the zero contour of a smooth field, fading out as the ground rises. +inf away from any river. */
@@ -478,7 +550,26 @@ bool FMOWorldGenDomain::IsInUplandLakeZone(const FMOWorldGenParams& Params, doub
 	const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
 	const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
 	const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
-	return Lx * Lx + Ly * Ly <= ZoneRadii * ZoneRadii;
+	return LakeShapeQ2(L, Lx, Ly) <= ZoneRadii * ZoneRadii;
+}
+
+float FMOWorldGenDomain::LakeShapeQ2(const FLake& L, float Lx, float Ly)
+{
+	if (L.NumLobes <= 1)
+	{
+		return Lx * Lx + Ly * Ly;   // the ellipse
+	}
+	float Q = TNumericLimits<float>::Max();
+	for (int32 K = 0; K < L.NumLobes; ++K)
+	{
+		const float Du = Lx - L.LobeU[K], Dv = Ly - L.LobeV[K];
+		Q = FMath::Min(Q, FMath::Sqrt(Du * Du + Dv * Dv) / FMath::Max(0.05f, L.LobeR[K]));
+	}
+	// A ragged shore: the lobes' edges wander +-12 % (two octaves over the lake's unit frame).
+	const float Rag = 0.08f * GradientNoise2((double)Lx / 0.35 + 3.1, (double)Ly / 0.35 - 7.7, L.ShapeSalt ^ SaltLakeShore).Value
+		+ 0.04f * GradientNoise2((double)Lx / 0.13 - 1.9, (double)Ly / 0.13 + 4.3, (L.ShapeSalt ^ SaltLakeShore) + 1u).Value;
+	Q *= 1.0f + Rag;
+	return Q * Q;
 }
 
 float FMOWorldGenDomain::UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
@@ -514,7 +605,7 @@ bool FMOWorldGenDomain::GetWaterSurfaceCm(const FMOWorldGenParams& Params, doubl
 			const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
 			const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
 			const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
-			if (Lx * Lx + Ly * Ly <= 1.0f)
+			if (LakeShapeQ2(L, Lx, Ly) <= 1.0f)
 			{
 				OutSurfaceCm = L.SurfaceCm;
 				return true;
@@ -541,7 +632,7 @@ float FMOWorldGenDomain::UplandLakeBedWeight(const FMOWorldGenParams& Params, do
 	const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
 	const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
 	const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
-	const float Q = FMath::Sqrt(Lx * Lx + Ly * Ly);
+	const float Q = FMath::Sqrt(LakeShapeQ2(L, Lx, Ly));
 	constexpr float Fade = 0.10f;   // of a radius: 7-13 m on the 70-130 m lakes
 	if (Q <= 1.0f)
 	{

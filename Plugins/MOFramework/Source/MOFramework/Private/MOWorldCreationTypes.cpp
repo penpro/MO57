@@ -155,6 +155,7 @@ void FMOWorldCreation::ApplyShape(const FMOWorldShape& Shape, FMOWorldGenTuning&
 	if (Shape.Caves != 1.0f)
 	{
 		T.CaveEntranceChance = FMath::Clamp(T.CaveEntranceChance * Shape.Caves, 0.0f, 1.0f);
+		T.RavineChance = FMath::Clamp(T.RavineChance * Shape.Caves, 0.0f, 1.0f);
 	}
 	T.VegetationDensityScale *= Shape.Vegetation;
 }

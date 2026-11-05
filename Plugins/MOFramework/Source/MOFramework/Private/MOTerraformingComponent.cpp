@@ -179,13 +179,22 @@ bool UMOTerraformingComponent::EnsureVolumeSculptActor()
 	return VolumeSculptActor.IsValid();
 }
 
+bool UMOTerraformingComponent::IsOnVolumeRock(const FVector& At) const
+{
+	float HeightCm = 0.0f;
+	const bool bKnown = MOVoxel::HeightLayerSurfaceCm(GetWorld(), At.X, At.Y, HeightCm);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] volume rock? spot z %.0f, height layer %s"), At.Z,
+		bKnown ? *FString::Printf(TEXT("%.0f (%.0f cm over it)"), HeightCm, At.Z - HeightCm) : TEXT("unknown"));
+	return bKnown && At.Z > HeightCm + VolumeRockMarginCm;
+}
+
 bool UMOTerraformingComponent::UsesVolumeAt(const FVector& At)
 {
 	if (bUseVolumeSculpting || (PendingAction.bActive && PendingAction.bVolume))
 	{
 		return EnsureVolumeSculptActor();
 	}
-	return HasRockOverhead(At) && EnsureVolumeSculptActor();
+	return (HasRockOverhead(At) || IsOnVolumeRock(At)) && EnsureVolumeSculptActor();
 }
 
 float UMOTerraformingComponent::GetVolumeBiteRadius() const
@@ -921,7 +930,10 @@ bool UMOTerraformingComponent::BeginTerraform()
 	// or level the hill ABOVE, not the spot aimed at. A flatten in a cave levelled the hill down to the cave floor and opened the roof: square
 	// patches of sun on the floor (BR1101, Nov 1: "lighting problems when using flatten in a cave"). Under rock the volume sculpt works the spot
 	// itself (N-256), made if the level has none; only without one is it refused.
-	const bool bUnderRock = !bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && HasRockOverhead(HitLocation);
+	// The volume layer's own rock is worked the same way (IsOnVolumeRock: a stamped cliff's face, an island).
+	const bool bOverhead = !bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && HasRockOverhead(HitLocation);
+	const bool bVolumeRock = !bUseVolumeSculpting && CurrentMode != EMOTerraformMode::RemoveFoliage && !bOverhead && IsOnVolumeRock(HitLocation);
+	const bool bUnderRock = bOverhead || bVolumeRock;
 	if (bUnderRock && !EnsureVolumeSculptActor())
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s refused: rock overhead and no volume sculpt"), *GetModeDisplayName().ToString(),
@@ -931,8 +943,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 	}
 	if (bUnderRock)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s: rock overhead -- the volume sculpt works the spot itself"), *GetModeDisplayName().ToString(),
-			*HitLocation.ToString());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] %s at %s: %s -- the volume sculpt works the spot itself"), *GetModeDisplayName().ToString(),
+			*HitLocation.ToString(), bVolumeRock ? TEXT("on the volume layer's rock (over the height terrain)") : TEXT("rock overhead"));
 	}
 
 	// Capture the action intent. The Flatten height is resolved NOW (not at

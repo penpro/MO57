@@ -20,10 +20,17 @@ namespace
 	}
 
 	/** Default tuning + the three stock biome bands (what DT_Biomes held when the probe was written). */
-	FMOWorldGenParamsRef MakeProbeParams(bool bWater)
+	FMOWorldGenParamsRef MakeProbeParams(bool bWater, bool bWithoutV13Features)
 	{
 		TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> P = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
 		P->Tuning.bEnableWater = bWater;
+		if (!bWater || bWithoutV13Features)
+		{
+			// The anchor is the v1 base; the other is v12's world, which must still come out of this code to the bit with v13's features off.
+			P->Tuning.RavineChance = 0.0f;
+			P->Tuning.IslandChance = 0.0f;
+			P->Tuning.LakeLobes = 1;
+		}
 		if (!bWater)
 		{
 			// The water-off probe is the v1 ANCHOR (PinnedProbeHeightNoWater): the base math as it shipped, before any later feature.
@@ -67,9 +74,9 @@ namespace
 	}
 }
 
-FMOWorldGenProbe FMOWorldGenDomain::RunProbe(bool bWater)
+FMOWorldGenProbe FMOWorldGenDomain::RunProbe(bool bWater, bool bWithoutV13Features)
 {
-	const FMOWorldGenParamsRef Params = MakeProbeParams(bWater);
+	const FMOWorldGenParamsRef Params = MakeProbeParams(bWater, bWithoutV13Features);
 	const FMOWorldGenParams& P = *Params;
 
 	FMOWorldGenProbe Probe;

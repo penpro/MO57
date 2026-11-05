@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "MOPCGWaterMask.h"
 #include "MOWorldGen.h"
+#include "MOLakeShapeTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -68,8 +69,9 @@ bool FMOPCG_WaterMask::RunTest(const FString& Parameters)
 		const double HighZ = (double)L.SurfaceCm + 50.0;   // well above sea level, as the lake is: the sea test cannot be what answers
 		CentreMissed += Mask.IsInWater(L.Center.X, L.Center.Y, HighZ) ? 0 : 1;
 		// 90% of the way to the shore along the long axis, and 3% past it (the default bank margin is 5%).
-		ShoreMissed += Mask.IsInWater(L.Center.X + 0.9 * L.RadiusCm * L.CosAngle, L.Center.Y + 0.9 * L.RadiusCm * L.SinAngle, HighZ) ? 0 : 1;
-		BankMissed += Mask.IsInWater(L.Center.X + 1.03 * L.RadiusCm * L.CosAngle, L.Center.Y + 1.03 * L.RadiusCm * L.SinAngle, HighZ) ? 0 : 1;
+		const FVector2D ShoreAt = MOLakeTest::PointAtQ(L, 0.9f), BankAt = MOLakeTest::PointAtQ(L, 1.03f);
+		ShoreMissed += Mask.IsInWater(ShoreAt.X, ShoreAt.Y, HighZ) ? 0 : 1;
+		BankMissed += Mask.IsInWater(BankAt.X, BankAt.Y, HighZ) ? 0 : 1;
 		// 2.4 radii out is dry land (the cell margin keeps neighbours' lakes away).
 		FarFalse += Mask.IsInWater(L.Center.X + 2.4 * L.RadiusCm * L.CosAngle, L.Center.Y + 2.4 * L.RadiusCm * L.SinAngle, HighZ) ? 1 : 0;
 	}
@@ -82,7 +84,8 @@ bool FMOPCG_WaterMask::RunTest(const FString& Parameters)
 	const FMOPCGWaterMask Wide(P, Seed, 1.3f);
 	const FMOWorldGen::FLake& L0 = Lakes[0];
 	const double Zhigh = (double)L0.SurfaceCm + 50.0;
-	const double Px = L0.Center.X + 1.2 * L0.RadiusCm * L0.CosAngle, Py = L0.Center.Y + 1.2 * L0.RadiusCm * L0.SinAngle;
+	const FVector2D PastBank = MOLakeTest::PointAtQ(L0, 1.2f);
+	const double Px = PastBank.X, Py = PastBank.Y;
 	TestFalse(TEXT("120% of the shore is outside the default 105% margin"), Mask.IsInWater(Px, Py, Zhigh));
 	TestTrue(TEXT("... and inside a 130% margin"), Wide.IsInWater(Px, Py, Zhigh));
 
@@ -112,12 +115,12 @@ bool FMOWorldGen_UplandLakeBed::RunTest(const FString& Parameters)
 	int32 RimN = 0;
 	for (const FMOWorldGen::FLake& L : Lakes)
 	{
-		// Anywhere inside the shore ellipse the whole bed is lake bed.
+		// Anywhere inside the shore the whole bed is lake bed.
 		for (int32 K = 0; K < 8; ++K)
 		{
 			const double Angle = (double)K * UE_PI / 4.0;
-			const double Lx = 0.95 * L.RadiusCm * FMath::Cos(Angle), Ly = 0.95 * L.RadiusCm * L.Aspect * FMath::Sin(Angle);
-			const double X = L.Center.X + L.CosAngle * Lx - L.SinAngle * Ly, Y = L.Center.Y + L.SinAngle * Lx + L.CosAngle * Ly;
+			const FVector2D At = MOLakeTest::PointAtQ(L, 0.95f, (float)Angle);
+			const double X = At.X, Y = At.Y;
 			InsideWrong += FMOWorldGen::UplandLakeBedWeight(*P, X, Y, Seed) < 0.999f ? 1 : 0;
 			Nondeterministic += FMOWorldGen::UplandLakeBedWeight(*P, X, Y, Seed) != FMOWorldGen::UplandLakeBedWeight(*P, X, Y, Seed) ? 1 : 0;
 		}
@@ -127,8 +130,8 @@ bool FMOWorldGen_UplandLakeBed::RunTest(const FString& Parameters)
 		int32 Above = 0, Below = 0;
 		for (int32 I = 0; I <= 60; ++I)
 		{
-			const double Q = 1.0 + 0.20 * (double)I / 60.0;
-			const float W = FMOWorldGen::UplandLakeBedWeight(*P, L.Center.X + Q * L.RadiusCm * L.CosAngle, L.Center.Y + Q * L.RadiusCm * L.SinAngle, Seed);
+			const FVector2D At = MOLakeTest::PointAtQ(L, 1.0f + 0.20f * (float)I / 60.0f);
+			const float W = FMOWorldGen::UplandLakeBedWeight(*P, At.X, At.Y, Seed);
 			RimSum += W;
 			++RimN;
 			(W >= 0.5f ? Above : Below) += 1;

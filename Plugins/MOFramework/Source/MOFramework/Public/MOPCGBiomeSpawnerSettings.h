@@ -116,10 +116,14 @@ namespace MOPCGBiomeSpawner
 	{
 		FVector2D Center = FVector2D::ZeroVector;
 		float Radius = 0.0f;
+		double Z = 0.0;
 	};
 
 	/** Does a footprint of Radius at Point reach any obstacle (centres closer than the two radii together)? */
 	MOFRAMEWORK_API bool OverlapsObstacle(const FVector2D& Point, float Radius, TConstArrayView<FObstacle> Obstacles);
+
+	/** The same, among the obstacles within MaxHeightCm of Point's height: a world with floating islands has a forest over a forest. */
+	MOFRAMEWORK_API bool OverlapsObstacleNearHeight(const FVector& Point, float Radius, TConstArrayView<FObstacle> Obstacles, double MaxHeightCm);
 
 	/** A planted instance's footprint radius (cm): a tree its trunk (its crown may spread over a rock), anything else 0.4 of its mesh's horizontal extent
 	 *  (a boulder's body, not its bounding box's corners). */

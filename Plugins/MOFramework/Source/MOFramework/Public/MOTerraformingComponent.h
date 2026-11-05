@@ -645,9 +645,15 @@ public:
 	 *  point (BR1101-7): the volume sculpt works it there (UsesVolumeAt). Voxel terrain only (a canopy or a roof is no rock). */
 	bool HasRockOverhead(const FVector& At) const;
 
-	/** The volume sculpt for this spot (N-256): everywhere when bUseVolumeSculpting, else under rock -- the world's volume sculpt made if the
-	 *  level has none (MOVoxel::EnsureVolumeSculptActor). The timed action decides once (PendingAction.bVolume); a joiner's dig applied on
-	 *  the host decides here from the spot. */
+	/** Is the spot on the volume layer's own rock -- more than VolumeRockMarginCm over the height layer's surface at its column (a mesh or shape
+	 *  stamp: a cliff, a floating island)? The height sculpt only moves the height layer, so it cannot touch that rock, and a clean vertical face
+	 *  has none over its foot for HasRockOverhead to find (Nov 4: five digs on a stamped cliff's face moved it 0 cm). */
+	bool IsOnVolumeRock(const FVector& At) const;
+	static constexpr float VolumeRockMarginCm = 50.0f;
+
+	/** The volume sculpt for this spot (N-256): everywhere when bUseVolumeSculpting, else under rock or on the volume layer's rock -- the world's
+	 *  volume sculpt made if the level has none (MOVoxel::EnsureVolumeSculptActor). The timed action decides once (PendingAction.bVolume); a
+	 *  joiner's dig applied on the host decides here from the spot. */
 	bool UsesVolumeAt(const FVector& At);
 
 	/** The volume sculpt actor, made if the level has none. */

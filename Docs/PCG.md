@@ -101,6 +101,10 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   a rim zone, ground an opening has carved (`SampleOpeningDistanceUnderCm`, Nov 3), a cave surface; the biome spawner asks it too
   (`IsInCave(X, Y, Z, GroundZ)` with the ground it already sampled). Round a cave mouth `MO.PCG.OpeningAudit`, not `MO.PCG.Grounding`
   (that one measures against the generator's height field, which knows nothing of the bowl).
+- **Floating islands (generator v13, F62 A; Wes, Nov 4: "can we make sure they have trees and such on them too though? not just grass"):** the Voxel Sampler's points are on the height layer, so `FMOPCGBiomeSpawnerElement::Plant` makes a second pass over them at the island's
+  top (`FMOWorldGen::SampleIslandSurface`, 3 m inset, its own seed), every tier, doubling the points only for a partition `IslandReachesBox` says an island reaches; the land's own rules (water, caves, world features) don't ask about an island's points. An island's biome is the land's at its origin; a biome under
+  100 trees / ha gives way to the densest forest (`IslandForestIndex`), its slope bands keep their rocks. A landmark or a face-downhill slab needs its foot on rock (`IslandRockFootToleranceCm`). Seed 777: 16,701 instances on a 246 m island, 32,370 on a 428 m one, median plant base -2 cm against the rock, none over 60 cm, no rock hanging, the same on host and joiner.
+  `mo.PCG.IslandPlants 0` for a control; `MO.WorldGen.IslandPlants [radius]` counts them and how they meet the rock.
 - **The biome spawner** plants `DT_Biomes` palettes. Biome identity comes from the biome data, never from graph-wide layers.
   **New vegetation = a species row** (the HISM tag decides the tier), never a new native chain. A tag outside the large list (e.g.
   `MOBiomeCover_Fern`) lands a species in the near tier with no far copies.

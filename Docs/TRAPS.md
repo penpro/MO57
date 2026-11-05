@@ -472,6 +472,9 @@
   reads as metres of float (the cave's air under it): measure floor-facing instances only. A floating mesh near a mouth: check `DT_CaveScatter` before the biome
   palettes (the sand rocks there were the cave dressing). (BR23-1, Nov 3)
 
+- **Trees float in empty sky over a small island seen from a few km; the rock comes back up close** -> a far chunk's cells (32 m past 4 km) are as big as the rock is thick: no sample lands in it, whatever the field says -> a stand-in per far LOD (`IslandFarDistanceCm`). And `Sample` must return a real distance out to the stamp's bounds: the volume pass skips what its sparse grid says is far. (F62, `Docs/Voxel_Plugin_Reference.md` section 6)
+- **A lake test fails "at q" after generator v13** -> "0.9 of the radius along the long axis" says nothing about a lobed shore -> `MOLakeTest::PointAtQ`, and a slope check over more lakes meets the hills' own crags: count only what the basin carved. (`Docs/Water.md` section 1)
+
 ## 9. PCG
 
 - Full rules: `Docs/PCG.md` §2-§7. The traps: biome-blind native chains make every biome look the same; the Voxel Sampler places at most one

@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "HAL/PlatformTime.h"
 #include "MOWorldGen.h"
+#include "MOLakeShapeTestUtils.h"
 #include "MOUplandLakeSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOBiomeFinder.h"
@@ -312,12 +313,11 @@ bool FMOWorldGen_UplandLakes::RunTest(const FString& Parameters)
 		// The centre of the bowl is under the surface by (about) the lake depth.
 		CentreDry += (FMOWorldGen::SampleHeightCm(*P, L.Center.X, L.Center.Y, Seed) > L.SurfaceCm - 0.9f * L.DepthCm) ? 1 : 0;
 
-		// Along the long axis: water a hair inside the shore, dry bank a hair outside. (The cut is exact at q = 1, so test q = 0.97 and 1.06.)
+		// All round: water a hair inside the shore, dry bank a hair outside. (The cut is exact at q = 1, so test q = 0.97 and 1.06, on the lake's real shape.)
 		auto AtQ = [&](float Q, float Angle)
 		{
-			const float Ca = FMath::Cos(Angle), Sa = FMath::Sin(Angle);
-			const float Lx = Q * Ca * L.RadiusCm, Ly = Q * Sa * L.RadiusCm * L.Aspect;
-			return FMOWorldGen::SampleHeightCm(*P, L.Center.X + L.CosAngle * Lx - L.SinAngle * Ly, L.Center.Y + L.SinAngle * Lx + L.CosAngle * Ly, Seed);
+			const FVector2D At = MOLakeTest::PointAtQ(L, Q, Angle);
+			return FMOWorldGen::SampleHeightCm(*P, At.X, At.Y, Seed);
 		};
 		bool bShore = true;
 		for (int32 K = 0; K < 8; ++K)
@@ -376,30 +376,66 @@ bool FMOWorldGen_UplandLakes::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no sinkhole inside a lake zone"), SinkholeInside, 0);
 	TestTrue(FString::Printf(TEXT("the sinkhole gate had work to do: %d sinkholes would have opened in a lake zone"), SinkholesBlocked), SinkholesBlocked > 0);
 
-	// 3. Continuous: no cliff across a lake, its bank, or the outer reach where the bank ends.
+	// 3. Continuous: no cliff across a lake, its bank, or the outer reach where the bank ends. Only where the basin touches the ground: past it is the hills' own slope (a crag 1.77 radii from a lake is 1.27,
+	// round lake or lobed). With the round lakes alongside: what a lobed bank costs against the ellipse's.
 	{
-		float MaxStep = 0.0f;
-		for (int32 N = 0; N < FMath::Min(Lakes.Num(), 40); ++N)
+		struct FSteepest { float Slope = 0.0f, AtRadii = 0.0f, Q = 0.0f; int32 Over = 0, Lakes = 0; };
+		auto Measure = [&](const FMOWorldGenParams& Q, const TArray<FMOWorldGen::FLake>& Over)
 		{
-			const FMOWorldGen::FLake& L = Lakes[N];
-			for (int32 Dir = 0; Dir < 4; ++Dir)
+			FSteepest Out;
+			for (int32 N = 0; N < FMath::Min(Over.Num(), 120); ++N)
 			{
-				const float Angle = Dir * UE_PI / 2.0f + 0.3f;
-				const double Ux = FMath::Cos(Angle), Uy = FMath::Sin(Angle);
-				float Prev = 0.0f;
-				for (int32 I = -300; I <= 300; ++I)
+				const FMOWorldGen::FLake& L = Over[N];
+				float LakeMax = 0.0f;
+				for (int32 Dir = 0; Dir < 4; ++Dir)
 				{
-					const double R = (double)L.RadiusCm * 3.0 * (double)I / 300.0;   // through the centre, out past the 2.5 radii reach on both sides
-					const float H = FMOWorldGen::SampleHeightCm(*P, L.Center.X + Ux * R, L.Center.Y + Uy * R, Seed);
-					if (I > -300)
+					const float Angle = Dir * UE_PI / 2.0f + 0.3f;
+					const double Ux = FMath::Cos(Angle), Uy = FMath::Sin(Angle);
+					float Prev = 0.0f;
+					bool bPrevCarved = false;
+					for (int32 I = -300; I <= 300; ++I)
 					{
-						MaxStep = FMath::Max(MaxStep, FMath::Abs(H - Prev) / (float)(L.RadiusCm * 3.0 / 300.0));   // slope (rise per cm run)
+						const double R = (double)L.RadiusCm * 3.0 * (double)I / 300.0;   // through the centre, out past the 2.5 radii reach on both sides
+						const float H = FMOWorldGen::SampleHeightCm(Q, L.Center.X + Ux * R, L.Center.Y + Uy * R, Seed);
+						const bool bCarved = H != FMOWorldGen::SampleBaseHeightCm(Q, L.Center.X + Ux * R, L.Center.Y + Uy * R, Seed);
+						if (I > -300 && (bCarved || bPrevCarved))
+						{
+							const float Step = FMath::Abs(H - Prev) / (float)(L.RadiusCm * 3.0 / 300.0);   // slope (rise per cm run)
+							LakeMax = FMath::Max(LakeMax, Step);
+							if (Step > Out.Slope)
+							{
+								Out.Slope = Step;
+								Out.AtRadii = FMath::Abs(3.0f * I / 300.0f);
+								const float Dx = (float)(Ux * R), Dy = (float)(Uy * R);
+								Out.Q = FMath::Sqrt(FMOWorldGen::LakeShapeQ2(L, (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm, (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect)));
+							}
+						}
+						Prev = H;
+						bPrevCarved = bCarved;
 					}
-					Prev = H;
+				}
+				Out.Over += LakeMax >= 1.0f ? 1 : 0;
+				++Out.Lakes;
+			}
+			return Out;
+		};
+		const FMOWorldGenParamsRef Round = MakeCoastParams([](FMOWorldGenTuning& Tuning) { Tuning.LakeLobes = 1; });
+		TArray<FMOWorldGen::FLake> RoundLakes;
+		for (int64 Cy = -HalfCells; Cy < HalfCells && RoundLakes.Num() < 120; ++Cy)
+		{
+			for (int64 Cx = -HalfCells; Cx < HalfCells && RoundLakes.Num() < 120; ++Cx)
+			{
+				FMOWorldGen::FLake L;
+				if (FMOWorldGen::GetLakeInCell(*Round, 2, Cx, Cy, Seed, L))
+				{
+					RoundLakes.Add(L);
 				}
 			}
 		}
-		TestTrue(FString::Printf(TEXT("no cliff: steepest slope across a lake and its bank is %.2f (limit 1.0)"), MaxStep), MaxStep < 1.0f);
+		const FSteepest Steepest = Measure(*P, Lakes), RoundSteepest = Measure(*Round, RoundLakes);
+		AddInfo(FString::Printf(TEXT("steepest slope across a lake and its bank: %.2f, %.2f radii from its centre (q %.2f), %d of %d lakes at 1.0 or over; round lakes: %.2f, %.2f radii (q %.2f), %d of %d"),
+			Steepest.Slope, Steepest.AtRadii, Steepest.Q, Steepest.Over, Steepest.Lakes, RoundSteepest.Slope, RoundSteepest.AtRadii, RoundSteepest.Q, RoundSteepest.Over, RoundSteepest.Lakes));
+		TestTrue(FString::Printf(TEXT("no cliff: steepest slope across a lake and its bank is %.2f (limit 1.0), %.2f radii from its centre"), Steepest.Slope, Steepest.AtRadii), Steepest.Slope < 1.0f);
 	}
 
 	// 4. Deterministic, and the switch really switches them off.

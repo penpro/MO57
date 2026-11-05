@@ -5507,9 +5507,10 @@ def digsync_test(uproject, editor_exe, keep=False, boot_timeout=300):
             time.sleep(10.0)
             hv = _surface_z(host, sx, sy, z + 2000.0, z - 2000.0)
             cv, waited = None, 10.0
-            while waited < 45.0:   # the joiner fetches the sculpt's new data from the host (request / reply over the voxel channel)
+            while waited < 45.0:   # the joiner fetches the sculpt's new data from the host (request / reply over the voxel channel); the host's own collision can take more than 10 s too
+                hv = _surface_z(host, sx, sy, z + 2000.0, z - 2000.0)
                 cv = _surface_z(client, sx, sy, z + 2000.0, z - 2000.0)
-                if cv and hv and cv[0] == 1 and abs(cv[1] - hv[1]) < 5.0:
+                if cv and hv and cv[0] == 1 and hv[0] == 1 and abs(cv[1] - hv[1]) < 5.0 and g0[1] - hv[1] > 30.0:
                     break
                 time.sleep(5.0)
                 waited += 5.0

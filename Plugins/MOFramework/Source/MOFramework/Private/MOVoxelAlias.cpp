@@ -12,6 +12,12 @@
 #include "VoxelFalloff.h"
 #include "Sculpt/Volume/VoxelSculptVolume.h"               // AVoxelSculptVolume (was AVoxelVolumeSculptActor)
 #include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
+#include "VoxelWorld.h"                                    // AVoxelWorld::LayerStack (HeightLayerSurfaceCm)
+#include "VoxelStackLayer.h"
+#include "VoxelLayer.h"
+#include "VoxelLayerStack.h"
+#include "VoxelQueryBlueprintLibrary.h"
+#include "EngineUtils.h"
 
 #include "MOFramework.h"
 #include "Engine/World.h"
@@ -90,6 +96,9 @@ namespace MOVoxel
 			const FVoxelVolumeSculptStampRef Stamp = Volume->GetStamp();
 			Stamp->Scale = 25.0f;        // its samples every 25 cm (default 100): a dig's scoop takes the 50 cm voxel world's shape, not a metre grid's
 			Stamp->bIsInfinite = true;   // "for runtime stamps": an empty sculpt has no bounds, so its first edit would not reach the chunks
+			// Last in its layer ("higher priority stamps will be applied last"): the player's digs cut through every stamp of the world -- a stamped
+			// cliff or island at priority 1 re-added each dug sphere over a sculpt at the default 0 (Nov 4: five digs, the face 0 cm).
+			Stamp->Priority = SculptPriority;
 		}
 		Volume->FinishSpawning(FTransform::Identity);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOVoxel] spawned the volume sculpt %s (the level has none)%s"), *Volume->GetName(),
@@ -130,6 +139,37 @@ namespace MOVoxel
 
 	bool IsHeightSculptActor(const AActor* Actor) { return Actor && Actor->IsA<AVoxelSculptHeight>(); }
 	bool IsVolumeSculptActor(const AActor* Actor) { return Actor && Actor->IsA<AVoxelSculptVolume>(); }
+
+	bool HeightLayerSurfaceCm(UWorld* World, double X, double Y, float& OutHeightCm)
+	{
+		AVoxelSculptHeight* Sculpt = AsHeight(FindHeightSculptActor(World));
+		if (!World || !IsValid(Sculpt))
+		{
+			return false;
+		}
+		UVoxelHeightLayer* Layer = Sculpt->GetStamp()->Layer;
+		UVoxelLayerStack* Stack = nullptr;
+		for (TActorIterator<AVoxelWorld> It(World); It && !Stack; ++It)
+		{
+			Stack = It->LayerStack;
+		}
+		if (!Stack)
+		{
+			Stack = LoadObject<UVoxelLayerStack>(nullptr, TEXT("/Voxel/Default/DefaultStack.DefaultStack"));
+		}
+		if (!Layer || !Stack)
+		{
+			return false;
+		}
+		bool bSuccess = false;
+		FVoxelQueryResult Result;
+		Voxel::ExecuteSynchronously([&]
+		{
+			return UVoxelQueryBlueprintLibrary::K2_QueryVoxelLayer(bSuccess, Result, World, FVoxelStackHeightLayer(Stack, Layer), FVector(X, Y, 0.0), {});
+		});
+		OutHeightCm = Result.Value;
+		return bSuccess;
+	}
 
 	// --- height sculpting -----------------------------------------------------
 	void HeightSculpt(AActor* SculptActor, const FVector2D& Center, float Radius, float Strength, bool bAdd)

@@ -375,6 +375,12 @@ resolves a cave: `FVoxelStamp::LODRange = {0, FMOWorldGen::CaveMaxLOD}` (= 4 at 
 set by `UMOWorldSeedSubsystem` when it seeds the stamps. Rule for any new volume stamp: give
 it the tightest bounds AND the LOD range its features actually resolve at.
 
+**A shape stamp from C++ (MO57, Nov 4 2026, F62's islands):** a USTRUCT deriving `FVoxelShape` (`GetLocalBounds`, `Sample(OutDistances, Positions)`, `FMOFloatingIslandShape`) in an `FVoxelShapeStamp` on an `AVoxelStampActor` spawned at run time: no voxel graph, no asset. On the cave stamp's volume
+layer it is terrain. Three things it cost: (1) **a dig on it needs the volume sculpt**: the height sculpt can't touch volume-layer rock, so `IsOnVolumeRock` (more than 50 cm over the height layer's surface) sends the dig there, and the spawned sculpt must sit last in its layer (`SculptPriority` 1,000,000) or a stamp re-adds every dug sphere;
+(2) **the volume pass only looks where a sparse grid says**: samples 4 cells apart, a cell skipped when the distance there beats ~3.5 cells, so `Sample` must return a real distance out to its bounds, not a "nothing here" constant, or a small shape between the samples is never looked at;
+(3) **a shape thinner than a far chunk's cells is not drawn** whatever its field says. LOD = log2(distance / 16 m) / 1.1 at 50 cm voxels and `QualityExponent` 1.1, a chunk's nearest edge deciding: cells of 32 m past 4 km, 64 m past 8 km. Give such a shape a thicker stand-in per LOD (`LODRange` {L, L}).
+Stamps in the sky over steep ground show no chunk holes (bounds clear of the ground: the height pass still meshes it).
+
 ### Smoothness
 
 Mesh stamps and shape stamps both expose `Smoothness` (default 100). Higher

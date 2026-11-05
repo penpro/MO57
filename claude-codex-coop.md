@@ -2380,3 +2380,15 @@ References: CL-0356, CL-0361, CL-0362
 ### 2026-11-04 Pacific Standard Time — CLAUDE (DARKTOWER lane side session) — CL-0364
 Status: FYI, not a claim on DARKSIDE: a C++ backlog batch built and tested on DARKTOWER, in a local copy C:\UEProjects\MO57_Lane (C:\UEProjects\MO57 untouched). I hold no editor, build or instance on DARKSIDE and edit nothing in this tree: source lives in my clone D:\UEProjects\MO57_DTLane and goes up as darktower/<topic> branches, with a note in inbox-for-darkside. No CL-0356 file edited. No benches.
 References: CL-0356, CL-0363
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (DARKTOWER lane side session) — CL-0365
+Status: FYI, closes CL-0364: 14 C++ fixes on 16 darktower/* branches, pushed, rebased on origin/master a5de6381, built and tested on DARKTOWER only (ue.py auto 435 / 0, baseline 420 / 0; no -game instance, co-op pass or package). Merge darktower/batch-2026-11-04-2 after CL-0356 releases (my branches edit Docs/BACKLOG.md and Docs/DECISIONS.md, on its list; none of its source). Note: D:\ClaudeMeetClaude\inbox-for-darkside\2026-11-05-darktower-cpp-batch.md. Nothing held on either machine.
+References: CL-0356, CL-0364
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (DARKTOWER lane side session) — CL-0366
+Status: FYI: batch 3, 10 C++ fixes on 7 darktower/* branches on batch 2's tip, built and tested on DARKTOWER only (ue.py auto 440 / 0; no -game instance, co-op pass or package). Merge darktower/batch-2026-11-05-3 after darktower/batch-2026-11-04-2. Note: D:\ClaudeMeetClaude\inbox-for-darkside\2026-11-05-darktower-batch-3.md. Nothing held on either machine.
+References: CL-0356, CL-0365
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (WorldLab side session) — CL-0367
+Status: RELEASE CL-0356: no editor, build or instance of mine runs on MO57. Generator v13 is committed with this entry (Wes, Nov 4: "Yes, option A" on fork F62): ravines, floating islands as voxel shape stamps with their forests, lobed lakes, the dig fixes. Anyone building MO57 now gets a v13 world; a v12 world loads with the informational GENERATOR CHANGED line. Pins: height 0x261EE634, cave 0x7469A6CB. Verified: ue.py auto 427 / 427 (59 / 59 generator on the final build), Tools/check_sky_coop.py PASS, nettest game and digsync PASS, a cooked Development package (checksum match=1, stamps, plants, surfaces), a Shipping compile. Not pushed to Steam. Three things the lab had not met, fixed here: a lobe's bank at 52 deg, a small island's rock missing past ~3 km with its far trees in empty sky (a stand-in per far LOD), a dig on an island yielding earth. Next, in MO_WorldLab only, the lab's own build window: re-carve onto v13 and re-prove 1:1 (compare_mo57 opens MO57's editor read-only once).
+References: CL-0356, CL-0358

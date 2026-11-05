@@ -111,6 +111,55 @@ bool FMOWorldGen::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 C
 	return bFound;
 }
 
+bool FMOWorldGen::GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out)
+{
+	const bool bFound = FMOWorldGenDomain::GetFloatingIslandInCell(Params, CellX, CellY, Seed, Out);
+	if (bFound)
+	{
+		ToWorld(Params, Out.Center);
+		for (int32 K = 0; K < Out.NumClumps; ++K)
+		{
+			ToWorld(Params, Out.ClumpCenter[K]);
+		}
+	}
+	return bFound;
+}
+
+bool FMOWorldGen::GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out)
+{
+	const bool bFound = FMOWorldGenDomain::GetRavineInCell(Params, CellX, CellY, Seed, Out);
+	if (bFound)
+	{
+		ToWorld(Params, Out.Center);
+	}
+	return bFound;
+}
+
+float FMOWorldGen::IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	return FMOWorldGenDomain::IslandTopCm(Params, Fx(Params, X), Fy(Params, Y), Seed);
+}
+
+float FMOWorldGen::IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed)
+{
+	return FMOWorldGenDomain::IslandRockDistanceCm(Params, Fx(Params, X), Fy(Params, Y), Z, Seed);
+}
+
+float FMOWorldGen::IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm)
+{
+	return FMOWorldGenDomain::IslandFarDistanceCm(Params, Fx(Params, X), Fy(Params, Y), Z, Seed, GrowCm, ThickenCm);
+}
+
+bool FMOWorldGen::SampleIslandSurface(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float InsetCm, FMOIslandSurfacePoint& Out)
+{
+	return FMOWorldGenDomain::SampleIslandSurface(Params, Fx(Params, X), Fy(Params, Y), Seed, InsetCm, Out);
+}
+
+bool FMOWorldGen::IslandReachesBox(const FMOWorldGenParams& Params, double MinX, double MinY, double MaxX, double MaxY, int32 Seed)
+{
+	return FMOWorldGenDomain::IslandReachesBox(Params, Fx(Params, MinX), Fy(Params, MinY), Fx(Params, MaxX), Fy(Params, MaxY), Seed);
+}
+
 float FMOWorldGen::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed)
 {
 	return FMOWorldGenDomain::SampleOpeningDistanceUnderCm(Params, Fx(Params, X), Fy(Params, Y), GroundZ, Seed);

@@ -199,6 +199,18 @@ float FMOWorldGenDomain::SoilDepthCm(const FMOWorldGenParams& Params, double X, 
 FMODigSample FMOWorldGenDomain::SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade)
 {
 	FMODigSample Out;
+	if (IslandRockDistanceCm(Params, X, Y, Z, Seed) < 0.0f)
+	{
+		// A floating island: the ground far below says nothing about it. Its grass top is soil, the rest the rock of the land it was torn from, no ore.
+		if (Z >= (double)(IslandTopCm(Params, X, Y, Seed) - FMOFloatingIsland::TopSlabDepthCm))
+		{
+			Out.Material = EMODigMaterial::Soil;
+			return Out;
+		}
+		Out.Bedrock = SampleBedrock(Params, X, Y, Seed);
+		Out.Material = EMODigMaterial::Rock;
+		return Out;
+	}
 	const float Ground = SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm);
 	if (Z >= (double)(Ground - SoilDepthCm(Params, X, Y, Seed)))
 	{

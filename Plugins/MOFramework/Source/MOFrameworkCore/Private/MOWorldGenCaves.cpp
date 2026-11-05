@@ -16,7 +16,9 @@ namespace
 		SaltCavernA = 0x7201u, SaltCavernB = 0x7202u,
 		SaltSinkhole = 0x7401u, SaltSinkholeWall = 0x7402u,
 		SaltGallery = 0x7501u, SaltGalleryPath = 0x7502u, SaltGalleryLevel = 0x7503u, SaltGalleryMask = 0x7504u, SaltGalleryRadius = 0x7505u,
-		SaltEntrance = 0x7601u
+		SaltEntrance = 0x7601u,
+		SaltRavine = 0x7701u, SaltRavineWall = 0x7702u,
+		SaltIsland = 0x7801u, SaltIslandRock = 0x7802u, SaltIslandTop = 0x7803u
 	};
 
 	/** Floor on a gallery meander's gradient (per lattice cell) in its distance estimate: |value| / |gradient| blows up at the noise's saddles. */
@@ -97,6 +99,455 @@ namespace
 
 	/** Does this cell's sinkhole open at all: not on low ground (coast / basin), and never inside an upland lake or its bank (the lake bed would be a hole under the water). */
 	float WaterGate(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed);   // below
+
+	// --- Ravines and floating islands (v13, fork F62) ------------------------------------------------------------------------------------------
+	/** The ground at a feature's anchor (a cell's ravine or island centre): memoised per thread like SinkholeGroundCm. */
+	float AnchorGroundCm(const FMOWorldGenParams& P, uint32 Salt, int64 CellX, int64 CellY, int32 Seed, double X, double Y)
+	{
+		struct FEntry { int64 CellX = 0, CellY = 0; uint32 Salt = 0, Seed = 0, ParamsHash = 0; float Ground = 0.0f; bool bValid = false; };
+		thread_local FEntry Cache[32];
+		FEntry& E = Cache[(uint32)(((uint64)CellX * 73856093ull) ^ ((uint64)CellY * 19349663ull) ^ Salt) & 31u];
+		if (E.bValid && E.CellX == CellX && E.CellY == CellY && E.Salt == Salt && E.Seed == (uint32)Seed && E.ParamsHash == P.GetHash())
+		{
+			return E.Ground;
+		}
+		E = { CellX, CellY, Salt, (uint32)Seed, P.GetHash(), FMOWorldGenDomain::SampleHeightCm(P, X, Y, Seed, P.Tuning.VoxelSizeCm), true };
+		return E.Ground;
+	}
+
+	// An island is a cluster of craggy clumps (round 3): a main mass and up to four smaller chunks round it, at a little different heights and some
+	// apart, as if torn out of the ground and held together by nothing. Each clump's outline is a warped, lobed, notched shape; its top is rolling
+	// ground with a jagged rim; its underside is torn rock -- ridged hanging chunks over a rough cone, deepest under the middle.
+	constexpr int32 MaxIslandClumps = 5;
+
+	struct FIslandClump
+	{
+		double X = 0.0, Y = 0.0;
+		float R = 0.0f, Lift = 0.0f, Thickness = 0.0f;   // its radius, its top over the cluster's top (cm, + or -), its depth under the middle
+	};
+
+	struct FIslandBasics
+	{
+		double CenterX = 0.0, CenterY = 0.0;
+		float Radius = 0.0f, Height = 0.0f, Thickness = 0.0f;   // the cluster: its reach (every clump within 1.3 x), its top over the ground, the main mass's depth
+		int32 NumClumps = 1;
+		uint32 ShapeSalt = 0;   // this island's own: the outlines' noise is in each clump's own frame, scaled by its radius -- one salt for all would give every island the same shape
+		FIslandClump Clumps[MaxIslandClumps];
+	};
+
+	/** The cell's island without the ground (pure hashing). Its centre keeps a quarter of the cell from the cell's edges, and the cluster's reach (1.3 x its
+	 *  radius) fits in that margin, so an island stays inside its own cell. Sizes skew small (radius log-spread by U^2); the bigger ones fly higher and
+	 *  have more chunks. */
+	bool IslandBasics(const FMOWorldGenTuning& T, int64 CellX, int64 CellY, int32 Seed, FIslandBasics& Out)
+	{
+		if (T.IslandChance <= 0.0f)
+		{
+			return false;
+		}
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltIsland);
+		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.IslandChance)
+		{
+			return false;
+		}
+		const uint32 H1 = HashLattice2(CellX, CellY, S + 1u);
+		const uint32 H2 = HashLattice2(CellX, CellY, S + 2u);
+		const uint32 H3 = HashLattice2(CellX, CellY, S + 3u);
+		Out.CenterX = ((double)CellX + (double)(0.25f + 0.5f * Unit16(H1))) * (double)T.IslandCellCm;
+		Out.CenterY = ((double)CellY + (double)(0.25f + 0.5f * Unit16(H1 >> 16))) * (double)T.IslandCellCm;
+		const float RMin = FMath::Max(1000.0f, T.IslandRadiusMinCm);
+		const float RMax = FMath::Max(RMin, FMath::Min(T.IslandRadiusMaxCm, (0.25f * T.IslandCellCm - 200.0f) / 1.3f));
+		const float Size01 = FMath::Square(Unit16(H2));
+		Out.Radius = RMin * FMath::Pow(FMath::Max(1.0f, RMax / RMin), Size01);
+		Out.Height = T.IslandHeightMinCm + (T.IslandHeightMaxCm - T.IslandHeightMinCm) * FMath::Clamp(0.55f * Size01 + 0.45f * Unit16(H2 >> 16), 0.0f, 1.0f);
+		// Round 3b (Nov 4: the first cut's clumps merged into one wobbly blob -- 8 of 12 outlines as round as an ellipse, 1 of 12 with a chunk
+		// apart): a smaller main mass, at least two clumps, the others further out (about half float apart), rougher outlines (ClumpOutline).
+		const float MainR = 0.5f * Out.Radius;
+		Out.Thickness = FMath::Clamp(MainR * (0.65f + 0.35f * Unit16(H3)), 4000.0f, 0.6f * Out.Height);
+		Out.Clumps[0] = { Out.CenterX, Out.CenterY, MainR, 0.0f, Out.Thickness };
+		Out.NumClumps = FMath::Clamp(2 + (int32)(Unit16(H3 >> 16) * (2.0f + 2.0f * Size01)), 2, MaxIslandClumps);
+		Out.ShapeSalt = HashLattice2(CellX, CellY, S + 40u);
+		for (int32 K = 1; K < Out.NumClumps; ++K)
+		{
+			const uint32 Hk = HashLattice2(CellX, CellY, S + 10u + (uint32)K);
+			const uint32 Hj = HashLattice2(CellX, CellY, S + 20u + (uint32)K);
+			const float Angle = 2.0f * UE_PI * Unit16(Hk);
+			// Its outline reaches at most ~2 x its radius from its centre (ClumpOutline's warp, lobes and notches at their extremes): 0.85 + 2 x 0.22
+			// stays inside the cluster's reach (1.3 x), where FindIslandAt stops looking.
+			const float Dist = Out.Radius * (0.55f + 0.3f * Unit16(Hk >> 16));
+			const float R = Out.Radius * (0.1f + 0.12f * Unit16(Hj));
+			FIslandClump& C = Out.Clumps[K];
+			C.X = Out.CenterX + Dist * FMath::Cos(Angle);
+			C.Y = Out.CenterY + Dist * FMath::Sin(Angle);
+			C.R = R;
+			C.Lift = Out.Thickness * (-0.3f + 0.45f * Unit16(Hj >> 16));
+			C.Thickness = FMath::Clamp(R * (0.7f + 0.4f * Unit16(HashLattice2(CellX, CellY, S + 30u + (uint32)K))), 1500.0f, 0.6f * Out.Height);
+		}
+		return true;
+	}
+
+	/** Over land and below the high ground. */
+	bool IslandAllowed(const FMOWorldGenParams& P, float Ground)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		return Ground >= T.SeaLevelCm + 300.0f && (T.CaveMaxGroundCm <= 0.0f || Ground < T.CaveMaxGroundCm - T.CaveHighFadeCm);
+	}
+
+	/** The island whose reach covers (X, Y), if any, with the real ground at its centre. An island stays inside its cell, so one cell is enough. */
+	bool FindIslandAt(const FMOWorldGenParams& P, double X, double Y, int32 Seed, FIslandBasics& B, float& OutGround)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.IslandCellCm);
+		const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.IslandCellCm);
+		if (!IslandBasics(T, CellX, CellY, Seed, B))
+		{
+			return false;
+		}
+		const double Dx = X - B.CenterX, Dy = Y - B.CenterY;
+		if (Dx * Dx + Dy * Dy > FMath::Square(1.3 * (double)B.Radius + 100.0))
+		{
+			return false;
+		}
+		OutGround = AnchorGroundCm(P, SaltIsland, CellX, CellY, Seed, B.CenterX, B.CenterY);
+		return IslandAllowed(P, OutGround);
+	}
+
+	/** A clump's outline at (X, Y): cm, negative inside -- a circle warped by 0.4 of its radius, lobed (+-40 %) and notched by ridged noise (crags, 0.18). */
+	float ClumpOutline(const FIslandClump& C, double X, double Y, uint32 Salt)
+	{
+		const double Px = X - C.X, Py = Y - C.Y;
+		const double Wl = FMath::Max(500.0, 0.7 * (double)C.R);
+		const double Qx = Px + 0.4 * C.R * GradientNoise2(Px / Wl, Py / Wl, Salt).Value;
+		const double Qy = Py + 0.4 * C.R * GradientNoise2(Px / Wl + 17.3, Py / Wl - 9.1, Salt).Value;
+		const double Ll = FMath::Max(400.0, 0.4 * (double)C.R), Lc = FMath::Max(300.0, 0.13 * (double)C.R);
+		const float Edge = C.R * (1.0f + 0.4f * GradientNoise2(Qx / Ll, Qy / Ll, Salt + 1u).Value
+			+ 0.18f * (1.0f - 2.0f * FMath::Abs(GradientNoise2(Qx / Lc, Qy / Lc, Salt + 2u).Value)));
+		return (float)FMath::Sqrt(Qx * Qx + Qy * Qy) - Edge;
+	}
+
+	/** One column of an island: each clump's outline there, its top and the column part of its underside (the 3D crags come per voxel). A chunk asks for
+	 *  the same column at every voxel, so the last few columns are kept per thread. */
+	struct FIslandColumn
+	{
+		float Outline[MaxIslandClumps];
+		float Top[MaxIslandClumps];
+		float Under2D[MaxIslandClumps];
+		float Union = 1.0e9f;   // the footprint of the cluster: the least outline (negative = over a clump)
+		float MaxTop = -1.0e9f;
+	};
+
+	const FIslandColumn& IslandColumnAt(const FIslandBasics& B, float Ground, double X, double Y, int32 Seed)
+	{
+		struct FEntry { double X = 0.0, Y = 0.0, Cx = 0.0, Cy = 0.0; uint32 Seed = 0; float Ground = 0.0f, Radius = 0.0f; bool bValid = false; FIslandColumn Column; };
+		thread_local FEntry Cache[64];
+		const uint64 Bits = (uint64)(int64)FMath::FloorToDouble(X) * 73856093ull ^ (uint64)(int64)FMath::FloorToDouble(Y) * 19349663ull;
+		FEntry& E = Cache[Bits & 63u];
+		if (E.bValid && E.X == X && E.Y == Y && E.Cx == B.CenterX && E.Cy == B.CenterY && E.Seed == (uint32)Seed && E.Ground == Ground && E.Radius == B.Radius)
+		{
+			return E.Column;
+		}
+		FIslandColumn& Col = E.Column;
+		Col.Union = 1.0e9f;
+		Col.MaxTop = -1.0e9f;
+		const uint32 ShapeSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltIslandTop) ^ B.ShapeSalt;
+		const double Wave = 3000.0 + 0.25 * (double)B.Radius;
+		const float Bump = (300.0f + 0.03f * B.Radius) * (0.7f * GradientNoise2(X / Wave, Y / Wave, ShapeSalt).Value
+			+ 0.3f * GradientNoise2(X / (Wave * 0.37), Y / (Wave * 0.37), ShapeSalt + 1u).Value);
+		for (int32 K = 0; K < B.NumClumps; ++K)
+		{
+			const FIslandClump& C = B.Clumps[K];
+			const float Outline = ClumpOutline(C, X, Y, ShapeSalt + 7u * (uint32)K + 3u);
+			const float In01 = FMath::Clamp(-Outline / FMath::Max(100.0f, 0.35f * C.R), 0.0f, 1.0f);    // 0 at the edge, 1 a third of the way in
+			const float Deep01 = FMath::Clamp(-Outline / FMath::Max(100.0f, 0.8f * C.R), 0.0f, 1.0f);   // 1 under the middle
+			// The rim: rounded down near the edge, and jagged (ridged noise) -- a broken edge, not a lip.
+			const float Rim = FMath::Min(0.25f * C.Thickness, 0.06f * C.R + 500.0f) * FMath::Pow(1.0f - In01, 1.5f);
+			const float Jag = 0.08f * C.Thickness * (1.0f - In01)
+				* (1.0f - 2.0f * FMath::Abs(GradientNoise2(X / FMath::Max(300.0, 0.08 * C.R), Y / FMath::Max(300.0, 0.08 * C.R), ShapeSalt + 50u).Value));
+			const float Top = Ground + B.Height + C.Lift + Bump - Rim - Jag;
+			Col.Outline[K] = Outline;
+			Col.Top[K] = Top;
+			Col.Under2D[K] = Top - C.Thickness * FMath::Pow(Deep01, 0.6f);
+			Col.Union = FMath::Min(Col.Union, Outline);
+			if (Outline < 0.0f)
+			{
+				Col.MaxTop = FMath::Max(Col.MaxTop, Top);
+			}
+		}
+		E.X = X;
+		E.Y = Y;
+		E.Cx = B.CenterX;
+		E.Cy = B.CenterY;
+		E.Seed = (uint32)Seed;
+		E.Ground = Ground;
+		E.Radius = B.Radius;
+		E.bValid = true;
+		return Col;
+	}
+
+	/** The island's top at (X, Y): the highest clump over the column, or -1e9 off every clump. */
+	float IslandTopAt(const FIslandBasics& B, float Ground, double X, double Y, int32 Seed)
+	{
+		const FIslandColumn& Col = IslandColumnAt(B, Ground, X, Y, Seed);
+		return Col.Union < 0.0f ? Col.MaxTop : -1.0e9f;
+	}
+
+	/** The island's rock (cm, negative inside a clump): each clump's rock lies between its torn underside and its top; off the cluster's footprint, the least outline. */
+	float IslandRockAt(const FIslandBasics& B, const FIslandColumn& Col, double X, double Y, double Z, int32 Seed)
+	{
+		if (Col.Union >= 0.0f)
+		{
+			return FMath::Max(Col.Union, 1.0f);
+		}
+		const uint32 RockSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltIslandRock);
+		float Rock = 1.0e9f;   // the nearest clump's rock: negative inside one
+		for (int32 K = 0; K < B.NumClumps; ++K)
+		{
+			const FIslandClump& C = B.Clumps[K];
+			if (Col.Outline[K] > 0.25f * C.Thickness)
+			{
+				Rock = FMath::Min(Rock, Col.Outline[K]);   // well off this clump: its outline is the distance
+				continue;
+			}
+			// The torn underside: ridged hanging chunks (sharp creases) and finer broken rock over the column's cone.
+			const double Lc = FMath::Max(800.0, 0.15 * (double)C.R), Lf = FMath::Max(300.0, 0.05 * (double)C.R);
+			const float Chunks = 1.0f - 2.0f * FMath::Abs(GradientNoise3(X / Lc, Y / Lc, Z / Lc, RockSalt + (uint32)K));
+			const float Fine = GradientNoise3(X / Lf, Y / Lf, Z / Lf, RockSalt + 11u);
+			const float Under = Col.Under2D[K] + C.Thickness * (0.22f * Chunks + 0.08f * Fine) + 300.0f * GradientNoise3(X / 700.0, Y / 700.0, Z / 700.0, RockSalt + 23u);
+			Rock = FMath::Min(Rock, FMath::Max3(Under - (float)Z, (float)Z - Col.Top[K], Col.Outline[K]));
+		}
+		return Rock;
+	}
+
+	struct FRavineBasics
+	{
+		double CenterX = 0.0, CenterY = 0.0;
+		float DirX = 1.0f, DirY = 0.0f, Length = 0.0f, HalfWidth = 0.0f, Depth = 0.0f, Bend = 0.0f, Waves = 1.0f, Phase = 0.0f;
+		float StepH = 700.0f, LedgeW = 200.0f;   // its ledges: the wall steps in by LedgeW every StepH going down
+	};
+
+	bool RavineBasics(const FMOWorldGenTuning& T, int64 CellX, int64 CellY, int32 Seed, FRavineBasics& Out)
+	{
+		if (T.RavineChance <= 0.0f)
+		{
+			return false;
+		}
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltRavine);
+		if (Unit16(HashLattice2(CellX, CellY, S)) >= T.RavineChance)
+		{
+			return false;
+		}
+		const uint32 H1 = HashLattice2(CellX, CellY, S + 1u);
+		const uint32 H2 = HashLattice2(CellX, CellY, S + 2u);
+		const uint32 H3 = HashLattice2(CellX, CellY, S + 3u);
+		Out.CenterX = ((double)CellX + (double)(0.25f + 0.5f * Unit16(H1))) * (double)T.RavineCellCm;
+		Out.CenterY = ((double)CellY + (double)(0.25f + 0.5f * Unit16(H1 >> 16))) * (double)T.RavineCellCm;
+		const float Angle = 2.0f * UE_PI * Unit16(H2);
+		Out.DirX = FMath::Cos(Angle);
+		Out.DirY = FMath::Sin(Angle);
+		Out.Length = T.RavineLengthMaxCm * (0.4f + 0.6f * Unit16(H2 >> 16));
+		Out.HalfWidth = T.RavineHalfWidthMaxCm * (0.5f + 0.5f * Unit16(H3));
+		Out.Depth = T.RavineDepthMaxCm * (0.5f + 0.5f * Unit16(H3 >> 16));
+		const uint32 H4 = HashLattice2(CellX, CellY, S + 4u);
+		Out.Bend = Out.Length * (0.05f + 0.1f * Unit16(H4));
+		Out.Waves = 0.6f + 0.8f * Unit16(H4 >> 16);
+		const uint32 H5 = HashLattice2(CellX, CellY, S + 5u);
+		Out.Phase = 2.0f * UE_PI * Unit16(H5);
+		Out.StepH = 500.0f + 500.0f * Unit16(H5 >> 16);
+		Out.LedgeW = Out.HalfWidth * (0.15f + 0.15f * Unit16(HashLattice2(CellX, CellY, S + 6u)));
+		return true;
+	}
+
+	/** How deep the ravine cuts here: its depth, but its floor kept above the sea's clearance (a ravine near the coast is shallower). */
+	FORCEINLINE float RavineDepth(const FMOWorldGenParams& P, const FRavineBasics& B, float Ground)
+	{
+		return FMath::Min(B.Depth, Ground - (P.Tuning.SeaLevelCm + P.Tuning.CaveWaterClearanceCm));
+	}
+
+	/** Dry ground in the cave band: above the coast's low ground, below the high ground (as the other cave features), and room above the sea for a
+	 *  ravine at least half the deepest one (Wes: "50-100m deep"; a ravine the sea's clearance would cut shallower is not made at all). */
+	bool RavineAllowed(const FMOWorldGenParams& P, const FRavineBasics& B, float Ground, int32 Seed)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		if (RavineDepth(P, B, Ground) < FMath::Max(3000.0f, 0.5f * T.RavineDepthMaxCm) || Ground < T.SeaLevelCm + T.CaveMinGroundAboveSeaCm
+			|| (T.CaveMaxGroundCm > 0.0f && Ground >= T.CaveMaxGroundCm - T.CaveHighFadeCm))
+		{
+			return false;
+		}
+		// Out of the water, as every cave feature (the shore lattice of WaterGate: low ground, a river, a basin, an upland lake's shore): nine points
+		// along its path at the ground. A ravine cut through an upland lake (round 3's lab run, Nov 4) drained into the slot under the lake's water
+		// plane. Once per ravine: kept per thread, since a chunk asks at every voxel.
+		struct FEntry { double X = 0.0, Y = 0.0; uint32 Seed = 0, ParamsHash = 0; bool bDry = false, bValid = false; };
+		thread_local FEntry Cache[32];
+		FEntry& E = Cache[(uint32)(((uint64)(int64)B.CenterX * 73856093ull) ^ ((uint64)(int64)B.CenterY * 19349663ull)) & 31u];
+		if (E.bValid && E.X == B.CenterX && E.Y == B.CenterY && E.Seed == (uint32)Seed && E.ParamsHash == P.GetHash())
+		{
+			return E.bDry;
+		}
+		bool bDry = true;
+		for (int32 I = 0; I <= 8 && bDry; ++I)
+		{
+			const float S = (float)I / 8.0f;
+			const float Along = (S - 0.5f) * B.Length;
+			const float Side = B.Bend * FMath::Sin(2.0f * UE_PI * B.Waves * S + B.Phase);
+			bDry = WaterGate(P, B.CenterX + B.DirX * Along - B.DirY * Side, B.CenterY + B.DirY * Along + B.DirX * Side, Ground, Seed) <= 0.0f;
+		}
+		E = { B.CenterX, B.CenterY, (uint32)Seed, P.GetHash(), bDry, true };
+		return bDry;
+	}
+
+	/** The nearest point of a ravine's path (a polyline of 16 pieces): its distance and where along the ravine it is (S in 0..1). The path's points are a pure function of the cell: kept per
+	 *  thread, since a chunk asks for them at every voxel (17 sines a time). */
+	void NearestOnRavinePath(const FMOWorldGenParams& P, const FRavineBasics& B, int64 Cx, int64 Cy, int32 Seed, double X, double Y, float& OutDist, float& OutS)
+	{
+		constexpr int32 Segments = 16;
+		struct FPathCache { int64 CellX = 0, CellY = 0; uint32 Seed = 0, ParamsHash = 0; FVector2D Points[Segments + 1]; bool bValid = false; };
+		thread_local FPathCache PathCache[16];
+		FPathCache& Path = PathCache[(uint32)(((uint64)Cx * 73856093ull) ^ ((uint64)Cy * 19349663ull)) & 15u];
+		if (!Path.bValid || Path.CellX != Cx || Path.CellY != Cy || Path.Seed != (uint32)Seed || Path.ParamsHash != P.GetHash())
+		{
+			for (int32 I = 0; I <= Segments; ++I)
+			{
+				const float S = (float)I / Segments;
+				const float Along = (S - 0.5f) * B.Length;
+				const float Side = B.Bend * FMath::Sin(2.0f * UE_PI * B.Waves * S + B.Phase);
+				Path.Points[I] = FVector2D(B.CenterX + B.DirX * Along - B.DirY * Side, B.CenterY + B.DirY * Along + B.DirX * Side);
+			}
+			Path.CellX = Cx;
+			Path.CellY = Cy;
+			Path.Seed = (uint32)Seed;
+			Path.ParamsHash = P.GetHash();
+			Path.bValid = true;
+		}
+		const FVector2D Q(X, Y);
+		OutDist = TNumericLimits<float>::Max();
+		OutS = 0.0f;
+		FVector2D A = Path.Points[0];
+		for (int32 I = 1; I <= Segments; ++I)
+		{
+			const FVector2D Bp = Path.Points[I];
+			const FVector2D Ab = Bp - A;
+			const double L2 = FMath::Max(Ab.SizeSquared(), 1.0);
+			const double U = FMath::Clamp(FVector2D::DotProduct(Q - A, Ab) / L2, 0.0, 1.0);
+			const float Dist = (float)FVector2D::Distance(Q, A + Ab * U);
+			if (Dist < OutDist)
+			{
+				OutDist = Dist;
+				OutS = ((float)(I - 1) + (float)U) / Segments;
+			}
+			A = Bp;
+		}
+	}
+
+	/** How much of a ravine there is at S along it: 1 at the middle, tapering to nothing at both ends. */
+	FORCEINLINE float RavineEnvelope(float S)
+	{
+		return FMath::Pow(FMath::Max(0.0f, FMath::Sin(UE_PI * S)), 0.5f);
+	}
+
+	/** The keep-out round the ravines (cm, negative inside): 2D, out from the path by the ravine's half width at that point of its length, plus a margin. Plants, world features and spawns ask
+	 *  this through DistanceToSinkholeRimZone: 9 cell hashes where no ravine is near. */
+	float RavineZoneDistance(const FMOWorldGenParams& P, double X, double Y, int32 Seed)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		float D = FMOWorldGenDomain::NoSinkholeDistanceCm;
+		if (T.RavineChance <= 0.0f)
+		{
+			return D;
+		}
+		const int64 Cx0 = (int64)FMath::FloorToDouble(X / (double)T.RavineCellCm);
+		const int64 Cy0 = (int64)FMath::FloorToDouble(Y / (double)T.RavineCellCm);
+		for (int64 Cy = Cy0 - 1; Cy <= Cy0 + 1; ++Cy)
+		{
+			for (int64 Cx = Cx0 - 1; Cx <= Cx0 + 1; ++Cx)
+			{
+				FRavineBasics B;
+				if (!RavineBasics(T, Cx, Cy, Seed, B))
+				{
+					continue;
+				}
+				const double Reach = 0.5 * B.Length + B.Bend + 30000.0;   // past the widest footprint that asks
+				if (FMath::Square(X - B.CenterX) + FMath::Square(Y - B.CenterY) > Reach * Reach)
+				{
+					continue;
+				}
+				const float Ground = AnchorGroundCm(P, SaltRavine, Cx, Cy, Seed, B.CenterX, B.CenterY);
+				if (!RavineAllowed(P, B, Ground, Seed))
+				{
+					continue;
+				}
+				float Dist = 0.0f, S = 0.0f;
+				NearestOnRavinePath(P, B, Cx, Cy, Seed, X, Y, Dist, S);
+				D = FMath::Min(D, Dist - B.HalfWidth * FMath::Pow(RavineEnvelope(S), 0.6f) - 100.0f);
+			}
+		}
+		return D;
+	}
+
+	/** The ravines' distance (cm, negative = air) at a point: the nearest point of each ravine's meandering path in the 3 x 3 cells round it. A Minecraft
+	 *  ravine (round 2): open to the sky, 50-100 m deep at mid-length, widest a little above mid-depth, the lip a little narrower and the bottom narrowing
+	 *  to a third; its walls stepped into ledges every 5-10 m (leaning out within a step, then a shelf), craggy (ridged noise: sharp creases at 3 m,
+	 *  lumps at 10 m), its floor uneven. Skipped when the sample spacing cannot resolve the slot. */
+	float RavineDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		if (T.RavineChance <= 0.0f || StepCm > T.RavineHalfWidthMaxCm * 0.9f)
+		{
+			return FMOWorldGenDomain::CaveFarCm;
+		}
+		float D = FMOWorldGenDomain::CaveFarCm;
+		const int64 Cx0 = (int64)FMath::FloorToDouble(X / (double)T.RavineCellCm);
+		const int64 Cy0 = (int64)FMath::FloorToDouble(Y / (double)T.RavineCellCm);
+		for (int64 Cy = Cy0 - 1; Cy <= Cy0 + 1; ++Cy)
+		{
+			for (int64 Cx = Cx0 - 1; Cx <= Cx0 + 1; ++Cx)
+			{
+				FRavineBasics B;
+				if (!RavineBasics(T, Cx, Cy, Seed, B))
+				{
+					continue;
+				}
+				const double Reach = 0.5 * B.Length + B.Bend + 1.5 * B.HalfWidth + FMOWorldGenDomain::CaveFarCm + 300.0;
+				if (FMath::Square(X - B.CenterX) + FMath::Square(Y - B.CenterY) > Reach * Reach)
+				{
+					continue;
+				}
+				const float Ground = AnchorGroundCm(P, SaltRavine, Cx, Cy, Seed, B.CenterX, B.CenterY);
+				if (!RavineAllowed(P, B, Ground, Seed))
+				{
+					continue;
+				}
+				float BestDist = 0.0f, BestS = 0.0f;
+				NearestOnRavinePath(P, B, Cx, Cy, Seed, X, Y, BestDist, BestS);
+				const float Env = RavineEnvelope(BestS);
+				if (Env < 0.02f)
+				{
+					continue;
+				}
+				const uint32 WallSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltRavineWall);
+				const bool bNearWall = BestDist < 1.8f * B.HalfWidth + 400.0f;   // the walls' detail only matters near them
+				const float FloorDepth = RavineDepth(P, B, Ground) * FMath::Pow(Env, 0.5f);
+				const float Floor = Ground - FloorDepth + (bNearWall ? 150.0f * GradientNoise2(X / 900.0, Y / 900.0, WallSalt + 2u).Value : 0.0f);
+				const float F = FMath::Clamp((Ground - (float)Z) / FMath::Max(100.0f, FloorDepth), 0.0f, 1.0f);
+				const float Profile = (0.62f + 0.38f * FMath::Sin(UE_PI * FMath::Min(1.0f, F * 1.15f))) * (1.0f - 0.55f * Smooth01(0.7f, 1.0f, F));
+				float HalfWidth = B.HalfWidth * FMath::Pow(Env, 0.6f) * Profile;
+				if (bNearWall)
+				{
+					// Ledges: going down, the wall leans out across a step and then steps in by LedgeW over its last 6 % -- a shelf; the steps wander with
+					// the rock (a 2D noise shifts them by up to 0.6 of a step).
+					const float Steps = (Ground - (float)Z) / B.StepH + 0.6f * GradientNoise2(X / 2000.0, Y / 2000.0, WallSalt + 3u).Value;
+					const float Frac = Steps - FMath::FloorToFloat(Steps);
+					HalfWidth += B.LedgeW * (Frac - 0.5f - Smooth01(0.94f, 1.0f, Frac));
+					// Crags: ridged noise for sharp creases (3 m) and lumps (10 m).
+					const float Crease = 1.0f - 2.0f * FMath::Abs(GradientNoise3(X / 300.0, Y / 300.0, Z / 300.0, WallSalt));
+					const float Lumps = GradientNoise3(X / 1000.0, Y / 1000.0, Z / 700.0, WallSalt + 1u);
+					HalfWidth += B.HalfWidth * (0.16f * Crease + 0.22f * Lumps);
+				}
+				HalfWidth = FMath::Max(HalfWidth, 60.0f);
+				D = FMath::Min(D, FMath::Max(BestDist - HalfWidth, Floor - (float)Z));
+			}
+		}
+		return D;
+	}
+
 
 	/** A sinkhole exists only where its whole shaft stays dry: above the water floor and outside the water keep-out (v10; upland lakes included). Otherwise the
 	 *  gate would close it while GetSinkholeInCell / DistanceToSinkholeRimZone still reported it (the world features' keep-out, the dev verbs, PCG suppression). */
@@ -538,6 +989,21 @@ float FMOWorldGenDomain::SampleCaveDistanceAtGround(const FMOWorldGenParams& Par
 	{
 		return CaveFarCm;
 	}
+	const float Caves = SampleCaveDistanceUnderGround(Params, X, Y, Z, GroundCm, Seed, StepCm);
+	if (T.RavineChance <= 0.0f || Z > (double)GroundCm + 100.0)
+	{
+		return Caves;
+	}
+	return FMath::Clamp(FMath::Min(RavineDistance(Params, X, Y, Z, Seed, StepCm), Caves), -CaveFarCm, CaveFarCm);
+}
+
+float FMOWorldGenDomain::SampleCaveDistanceUnderGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves)
+	{
+		return CaveFarCm;
+	}
 
 	// Depth under THIS column's ground. Air above the ground needs no carving, and below the cave band there is nothing.
 	const float Depth = GroundCm - (float)Z;
@@ -649,8 +1115,8 @@ bool FMOWorldGenDomain::FindSinkholeAt(const FMOWorldGenParams& Params, double X
 
 float FMOWorldGenDomain::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
-	// Every opening's keep-out: a sinkhole's rim zone and a built entrance's hollow (vegetation, world features and spawns read this one query).
-	const float Entrance = DistanceToCaveEntranceHollow(Params, X, Y, Seed);
+	// Every opening's keep-out: a sinkhole's rim zone, a built entrance's hollow and a ravine (vegetation, world features and spawns read this one query).
+	const float Entrance = FMath::Min(DistanceToCaveEntranceHollow(Params, X, Y, Seed), RavineZoneDistance(Params, X, Y, Seed));
 	FMOSinkhole S;
 	if (!FindSinkholeAt(Params, X, Y, Seed, S))
 	{
@@ -681,6 +1147,159 @@ bool FMOWorldGenDomain::GetCaveEntranceInCell(const FMOWorldGenParams& Params, i
 	return true;
 }
 
+bool FMOWorldGenDomain::GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out)
+{
+	FIslandBasics B;
+	if (!IslandBasics(Params.Tuning, CellX, CellY, Seed, B))
+	{
+		return false;
+	}
+	const float Ground = AnchorGroundCm(Params, SaltIsland, CellX, CellY, Seed, B.CenterX, B.CenterY);
+	if (!IslandAllowed(Params, Ground))
+	{
+		return false;
+	}
+	Out.Center = FVector2D(B.CenterX, B.CenterY);
+	Out.RadiusCm = B.Radius;
+	Out.TopCm = Ground + B.Height;
+	Out.ThicknessCm = B.Thickness;
+	Out.GroundCm = Ground;
+	Out.NumClumps = FMath::Min(B.NumClumps, FMOFloatingIsland::MaxClumps);
+	for (int32 K = 0; K < Out.NumClumps; ++K)
+	{
+		Out.ClumpCenter[K] = FVector2D(B.Clumps[K].X, B.Clumps[K].Y);
+		Out.ClumpRadiusCm[K] = B.Clumps[K].R;
+		Out.ClumpLiftCm[K] = B.Clumps[K].Lift;
+		Out.ClumpThicknessCm[K] = B.Clumps[K].Thickness;
+	}
+	return true;
+}
+
+bool FMOWorldGenDomain::GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out)
+{
+	FRavineBasics B;
+	if (!Params.Tuning.bEnableCaves || !RavineBasics(Params.Tuning, CellX, CellY, Seed, B))
+	{
+		return false;
+	}
+	const float Ground = AnchorGroundCm(Params, SaltRavine, CellX, CellY, Seed, B.CenterX, B.CenterY);
+	if (!RavineAllowed(Params, B, Ground, Seed))
+	{
+		return false;
+	}
+	Out.Center = FVector2D(B.CenterX, B.CenterY);
+	Out.Dir = FVector2D(B.DirX, B.DirY);
+	Out.LengthCm = B.Length;
+	Out.HalfWidthCm = B.HalfWidth;
+	Out.DepthCm = RavineDepth(Params, B, Ground);
+	Out.GroundCm = Ground;
+	return true;
+}
+
+float FMOWorldGenDomain::IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	FIslandBasics B;
+	float Ground = 0.0f;
+	if (!FindIslandAt(Params, X, Y, Seed, B, Ground))
+	{
+		return -1.0e9f;
+	}
+	return IslandTopAt(B, Ground, X, Y, Seed);   // -1e9 off every clump
+}
+
+float FMOWorldGenDomain::IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed)
+{
+	FIslandBasics B;
+	float Ground = 0.0f;
+	if (!FindIslandAt(Params, X, Y, Seed, B, Ground))
+	{
+		return 1.0e6f;
+	}
+	return IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), X, Y, Z, Seed);
+}
+
+float FMOWorldGenDomain::IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm)
+{
+	FIslandBasics B;
+	float Ground = 0.0f;
+	if (!FindIslandAt(Params, X, Y, Seed, B, Ground))
+	{
+		return 1.0e6f;
+	}
+	const FIslandColumn& Col = IslandColumnAt(B, Ground, X, Y, Seed);
+	float Rock = 1.0e9f;
+	for (int32 K = 0; K < B.NumClumps; ++K)
+	{
+		const float Outline = Col.Outline[K] - GrowCm;
+		Rock = FMath::Min(Rock, Outline > 0.0f ? Outline : FMath::Max3(Col.Under2D[K] - ThickenCm - (float)Z, (float)Z - Col.Top[K], Outline));
+	}
+	return Rock;
+}
+
+bool FMOWorldGenDomain::SampleIslandSurface(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float InsetCm, FMOIslandSurfacePoint& Out)
+{
+	FIslandBasics B;
+	float Ground = 0.0f;
+	if (!FindIslandAt(Params, X, Y, Seed, B, Ground))
+	{
+		return false;
+	}
+	const float Top = IslandTopAt(B, Ground, X, Y, Seed);
+	if (Top < -1.0e8f)
+	{
+		return false;
+	}
+	// Solid under the top: near the rim the torn underside can come up past the top, and the column has a top but no rock (the rim's holes).
+	constexpr float SolidCm = 100.0f;
+	if (IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), X, Y, (double)Top - SolidCm, Seed) >= 0.0f)
+	{
+		return false;
+	}
+	const double D = FMath::Max(InsetCm, 1.0f);
+	const float East = IslandTopAt(B, Ground, X + D, Y, Seed);
+	const float West = IslandTopAt(B, Ground, X - D, Y, Seed);
+	const float North = IslandTopAt(B, Ground, X, Y + D, Seed);
+	const float South = IslandTopAt(B, Ground, X, Y - D, Seed);
+	if (FMath::Min(FMath::Min(East, West), FMath::Min(North, South)) < -1.0e8f)
+	{
+		return false;   // the edge is nearer than that
+	}
+	Out.TopCm = Top;
+	Out.Normal = FVector((double)(West - East) / (2.0 * D), (double)(South - North) / (2.0 * D), 1.0).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	Out.OriginGroundCm = Ground;
+	return true;
+}
+
+bool FMOWorldGenDomain::IslandReachesBox(const FMOWorldGenParams& Params, double MinX, double MinY, double MaxX, double MaxY, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (T.IslandChance <= 0.0f)
+	{
+		return false;
+	}
+	const double Cell = (double)T.IslandCellCm;
+	const int64 X0 = (int64)FMath::FloorToDouble(MinX / Cell), X1 = (int64)FMath::FloorToDouble(MaxX / Cell);
+	const int64 Y0 = (int64)FMath::FloorToDouble(MinY / Cell), Y1 = (int64)FMath::FloorToDouble(MaxY / Cell);
+	for (int64 Cy = Y0; Cy <= Y1; ++Cy)
+	{
+		for (int64 Cx = X0; Cx <= X1; ++Cx)
+		{
+			FIslandBasics B;
+			if (!IslandBasics(T, Cx, Cy, Seed, B))
+			{
+				continue;
+			}
+			const double Dx = FMath::Max3(MinX - B.CenterX, 0.0, B.CenterX - MaxX), Dy = FMath::Max3(MinY - B.CenterY, 0.0, B.CenterY - MaxY);
+			if (Dx * Dx + Dy * Dy <= FMath::Square(1.3 * (double)B.Radius + 100.0)
+				&& IslandAllowed(Params, AnchorGroundCm(Params, SaltIsland, Cx, Cy, Seed, B.CenterX, B.CenterY)))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 float FMOWorldGenDomain::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
@@ -695,6 +1314,10 @@ float FMOWorldGenDomain::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& P
 	if (T.CaveEntranceChance > 0.0f)
 	{
 		Near = FMath::Min(Near, EntranceDistance(Params, X, Y, Under, Seed, T.VoxelSizeCm));
+	}
+	if (T.RavineChance > 0.0f)
+	{
+		Near = FMath::Min(Near, RavineDistance(Params, X, Y, Under, Seed, T.VoxelSizeCm));
 	}
 	if (Near >= CaveFarCm)
 	{

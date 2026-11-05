@@ -3,6 +3,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "MOWorldGen.h"
+#include "MOLakeShapeTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -98,13 +99,12 @@ bool FMOWorldGen_Water::RunTest(const FString& Parameters)
 					++Checked;
 					CentreWet += (FMOWorldGen::SampleHeightCm(*P, L.Center.X, L.Center.Y, WaterTestSeed) <= T.SeaLevelCm - L.DepthCm * 0.95f) ? 1 : 0;
 					// On the long axis a hair inside the shore: still water; a hair outside: the bank just above sea level.
-					const double Ax = L.Center.X + L.CosAngle * L.RadiusCm * 0.98, Ay = L.Center.Y + L.SinAngle * L.RadiusCm * 0.98;
-					const double Bx = L.Center.X + L.CosAngle * L.RadiusCm * 1.06, By = L.Center.Y + L.SinAngle * L.RadiusCm * 1.06;
-					const float Inside = FMOWorldGen::SampleHeightCm(*P, Ax, Ay, WaterTestSeed), Outside = FMOWorldGen::SampleHeightCm(*P, Bx, By, WaterTestSeed);
+					const FVector2D InShore = MOLakeTest::PointAtQ(L, 0.98f), OutShore = MOLakeTest::PointAtQ(L, 1.06f);
+					const float Inside = FMOWorldGen::SampleHeightCm(*P, InShore.X, InShore.Y, WaterTestSeed), Outside = FMOWorldGen::SampleHeightCm(*P, OutShore.X, OutShore.Y, WaterTestSeed);
 					ShoreOk += (Inside < T.SeaLevelCm && Outside >= T.SeaLevelCm) ? 1 : 0;
 					// Every rim point of a basin was fit (low land): the carved rim stays dry.
-					const double Cxw = L.Center.X - L.CosAngle * L.RadiusCm * 1.15, Cyw = L.Center.Y - L.SinAngle * L.RadiusCm * 1.15;
-					RimDry += (FMOWorldGen::SampleHeightCm(*P, Cxw, Cyw, WaterTestSeed) >= T.SeaLevelCm) ? 1 : 0;
+					const FVector2D FarBank = MOLakeTest::PointAtQ(L, 1.15f, UE_PI);
+					RimDry += (FMOWorldGen::SampleHeightCm(*P, FarBank.X, FarBank.Y, WaterTestSeed) >= T.SeaLevelCm) ? 1 : 0;
 				}
 			}
 		}

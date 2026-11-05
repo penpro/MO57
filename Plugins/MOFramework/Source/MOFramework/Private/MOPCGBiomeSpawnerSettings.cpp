@@ -287,6 +287,20 @@ bool MOPCGBiomeSpawner::OverlapsObstacle(const FVector2D& Point, float Radius, T
 	return false;
 }
 
+bool MOPCGBiomeSpawner::OverlapsObstacleNearHeight(const FVector& Point, float Radius, TConstArrayView<FObstacle> Obstacles, double MaxHeightCm)
+{
+	const FVector2D Flat(Point);
+	for (const FObstacle& O : Obstacles)
+	{
+		const double Reach = double(Radius) + O.Radius;
+		if (FMath::Abs(Point.Z - O.Z) <= MaxHeightCm && FVector2D::DistSquared(Flat, O.Center) < Reach * Reach)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 float MOPCGBiomeSpawner::FootprintRadius(const UStaticMesh* Mesh, const FVector& Scale, bool bTree)
 {
 	if (bTree)
@@ -336,7 +350,7 @@ namespace
 				FTransform Xf;
 				if (ISM->GetInstanceTransform(i, Xf, /*bWorldSpace=*/true) && Bounds.IsInsideXY(Xf.GetLocation()))
 				{
-					Out.Add({ FVector2D(Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(Mesh, Xf.GetScale3D(), bTree) });
+					Out.Add({ FVector2D(Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(Mesh, Xf.GetScale3D(), bTree), Xf.GetLocation().Z });
 				}
 			}
 		}
@@ -347,6 +361,14 @@ namespace
 {
 	std::atomic<int32> GBiomeSpawnerRuns{0};
 	std::atomic<int64> GBiomeSpawnerAccepted{0};
+
+	// Floating islands are voxel stamps (Wes, Nov 4: "make sure they have trees and such on them too though? not just grass"). The sampler's points are on the height layer, which knows nothing of
+	// a stamp, so each point with an island over it is planted a second time, on the island's top. Every tier comes through here.
+	TAutoConsoleVariable<int32> CVarIslandPlants(TEXT("mo.PCG.IslandPlants"), 1, TEXT("Dev: 1 = the biome spawner plants the tops of floating islands, 0 = bare tops (the frame-time control). Next generation."), ECVF_Default);
+	constexpr float IslandPlantInsetCm = 300.0f;            // nothing rooted within 3 m of a rim
+	constexpr float IslandForestMinTreesPerHectare = 100.0f;   // a biome thinner than this gives way to the densest forest: Wes asked for trees, and the top is green grass whatever lies below
+	constexpr double IslandObstacleHeightCm = 5000.0;       // a forest over a forest: an obstacle further than this above or below is on the other level
+	constexpr float IslandRockFootToleranceCm = 100.0f;     // how far out of the rock the corners of a rock's bounds may be (a bounds corner is rarely rock itself)
 }
 
 void MOPCGBiomeSpawner::GetRunTotals(int32& OutRuns, int64& OutAccepted)
@@ -423,6 +445,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		TArray<bool> EdgeGroundCoverScaled;      // parallel to Row->WaterEdgeSpecies
 		TArray<bool> FeatureRingOk;              // parallel to Row->Species: may grow between a world feature's core and its footprint
 		TArray<bool> EdgeFeatureRingOk;          // parallel to Row->WaterEdgeSpecies
+		float TreesPerHectare = 0.0f;            // the row's real trees: what a floating island's top asks of it
 	};
 	auto ScalesWithGroundCover = [](const FMOBiomeSpeciesEntry& Sp) { return !IsLargeSpecies(Sp) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp); };
 	// Round a world feature, between its solid core and its footprint, only low growth: ground cover, shrubs, bushes -- no trees, no rocks
@@ -458,6 +481,10 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				E.LoadedMeshes.Add(Loaded);
 				E.GroundCoverScaled.Add(ScalesWithGroundCover(Sp));
 				E.FeatureRingOk.Add(GrowsInFeatureRing(Sp));
+				if (!Sp.bLandmark && IsTreeSpecies(Sp))
+				{
+					E.TreesPerHectare += Sp.DensityPerHectare;
+				}
 				if (PassesSpeciesFilter(Settings->SpeciesFilter, Sp))
 				{
 					E.FilteredSpecies.Add(i);
@@ -486,6 +513,14 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	const float WidthMultiplier = FMath::Clamp(CVarWidthScaleMultiplier.GetValueOnGameThread(), 0.1f, 4.0f);
 	// Highest priority first so the first band match wins.
 	Biomes.Sort([](const FBiomeEntry& A, const FBiomeEntry& B) { return A.Row->Priority > B.Row->Priority; });
+	int32 IslandForestIndex = INDEX_NONE;   // the densest forest: what a floating island's top grows where the land below it is too thin for trees
+	for (int32 B = 0; B < Biomes.Num(); ++B)
+	{
+		if (Biomes[B].TreesPerHectare > 0.0f && (IslandForestIndex == INDEX_NONE || Biomes[B].TreesPerHectare > Biomes[IslandForestIndex].TreesPerHectare))
+		{
+			IslandForestIndex = B;
+		}
+	}
 
 	UMOTerrainModificationSubsystem* TerrainMod = nullptr;
 	if (Settings->bRespectTerrainModifications)
@@ -588,6 +623,21 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		}
 	}
 	TotalIn = Points.Num();
+	// A world with floating islands: the same points again, for the tops (after the ground's, so the ground's instance order and random streams do not move). A cell with no island over it adds
+	// nothing: with the islands off, and on most cells with them on, this is the same work and the same plants as ever. Only with an active seed: that is when the islands are stamped
+	// (UMOWorldFeatureSubsystem), and nothing should grow in empty sky.
+	const int32 NumGroundPoints = Points.Num();
+	const UMOWorldSeedSubsystem* IslandSeeds = Settings->bUseWorldGenerator ? UMOWorldSeedSubsystem::Get(TargetActor) : nullptr;
+	const bool bIslandWorld = IslandSeeds && IslandSeeds->HasActiveSeed() && GenParams->Tuning.IslandChance > 0.0f && CVarIslandPlants.GetValueOnGameThread() != 0;
+	if (bIslandWorld && InputBounds.IsValid && FMOWorldGen::IslandReachesBox(*GenParams, InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y, TerrainSeed))
+	{
+		Points.Reserve(2 * NumGroundPoints);
+		for (int32 I = 0; I < NumGroundPoints; ++I)
+		{
+			const FPCGPoint* Under = Points[I];
+			Points.Add(Under);
+		}
+	}
 	// World features (POIs) are self-contained, hand-tuned compositions: the scatter plants nothing inside one's footprint (UMOWorldFeatureSubsystem,
 	// a pure function of the seed -- the same exclusion on every machine, whether or not the feature's actor is spawned yet). Gathered once, here on the game thread.
 	TArray<UMOWorldFeatureSubsystem::FFootprint> FeatureFootprints;
@@ -599,6 +649,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	struct FPointResult
 	{
 		EPointOutcome Outcome = EPointOutcome::Empty;
+		bool bIsland = false;   // planted on a floating island's top
 		int32 BiomeIndex = INDEX_NONE;
 		const FMOBiomeSpeciesEntry* Species = nullptr;
 		UStaticMesh* Mesh = nullptr;
@@ -622,11 +673,33 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	ParallelForWithTaskContext(StageContexts, Points.Num(), [&](FStageCycles& Cy, int32 PointIndex)
 	{
 		FCyScope WholePoint(Cy.Total, bProfile);
-		const FPCGPoint& Point = *Points[PointIndex];
 		FPointResult& Result = Results[PointIndex];
+		// A floating island's top over this point: the same point lifted onto it, with the top's normal and a random stream of its own. The land's rules (water, caves, world features) are for
+		// the land; its biome is the land's, at the ground the island was torn from: the height it stands at now is no climate it ever grew in.
+		const bool bIslandPoint = PointIndex >= NumGroundPoints;
+		TOptional<FPCGPoint> IslandPoint;
+		float IslandOriginGroundCm = 0.0f;
+		if (bIslandPoint)
+		{
+			FCyScope GenStage(Cy.Gen, bProfile);
+			const FVector Under = Points[PointIndex]->Transform.GetLocation();
+			FMOIslandSurfacePoint Top;
+			if (!FMOWorldGen::SampleIslandSurface(*GenParams, Under.X, Under.Y, TerrainSeed, IslandPlantInsetCm, Top))
+			{
+				return;
+			}
+			IslandPoint.Emplace(*Points[PointIndex]);
+			IslandPoint->Transform.SetLocation(FVector(Under.X, Under.Y, (double)Top.TopCm + FMOFloatingIsland::TopSlabProudCm));
+			IslandPoint->Transform.SetRotation(FQuat::FindBetweenNormals(FVector::UpVector, Top.Normal));
+			IslandPoint->Seed = PCGHelpers::ComputeSeed(IslandPoint->Seed, 0x15A7);
+			IslandOriginGroundCm = Top.OriginGroundCm;
+			Result.bIsland = true;
+		}
+		const FPCGPoint& Point = bIslandPoint ? *IslandPoint : *Points[PointIndex];
 		FRandomStream RandomStream(PCGHelpers::ComputeSeed(Seed, Point.Seed));
 		{
 			const FVector Location = Point.Transform.GetLocation();
+			const FVector BiomeAt = bIslandPoint ? FVector(Location.X, Location.Y, IslandOriginGroundCm) : Location;
 
 			if (TerrainMod && TerrainMod->IsLocationModified(Location))
 			{
@@ -635,7 +708,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			}
 			bool bFeatureRing = false;   // just outside a world feature's core: low growth only (FFootprint: the forest grows up to the rock beyond it)
 			bool bNearFeature = false;   // round it: denser, unclumped trees (FeatureTreeBoost)
-			for (const UMOWorldFeatureSubsystem::FFootprint& Footprint : FeatureFootprints)
+			for (const UMOWorldFeatureSubsystem::FFootprint& Footprint : bIslandPoint ? TConstArrayView<UMOWorldFeatureSubsystem::FFootprint>() : TConstArrayView<UMOWorldFeatureSubsystem::FFootprint>(FeatureFootprints))
 			{
 				const double DistSq = FMath::Square(Location.X - Footprint.X) + FMath::Square(Location.Y - Footprint.Y);
 				if (DistSq < Footprint.CoreSq)
@@ -650,7 +723,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,
 			// cavern or shaft), not a place for meadow grass or trees. Same generator, same terrain seed as the voxel stamp that carved the cave.
 			bool bBankStrip = false;   // dry ground in the first metres past an upland lake's shore: only the water-edge species may stand here
-			if (Settings->bUseWorldGenerator)
+			if (Settings->bUseWorldGenerator && !bIslandPoint)
 			{
 				FCyScope GenStage(Cy.Gen, bProfile);
 				const float GroundZ = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
@@ -672,12 +745,12 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			int32 ChosenIndex = INDEX_NONE;
 			{
 				FCyScope ClimateStage(Cy.Climate, bProfile);
-				ClimateAt(Location, Moisture, Temperature);
+				ClimateAt(BiomeAt, Moisture, Temperature);
 				if (bSoftPick)
 				{
 					// The ground's own soft boundary (FMOWorldGen::SampleSurfaceBiomeWeights): inside the band each point rolls for its biome by the ground's mix, so the two biomes' plants interleave and thin out
 					// where their ground does.
-					const int32 GenIndex = FMOWorldGen::PickSurfaceBiome(*GenParams, Location.X, Location.Y, TerrainSeed, (float)Location.Z, SlopeDeg, Moisture, Temperature);
+					const int32 GenIndex = FMOWorldGen::PickSurfaceBiome(*GenParams, Location.X, Location.Y, TerrainSeed, (float)BiomeAt.Z, SlopeDeg, Moisture, Temperature);
 					ChosenIndex = SpawnerIndexOfGenBiome.IsValidIndex(GenIndex) ? SpawnerIndexOfGenBiome[GenIndex] : INDEX_NONE;
 					Chosen = ChosenIndex != INDEX_NONE ? &Biomes[ChosenIndex] : nullptr;
 				}
@@ -686,13 +759,19 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					// Highest-priority biome whose bands contain this sample.
 					for (int32 B = 0; B < Biomes.Num(); ++B)
 					{
-						if (Biomes[B].Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
+						if (Biomes[B].Row->Contains(BiomeAt.Z, SlopeDeg, Moisture, Temperature))
 						{
 							Chosen = &Biomes[B];
 							ChosenIndex = B;
 							break;
 						}
 					}
+				}
+				// An island's top is a forest: the land's own if it has one, else the densest one. A slope band (the rock of a steep rim) keeps its rocks.
+				if (bIslandPoint && IslandForestIndex != INDEX_NONE && (!Chosen || (Chosen->TreesPerHectare < IslandForestMinTreesPerHectare && Chosen->Row->SlopeMinDeg <= 0.0f)))
+				{
+					ChosenIndex = IslandForestIndex;
+					Chosen = &Biomes[ChosenIndex];
 				}
 			}
 			if (!Chosen)
@@ -709,7 +788,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			const float BlendW = Chosen->Row->EdgeBlendWidth;
 			// (the far tiers skip the feather: it costs four climate samples per point and moves a density ramp nobody can see from kilometres away)
 			const bool bFarTierFilter = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarCanopyOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarLargeOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarGroundCoverOnly;
-			if (BlendW > 1.0f && !bFarTierFilter && !bSoftPick)
+			if (BlendW > 1.0f && !bFarTierFilter && !bSoftPick && !bIslandPoint)
 			{
 				FCyScope BlendStage(Cy.Blend, bProfile);
 				int32 Agree = 0;
@@ -756,7 +835,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					}
 				}
 			}
-			if (bPlantsWaterEdge && Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
+			if (bPlantsWaterEdge && !bIslandPoint && Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
 			{
 				const float Shore = EdgeMask.ShoreFactor(Location.X, Location.Y, Location.Z, Chosen->Row->WaterEdgeBandCm);
 				if (Shore > 0.0f)
@@ -859,13 +938,17 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			{
 				const FBoxSphereBounds MeshBounds = Mesh->GetBounds();
 				const double Radius = FMath::Max(MeshBounds.BoxExtent.X, MeshBounds.BoxExtent.Y) * Width;
+				// (On an island, its own top: off the edge is -1e9, far past any relief, so the slot stays empty.)
+				const auto GroundAt = [&](double X, double Y)
+				{
+					return bIslandPoint ? FMOWorldGen::IslandTopCm(*GenParams, X, Y, TerrainSeed) : FMOWorldGen::SampleHeightCm(*GenParams, X, Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+				};
 				float Heights[8];
 				for (int32 K = 0; K < 8; ++K)
 				{
-					Heights[K] = FMOWorldGen::SampleHeightCm(*GenParams, Location.X + Radius * FMath::Cos(K * UE_PI / 4.0), Location.Y + Radius * FMath::Sin(K * UE_PI / 4.0),
-						TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+					Heights[K] = GroundAt(Location.X + Radius * FMath::Cos(K * UE_PI / 4.0), Location.Y + Radius * FMath::Sin(K * UE_PI / 4.0));
 				}
-				const float Centre = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+				const float Centre = GroundAt(Location.X, Location.Y);
 				if (FMOSpeciesPlacement::GroundReliefCm(Heights, Centre) > Sp.MaxGroundReliefFraction * 2.0f * MeshBounds.BoxExtent.Z * Scale)
 				{
 					return;   // not flat enough for it: the slot stays empty
@@ -917,6 +1000,23 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				}
 			}
 
+			// A rock on an island has no hillside to hide its foot: a cliff scan on a steep rim would hang out into the air under it, its open base showing (Nov 4: a 200 m slab under island 1).
+			// The foot of its bounds, at the corners and the middle, must be in the island's rock.
+			if (bIslandPoint && (Sp.bLandmark || Sp.bFaceDownhill || Sp.bLieOnSlope || IsRockSpecies(Sp)))
+			{
+				const FBox Local = Mesh->GetBoundingBox();
+				const double MidX = 0.5 * (Local.Min.X + Local.Max.X), MidY = 0.5 * (Local.Min.Y + Local.Max.Y);
+				const FVector2D Foot[5] = { { Local.Min.X, Local.Min.Y }, { Local.Max.X, Local.Min.Y }, { Local.Min.X, Local.Max.Y }, { Local.Max.X, Local.Max.Y }, { MidX, MidY } };
+				for (const FVector2D& F : Foot)
+				{
+					const FVector At = Xf.TransformPosition(FVector(F.X, F.Y, Local.Min.Z));
+					if (FMOWorldGen::IslandRockDistanceCm(*GenParams, At.X, At.Y, At.Z, TerrainSeed) > IslandRockFootToleranceCm)
+					{
+						return;   // the slot stays empty
+					}
+				}
+			}
+
 			Result.Outcome = EPointOutcome::Planted;
 			Result.BiomeIndex = ChosenIndex;
 			Result.Species = &Sp;
@@ -936,6 +1036,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		GatherObstacles(TargetActor->GetWorld(), InputBounds.ExpandBy(FVector(4000.0, 4000.0, 1.0e6)), /*bWithTrees=*/bLargeTier, Obstacles);
 	}
 	int32 TotalBlocked = 0;
+	int32 TotalOnIslands = 0;
 
 	// Merge in input order (the buckets' instance order, and so the components' instance indices, stay deterministic).
 	// A tree felled or a boulder quarried stays gone when its cell is generated again (UMOWorldRemovalSubsystem).
@@ -960,7 +1061,9 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		const FBiomeEntry& Chosen = Biomes[R.BiomeIndex];
 		const FMOBiomeSpeciesEntry& Sp = *R.Species;
 		if (!Obstacles.IsEmpty() && ((bTreeTier && IsTreeSpecies(Sp)) || (bLargeTier && IsRockSpecies(Sp)))
-			&& MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(R.Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(R.Mesh, R.Xf.GetScale3D(), bTreeTier), Obstacles))
+			&& (bIslandWorld
+				? MOPCGBiomeSpawner::OverlapsObstacleNearHeight(R.Xf.GetLocation(), MOPCGBiomeSpawner::FootprintRadius(R.Mesh, R.Xf.GetScale3D(), bTreeTier), Obstacles, IslandObstacleHeightCm)
+				: MOPCGBiomeSpawner::OverlapsObstacle(FVector2D(R.Xf.GetLocation()), MOPCGBiomeSpawner::FootprintRadius(R.Mesh, R.Xf.GetScale3D(), bTreeTier), Obstacles)))
 		{
 			++TotalSuppressed;
 			++TotalBlocked;
@@ -980,10 +1083,15 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		Bucket.bTreeTrunk = !Sp.bLandmark && IsTreeSpecies(Sp);
 		Bucket.Transforms.Add(R.Xf);
 		++TotalAccepted;
+		TotalOnIslands += R.bIsland ? 1 : 0;
 	}
 
 	FString StageSummary = FString::Printf(TEXT("blocked %d (of %d obstacles) setup %.0f parallel %.0f merge %.0f"), TotalBlocked, Obstacles.Num(),
 		(PlantStartTime - ExecStartTime) * 1000.0, (ParallelDoneTime - PlantStartTime) * 1000.0, (FPlatformTime::Seconds() - ParallelDoneTime) * 1000.0);
+	if (TotalOnIslands > 0)
+	{
+		StageSummary += FString::Printf(TEXT("; on islands %d"), TotalOnIslands);
+	}
 	if (bProfile)
 	{
 		FStageCycles Sum;

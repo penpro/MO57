@@ -1,7 +1,7 @@
 # Caves and geology
 
 > **Covers:** cave shape and placement, bedrock and ore bodies, what digging yields, dig time by rock, what grows/lies in caves.
-> **Current state (2026-10-19):** world generator **v12**. Caves are level limestone galleries entered from hillsides and, since v12,
+> **Current state (2026-11-04):** world generator **v13** (ravines, section 1). Caves are level limestone galleries entered from hillsides and, since v12,
 > from built entrances in karst (a doline hollow with a passage down into a chamber; F30 A); kept away from sea level and shores; bedrock provinces carry realistic ore bodies; both dig paths (player + survivors) yield from the
 > geology through one map; dig time scales with rock hardness. Torches make caves playable (`Docs/Light_Sources.md`).
 > **Entry points:** `FMOWorldGen::SampleCaveDistanceAtGround` (`MOFrameworkCore/Private/MOWorldGenCaves.cpp`), `SampleBedrock` /
@@ -9,7 +9,7 @@
 > `UMOPCGCaveSpawnerSettings` (MO Cave Spawner), `/MOFramework/Data/DT_CaveScatter`, graph `Content/Penumbra/Maps/VVG_MOCaves`.
 > **Dev verbs:** `MO.WorldGen.FindCaveEntrance [r]`, `.FindCave [r]`, `.CaveSample x y z`, `.Bedrock`, `.FindOre <kind> [r]`,
 > `.Checksum`, `.Sinkholes [r]`, `MO.PCG.OpeningAudit [r]` (what stands round the built entrances); cvar `mo.PCG.CaveDensityScale`. **Tests:**
-> `MOFramework.WorldGen.Caves`, `.GalleriesStayLevel`, `.CavesStayDry`, `.CaveEntrances`, `.OpeningKeepOut`, `.NoCavesOnHighGround`, `.CaveMaxLOD`,
+> `MOFramework.WorldGen.Sky.Ravines`, `MOFramework.WorldGen.Caves`, `.GalleriesStayLevel`, `.CavesStayDry`, `.CaveEntrances`, `.OpeningKeepOut`, `.NoCavesOnHighGround`, `.CaveMaxLOD`,
 > `.Geology`, `.CaveSurfaces`, `.DigYields`, `.GoldenChecksum`.
 > **Open items:** `Docs/BACKLOG.md` § World: terrain, caves, geology. **Decisions:** `Docs/DECISIONS.md` (Oct 16 caves v8, Oct 17 geology calls).
 > **History:** the dated build log is `Docs/Terrain_Generation_Exploration.md` ("Geology", "Update 2026-10-10" caves, to-do list).
@@ -27,6 +27,7 @@
 | Karst only | `bCavesOnlyInLimestone` (in the params hash): non-limestone nodes of the 16 m water-gate lattice close, so a contact tapers over a few metres | v11, Oct 17 |
 | Density | ~4 mouths per km2 of hill country (16-32 deg band), ~11 per km2 of karst hillside; none on flat lowland or in the ranges. A coastal spawn can be ~9 km from the nearest mouth (world 31415926) | measured Oct 17 |
 | Reach | Ordinary ground: a walk-in mouth in 0 % of 24 random 1 km tiles of cave country (3 worlds); most tiles have no ground at >= 16 deg. `MOFramework.WorldGen.CaveReach` reports it per world and per tile (slope, limestone, passages) and for candidate tunings. With the built entrances (v12) a walk-in mouth in ~25 % of those tiles (5 of the 8 limestone ones) | measured Oct 19 |
+| Ravines (ON since v13, F62 A: Wes Nov 4; "better caves with chasms more like minecraft", "50-100m deep, full of crags and ledges") | `RavineChance` 0.35 per `RavineCellCm` 500 m (the Caves knob scales it; 0 = off and out of the params hash): a meandering slot open to the sky, 160-400 m long, 50-100 m deep at mid-length, widest a little above mid-depth, ledges every 5-10 m, crags, kept out of water. Its distance is `min`'d into `SampleCaveDistanceAtGround`, so it is a cave-field feature: the same stamp, LOD gate and dig. It is the one deliberate hole in flat ground, and it ends in a sheer wall (the field jumps at its tips, in the rock beside them), so `.Caves` and `.GalleriesStayLevel` measure the caves with `RavineChance` 0. `DistanceToSinkholeRimZone` includes it (plants, world features, spawns keep out). +48 % cave-field generation in the chunks round one (lab). No rain or snow in them yet (N-174). Tests `WorldGen.Sky.Ravines`, verb `MO.WorldGen.FindRavine` | built Nov 4 |
 | Built entrances (ON since v12, F30 A: Wes Oct 19) | `CaveEntranceCellCm` 500 m / `CaveEntranceChance` 0.7 (in the params hash; 0 turns them off and out of it): a doline hollow (spherical cap 11-15 m across, 3.5-5 m deep, walkable rim) with a 3.4 m passage leading UPHILL out of its side at ~27 deg into a chamber; gated on karst + dry at both ends, ground <= 20 deg, 3 m of rock over the chamber; inside its cell's jitter margin. `DistanceToSinkholeRimZone` includes the hollow (plants, world features, spawns keep out). On (0.7): a mouth in 25 % of 1 km tiles. Test `MOFramework.WorldGen.CaveEntranceBuilt` | built Oct 19 |
 
 Why the 16-32 deg band: lower bands give more mouths (14-24: 8.5/km2, 12-20: 13, 10-16: 18.5) but a 3 m tube on a gentle slope cuts

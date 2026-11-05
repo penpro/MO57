@@ -2,7 +2,7 @@
 
 > **Covers:** the C++ world generator (`FMOWorldGen`: climate, relief, mountains, coasts, rivers, lakes, biomes, spawn search), how the
 > Voxel terrain and PCG read it, the terrain ground material, and the dated build log of every generator version.
-> **Current state (2026-10-17):** generator **v11** (`CurrentGeneratorVersion` in `MOWorldGen.h`); the game level `MOPCGScattering` and the
+> **Current state (2026-11-04):** generator **v13** (`CurrentGeneratorVersion` in `MOWorldGen.h`: floating islands, ravines and lobed lakes, § Sky features below); the game level `MOPCGScattering` and the
 > menu level run on `VHG_MOTerrain` + the `VVG_MOCaves` stamp; world 120 km edge (`WorldHalfSizeCm` 6e6) with an island edge; per-biome relief
 > with regional (30 km) mountain ranges, VerticalScale 2, highest ground ~1.4-1.9 km; deep ocean; rivers and sea-level basins; upland lakes
 > (Oceanology surfaces); soft biome boundaries (`SampleSurfaceBiomeWeights`, `SurfaceClimateBlend` 0.12); coastal new-game spawn (never an
@@ -27,6 +27,28 @@
 > slope at 3 km / 1 km / 300 m, packaged.
 > **Reading this file:** the sections below are a dated build log, newest first (Oct 11 night at the top, then back to the Oct 9 exploration
 > and its rationale). The header above is the current state; where a dated section disagrees with it, the header wins.
+
+## Sky features (generator v13, Nov 4 2026)
+
+Fork F62, option A (Wes, Nov 4: "Yes, option A"; asked for Nov 3: "floating islands and better caves with chasms more like minecraft"). Built and measured in `MO_WorldLab` (`Docs/Islands_Ravines.md`,
+`Docs/Voxel_Stamps.md` there), then brought here; `CurrentGeneratorVersion` 13, goldens re-pinned, and v12's world still comes out of this code to the bit with the three features off
+(`RunProbe(true, true)` against `PinnedProbeHeightV12` / `PinnedProbeCaveV12`, test `WorldGen.Sky.SkyOffIsV12`). Defaults, a small call: `IslandChance` 0.5 per 8 km cell, `RavineChance` 0.35 per 500 m cell,
+`LakeLobes` 4 (the values the lab tested); dev cvars `mo.WorldGen.IslandChance`, `.RavineChance`, `.LakeLobes` apply at the next world start. No New Game knob for islands yet; the Caves knob scales the ravines.
+
+- **Floating islands are not terrain height.** `FMOWorldGen::GetFloatingIslandInCell` gives one island per 8 km cell (radius 115 m-2.9 km, 300-950 m over the land, a cluster of torn clumps), and the height
+  terrain and the cave field know nothing of it: no rock disc on the ground under it, no pillar past the cave stamp's LOD 4, no needles (the earlier raise-and-carve way had all three: rejected, DECISIONS F62).
+  Its rock is an additive voxel SHAPE stamp (`FMOFloatingIslandShape`, a C++ `FVoxelShape` sampling `IslandRockDistanceCm`) with a second one for its grass top (a 2.5 m slab of the rock's top, 20 cm proud, `VST_MI_MossyGrass`
+  over the rock's `VST_Cliff`), on the cave stamp's volume layer, so the dig tool's volume sculpt works them.
+- **Placed by the world features, per machine.** `UMOWorldFeatureSubsystem::UpdateIslandStamps` (`MOFloatingIslandStamps.cpp`) stamps the nearest unstamped island within reach of any player, one per 0.5 s update, and
+  removes it past 1.25 x the reach: 15 km + 12 x its radius, at most 40 km (a big island would pop into a clear sky at 15 km). Nothing is replicated: every machine comes to the same stamps from the seed, as it does the terrain.
+- **Far chunks can't draw a small island's rock.** A chunk's cells double per LOD: 32 m past 4 km, 64 m past 8 km, 128 m to 15 km, and a small island's rock is 40-57 m thick, so its far trees stood in empty sky (shots at 4 and 8 km, Nov 4). The rock
+  itself is drawn while three cells fit in the main clump's thickness; past that each LOD up to 9 has its own stand-in (`IslandFarDistanceCm`: smooth, the outline half a cell wider, the underside a cell deeper, the top where it was, under the trees).
+  The far views of three islands over steep ground show no chunk holes, stamps at every LOD or only at LOD 0; two bright patches on one hillside at 13.5 km are in both, so not the stamps (not chased: BACKLOG N-271). Frame time at 8 km: 7.7-9.1 ms over three runs with stamps at every LOD, 7.7-7.9 ms at LOD 0 only; run-to-run spread is 1.1-1.9 ms, so no cost that can be told from it.
+- **Plants:** the biome spawner's second pass over its points (`Docs/PCG.md` section 4). **Digging:** `IsOnVolumeRock` + the sculpt last in its layer (`MOTerraformingComponent`, `Docs/Voxel_Plugin_Reference.md` section 6); what comes out asks the island (`SampleDig`): its grass top is soil, the rest the rock of the land it was torn from at that rock's speed, no ore (Granite01 at seed 777's first island; it was earth at earth's speed until the host and joiner pass read the log).
+- **Ravines:** one cave-field feature (`Docs/Caves_And_Geology.md` section 1). **Lobed lakes:** `Docs/Water.md` section 1.
+- **Known, not in this change:** ravines keep the caves' weather shelter (no rain or snow in them: N-174); pick-up clutter (`MO Mesh Spawner`) doesn't reach the islands; the top's ground is always mossy grass, very dark in shade; a big island's top takes 1-2 minutes to build after a teleport.
+- **Measured, seed 777:** 427 / 427 tests; host and joiner: one checksum, the same 14 islands stamped, rock heights equal at 5 spots, 16,701 plants on both, digs from either side reach both (`check_sky_coop`), `nettest game` and `digsync` pass. Cooked Development build: `MO.WorldGen.Checksum` match=1, stamps and plants present, the surfaces drawn (`/Game/VoxelExamples` is cooked). Not on Steam yet.
+- **Verify:** `MOFramework.WorldGen.Sky.*`; `python Tools/check_sky_features.py` (the views, the benches, `--holes` for the far views); `python Tools/check_sky_coop.py` (host and joiner). Verbs: `MO.WorldGen.FindIsland`, `.FindRavine`, `.FindLake`, `.IslandPlants`.
 
 ## World space and the world's origin (2026-10-26)
 

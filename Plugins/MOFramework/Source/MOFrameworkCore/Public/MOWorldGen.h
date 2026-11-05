@@ -632,6 +632,45 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
 	float CaveEntranceChance = 0.7f;
 
+	// --- Ravines and floating islands (v13, fork F62, option A; Wes, Nov 3: "floating islands and better caves with chasms more like minecraft").
+
+	/** Ravines: a long, narrow, deep slot open to the sky, its walls bulging at mid-depth and its floor level (a Minecraft ravine). One candidate per
+	 *  cell of this edge (cm); a ravine may reach into the neighbouring cells (the field asks the 3 x 3 around a point). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves|Ravines", meta=(EditCondition="bEnableCaves", ClampMin="20000"))
+	float RavineCellCm = 50000.0f;
+	/** Chance (0..1) that a cell holds a ravine, before the ground has its say (dry, in the cave band, out of the water). 0 = off. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves|Ravines", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
+	float RavineChance = 0.35f;
+	/** The longest ravine (cm); each is 0.4..1 of it (round 2: 160-400 m). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves|Ravines", meta=(EditCondition="bEnableCaves", ClampMin="2000", ClampMax="60000"))
+	float RavineLengthMaxCm = 40000.0f;
+	/** Half the widest ravine at its widest (mid-length, a little above mid-depth), cm; each is 0.5..1 of it (10-20 m across at the widest). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves|Ravines", meta=(EditCondition="bEnableCaves", ClampMin="100", ClampMax="3000"))
+	float RavineHalfWidthMaxCm = 1000.0f;
+	/** The deepest ravine below the ground at its middle (cm); each is 0.5..1 of it (Wes, round 2: "50-100m deep"), never below the sea's clearance. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves|Ravines", meta=(EditCondition="bEnableCaves", ClampMin="500", ClampMax="15000"))
+	float RavineDepthMaxCm = 10000.0f;
+
+	/** Floating islands: torn clumps of rock in the sky over the land, each drawn by its own additive voxel shape stamps (UMOWorldFeatureSubsystem, FMOFloatingIslandShape) and planted by the
+	 *  biome spawner (SampleIslandSurface). The height terrain and the cave field know nothing of them: the ground under an island is the ground. One candidate per cell of this edge (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="20000"))
+	float IslandCellCm = 800000.0f;
+	/** Chance (0..1) that a cell holds an island. 0 = off. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="0", ClampMax="1"))
+	float IslandChance = 0.5f;
+	/** The islands' radii (cm), from the smallest to the widest; most are small (Wes, round 2: "varying from at least two times the size i see to 25
+	 *  times the size": 230 m to 2.9 km across). Since round 3 an island is a cluster of craggy clumps reaching 1.3 x this radius, and the cluster must
+	 *  fit its cell's jitter margin (a quarter of IslandCellCm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="1000", ClampMax="200000"))
+	float IslandRadiusMinCm = 11500.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="1000", ClampMax="200000"))
+	float IslandRadiusMaxCm = 144000.0f;
+	/** An island's top over the ground at its centre (cm), from the lowest to the highest; the bigger islands fly higher (round 2: "much higher"). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="2000", ClampMax="150000"))
+	float IslandHeightMinCm = 30000.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Islands", meta=(ClampMin="2000", ClampMax="150000"))
+	float IslandHeightMaxCm = 95000.0f;
+
 	// --- Water: rivers and lakes are carved into low ground and sit AT SEA LEVEL; the water plane of the world (WaterBodyCustom at SeaLevelCm) fills them ----------
 	// Everything below SeaLevelCm is water, so a channel or basin is just terrain dipping under sea level: no per-lake water actor, no flow simulation.
 
@@ -708,6 +747,12 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Upland Lakes", meta=(EditCondition="bEnableWater"))
 	bool bEnableUplandLakes = true;
+
+	/** How many overlapping lobes make a lake's shore (Wes, Nov 3: "i still want lakes to be multiple stamps, not just one circle stamp", BR23-13): 1 = the ellipse;
+	 *  2..4 = a main lobe and smaller ones round it, all inside the lake's ellipse, with a ragged shore (FMOWorldGenDomain::LakeShapeQ2). The upland lakes and the
+	 *  sea-level basins both. Joins the params hash only above 1. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Upland Lakes", meta=(EditCondition="bEnableWater", ClampMin="1", ClampMax="4"))
+	int32 LakeLobes = 4;
 
 	/** One lake site per square cell of this edge length (cm). 180000 cm (1.8 km) measured one lake per ~5 km^2 of the whole world (a third of it is sea, and the fit test thins out the hills). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Upland Lakes", meta=(EditCondition="bEnableUplandLakes", ClampMin="60000"))
@@ -792,7 +837,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 12;   // v12: built cave entrances in karst (a doline hollow with a passage leading down into a chamber; F30 A, Wes Oct 19); v11: caves only in limestone (karst); v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 13;   // v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
 
 	FMOWorldGenTuning Tuning;
 
@@ -974,6 +1019,47 @@ struct FMOCaveEntranceHollow
 	float GroundCm = 0.0f;
 };
 
+/** A floating island: a cluster of torn clumps of rock, its top about TopCm, RadiusCm its size (every clump within 1.3 x), its deepest ThicknessCm under the top; GroundCm is the ground
+ *  at its centre, the land it was torn from. Drawn by voxel shape stamps, so the height terrain under it is untouched. Center is world XY from FMOWorldGen. */
+struct FMOFloatingIsland
+{
+	FVector2D Center = FVector2D::ZeroVector;
+	float RadiusCm = 0.0f;
+	float TopCm = 0.0f;
+	float ThicknessCm = 0.0f;
+	float GroundCm = 0.0f;
+	// Its clumps (round 3): the main mass first. Centre in world XY from FMOWorldGen; Lift is the clump's top over TopCm (+ or -).
+	static constexpr int32 MaxClumps = 5;
+	int32 NumClumps = 0;
+	FVector2D ClumpCenter[MaxClumps];
+	float ClumpRadiusCm[MaxClumps] = {};
+	float ClumpLiftCm[MaxClumps] = {};
+	float ClumpThicknessCm[MaxClumps] = {};
+	// An island drawn as a stamp: its top slab (the grass) stands this far proud of the rock's top, so the ground a plant stands on is TopCm + this.
+	static constexpr float TopSlabDepthCm = 250.0f;   // its grass top: this much of the rock's top is soil
+	static constexpr float TopSlabProudCm = 20.0f;
+};
+
+/** Where a plant can stand on a floating island's top (FMOWorldGen::SampleIslandSurface). World Z. */
+struct FMOIslandSurfacePoint
+{
+	float TopCm = 0.0f;                   // the rock's top over the column
+	FVector Normal = FVector::UpVector;   // of that top, across the inset asked for
+	float OriginGroundCm = 0.0f;          // the real ground under the island's centre: the land it was torn from
+};
+
+/** A ravine: a meandering slot LengthCm long along Dir, HalfWidthCm at its widest, DepthCm below GroundCm (the ground at its middle) at its deepest, tapering to nothing at
+ *  both ends. Center is world XY from FMOWorldGen. */
+struct FMORavine
+{
+	FVector2D Center = FVector2D::ZeroVector;
+	FVector2D Dir = FVector2D(1.0, 0.0);
+	float LengthCm = 0.0f;
+	float HalfWidthCm = 0.0f;
+	float DepthCm = 0.0f;
+	float GroundCm = 0.0f;
+};
+
 /** Where FMOWorldGen::FindCoastalSpawn would put a new game: standing on the shore, facing open water. */
 struct FMOCoastalSpawn
 {
@@ -1013,7 +1099,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	static int32 HashSeed(int32 Seed, uint32 Salt);
 
 	/** Run the fixed probe (see FMOWorldGenProbe). Pure and deterministic: the same binary must print the same numbers on every CPU. */
-	static FMOWorldGenProbe RunProbe(bool bWater = true);
+	static FMOWorldGenProbe RunProbe(bool bWater = true, bool bWithoutV13Features = false);
 
 	/**
 	 * This machine against the pinned values below, worked out once per process (the first caller pays ~3 s on one core: run it off the game
@@ -1030,10 +1116,13 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	 * The values RunProbe() must produce for this generator version. THE single place they are pinned: the automation tests and MO.WorldGen.Checksum compare against
 	 * these. An intentional change to the generator math bumps FMOWorldGenParams::CurrentGeneratorVersion and updates them in the same commit.
 	 */
-	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
+	static constexpr uint32 PinnedProbeHeight = 0x261EE634u;   // v13 (lobed lakes: F62 A); v8 0x3343B4EB (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0xAB796FA0u;     // v12 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	/** v12's world, which must still come out of this code to the bit with v13's features off (RunProbe(true, true), WorldGen.Sky.SkyOffIsV12). */
+	static constexpr uint32 PinnedProbeHeightV12 = 0x3343B4EBu;
+	static constexpr uint32 PinnedProbeCaveV12 = 0xAB796FA0u;
+	static constexpr uint32 PinnedProbeCave = 0x7469A6CBu;     // v13 (ravines, on the lobed lakes' ground: F62 A); v12 0xAB796FA0 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
@@ -1124,6 +1213,31 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	 *  fitted to its centre's ground, so uphill it cuts wider than its radius and a rock planted on the old surface hangs in the air (BR23-1, Nov 3). */
 	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
 
+	/** The floating island / ravine of a grid cell (cells of IslandCellCm / RavineCellCm), or false if it has none, the feature is off, or it did not
+	 *  settle (islands: over land, below the high ground; ravines: dry ground in the cave band). Field XY here, world XY from FMOWorldGen. */
+	static bool GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out);
+	static bool GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out);
+
+	/** The top of the floating island over (X, Y) (cm), or -1e9 where there is none. */
+	static float IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** A floating island's rock at a point (cm, negative inside a clump; 1e6 where no island reaches): the shape its stamps draw (FMOFloatingIslandShape). */
+	static float IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
+
+	/** The stand-in a far chunk draws for that rock (same sign, same 1e6): smooth, no 3D crags, the outline GrowCm wider and the underside ThickenCm deeper, so a chunk whose cells are as big as the
+	 *  rock is thick still finds it; the top stays where it is, under the island's trees. */
+	static float IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm);
+
+	/** Can a plant stand at (X, Y) on a floating island? True where the column has a top with solid rock under it (the broken rim has columns with a "top" and
+	 *  no rock) and the top goes on for InsetCm each way (nothing rooted over the edge). The biome spawner's way onto an island, which the height terrain knows nothing of. */
+	static bool SampleIslandSurface(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float InsetCm, FMOIslandSurfacePoint& Out);
+
+	/** Does any island's reach touch this XY box? One cell hash per island cell: what lets a chunk of scatter with no island over it skip the per-point work. */
+	static bool IslandReachesBox(const FMOWorldGenParams& Params, double MinX, double MinY, double MaxX, double MaxY, int32 Seed);
+
+	/** The cave field before the ravines (every feature of v12). SampleCaveDistanceAtGround adds them. */
+	static float SampleCaveDistanceUnderGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm);
+
 	/** DistanceToSinkholeRimZone where there is no sinkhole: farther than any footprint. It used to be CaveFarCm (30 m) -- a world feature with a footprint
 	 *  over 30 m was rejected in every cell WITHOUT a sinkhole (found Oct 16 2026 when v9 turned sinkholes off and every cliff assembly vanished). */
 	static constexpr float NoSinkholeDistanceCm = 1.0e9f;
@@ -1159,6 +1273,12 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 		float RadiusCm = 0.0f;                      // long-axis radius at the shore
 		float Aspect = 1.0f;                        // short axis / long axis
 		float CosAngle = 1.0f, SinAngle = 0.0f;     // long-axis direction
+		// The shore's lobes (LakeLobes > 1), in the ellipse's unit frame (u = along the long axis / RadiusCm, v = across / (RadiusCm x Aspect)): every lobe
+		// lies inside the unit circle, so the ellipse's box -- the water plane, the bury and bank checks -- holds the whole lake. One lobe = the ellipse.
+		uint8 NumLobes = 1;
+		float LobeU[4] = { 0.0f, 0.0f, 0.0f, 0.0f }, LobeV[4] = { 0.0f, 0.0f, 0.0f, 0.0f }, LobeR[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		uint32 ShapeSalt = 0;
+		float BankScale = 1.0f;                     // how much of BasinBankSlope its bank rises at: the lobes squeeze the bank (MakeLakeLobes); the ellipse has all of it
 		float DepthCm = 0.0f;                       // depth below the water surface at the centre
 		float SurfaceCm = 0.0f;                     // world Z of the water surface (sea level for tiers 0 and 1)
 		int64 CellX = 0, CellY = 0;                 // the grid cell that owns this lake (its identity)
@@ -1188,6 +1308,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	 * out of the bowl. Cheap and cache-backed; false when upland lakes are off.
 	 */
 	static bool IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii = 1.0f);
+
+	/** A lake's shape at a point of its unit frame (Lx along the long axis / RadiusCm, Ly across / (RadiusCm x Aspect)): q^2, where q = 1 on the shore, < 1 in
+	 *  the water. One lobe: Lx^2 + Ly^2 (the ellipse). More: the nearest lobe's own q, the shore ragged by +-12 %. Every lake test asks this. */
+	static float LakeShapeQ2(const FLake& L, float Lx, float Ly);
 
 	/** How far (cm) (X, Y) is from the shore of the upland lake of its cell, at most: the distance to its centre minus its LONG radius (the shore is never farther out
 	 *  than that, so this never overstates the distance). 1e9 where the cell has none or upland lakes are off. A lake's centre keeps a quarter cell from the cell's
@@ -1296,10 +1420,13 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	using FMOWorldGenDomain::SelfCheckIfDone;
 	using FMOWorldGenDomain::PinnedProbeHeight;
 	using FMOWorldGenDomain::PinnedProbeHeightNoWater;
+	using FMOWorldGenDomain::PinnedProbeHeightV12;
+	using FMOWorldGenDomain::PinnedProbeCaveV12;
 	using FMOWorldGenDomain::PinnedProbeCave;
 	using FMOWorldGenDomain::CaveFarCm;
 	using FMOWorldGenDomain::CavernMaxStepCm;
 	using FMOWorldGenDomain::CaveMaxLOD;
+	using FMOWorldGenDomain::LakeShapeQ2;   // a lake's unit frame: no position
 	using FMOWorldGenDomain::NoSinkholeDistanceCm;
 	using FMOWorldGenDomain::IsWaterTierResolved;
 	using FMOWorldGenDomain::BiomeReliefAt;
@@ -1325,6 +1452,13 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static bool GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out);
 	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
+	static bool GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out);
+	static bool GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out);
+	static float IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static float IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
+	static float IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm);
+	static bool SampleIslandSurface(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float InsetCm, FMOIslandSurfacePoint& Out);
+	static bool IslandReachesBox(const FMOWorldGenParams& Params, double MinX, double MinY, double MaxX, double MaxY, int32 Seed);
 
 	// Rock.
 	static EMOBedrock SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);

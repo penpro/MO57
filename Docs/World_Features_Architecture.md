@@ -31,6 +31,8 @@ Only the `Many` policy with composition actors exists. Everything else below is 
   the composition's `AuthoredDownhillYawDeg` to face the terrain's downhill (+- `AlignYawJitterDeg`). Tests `WorldFeatures.Placer`, `.SlopeAlign`.
 - **Registry:** `UMOWorldFeatureSubsystem` spawns the actors locally near every player (never replicated), despawns past 1.25x the spawn
   distance, writes the site seed into the actor's PCG components; the biome scatter skips every footprint.
+- **Floating islands (generator v13, F62 A):** the subsystem also keeps two or more voxel shape stamps per island round the players (`UpdateIslandStamps`, `MOFloatingIslandStamps.cpp`; never replicated, despawn past 1.25 x the reach). Not a catalog row: the generator decides where islands are. `Docs/Terrain_Generation_Exploration.md` § Sky features.
+  The placer's keep-out (`DistanceToSinkholeRimZone`) includes the ravines.
 - **Generic composition actor:** `AMOWorldFeatureActor` -- a PCG component + `Variants` (PCG graphs); the site seed picks one
   (`ChooseVariant`, test `WorldFeatures.ChooseVariant`). A PCG-only POI is a graph + a row: no Blueprint, no code.
 - **Rows (Electric Dreams, ElectricForest):** ED_CliffAssembly / ED_EmbankmentAssembly / ED_SmallAssembly (ED's own BP_PCG_*Assembly, live PCG),

@@ -86,9 +86,9 @@ void FMOGeologyYield::SampleDugRegion(const FMOWorldGenParams& Params, int32 See
 	}
 	for (const FVector& P : Points)
 	{
-		// Air holds nothing: above the unworked ground, or inside a cave (the generator's ground knows neither).
+		// Air holds nothing: above the unworked ground but for a floating island's rock, or inside a cave (the generator's ground knows neither).
 		const float Ground = FMOWorldGen::SampleHeightCm(Params, P.X, P.Y, Seed, Voxel);
-		if (P.Z > Ground || FMOWorldGen::SampleCaveDistanceAtGround(Params, P.X, P.Y, P.Z, Ground, Seed, 50.0f) < 0.0f)
+		if (P.Z > Ground ? FMOWorldGen::IslandRockDistanceCm(Params, P.X, P.Y, P.Z, Seed) >= 0.0f : FMOWorldGen::SampleCaveDistanceAtGround(Params, P.X, P.Y, P.Z, Ground, Seed, 50.0f) < 0.0f)
 		{
 			continue;
 		}

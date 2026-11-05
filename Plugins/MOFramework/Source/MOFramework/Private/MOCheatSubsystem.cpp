@@ -3948,8 +3948,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			for (int32 I = 0; I < FMath::Min(Lakes.Num(), 8); ++I)
 			{
 				const FMOWorldGen::FLake& L = Lakes[I];
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Lake #%d dist=%.0f x=%.0f y=%.0f surfaceZ=%.0f radius=%.0f aspect=%.2f depth=%.0f"), I,
-					FVector2D::Distance(L.Center, FVector2D(C.X, C.Y)), L.Center.X, L.Center.Y, L.SurfaceCm, L.RadiusCm, L.Aspect, L.DepthCm);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Lake #%d dist=%.0f x=%.0f y=%.0f surfaceZ=%.0f radius=%.0f aspect=%.2f depth=%.0f lobes=%d cos=%.3f sin=%.3f"), I,
+					FVector2D::Distance(L.Center, FVector2D(C.X, C.Y)), L.Center.X, L.Center.Y, L.SurfaceCm, L.RadiusCm, L.Aspect, L.DepthCm, (int32)L.NumLobes, L.CosAngle, L.SinAngle);
 			}
 		}),
 		ECVF_Default));
@@ -4092,6 +4092,94 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Ore #%d dist=%.0f x=%.0f y=%.0f z=%.0f nx=%.2f ny=%.2f nz=%.2f %s in %s (grade %.2f)%s"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Pos.Z, H.Normal.X, H.Normal.Y, H.Normal.Z,
 					*UEnum::GetDisplayValueAsText(H.Kind).ToString(), *UEnum::GetDisplayValueAsText(H.Rock).ToString(), H.Grade, H.bOutcrop ? TEXT(" OUTCROP") : TEXT(""));
 				if (++Listed >= 8) { break; }
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindIsland / FindRavine [radius] ----------
+	// The floating islands / ravines near the local pawn, nearest first (their cells: FMOWorldGen::GetFloatingIslandInCell / GetRavineInCell).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindIsland"),
+		TEXT("Dev: list the floating islands near the local pawn. Usage: MO.WorldGen.FindIsland [radius_cm=300000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindIsland FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 10000.0, 2000000.0) : 300000.0;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			const double Cell = FMath::Max(1.0f, P->Tuning.IslandCellCm);
+			int64 Cx0 = 0, Cy0 = 0;
+			FMOWorldGen::WorldToCell(*P, C.X, C.Y, Cell, Cx0, Cy0);
+			const int64 Span = (int64)FMath::CeilToDouble(Radius / Cell) + 1;
+			TArray<FMOFloatingIsland> Found;
+			for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
+			{
+				for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
+				{
+					FMOFloatingIsland I;
+					if (FMOWorldGen::GetFloatingIslandInCell(*P, Cx, Cy, Seeds->GetActiveTerrainSeed(), I) && FVector2D::Distance(I.Center, FVector2D(C)) <= Radius)
+					{
+						Found.Add(I);
+					}
+				}
+			}
+			Found.Sort([&C](const FMOFloatingIsland& A, const FMOFloatingIsland& B) { return FVector2D::DistSquared(A.Center, FVector2D(C)) < FVector2D::DistSquared(B.Center, FVector2D(C)); });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindIsland radius=%.0f found=%d (IslandChance %.2f)"), Radius, Found.Num(), P->Tuning.IslandChance);
+			for (int32 K = 0; K < FMath::Min(8, Found.Num()); ++K)
+			{
+				const FMOFloatingIsland& I = Found[K];
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Island #%d dist=%.0f x=%.0f y=%.0f top=%.0f ground=%.0f radius=%.0f thickness=%.0f"), K,
+					FVector2D::Distance(I.Center, FVector2D(C)), I.Center.X, I.Center.Y, I.TopCm, I.GroundCm, I.RadiusCm, I.ThicknessCm);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindRavine"),
+		TEXT("Dev: list the ravines near the local pawn. Usage: MO.WorldGen.FindRavine [radius_cm=150000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindRavine FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 5000.0, 1000000.0) : 150000.0;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			const double Cell = FMath::Max(1.0f, P->Tuning.RavineCellCm);
+			int64 Cx0 = 0, Cy0 = 0;
+			FMOWorldGen::WorldToCell(*P, C.X, C.Y, Cell, Cx0, Cy0);
+			const int64 Span = (int64)FMath::CeilToDouble(Radius / Cell) + 1;
+			TArray<FMORavine> Found;
+			for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
+			{
+				for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
+				{
+					FMORavine R;
+					if (FMOWorldGen::GetRavineInCell(*P, Cx, Cy, Seeds->GetActiveTerrainSeed(), R) && FVector2D::Distance(R.Center, FVector2D(C)) <= Radius)
+					{
+						Found.Add(R);
+					}
+				}
+			}
+			Found.Sort([&C](const FMORavine& A, const FMORavine& B) { return FVector2D::DistSquared(A.Center, FVector2D(C)) < FVector2D::DistSquared(B.Center, FVector2D(C)); });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindRavine radius=%.0f found=%d (RavineChance %.2f)"), Radius, Found.Num(), P->Tuning.RavineChance);
+			for (int32 K = 0; K < FMath::Min(8, Found.Num()); ++K)
+			{
+				const FMORavine& R = Found[K];
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Ravine #%d dist=%.0f x=%.0f y=%.0f ground=%.0f length=%.0f halfwidth=%.0f depth=%.0f dir=%.2f,%.2f"), K,
+					FVector2D::Distance(R.Center, FVector2D(C)), R.Center.X, R.Center.Y, R.GroundCm, R.LengthCm, R.HalfWidthCm, R.DepthCm, R.Dir.X, R.Dir.Y);
 			}
 		}),
 		ECVF_Default));

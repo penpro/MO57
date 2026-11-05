@@ -102,8 +102,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_Caves,
 bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 {
 	// The cave FIELD's own properties (purity, cover, air share, gradient, LOD, sinkholes) are measured with the karst rule off: since v11 caves exist only in
-	// limestone (41% of the land), which MOFramework.WorldGen.CavesStayDry checks; measured over every rock these numbers would only be diluted.
-	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; });
+	// limestone (41% of the land), which MOFramework.WorldGen.CavesStayDry checks; measured over every rock these numbers would only be diluted. And with the ravines off (v13): a ravine
+	// is a hole in flat ground by design and ends in a sheer wall (the field jumps at its tips, in the rock beside them), which are this test's two failures; WorldGen.Sky.Ravines tests them.
+	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; Tuning.RavineChance = 0.0f; });
 	const FMOWorldGenTuning& T = P->Tuning;
 	FRandomStream R(5);
 	auto RandomColumn = [&R](double& X, double& Y) { X = R.FRandRange(-1.5e6f, 1.5e6f); Y = R.FRandRange(-1.5e6f, 1.5e6f); };
@@ -327,8 +328,8 @@ bool FMOWorldGen_GalleriesStayLevel::RunTest(const FString& Parameters)
 	// Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them". From points well inside galleries (22-33 m deep:
 	// past where they fade in, above the caverns' 35 m), follow the passage 3 m sideways -- the horizontal direction where the field is deepest, at
 	// the best height within +-1.5 m. The height change along it is the passage's slope: 95% must stay under 15 deg.
-	// Passage geometry, measured with the karst rule off (v11 keeps caves to limestone; the random search for gallery air would only get slower).
-	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; });
+	// Passage geometry, measured with the karst rule off (v11 keeps caves to limestone; the random search for gallery air would only get slower) and the ravines off (v13: air they are, passages they are not).
+	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; Tuning.RavineChance = 0.0f; });
 	FRandomStream R(97);
 	int32 Measured = 0, Level = 0;
 	float Worst = 0.0f;
