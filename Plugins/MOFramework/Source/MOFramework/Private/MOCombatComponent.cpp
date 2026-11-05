@@ -17,6 +17,8 @@ namespace
 #include "MOSkillsComponent.h"
 #include "MOCombatMedicalTypes.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOPlayerController.h"
+#include "MONotificationWidget.h"
 #include "MOItemDefinitionRow.h"
 #include "Engine/DataTable.h"
 #include "Net/UnrealNetwork.h"
@@ -1330,6 +1332,8 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		return;
 	}
 
+	const FName HeldItem = CachedEquipmentComp ? CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemDefinitionId : NAME_None;   // gone from the slot once it breaks
+
 	// The held item keeps its own wear: wear it there (a worn-out item leaves the hand, and SyncMainHandFromEquipment goes back to the bare hand).
 	if (CachedEquipmentComp && CachedEquipmentComp->GetEquippedItem(EMOEquipmentSlot::RightHand).ItemGuid == MainHandWeapon.ItemGuid)
 	{
@@ -1338,7 +1342,7 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		{
 			if (bDestroyed)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
+				HandleWeaponBroke(HeldItem);
 			}
 			else
 			{
@@ -1348,12 +1352,24 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 		}
 	}
 
+	const bool bWasBroken = MainHandWeapon.IsBroken();
 	MainHandWeapon.CurrentDurability = FMath::Max(0, MainHandWeapon.CurrentDurability - Amount);
 
-	if (MainHandWeapon.IsBroken())
+	if (!bWasBroken && MainHandWeapon.IsBroken())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
-		// TODO: Broadcast weapon broke event
+		HandleWeaponBroke(HeldItem);
+	}
+}
+
+void UMOCombatComponent::HandleWeaponBroke(FName ItemDefinitionId)
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] %s: its %s broke"), *GetNameSafe(GetOwner()), *ItemDefinitionId.ToString());
+	OnWeaponBroke.Broadcast(ItemDefinitionId);
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
+	{
+		const FText Name = ItemDefinitionId.IsNone() ? NSLOCTEXT("MOCombat", "TheWeapon", "weapon") : UMOItemDatabaseSettings::GetItemDisplayName(ItemDefinitionId);
+		PC->ClientShowNotification(FText::Format(NSLOCTEXT("MOCombat", "WeaponBroke", "Your {0} broke."), Name), 4.0f, EMONotificationType::Warning);
 	}
 }
 

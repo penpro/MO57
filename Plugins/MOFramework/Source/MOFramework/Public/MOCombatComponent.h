@@ -204,6 +204,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnAttackBlocked, AActor*, Attack
 /** Fired when successfully parrying. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnParrySuccess, AActor*, Attacker);
 
+/** Fired on the server when the held weapon wears out (the item, None if the hand's weapon had no item). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnWeaponBroke, FName, ItemDefinitionId);
+
 /** Fired when entering/exiting combat. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnCombatEngaged, bool, bInCombat);
 
@@ -290,6 +293,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
 	FMOOnAttackHit OnAttackHit;
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
+	FMOOnWeaponBroke OnWeaponBroke;
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
 	FMOOnDamageReceived OnDamageReceived;
@@ -504,6 +510,9 @@ public:
 
 	/** The main-hand weapon state (equipped from the right hand by SyncMainHandFromEquipment). */
 	const FMOWeaponState& GetMainHandWeapon() const { return MainHandWeapon; }
+
+	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. Wearing out says so (HandleWeaponBroke). */
+	void ApplyWeaponDurabilityLoss(int32 Amount);
 
 	// ============================================================================
 	// QUERY API
@@ -747,8 +756,8 @@ private:
 	/** Consume stamina for an action. */
 	bool ConsumeStamina(float Amount);
 
-	/** Apply weapon durability loss: to the held item's own durability (the equipment slot is its one record) when it has one. */
-	void ApplyWeaponDurabilityLoss(int32 Amount);
+	/** The held weapon just wore out: tells listeners and whoever plays this pawn. A spear gone from the hand mid-fight must not be a surprise. */
+	void HandleWeaponBroke(FName ItemDefinitionId);
 
 	/** Server: the right hand changed. */
 	UFUNCTION()

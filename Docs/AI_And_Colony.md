@@ -107,7 +107,8 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   every right-hand change and at BeginPlay): an item with `bIsWeapon` + `WeaponProfileId` (DT_Weapons) is equipped and drawn; anything
   else fights bare. Nothing called `EquipMainHandWeapon` before, so every spear fought with the fist; the five spear rows in DT_Items
   were also not weapons (`bIsWeapon` false, slot None) until Oct 18. A weapon wears only when a blow lands, on the held item's own
-  durability (a worn-out item leaves the hand; an item that keeps none, like the spears, wears the profile's MaxDurability counter).
+  durability (a worn-out item leaves the hand; an item that keeps none, like the spears, wears the profile's MaxDurability counter). Wearing out says so (Nov 4, N-287): "Your Flint Spear broke." on
+  the player's screen and `OnWeaponBroke` (it was a log line; the next blow was a punch).
   Measured Oct 18 (solo instance, deer frozen in front): fist 3.9 -> 3.1 HP off the torso; wooden spear light thrust 8.3 -> 10.0 HP
   (Puncture x1.2) with a bleeding puncture wound; before the reset the fist did 386.8 -> 309.4 and killed it.
 

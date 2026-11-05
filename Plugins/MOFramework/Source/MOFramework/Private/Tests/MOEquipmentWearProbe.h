@@ -12,4 +12,6 @@ public:
 	int32 WearEvents = 0;
 	UFUNCTION() void EquipmentChanged(EMOEquipmentSlot Slot, const FMOEquippedItem& Item) { ++EquipmentEvents; }
 	UFUNCTION() void DurabilityChanged(EMOEquipmentSlot Slot, int32 Durability) { ++WearEvents; }
+	TArray<FName> Broke;
+	UFUNCTION() void WeaponBroke(FName ItemDefinitionId) { Broke.Add(ItemDefinitionId); }
 };
