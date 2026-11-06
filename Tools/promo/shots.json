@@ -21,28 +21,28 @@
    {
     "t": 0.0,
     "pos": [
-     -440,
-     -830,
-     650
+     594,
+     238,
+     690
     ],
     "look": [
      28,
      -328,
-     610
+     606
     ],
     "fov": 40
    },
    {
     "t": 1.0,
     "pos": [
-     -300,
-     -700,
-     640
+     424,
+     68,
+     672
     ],
     "look": [
      28,
      -328,
-     600
+     604
     ],
     "fov": 40
    }
@@ -71,13 +71,13 @@
    {
     "t": 0.0,
     "pos": [
-     -110,
-     -560,
+     -124,
+     -587,
      758
     ],
     "look": [
-     -268,
-     -405,
+     -265,
+     -408,
      752
     ],
     "fov": 34
@@ -85,8 +85,8 @@
    {
     "t": 1.0,
     "pos": [
-     -245,
-     -635,
+     -192,
+     -624,
      752
     ],
     "look": [
@@ -991,252 +991,318 @@
   ]
  },
  "G14_wall": {
-  "film_frames": 160,
+  "film_frames": 120,
   "clock": [
    7,
    45
   ],
   "director": false,
-  "settle": 12,
+  "settle": 10,
   "preroll": 24,
   "ease": 0.4,
   "pawn": {
-   "hide": true
+   "hide": true,
+   "fly": true,
+   "at": [
+    -800.0,
+    -1658.6,
+    585.6
+   ]
   },
   "keys": [
    {
     "t": 0.0,
     "pos": [
-     -1465,
-     -700,
-     395
+     -640,
+     -330,
+     790
     ],
     "look": [
-     -1764,
-     -976,
-     335
+     -860,
+     -1830,
+     430
     ],
-    "fov": 44
+    "fov": 42
    },
    {
     "t": 1.0,
     "pos": [
-     -1505,
-     -740,
-     385
+     -648,
+     -440,
+     762
     ],
     "look": [
-     -1764,
-     -976,
-     335
+     -860,
+     -1830,
+     430
     ],
-    "fov": 44
+    "fov": 42
    }
   ],
   "actions": [
    [
     0,
-    "MO.Test.PieceProgress 0.000 BP_Piece_WattleWall_C_1"
+    "MO.Test.PieceProgress 0.000 BP_Piece_WattleWall_C_34"
    ],
    [
-    12,
-    "MO.Test.PieceProgress 0.042 BP_Piece_WattleWall_C_1"
+    10,
+    "MO.Test.PieceProgress 0.050 BP_Piece_WattleWall_C_34"
    ],
    [
-    25,
-    "MO.Test.PieceProgress 0.083 BP_Piece_WattleWall_C_1"
+    20,
+    "MO.Test.PieceProgress 0.100 BP_Piece_WattleWall_C_34"
    ],
    [
-    37,
-    "MO.Test.PieceProgress 0.125 BP_Piece_WattleWall_C_1"
+    30,
+    "MO.Test.PieceProgress 0.150 BP_Piece_WattleWall_C_34"
    ],
    [
-    50,
-    "MO.Test.PieceProgress 0.167 BP_Piece_WattleWall_C_1"
+    30,
+    "MO.Test.PieceProgress 0.000 BP_Piece_WattleWall_C_28"
    ],
    [
-    62,
-    "MO.Test.PieceProgress 0.208 BP_Piece_WattleWall_C_1"
+    41,
+    "MO.Test.PieceProgress 0.200 BP_Piece_WattleWall_C_34"
    ],
    [
-    75,
-    "MO.Test.PieceProgress 0.250 BP_Piece_WattleWall_C_1"
+    43,
+    "MO.Test.PieceProgress 0.050 BP_Piece_WattleWall_C_28"
    ],
    [
-    87,
-    "MO.Test.PieceProgress 0.292 BP_Piece_WattleWall_C_1"
+    51,
+    "MO.Test.PieceProgress 0.250 BP_Piece_WattleWall_C_34"
    ],
    [
-    100,
-    "MO.Test.PieceProgress 0.333 BP_Piece_WattleWall_C_1"
+    56,
+    "MO.Test.PieceProgress 0.100 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    61,
+    "MO.Test.PieceProgress 0.300 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    69,
+    "MO.Test.PieceProgress 0.150 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    71,
+    "MO.Test.PieceProgress 0.350 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    82,
+    "MO.Test.PieceProgress 0.400 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    82,
+    "MO.Test.PieceProgress 0.200 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    92,
+    "MO.Test.PieceProgress 0.450 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    95,
+    "MO.Test.PieceProgress 0.250 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    102,
+    "MO.Test.PieceProgress 0.500 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    108,
+    "MO.Test.PieceProgress 0.300 BP_Piece_WattleWall_C_28"
    ],
    [
     112,
-    "MO.Test.PieceProgress 0.375 BP_Piece_WattleWall_C_1"
+    "MO.Test.PieceProgress 0.550 BP_Piece_WattleWall_C_34"
    ],
    [
-    125,
-    "MO.Test.PieceProgress 0.417 BP_Piece_WattleWall_C_1"
+    121,
+    "MO.Test.PieceProgress 0.350 BP_Piece_WattleWall_C_28"
    ],
    [
-    137,
-    "MO.Test.PieceProgress 0.458 BP_Piece_WattleWall_C_1"
+    123,
+    "MO.Test.PieceProgress 0.600 BP_Piece_WattleWall_C_34"
    ],
    [
-    150,
-    "MO.Test.PieceProgress 0.500 BP_Piece_WattleWall_C_1"
+    133,
+    "MO.Test.PieceProgress 0.650 BP_Piece_WattleWall_C_34"
    ],
    [
-    162,
-    "MO.Test.PieceProgress 0.542 BP_Piece_WattleWall_C_1"
+    134,
+    "MO.Test.PieceProgress 0.400 BP_Piece_WattleWall_C_28"
    ],
    [
-    175,
-    "MO.Test.PieceProgress 0.583 BP_Piece_WattleWall_C_1"
+    143,
+    "MO.Test.PieceProgress 0.700 BP_Piece_WattleWall_C_34"
    ],
    [
-    187,
-    "MO.Test.PieceProgress 0.625 BP_Piece_WattleWall_C_1"
+    147,
+    "MO.Test.PieceProgress 0.450 BP_Piece_WattleWall_C_28"
    ],
    [
-    200,
-    "MO.Test.PieceProgress 0.667 BP_Piece_WattleWall_C_1"
+    153,
+    "MO.Test.PieceProgress 0.750 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    160,
+    "MO.Test.PieceProgress 0.500 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    164,
+    "MO.Test.PieceProgress 0.800 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    173,
+    "MO.Test.PieceProgress 0.550 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    174,
+    "MO.Test.PieceProgress 0.850 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    184,
+    "MO.Test.PieceProgress 0.900 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    186,
+    "MO.Test.PieceProgress 0.600 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    194,
+    "MO.Test.PieceProgress 0.950 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    199,
+    "MO.Test.PieceProgress 0.650 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    205,
+    "MO.Test.PieceProgress 1.000 BP_Piece_WattleWall_C_34"
+   ],
+   [
+    207,
+    "MO.Test.PieceProgress done BP_Piece_WattleWall_C_34"
    ],
    [
     212,
-    "MO.Test.PieceProgress 0.708 BP_Piece_WattleWall_C_1"
+    "MO.Test.PieceProgress 0.700 BP_Piece_WattleWall_C_28"
+   ],
+   [
+    212,
+    "MO.Test.PlacePiece DaubWallMoss -835.4 -1694.0 385.6 @world 0"
+   ],
+   [
+    220,
+    "MO.Test.PieceProgress 0.000 MossDaub"
    ],
    [
     225,
-    "MO.Test.PieceProgress 0.750 BP_Piece_WattleWall_C_1"
+    "MO.Test.PieceProgress 0.750 BP_Piece_WattleWall_C_28"
    ],
    [
-    237,
-    "MO.Test.PieceProgress 0.792 BP_Piece_WattleWall_C_1"
+    232,
+    "MO.Test.PieceProgress 0.050 MossDaub"
    ],
    [
-    250,
-    "MO.Test.PieceProgress 0.833 BP_Piece_WattleWall_C_1"
+    238,
+    "MO.Test.PieceProgress 0.800 BP_Piece_WattleWall_C_28"
    ],
    [
-    262,
-    "MO.Test.PieceProgress 0.875 BP_Piece_WattleWall_C_1"
+    245,
+    "MO.Test.PieceProgress 0.100 MossDaub"
    ],
    [
-    275,
-    "MO.Test.PieceProgress 0.917 BP_Piece_WattleWall_C_1"
+    251,
+    "MO.Test.PieceProgress 0.850 BP_Piece_WattleWall_C_28"
    ],
    [
-    287,
-    "MO.Test.PieceProgress 0.958 BP_Piece_WattleWall_C_1"
+    257,
+    "MO.Test.PieceProgress 0.150 MossDaub"
    ],
    [
-    300,
-    "MO.Test.PieceProgress 1.000 BP_Piece_WattleWall_C_1"
+    264,
+    "MO.Test.PieceProgress 0.900 BP_Piece_WattleWall_C_28"
    ],
    [
-    300,
-    "MO.Test.PieceProgress done BP_Piece_WattleWall_C_1"
+    270,
+    "MO.Test.PieceProgress 0.200 MossDaub"
    ],
    [
-    324,
-    "MO.Test.PieceProgress 0.000 Daub"
+    277,
+    "MO.Test.PieceProgress 0.950 BP_Piece_WattleWall_C_28"
    ],
    [
-    336,
-    "MO.Test.PieceProgress 0.042 Daub"
+    282,
+    "MO.Test.PieceProgress 0.250 MossDaub"
    ],
    [
-    349,
-    "MO.Test.PieceProgress 0.083 Daub"
+    290,
+    "MO.Test.PieceProgress 1.000 BP_Piece_WattleWall_C_28"
    ],
    [
-    362,
-    "MO.Test.PieceProgress 0.125 Daub"
+    292,
+    "MO.Test.PieceProgress done BP_Piece_WattleWall_C_28"
    ],
    [
-    375,
-    "MO.Test.PieceProgress 0.167 Daub"
+    295,
+    "MO.Test.PieceProgress 0.300 MossDaub"
    ],
    [
-    387,
-    "MO.Test.PieceProgress 0.208 Daub"
+    307,
+    "MO.Test.PieceProgress 0.350 MossDaub"
    ],
    [
-    400,
-    "MO.Test.PieceProgress 0.250 Daub"
+    320,
+    "MO.Test.PieceProgress 0.400 MossDaub"
    ],
    [
-    413,
-    "MO.Test.PieceProgress 0.292 Daub"
+    332,
+    "MO.Test.PieceProgress 0.450 MossDaub"
    ],
    [
-    426,
-    "MO.Test.PieceProgress 0.333 Daub"
+    345,
+    "MO.Test.PieceProgress 0.500 MossDaub"
    ],
    [
-    438,
-    "MO.Test.PieceProgress 0.375 Daub"
+    357,
+    "MO.Test.PieceProgress 0.550 MossDaub"
    ],
    [
-    451,
-    "MO.Test.PieceProgress 0.417 Daub"
+    370,
+    "MO.Test.PieceProgress 0.600 MossDaub"
    ],
    [
-    464,
-    "MO.Test.PieceProgress 0.458 Daub"
+    382,
+    "MO.Test.PieceProgress 0.650 MossDaub"
    ],
    [
-    477,
-    "MO.Test.PieceProgress 0.500 Daub"
+    395,
+    "MO.Test.PieceProgress 0.700 MossDaub"
    ],
    [
-    489,
-    "MO.Test.PieceProgress 0.542 Daub"
+    407,
+    "MO.Test.PieceProgress 0.750 MossDaub"
    ],
    [
-    502,
-    "MO.Test.PieceProgress 0.583 Daub"
+    420,
+    "MO.Test.PieceProgress 0.800 MossDaub"
    ],
    [
-    515,
-    "MO.Test.PieceProgress 0.625 Daub"
+    432,
+    "MO.Test.PieceProgress 0.850 MossDaub"
    ],
    [
-    528,
-    "MO.Test.PieceProgress 0.667 Daub"
+    445,
+    "MO.Test.PieceProgress 0.900 MossDaub"
    ],
    [
-    540,
-    "MO.Test.PieceProgress 0.708 Daub"
+    457,
+    "MO.Test.PieceProgress 0.950 MossDaub"
    ],
    [
-    553,
-    "MO.Test.PieceProgress 0.750 Daub"
-   ],
-   [
-    566,
-    "MO.Test.PieceProgress 0.792 Daub"
-   ],
-   [
-    579,
-    "MO.Test.PieceProgress 0.833 Daub"
-   ],
-   [
-    591,
-    "MO.Test.PieceProgress 0.875 Daub"
-   ],
-   [
-    604,
-    "MO.Test.PieceProgress 0.917 Daub"
-   ],
-   [
-    617,
-    "MO.Test.PieceProgress 0.958 Daub"
-   ],
-   [
-    630,
-    "MO.Test.PieceProgress 1.000 Daub"
+    470,
+    "MO.Test.PieceProgress 1.000 MossDaub"
    ]
   ],
   "preroll_actions": [

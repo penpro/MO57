@@ -119,7 +119,7 @@ visible in order as the build timer fills up so it looks like you're actually bu
   - ten RiverCobble01 stones (the recipe deposits ten cobbles), staged round the ring, each at a random yaw, tilt (±18°), size (x0.85-1.25)
     and sink (1-4.5 cm), seeded so a rebuild matches (Wes: "add some random rotation to the stone so they don't look so uniform");
   - twenty Firewood01 fuel sticks (below), standing inside the ring;
-  - BP_Campfire's fire (NFire_03), light and sounds.
+  - BP_Campfire's fire, light and sounds. (Nov 5: the fire is now the M5 pack's thin bonfire loop at 0.26 with a thin strip of smoke apart from it, `M_MO_SmokeWisp` on `AMOCraftingStationActor`, and a 1500 cd light: `Content/Python/campfire_fire_settings.py`, which says why.)
   No other sticks: the first build also had three fresh sticks beside the ring and burnt pieces in the bed, which read as fuel before any
   wood went in (Wes: "fireplace sticks visible before firewood being added, some sticks are also on outside of fireplace"). The fresh and
   burnt sticks are the fuel sticks themselves, so an empty fire is an empty ring. The placement preview still shows the old merged mesh.

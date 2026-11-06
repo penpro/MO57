@@ -83,6 +83,8 @@ class UMOInventoryComponent;
 class UAudioComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
+class UMaterialBillboardComponent;
+class UMaterialInterface;
 class UPointLightComponent;
 UCLASS()
 class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor,
@@ -115,9 +117,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Visual")
 	TObjectPtr<UNiagaraComponent> ActiveParticleComponent;
 
-	/** Smoke over an active station, apart from the flames: its own size and its own clock, so the flames keep their speed. */
+	/** Smoke over an active station, apart from the flames: one camera-facing strip with a smoke material (Content/Python/make_smoke_wisp.py), so its size and speed are its own. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Visual")
-	TObjectPtr<UNiagaraComponent> ActiveSmokeComponent;
+	TObjectPtr<UMaterialBillboardComponent> ActiveSmokeComponent;
 
 	/** Point light for active station (fire glow, etc.). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Visual")
@@ -143,21 +145,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.001"))
 	float ActiveParticleScale = 1.0f;
 
-	/** Smoke for the active state. None = the station makes no smoke of its own. */
+	/** Smoke material for the active state. None = the station makes no smoke of its own. Its speed and density are the material's parameters. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual")
-	TSoftObjectPtr<UNiagaraSystem> ActiveSmokeSystem;
+	TSoftObjectPtr<UMaterialInterface> ActiveSmokeMaterial;
 
-	/** Uniform scale of the smoke (the M5 pack's plume is over 10 m wide at 1). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.001"))
-	float ActiveSmokeScale = 1.0f;
+	/** The smoke strip's size, cm: width and height. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="1.0"))
+	FVector2D ActiveSmokeSize = FVector2D(120.0, 380.0);
 
-	/** Where the smoke starts, cm above the actor's origin (a plume starts in the flames, not on the ground). */
+	/** Where the smoke's foot is, cm above the actor's origin (a plume starts in the flames, not on the ground). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual")
-	float ActiveSmokeHeight = 0.0f;
-
-	/** The smoke's clock: below 1 it rises and turns more slowly (Niagara runs a dilated component solo). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.05", ClampMax="1.0"))
-	float ActiveSmokeTimeDilation = 1.0f;
+	float ActiveSmokeBase = 40.0f;
 
 	/** Base intensity for the active light (before flicker). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.0"))

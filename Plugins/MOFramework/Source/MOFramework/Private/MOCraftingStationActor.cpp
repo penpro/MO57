@@ -11,6 +11,7 @@
 #include "Components/PointLightComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "Components/MaterialBillboardComponent.h"
 #include "Sound/SoundBase.h"
 
 AMOCraftingStationActor::AMOCraftingStationActor()
@@ -37,9 +38,10 @@ AMOCraftingStationActor::AMOCraftingStationActor()
 	ActiveParticleComponent->SetupAttachment(RootComponent);
 	ActiveParticleComponent->bAutoActivate = false;
 
-	ActiveSmokeComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("ActiveSmokeComponent"));
+	ActiveSmokeComponent = CreateDefaultSubobject<UMaterialBillboardComponent>(TEXT("ActiveSmokeComponent"));
 	ActiveSmokeComponent->SetupAttachment(RootComponent);
-	ActiveSmokeComponent->bAutoActivate = false;
+	ActiveSmokeComponent->SetVisibility(false);
+	ActiveSmokeComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Create light component for fire glow
 	ActiveLightComponent = CreateDefaultSubobject<UPointLightComponent>(TEXT("ActiveLightComponent"));
@@ -548,16 +550,18 @@ void AMOCraftingStationActor::ActivateParticles()
 	ActiveParticleComponent->SetRelativeScale3D(FVector(ActiveParticleScale));
 
 	// Wes, Nov 5 2026 (a campfire): "turn down the smoke effects a LOT, it's fucking massive and a giant wide cone, and make it slower"
-	if (ActiveSmokeComponent && !ActiveSmokeSystem.IsNull())
+	if (ActiveSmokeComponent && !ActiveSmokeMaterial.IsNull())
 	{
-		if (UNiagaraSystem* Smoke = ActiveSmokeSystem.LoadSynchronous())
+		if (UMaterialInterface* Smoke = ActiveSmokeMaterial.LoadSynchronous())
 		{
-			ActiveSmokeComponent->SetRelativeLocation(FVector(0.0f, 0.0f, ActiveSmokeHeight));
-			ActiveSmokeComponent->SetRelativeScale3D(FVector(ActiveSmokeScale));
-			ActiveSmokeComponent->SetAsset(Smoke);
-			ActiveSmokeComponent->SetForceSolo(ActiveSmokeTimeDilation != 1.0f);
-			ActiveSmokeComponent->SetCustomTimeDilation(ActiveSmokeTimeDilation);
-			ActiveSmokeComponent->Activate();
+			FMaterialSpriteElement Element;
+			Element.Material = Smoke;
+			// half extents, and the engine's X is the sprite's height (UMaterialBillboardComponent's proxy: X along the view's up, Y along its right)
+			Element.BaseSizeX = ActiveSmokeSize.Y * 0.5f;
+			Element.BaseSizeY = ActiveSmokeSize.X * 0.5f;
+			ActiveSmokeComponent->SetElements({Element});
+			ActiveSmokeComponent->SetRelativeLocation(FVector(0.0f, 0.0f, ActiveSmokeBase + ActiveSmokeSize.Y * 0.5f));
+			ActiveSmokeComponent->SetVisibility(true);
 		}
 	}
 
@@ -588,9 +592,9 @@ void AMOCraftingStationActor::DeactivateParticles()
 		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
 		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated particles"));
 	}
-	if (ActiveSmokeComponent && ActiveSmokeComponent->IsActive())
+	if (ActiveSmokeComponent)
 	{
-		ActiveSmokeComponent->Deactivate();
+		ActiveSmokeComponent->SetVisibility(false);
 	}
 }
 

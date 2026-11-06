@@ -579,7 +579,8 @@
   reference pose must change delete the mesh, skeleton and animation on disk with the editor closed and import fresh
   (`import_blender_items.py` stops with that message). (Nov 2)
 - **The editor's own source control auto-adds new assets to the git index** (`A` in `git status --short`) -> while the LFS budget refuses
-  uploads, `git restore --staged <paths>` before committing, and check the staged column. (Nov 2)
+  uploads, `git restore --staged <paths>` before committing, and check the staged column. (Nov 2) A second save makes the line `AM`, so a grep for `^[AM] ` misses it and a plain
+  `git commit` still takes the staged copy (Nov 5: 56 first-save `.uasset` went to master that way, f5f6788f). After any editor run commit with explicit paths: `git commit -m ... -- <paths>`.
 - **A TRELLIS / glTF plant previews in rainbow colours** -> glTF makes COLOR_0 a MULTIPLIER of the base colour, so a viewer tints the plant by
   its wind vertex colours (Unreal's foliage master reads them as data only) -> preview the `_novc.glb` copy `crop_finish_blender.py` writes. (Nov 3)
 

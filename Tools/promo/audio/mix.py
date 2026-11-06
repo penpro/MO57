@@ -204,7 +204,7 @@ def on_picture(report):
     if knocks[0] is not None:
         t = bar_t(wall.bar) + 0.1
         i = 0
-        while t < bar_t(wall.bar + 1.0) - 0.1:     # the stakes and rods: the first half of the shot
+        while t < bar_t(wall.bar + wall.bars / 2.0) - 0.1:     # the stakes and rods: the first half of the shot
             out.append((t, knocks[i % 2], -24.0 + RNG.normal(0, 2.0)))
             t += 0.24 + RNG.uniform(0, 0.12)
             i += 1
