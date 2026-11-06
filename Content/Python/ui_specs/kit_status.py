@@ -25,7 +25,8 @@ FIELD = {
             {"type": "HorizontalBox", "name": "StatusFieldRow", "slot": {**FILL, "padding": [18, 8, 18, 8]}, "children": [
                 K.icon_node("IconImage", "ic_sev_info", "color.text.secondary", 28, var=True, slot={**VC, "padding": [0, 0, 14, 0]}),
                 {"type": "SizeBox", "name": "StatusTitleBox", "width": 260, "slot": VC, "children": [K.text("TitleText", "body.strong", "Title", "color.text.primary", var=True)]},
-                {"type": "SizeBox", "name": "StatusValueBox", "width": 200, "slot": VC, "children": [K.text("ValueText", "numeric", "0 / 0", "color.text.primary", var=True)]},
+                # A minimum, not a fixed width: a long value ("Mild (bleeding 0.6 ml/s, bandaged)") pushes the bar along instead of the bar drawing through it (N-315).
+                {"type": "SizeBox", "name": "StatusValueBox", "props": {"width_override": None, "min_desired_width": 200}, "slot": VC, "children": [K.text("ValueText", "numeric", "0 / 0", "color.text.primary", var=True)]},
                 {"type": "SizeBox", "name": "StatusBarBox", "height": 8, "slot": {**VC, **FILL_SIZE, "padding": [12, 0, 0, 0]}, "children": [K.progress_bar("ValueBar")]}]}]}]},
 }
 
