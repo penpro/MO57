@@ -2520,3 +2520,7 @@ References: CL-0395
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0397
 Status: Verified and pushing: N-331 (generator v14: smoother island undersides, large rocks) and N-330 (rocks on ravine walls); suite 459 / 0, check_sky_coop PASS, packaged checksum match=1. Next: a full nettest actions on this build for N-302 and N-352. The window stays under CL-0395.
 References: CL-0395, CL-0396
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0398
+Status: Pushed the medic fix (N-302, my own regression from N-332). nettest actions on this build: 255-261 pass with 6-7 world-dependent cases that come and go and pass alone (N-229, N-352); notes in BACKLOG. Next: one final ue.py auto on this build.
+References: CL-0395, CL-0397

@@ -1127,6 +1127,7 @@ def _joiner_long_run(rep, host, client):
     console(client, "MO.Test.Input SprintStart")
     off = log_size(host)
     console(client, "MO.Test.MoveFor 0 1 150")
+    print("[nettest] long run: " + (re.findall(r"\[MOWorldSeed\] host published world seed -?\d+", read_log_from(host, 0)) or ["no seed line"])[-1], flush=True)
     rows, worst, turns, last = [], 0.0, 0, None
     for _ in range(15):
         time.sleep(10)
@@ -1139,6 +1140,21 @@ def _joiner_long_run(rep, host, client):
             worst = max(worst, abs(sz - cz))
             rows.append(f"{dist:.0f}m:{sz:.0f}/{cz:.0f}")
             if last and math.hypot(here[0] - last[0], here[1] - last[1]) < 1000.0:
+                # Why it stalled, before it turns: what the joiner's own machine says of the pawn, and what stands in front of it.
+                why = re.search(r"STALLWHY [^\r\n]*", _probe(client,
+                    "p = unreal.GameplayStatics.get_player_pawn(world, 0); m = p.get_movement_component(); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
+                    "ss = p.get_component_by_class(unreal.MOSurvivalStatsComponent); "
+                    "r = unreal.SystemLibrary.line_trace_single(world, l, l + f * 150.0, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [p], unreal.DrawDebugTrace.NONE, True); "
+                    "t = r.to_tuple() if r else None; "
+                    "cap = p.get_editor_property('capsule_component'); rr, hh = cap.get_scaled_capsule_radius(), cap.get_scaled_capsule_half_height(); "
+                    "objs = [unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY1, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY2, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY4, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY5]; "
+                    "sw = unreal.SystemLibrary.capsule_trace_multi_for_objects(world, l, l + f * 40.0, rr, hh - 2.0, objs, False, [p], unreal.DrawDebugTrace.NONE, True); "
+                    "hits = [h.to_tuple() for h in (sw or [])]; hits = [h for h in hits if h[10] and not isinstance(h[10], unreal.BrushComponent) and 'Underwater' not in h[10].get_name()]; "
+                    "name = lambda z: ('%s/%s/%s %.0f cm n%.2f' % (z[9].get_name() if z[9] else '?', z[10].get_name() if z[10] else '?', z[10].get_editor_property('static_mesh').get_name() if z[10] and isinstance(z[10], unreal.StaticMeshComponent) and z[10].get_editor_property('static_mesh') else '-', z[3], z[7].z)) if z and z[0] else 'nothing'; "
+                    "fl = m.get_editor_property('current_floor'); "
+                    "out('STALLWHY at %.0f %.0f %.0f mode=%s custom=%d speed=%.0f accel=%.0f maxspeed=%.0f stamina=%.0f walkable=%s front=%s swept=%s' % (l.x, l.y, l.z, m.movement_mode, m.custom_movement_mode, p.get_velocity().length(), "
+                    "m.get_current_acceleration().length(), m.get_max_speed(), ss.get_stat_current('Stamina') if ss else -1.0, fl.get_editor_property('walkable_floor') if fl else '?', name(t), [name(h) for h in hits][:5]))"))
+                print(f"[nettest] long run stalled at {dist:.0f} m: {why.group(0) if why else 'no answer'}", flush=True)
                 _face_clear_heading(host, client, land, 10000.0)
                 turns += 1
             last = here
@@ -3445,6 +3461,12 @@ def _host_colony_medic(rep, host, client):
              "ws = [w for w in h.get_component_by_class(unreal.MOAnatomyComponent).get_all_wounds() if w.body_part == unreal.MOBodyPartType.FOREARM_LEFT]; "
              "out('HBLEED %.3f' % (max(w.bleed_rate for w in ws) if ws else -1))")
     _clear_around_host(host, keep=name, within=1100)
+    # The earlier cases' survivors are gone for good: moved 12 m aside they came back, and one pressed against the medic held it where it stood for the whole job (N-302: MEDICBLOCK, Nov 6, "can't reach", 462 cm off,
+    # with another survivor's capsule at distance 0). This case runs last, so nothing later wants them.
+    print("[nettest] medic case: " + (re.search(r"REMOVED \d+", _probe(host,
+        "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+        f"o = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a not in (h, j) and a.get_name() != '{name}' and not isinstance(a, unreal.MOCreature)]; "
+        "[a.k2_destroy_actor() for a in o]; out('REMOVED %d' % len(o))")) or re.search("no answer", "no answer")).group(0) + " earlier survivors", flush=True)
     me = (re.search(r"HOSTPAWN=(\S+)", _probe(host, "out('HOSTPAWN=' + unreal.GameplayStatics.get_player_pawn(world, 0).get_name())")) or [None, "?"])[1]
     off = log_size(host)
     _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); "
@@ -3467,6 +3489,16 @@ def _host_colony_medic(rep, host, client):
     if not (done and " done:" in done.group(0)):   # a path that failed: the navmesh round them, or the medic (Oct 24: "can't reach", 610 cm off)
         nav = " | " + _nav_between(host, f"[a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{name}'][0]",
                                    "unreal.GameplayStatics.get_player_pawn(world, 0)")
+        # N-302: it had hardly moved, the straight walk in as well. What its capsule meets on the way to the patient, and how its movement stands.
+        blocked = re.search(r"MEDICBLOCK [^\r\n]*", _probe(host,
+            f"a = [x for x in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if x.get_name() == '{name}'][0]; b = unreal.GameplayStatics.get_player_pawn(world, 0); "
+            "m = a.get_movement_component(); cap = a.get_editor_property('capsule_component'); rr, hh = cap.get_scaled_capsule_radius(), cap.get_scaled_capsule_half_height(); l = a.get_actor_location(); "
+            "objs = [unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY1, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY2, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY3, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY4, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY5]; "
+            "sw = unreal.SystemLibrary.capsule_trace_multi_for_objects(world, l, b.get_actor_location(), rr, hh - 2.0, objs, False, [a, b], unreal.DrawDebugTrace.NONE, True); "
+            "hits = [h.to_tuple() for h in (sw or [])]; "
+            "names = ['%s/%s %.0f' % (h[9].get_name() if h[9] else '?', h[10].get_name() if h[10] else '?', h[3]) for h in hits if h[10] and not isinstance(h[10], unreal.BrushComponent)][:8]; "
+            "out('MEDICBLOCK at %.0f %.0f %.0f mode=%s speed=%.0f max=%.0f crouched=%s hits=%s' % (l.x, l.y, l.z, m.movement_mode, a.get_velocity().length(), m.get_max_speed(), a.is_crouched, names))"))
+        nav += " | " + (blocked.group(0) if blocked else "no MEDICBLOCK answer")
     rep.step("... the villager walks over and finishes the treatment", bool(done) and " done:" in done.group(0), (done.group(0) if done else "no Treat job outcome") + nav)
     after = re.search(r"HBLEED (-?[\d.]+)", _probe(host, bleed))
     rep.step("... and the host's cut bleeds less", bool(after) and 0 <= float(after.group(1)) < float(before.group(1)),
