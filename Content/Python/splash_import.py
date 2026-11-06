@@ -1,10 +1,13 @@
-"""Import the Penumbra studio mark (rasterised from the brand SVG by Saved/Splash/mark.html + headless Chrome) as the splash texture.
+"""Import the Penumbra Tech logomark as the splash texture. The source of truth is Art/Branding/penumbra-tech-mark.svg (the site's LogoMark.jsx); corona-eclipse.svg is Aphelion's mark, not this one.
+
+Rasterise it first to Saved/Splash/penumbra_tech_mark.png, 1024 square with alpha: open the SVG in headless Chrome from a page that shows it at full size, with
+--headless=new --user-data-dir=<a temp folder> --default-background-color=00000000 --window-size=1024,1024 --screenshot=<the png>. Then:
 
     python Tools/ue.py py --file Content/Python/splash_import.py        (editor open, not in PIE)
 """
 import unreal
 
-SRC = r"D:\UEProjects\MO57\Saved\Splash\penumbra_mark.png"
+SRC = r"D:\UEProjects\MO57\Saved\Splash\penumbra_tech_mark.png"
 DST = "/MOFramework/UI/Splash"
 
 task = unreal.AssetImportTask()

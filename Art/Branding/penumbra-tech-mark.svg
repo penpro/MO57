@@ -1,0 +1,7 @@
+<!-- The Penumbra Tech logomark: a ring, a P, and a circuit termination dot. Same paths as the site's D:\WebDevClass\hello-world\frontend\src\components\LogoMark.jsx,
+     in its accent colour (theme.js colors.accent). Not to be confused with corona-eclipse.svg in D:\LocalLLM\Branding, which is Aphelion's mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="1024" height="1024" fill="none">
+  <path d="M32 4 a28 28 0 1 1 -0.001 0 M 56 14 L 60 14" stroke="#5eead4" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="60" cy="14" r="2.4" fill="#5eead4"/>
+  <path d="M22 18 L22 48 M22 18 L36 18 a8 8 0 0 1 0 16 L22 34" stroke="#5eead4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
