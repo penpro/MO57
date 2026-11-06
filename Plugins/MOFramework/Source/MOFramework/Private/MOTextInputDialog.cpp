@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOUIUtils.h"
 
+#include "MOCommonButton.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
 
@@ -25,6 +26,12 @@ void UMOTextInputDialog::ConfigureWithText(
 
 	MaxLength = FMath::Max(0, InMaxLength);
 
+	ExtraClick = nullptr;
+	if (ExtraButton)
+	{
+		ExtraButton->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	if (TextInput)
 	{
 		TextInput->SetText(InitialText);
@@ -36,6 +43,28 @@ void UMOTextInputDialog::ConfigureWithText(
 	}
 }
 
+void UMOTextInputDialog::SetExtraButton(const FText& Label, TFunction<void()> OnClick)
+{
+	if (!ExtraButton)
+	{
+		return;
+	}
+	ExtraClick = MoveTemp(OnClick);
+	ExtraButton->SetButtonText(Label);
+	ExtraButton->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UMOTextInputDialog::HandleExtraClicked()
+{
+	TFunction<void()> Click = MoveTemp(ExtraClick);
+	ExtraClick = nullptr;
+	DeactivateWidget();
+	if (Click)
+	{
+		Click();
+	}
+}
+
 FText UMOTextInputDialog::GetEnteredText() const
 {
 	return TextInput ? TextInput->GetText() : FText::GetEmpty();
@@ -44,6 +73,12 @@ FText UMOTextInputDialog::GetEnteredText() const
 void UMOTextInputDialog::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	if (ExtraButton)
+	{
+		ExtraButton->OnClicked().RemoveAll(this);
+		ExtraButton->OnClicked().AddUObject(this, &UMOTextInputDialog::HandleExtraClicked);
+	}
 
 	if (TextInput)
 	{

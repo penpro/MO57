@@ -15,6 +15,12 @@
 #include "MONotificationComponent.h"
 #include "MOBiomeFinder.h"
 #include "MOSpawnClearance.h"
+#include "MOSpawnManagerSubsystem.h"
+#include "MOCharacterMovementComponent.h"
+#include "MOWorldCreationTypes.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldFeatureSubsystem.h"
 #include "MOWorldFeatureSettings.h"
@@ -121,6 +127,7 @@ void AMOPlayerController::BeginPlay()
 void AMOPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+	TickDevCinema(DeltaTime);
 
 	// Apply pending spectator view if we now have a pawn
 	// Note: MOSpectatorPawn handles this in its BeginPlay, but this is a fallback for other pawn types
@@ -501,6 +508,8 @@ void AMOPlayerController::SetPawn(APawn* InPawn)
 
 void AMOPlayerController::CachePossessedPawn(APawn* InPawn)
 {
+	ApplyDevFirstPerson(InPawn);
+
 	// Cache the pawn if it implements the controllable interface
 	if (InPawn && InPawn->Implements<UMOControllableInterface>())
 	{
@@ -1156,6 +1165,15 @@ void AMOPlayerController::HandleJumpStart(const FInputActionValue& Value)
 
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
+		// A double jump toggles flying: the first press has already jumped, or risen if flying.
+		const double Now = FPlatformTime::Seconds();
+		const bool bDoubleJump = Now - LastJumpPressSeconds <= DoubleJumpSeconds;
+		LastJumpPressSeconds = bDoubleJump ? -1000.0 : Now;
+		if (bDoubleJump && (bDevFlyUnlocked || FMOWorldRules::IsCreative(this)))
+		{
+			DevSetFlying(-1);
+			return;
+		}
 		IMOControllableInterface::Execute_RequestJumpStart(ControllablePawn);
 		BroadcastTutorialEvent(TEXT("PlayerJumped"));
 	}
@@ -1809,6 +1827,14 @@ namespace
 
 bool AMOPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+	if (bDevCinemaPlaying && Params.Key == EKeys::Escape)
+	{
+		if (Params.Event == IE_Pressed)
+		{
+			DevCinemaStop(/*bFinished=*/false);
+		}
+		return true;
+	}
 	// Dev console popup on the Tilde key. Hard-coded (requested) and deliberately NOT an Input Action: UEnhancedInputComponent deletes
 	// the legacy BindKey, and a mapping context would only add assets to forget. InputKey sees every key before action bindings.
 	if (Params.Key == EKeys::Tilde && Params.Event == IE_Pressed && FMODevMode::IsEnabled())
@@ -1861,14 +1887,19 @@ void AMOPlayerController::HandleOpenDevConsole(const FString& InitialText)
 	}
 	Dialog->ConfigureWithText(
 		NSLOCTEXT("MOConsole", "Title", "Console"),
-		Recent.IsEmpty() ? NSLOCTEXT("MOConsole", "Message", "Type a command. Run it empty: command menu.")
-		                 : FText::Format(NSLOCTEXT("MOConsole", "MessageRecent", "Recent: {0}\nRun it empty: command menu."), FText::FromString(Recent)),
+		Recent.IsEmpty() ? NSLOCTEXT("MOConsole", "Message", "Type a command, or press Menu.")
+		                 : FText::Format(NSLOCTEXT("MOConsole", "MessageRecent", "Recent: {0}"), FText::FromString(Recent)),
 		FText::FromString(InitialText),
 		/*MaxLength=*/256,
 		NSLOCTEXT("MOConsole", "Hint", "command"),
 		NSLOCTEXT("MOConsole", "Run", "Run"),
 		NSLOCTEXT("MOConsole", "Close", "Close"));
 	Dialog->OnTextConfirmed.AddDynamic(this, &AMOPlayerController::HandleDevConsoleConfirmed);
+	Dialog->SetExtraButton(NSLOCTEXT("MOConsole", "Menu", "Menu"), [this]()
+	{
+		DevConsoleDialog.Reset();
+		GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { OpenDevCommandMenu(); }));
+	});
 	DevConsoleDialog = Dialog;
 	UE_LOG(LogMOFramework, Log, TEXT("[MOConsole] popup opened"));
 }
@@ -1919,16 +1950,24 @@ void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
 	GLog->FlushThreadedLogs();
 	GLog->RemoveOutputDevice(&Capture);
 
-	// Result = what the command wrote to the output device, else what the game logged while it ran.
+	// Result = what the command wrote to the output device, else what the game logged while it ran. The console's own commands speak for themselves (their notifications):
+	// their [MOConsole] lines are for the log, not the screen.
 	FString Result = Printed.TrimStartAndEnd();
+	bool bSpokeForItself = false;
 	if (Result.IsEmpty())
 	{
-		Result = FString::Join(Capture.TakeLines(), TEXT("\n"));
+		TArray<FString> Lines = Capture.TakeLines();
+		const int32 Before = Lines.Num();
+		Lines.RemoveAll([](const FString& Line) { return Line.StartsWith(TEXT("[MOConsole]")) || Line.StartsWith(TEXT("[MOCinema]")); });
+		bSpokeForItself = Lines.Num() < Before;
+		Result = FString::Join(Lines, TEXT("\n"));
 	}
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] > %s%s%s"), *Command, Result.IsEmpty() ? TEXT("") : TEXT("  =>  "),
 		*Result.Replace(TEXT("\n"), TEXT(" | ")));
 
-	if (NotificationComponent)
+	// A command that opened a menu has answered: what it logged on the way (CommonUI's input mode lines and the like) is no result either.
+	const bool bOpenedMenu = (DevQuickPickDialog.IsValid() && DevQuickPickDialog->IsActivated()) || (DevTimeDialog.IsValid() && DevTimeDialog->IsActivated()) || DevConsoleDialog.IsValid();
+	if (NotificationComponent && !bOpenedMenu && !bSpokeForItself)
 	{
 		const FText Shown = Result.IsEmpty()
 			? FText::Format(NSLOCTEXT("MOConsole", "Ran", "> {0}"), FText::FromString(Command))
@@ -2004,14 +2043,10 @@ void AMOPlayerController::OpenDevCommandMenu(const FString& Group)
 	};
 
 	TArray<FMOQuickPickOption> Options;
-	if (Group.IsEmpty() || !Groups.Contains(Group))
+	if (Group == TEXT("All"))
 	{
-		Options.Add({ FName(TEXT("@type")), NSLOCTEXT("MOConsole", "MenuType", "Type a command..."), NSLOCTEXT("MOConsole", "MenuTypeTip", "The console popup (~).") });
-		Options.Add({ FName(TEXT("@biome")), NSLOCTEXT("MOConsole", "MenuBiome", "Go to a biome..."), NSLOCTEXT("MOConsole", "MenuBiomeTip", "biome: teleports you deep inside the biome you pick.") });
-		Options.Add({ FName(TEXT("@poi")), NSLOCTEXT("MOConsole", "MenuPoi", "Go to a POI..."), NSLOCTEXT("MOConsole", "MenuPoiTip", "poi: takes you to the nearest world feature you pick.") });
-		Options.Add({ FName(TEXT("@weather")), NSLOCTEXT("MOConsole", "MenuWeather", "Weather..."), NSLOCTEXT("MOConsole", "MenuWeatherTip", "weather: sets the server's weather.") });
-		Options.Add({ FName(TEXT("@time")), NSLOCTEXT("MOConsole", "MenuTime", "Time of day..."), NSLOCTEXT("MOConsole", "MenuTimeTip", "time: moves the server's clock forward.") });
-		Options.Add({ FName(TEXT("@starter")), NSLOCTEXT("MOConsole", "MenuStarter", "Starter kit"), NSLOCTEXT("MOConsole", "MenuStarterTip", "starter: 50 sticks and 20 stones.") });
+		// Every MO.* command, by namespace.
+		Options.Add({ FName(TEXT("@back")), NSLOCTEXT("MOConsole", "MenuBack", "< Back") });
 		TArray<FString> Names;
 		Groups.GetKeys(Names);
 		Names.Sort([](const FString& A, const FString& B) { return A == TEXT("Other") ? false : (B == TEXT("Other") ? true : A < B); });
@@ -2019,8 +2054,31 @@ void AMOPlayerController::OpenDevCommandMenu(const FString& Group)
 		{
 			Options.Add({ FName(*Name), FText::Format(NSLOCTEXT("MOConsole", "MenuGroup", "{0} ({1})"), FText::FromString(Name), FText::AsNumber(Groups[Name].Num())) });
 		}
-		OpenDevQuickPick(NSLOCTEXT("MOConsole", "MenuTitle", "Developer menu"),
+		OpenDevQuickPick(NSLOCTEXT("MOConsole", "AllTitle", "All commands"),
 			NSLOCTEXT("MOConsole", "MenuMessage", "Every MO console command, by group. Hover a button for its help."), Options, /*Columns=*/4,
+			[this, Then](FName Id)
+			{
+				const FString Pick = Id.ToString();
+				Then([this, Pick]() { OpenDevCommandMenu(Pick == TEXT("@back") ? FString() : Pick); });
+			});
+		return;
+	}
+	if (Group.IsEmpty() || !Groups.Contains(Group))
+	{
+		// Wes, Nov 6 2026: "all of our current menus for time, weather, biome, poi, cinema, spawn and such so we don't have to know commands". Each is the console command of its name.
+		Options.Add({ FName(TEXT("@spawn")), NSLOCTEXT("MOConsole", "MenuSpawn", "Spawn..."), NSLOCTEXT("MOConsole", "MenuSpawnTip", "spawn: a survivor or any animal, on the ground in front of you.") });
+		Options.Add({ FName(TEXT("@cinema")), NSLOCTEXT("MOConsole", "MenuCinema", "Cinema..."), NSLOCTEXT("MOConsole", "MenuCinemaTip", "cinema: capture a camera start and end, then play the move with nothing else on screen.") });
+		Options.Add({ FName(TEXT("@biome")), NSLOCTEXT("MOConsole", "MenuBiome", "Go to a biome..."), NSLOCTEXT("MOConsole", "MenuBiomeTip", "biome: teleports you deep inside the biome you pick.") });
+		Options.Add({ FName(TEXT("@poi")), NSLOCTEXT("MOConsole", "MenuPoi", "Go to a POI..."), NSLOCTEXT("MOConsole", "MenuPoiTip", "poi: takes you to the nearest world feature you pick.") });
+		Options.Add({ FName(TEXT("@weather")), NSLOCTEXT("MOConsole", "MenuWeather", "Weather..."), NSLOCTEXT("MOConsole", "MenuWeatherTip", "weather: sets the server's weather.") });
+		Options.Add({ FName(TEXT("@time")), NSLOCTEXT("MOConsole", "MenuTime", "Time of day..."), NSLOCTEXT("MOConsole", "MenuTimeTip", "time: moves the server's clock forward.") });
+		Options.Add({ FName(TEXT("@firstperson")), NSLOCTEXT("MOConsole", "MenuFirstPerson", "First person"), NSLOCTEXT("MOConsole", "MenuFirstPersonTip", "firstperson: the view from the eyes; again to go back.") });
+		Options.Add({ FName(TEXT("@fly")), NSLOCTEXT("MOConsole", "MenuFly", "Fly"), NSLOCTEXT("MOConsole", "MenuFlyTip", "fly: Space rises, Ctrl or C sinks, Shift is faster; a double jump toggles it from then on.") });
+		Options.Add({ FName(TEXT("@starter")), NSLOCTEXT("MOConsole", "MenuStarter", "Starter kit"), NSLOCTEXT("MOConsole", "MenuStarterTip", "starter: 50 sticks and 20 stones.") });
+		Options.Add({ FName(TEXT("@type")), NSLOCTEXT("MOConsole", "MenuType", "Type a command..."), NSLOCTEXT("MOConsole", "MenuTypeTip", "The console popup (~).") });
+		Options.Add({ FName(TEXT("All")), NSLOCTEXT("MOConsole", "MenuAll", "All commands..."), NSLOCTEXT("MOConsole", "MenuAllTip", "Every MO console command, by group.") });
+		OpenDevQuickPick(NSLOCTEXT("MOConsole", "MenuTitle", "Menu"),
+			NSLOCTEXT("MOConsole", "MenuTopMessage", "Each of these is also a console command. Hover a button for its help."), Options, /*Columns=*/3,
 			[this, Then](FName Id)
 			{
 				const FString Pick = Id.ToString();
@@ -2032,7 +2090,7 @@ void AMOPlayerController::OpenDevCommandMenu(const FString& Group)
 					}
 					else if (Pick.StartsWith(TEXT("@")))
 					{
-						RunDevConsoleCommand(Pick.RightChop(1));   // biome / poi / weather / time / starter
+						RunDevConsoleCommand(Pick.RightChop(1));   // spawn / cinema / biome / poi / weather / time / firstperson / fly / starter
 					}
 					else
 					{
@@ -2063,7 +2121,7 @@ void AMOPlayerController::OpenDevCommandMenu(const FString& Group)
 			{
 				if (Pick == TEXT("@back"))
 				{
-					OpenDevCommandMenu();
+					OpenDevCommandMenu(TEXT("All"));
 					return;
 				}
 				const IConsoleObject* Object = IConsoleManager::Get().FindConsoleObject(*Pick);
@@ -2104,9 +2162,9 @@ void AMOPlayerController::OpenDevQuickPick(const FText& Title, const FText& Mess
 	{
 		return;
 	}
-	if (DevQuickPickDialog.IsValid())
+	if (DevQuickPickDialog.IsValid() && DevQuickPickDialog->IsActivated())
 	{
-		return; // already open
+		return; // already open (a pooled instance closed any other way than its buttons is not: it must not lock every picker out)
 	}
 	UClass* DialogClass = DevQuickPickDialogClass.LoadSynchronous();
 	if (!DialogClass)
@@ -2325,6 +2383,399 @@ void AMOPlayerController::BeginDevTeleportLanding(AMOCharacter* Traveller, const
 	World->GetTimerManager().SetTimer(DevTeleportTimer, this, &AMOPlayerController::PollDevTeleportLanding, 0.25f, /*bLoop=*/true);
 }
 
+void AMOPlayerController::OpenDevSpawnPicker(const FString& Id, int32 Count)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	if (!Id.IsEmpty())
+	{
+		ServerDevSpawn(FName(*Id), Count);
+		return;
+	}
+	const FName PreyId(TEXT("@PreyAI")), PredatorId(TEXT("@PredatorAI"));
+	TArray<FMOQuickPickOption> Options;
+	Options.Add({ PreyId, bDevPreyAIShown ? NSLOCTEXT("MOConsole", "SpawnPreyOn", "Prey AI: on") : NSLOCTEXT("MOConsole", "SpawnPreyOff", "Prey AI: off"),
+		NSLOCTEXT("MOConsole", "SpawnPreyTip", "Off: every prey animal stands still and plays its idle, those here now and any spawned after. preyai on the console.") });
+	Options.Add({ PredatorId, bDevPredatorAIShown ? NSLOCTEXT("MOConsole", "SpawnPredatorOn", "Predator AI: on") : NSLOCTEXT("MOConsole", "SpawnPredatorOff", "Predator AI: off"),
+		NSLOCTEXT("MOConsole", "SpawnPredatorTip", "Off: every predator stands still and plays its idle, those here now and any spawned after. predatorai on the console.") });
+	for (const FMODevSpawnChoice& Choice : UMOSpawnManagerSubsystem::GetDevSpawnChoices())
+	{
+		Options.Add({ Choice.Id, Choice.Label });
+	}
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "SpawnTitle", "Spawn"), NSLOCTEXT("MOConsole", "SpawnMessage", "Appears on the ground in front of you. For several: spawn wolf 3."), Options, /*Columns=*/4,
+		[this, PreyId, PredatorId](FName Picked)
+		{
+			if (Picked == PreyId || Picked == PredatorId)
+			{
+				DevToggleCreatureAI(Picked == PredatorId);
+				// Back to the menu, showing the new state; the next tick, once this one has closed.
+				GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { OpenDevSpawnPicker(); }));
+				return;
+			}
+			ServerDevSpawn(Picked, 1);
+		});
+}
+
+void AMOPlayerController::DevToggleCreatureAI(bool bPredator, int32 State)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	bool& bShown = bPredator ? bDevPredatorAIShown : bDevPreyAIShown;
+	bShown = State < 0 ? !bShown : State != 0;
+	ServerDevSetCreatureAI(bPredator, bShown);
+}
+
+void AMOPlayerController::ServerDevSetCreatureAI_Implementation(bool bPredator, bool bOn)
+{
+	UMOSpawnManagerSubsystem* Spawner = GetWorld() ? GetWorld()->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+	if (!Spawner || !ServerAllowsDevCheats(TEXT("creature AI")))
+	{
+		return;
+	}
+	const int32 Changed = Spawner->SetDevCreatureAI(bPredator, bOn);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] %s AI %s: %d creature(s) changed"), bPredator ? TEXT("predator") : TEXT("prey"), bOn ? TEXT("on") : TEXT("off"), Changed);
+	ClientDevCreatureAIState(Spawner->IsDevCreatureAIOn(false), Spawner->IsDevCreatureAIOn(true));
+}
+
+void AMOPlayerController::ClientDevCreatureAIState_Implementation(bool bPreyOn, bool bPredatorOn)
+{
+	bDevPreyAIShown = bPreyOn;
+	bDevPredatorAIShown = bPredatorOn;
+}
+
+// ============================================================================
+// DEV: FIRST PERSON, FLYING
+// ============================================================================
+
+void AMOPlayerController::ApplyDevFirstPerson(APawn* InPawn)
+{
+	AMOCharacter* Driven = Cast<AMOCharacter>(InPawn);
+	if (AMOCharacter* Previous = DevFirstPersonPawn.Get(); Previous && Previous != Driven)
+	{
+		Previous->SetFirstPersonView(false);
+	}
+	if (Driven)
+	{
+		Driven->SetFirstPersonView(bDevFirstPerson);
+	}
+	DevFirstPersonPawn = bDevFirstPerson ? Driven : nullptr;
+}
+
+void AMOPlayerController::DevSetFirstPerson(int32 State)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	bDevFirstPerson = State < 0 ? !bDevFirstPerson : State != 0;
+	ApplyDevFirstPerson(GetPawn());
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] first person %s on %s"), bDevFirstPerson ? TEXT("on") : TEXT("off"), *GetNameSafe(GetPawn()));
+}
+
+void AMOPlayerController::DevSetFlying(int32 State)
+{
+	UMOCharacterMovementComponent* Move = GetPawn() ? Cast<UMOCharacterMovementComponent>(GetPawn()->GetMovementComponent()) : nullptr;
+	auto Say = [this](const FText& Text)
+	{
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(Text, 4.0f);
+		}
+	};
+	if (!Move)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] fly: no MO pawn to fly"));
+		return;
+	}
+	if (!Move->IsFlightAllowed())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] fly: refused, not a creative world and the host's developer mode is off"));
+		Say(NSLOCTEXT("MOConsole", "FlyRefused", "Flying needs a creative world or the host's developer mode."));
+		return;
+	}
+	bDevFlyUnlocked = true;
+	const bool bOn = State < 0 ? !Move->WantsToFly() : State != 0;
+	Move->SetWantsToFly(bOn);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] fly %s"), bOn ? TEXT("on") : TEXT("off"));
+	Say(bOn ? NSLOCTEXT("MOConsole", "FlyOn", "Flying. Space rises, Ctrl sinks, Shift is faster. Double jump to stop.") : NSLOCTEXT("MOConsole", "FlyOff", "Stopped flying."));
+}
+
+// ============================================================================
+// DEV: CINEMA
+// ============================================================================
+
+void AMOPlayerController::DevCinemaCommand(const TArray<FString>& Args)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	const FString Verb = Args.Num() > 0 ? Args[0].ToLower() : FString();
+	if (Verb == TEXT("start") || Verb == TEXT("end"))
+	{
+		DevCinemaCapture(Verb == TEXT("end"));
+	}
+	else if (Verb == TEXT("play"))
+	{
+		if (Args.Num() > 1)
+		{
+			DevCinema.Seconds = FMath::Clamp(FCString::Atof(*Args[1]), 0.5f, 600.0f);
+		}
+		DevCinemaPlay();
+	}
+	else if (Verb == TEXT("stop"))
+	{
+		DevCinemaStop(/*bFinished=*/false);
+	}
+	else if (Verb.IsEmpty())
+	{
+		OpenDevCinemaMenu();
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCinema] usage: cinema [start|end|play [seconds]|stop]"));
+	}
+}
+
+void AMOPlayerController::OpenDevCinemaMenu()
+{
+	static const FName StartId(TEXT("Start")), EndId(TEXT("End")), PlayId(TEXT("Play")), LengthId(TEXT("Length")), SmoothId(TEXT("Smooth")), BodyId(TEXT("Body"));
+	TArray<FMOQuickPickOption> Options;
+	Options.Add({ StartId, DevCinema.Start.bSet ? NSLOCTEXT("MOConsole", "CinemaStartAgain", "Capture camera start (set)") : NSLOCTEXT("MOConsole", "CinemaStart", "Capture camera start"),
+		NSLOCTEXT("MOConsole", "CinemaStartTip", "The camera's position now is where the move begins.") });
+	Options.Add({ EndId, DevCinema.End.bSet ? NSLOCTEXT("MOConsole", "CinemaEndAgain", "Capture camera end (set)") : NSLOCTEXT("MOConsole", "CinemaEnd", "Capture camera end"),
+		NSLOCTEXT("MOConsole", "CinemaEndTip", "The camera's position now is where the move ends.") });
+	Options.Add({ PlayId, NSLOCTEXT("MOConsole", "CinemaPlay", "Play"), NSLOCTEXT("MOConsole", "CinemaPlayTip", "Everything leaves the screen and the camera moves from start to end. Esc stops it.") });
+	Options.Add({ LengthId, FText::Format(NSLOCTEXT("MOConsole", "CinemaLength", "Length: {0} s"), FText::AsNumber(FMath::RoundToInt(DevCinema.Seconds))),
+		NSLOCTEXT("MOConsole", "CinemaLengthTip", "Click for the next length, or type cinema play 12.") });
+	Options.Add({ SmoothId, DevCinema.bSmooth ? NSLOCTEXT("MOConsole", "CinemaSmoothOn", "Ease in and out: on") : NSLOCTEXT("MOConsole", "CinemaSmoothOff", "Ease in and out: off"),
+		NSLOCTEXT("MOConsole", "CinemaSmoothTip", "On: the camera starts and stops gently. Off: one steady speed.") });
+	Options.Add({ BodyId, DevCinema.bHideBody ? NSLOCTEXT("MOConsole", "CinemaBodyHidden", "Your body: hidden") : NSLOCTEXT("MOConsole", "CinemaBodyShown", "Your body: shown"),
+		NSLOCTEXT("MOConsole", "CinemaBodyTip", "Whether your own character is in the shot while it plays.") });
+	const FText Message = DevCinema.IsReady() ? NSLOCTEXT("MOConsole", "CinemaReady", "Ready to play. The world loads around your character, so stay near the path.")
+		: NSLOCTEXT("MOConsole", "CinemaNeeds", "Put the camera where the move should start and capture it; then the same for the end.");
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "CinemaTitle", "Cinema"), Message, Options, /*Columns=*/3, [this](FName Id)
+	{
+		auto Reopen = [this]() { GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { OpenDevCinemaMenu(); })); };
+		if (Id == StartId || Id == EndId)
+		{
+			DevCinemaCapture(Id == EndId);
+			if (DevCinema.IsReady())
+			{
+				Reopen();   // both set: Play is the next thing wanted. Otherwise the view is free, to go to the other end.
+			}
+		}
+		else if (Id == PlayId)
+		{
+			DevCinemaPlay();
+			if (!bDevCinemaPlaying)
+			{
+				Reopen();
+			}
+		}
+		else
+		{
+			if (Id == LengthId)
+			{
+				const float Lengths[] = { 5.0f, 10.0f, 20.0f, 30.0f, 60.0f };
+				float Next = Lengths[0];
+				for (const float Length : Lengths)
+				{
+					if (Length > DevCinema.Seconds)
+					{
+						Next = Length;
+						break;
+					}
+				}
+				DevCinema.Seconds = Next;
+			}
+			else if (Id == SmoothId)
+			{
+				DevCinema.bSmooth = !DevCinema.bSmooth;
+			}
+			else if (Id == BodyId)
+			{
+				DevCinema.bHideBody = !DevCinema.bHideBody;
+			}
+			Reopen();
+		}
+	});
+}
+
+void AMOPlayerController::DevCinemaCapture(bool bEnd)
+{
+	if (!PlayerCameraManager || bDevCinemaPlaying)
+	{
+		return;
+	}
+	FMODevCinemaShot& Shot = bEnd ? DevCinema.End : DevCinema.Start;
+	Shot.Location = PlayerCameraManager->GetCameraLocation();
+	Shot.Rotation = PlayerCameraManager->GetCameraRotation().Quaternion();
+	Shot.FieldOfView = PlayerCameraManager->GetFOVAngle();
+	Shot.bSet = true;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCinema] captured %s: %s, %s, fov %.0f"), bEnd ? TEXT("end") : TEXT("start"), *Shot.Location.ToCompactString(), *Shot.Rotation.Rotator().ToCompactString(), Shot.FieldOfView);
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowInfoNotification(bEnd ? NSLOCTEXT("MOConsole", "CinemaGotEnd", "Camera end captured.") : NSLOCTEXT("MOConsole", "CinemaGotStart", "Camera start captured."), 3.0f);
+	}
+}
+
+void AMOPlayerController::DevCinemaPlay()
+{
+	UWorld* World = GetWorld();
+	if (!World || bDevCinemaPlaying)
+	{
+		return;
+	}
+	if (!DevCinema.IsReady())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCinema] play: capture the camera's start and end first (start %d, end %d)"), DevCinema.Start.bSet ? 1 : 0, DevCinema.End.bSet ? 1 : 0);
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOConsole", "CinemaNotReady", "Capture a camera start and end first."), 4.0f);
+		}
+		return;
+	}
+	ACameraActor* Camera = DevCinemaCamera.Get();
+	if (!Camera)
+	{
+		FActorSpawnParameters Params;
+		Params.ObjectFlags |= RF_Transient;
+		Camera = World->SpawnActor<ACameraActor>(DevCinema.Start.Location, DevCinema.Start.Rotation.Rotator(), Params);
+		DevCinemaCamera = Camera;
+	}
+	if (!Camera)
+	{
+		return;
+	}
+	Camera->GetCameraComponent()->SetConstraintAspectRatio(false);   // the window's own shape (MO.Cam.LookAt's note)
+	Camera->GetCameraComponent()->FieldOfView = DevCinema.Start.FieldOfView;
+	Camera->SetActorLocationAndRotation(DevCinema.Start.Location, DevCinema.Start.Rotation);
+	SetViewTarget(Camera);
+
+	if (UIManagerComponent)
+	{
+		DevCinemaHUDBefore = UIManagerComponent->GetHUDMode();
+		UIManagerComponent->SetHUDMode(EMOHUDMode::Off);
+	}
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+	DevCinemaHidden.Reset();
+	if (DevCinema.bHideBody && GetPawn())
+	{
+		TArray<AActor*> Body;
+		GetPawn()->GetAttachedActors(Body, /*bResetArray=*/true, /*bRecursivelyIncludeAttachedActors=*/true);
+		Body.Add(GetPawn());
+		for (AActor* Part : Body)
+		{
+			if (!Part->IsHidden())
+			{
+				Part->SetActorHiddenInGame(true);
+				DevCinemaHidden.Add(Part);
+			}
+		}
+	}
+	DevCinemaElapsed = 0.0f;
+	bDevCinemaPlaying = true;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCinema] play: %.1f s, %.0f m, smooth %d, body hidden %d"), DevCinema.Seconds, FVector::Dist(DevCinema.Start.Location, DevCinema.End.Location) / 100.0f,
+		DevCinema.bSmooth ? 1 : 0, DevCinema.bHideBody ? 1 : 0);
+}
+
+void AMOPlayerController::TickDevCinema(float DeltaTime)
+{
+	if (!bDevCinemaPlaying)
+	{
+		return;
+	}
+	ACameraActor* Camera = DevCinemaCamera.Get();
+	if (!Camera)
+	{
+		DevCinemaStop(/*bFinished=*/false);
+		return;
+	}
+	DevCinemaElapsed += DeltaTime;
+	const float Alpha = DevCinemaElapsed / FMath::Max(DevCinema.Seconds, 0.01f);
+	const FMODevCinemaShot Shot = FMODevCinema::Evaluate(DevCinema.Start, DevCinema.End, Alpha, DevCinema.bSmooth);
+	Camera->SetActorLocationAndRotation(Shot.Location, Shot.Rotation);
+	Camera->GetCameraComponent()->FieldOfView = Shot.FieldOfView;
+	if (Alpha >= 1.0f)
+	{
+		DevCinemaStop(/*bFinished=*/true);
+	}
+}
+
+void AMOPlayerController::DevCinemaStop(bool bFinished)
+{
+	if (!bDevCinemaPlaying)
+	{
+		return;
+	}
+	bDevCinemaPlaying = false;
+	SetViewTarget(GetPawn());
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->SetHUDMode(DevCinemaHUDBefore);
+	}
+	SetIgnoreMoveInput(false);
+	SetIgnoreLookInput(false);
+	for (const TWeakObjectPtr<AActor>& Part : DevCinemaHidden)
+	{
+		if (Part.IsValid())
+		{
+			Part->SetActorHiddenInGame(false);
+		}
+	}
+	DevCinemaHidden.Reset();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCinema] %s after %.1f s"), bFinished ? TEXT("finished") : TEXT("stopped"), DevCinemaElapsed);
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { OpenDevCinemaMenu(); }));   // the next take
+}
+
+void AMOPlayerController::ServerDevSpawn_Implementation(FName Id, int32 Count)
+{
+	if (!ServerAllowsDevCheats(TEXT("spawn")))
+	{
+		return;
+	}
+	auto Say = [this](const FText& Text)
+	{
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(Text, 4.0f);
+		}
+	};
+	FMODevSpawnChoice Choice;
+	if (!UMOSpawnManagerSubsystem::FindDevSpawnChoice(Id, Choice))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] spawn -> %s: not on the menu"), *Id.ToString());
+		Say(FText::Format(NSLOCTEXT("MOConsole", "SpawnUnknown", "Nothing called {0} to spawn."), FText::FromName(Id)));
+		return;
+	}
+	UMOSpawnManagerSubsystem* Spawner = GetWorld() ? GetWorld()->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+	const APawn* Viewer = GetPawn();
+	const int32 Wanted = FMath::Clamp(Count, 1, 20);
+	int32 Spawned = 0;
+	FString Failure = !Spawner ? FString(TEXT("no spawn manager")) : !Viewer ? FString(TEXT("no pawn")) : FString();
+	for (int32 i = 0; Spawner && Viewer && i < Wanted; ++i)
+	{
+		const float SideCm = (i - (Wanted - 1) * 0.5f) * 250.0f;   // side by side, across the view
+		const APawn* Made = Spawner->DevSpawnChoice(Choice, Viewer, GetControlRotation(), SideCm, Failure);
+		if (Made)
+		{
+			++Spawned;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] spawn -> %s: %s at %s, %.0f cm from %s"), *Choice.Id.ToString(), *Made->GetName(), *Made->GetActorLocation().ToString(),
+				FVector::Dist(Made->GetActorLocation(), Viewer->GetActorLocation()), *Viewer->GetName());
+		}
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] spawn -> %s: %d of %d spawned%s%s"), *Choice.Id.ToString(), Spawned, Wanted, Failure.IsEmpty() ? TEXT("") : TEXT(": "), *Failure);
+	Say(Spawned == 0
+		? FText::Format(NSLOCTEXT("MOConsole", "SpawnFailed", "Couldn't spawn {0}: {1}"), Choice.Label, FText::FromString(Failure))
+		: FText::Format(NSLOCTEXT("MOConsole", "SpawnDone", "Spawned {0} x{1}"), Choice.Label, FText::AsNumber(Spawned)));
+}
+
 void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 {
 	if (!FMODevMode::IsEnabled())
@@ -2353,6 +2804,8 @@ void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 	});
 	// Caves are not world features (they are the generator's cave field, only in limestone): their own entry, searched by FMOWorldGen::FindNearestCaveMouth.
 	Options.Add({ FName(TEXT("CaveEntrance")), NSLOCTEXT("MOConsole", "PoiCave", "Cave entrance") });
+	// Nor are floating islands: the generator's too, each with its own voxel stamps.
+	Options.Add({ FName(TEXT("FloatingIsland")), NSLOCTEXT("MOConsole", "PoiIsland", "Floating island") });
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
 		[this](FName Id) { ServerDevTeleportToFeature(Id); });
 }
@@ -2393,6 +2846,45 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi CaveEntrance: mouth at %s (slope %.0f deg), %.1f km away, found in %.1f s"), *Mouth.ToCompactString(), SlopeDeg,
 			FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Mouth)) / 100000.0, FPlatformTime::Seconds() - Start);
 		BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
+		return;
+	}
+	if (Traveller && FeatureId == FName(TEXT("FloatingIsland")))
+	{
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(this);
+		const FVector From = Traveller->GetActorLocation();
+		TArray<FMOFloatingIsland> Islands;
+		if (Seeds && Seeds->HasActiveSeed())
+		{
+			FMOWorldGen::FindFloatingIslands(*Params, From.X, From.Y, 3000000.0, Seeds->GetActiveTerrainSeed(), Islands);
+		}
+		// On top of the nearest, on rock with room round it: the middle if it will do, else the first good spot on a widening ring (a torn island's middle can be a gap).
+		for (const FMOFloatingIsland& Island : Islands)
+		{
+			for (int32 Ring = 0; Ring <= 6; ++Ring)
+			{
+				const double RadiusCm = Island.RadiusCm * Ring / 8.0;
+				for (int32 Step = 0; Step < (Ring == 0 ? 1 : 12); ++Step)
+				{
+					const double Angle = UE_TWO_PI * Step / 12.0;
+					const double X = Island.Center.X + RadiusCm * FMath::Cos(Angle), Y = Island.Center.Y + RadiusCm * FMath::Sin(Angle);
+					FMOIslandSurfacePoint Point;
+					if (FMOWorldGen::SampleIslandSurface(*Params, X, Y, Seeds->GetActiveTerrainSeed(), 200.0f, Point))
+					{
+						const float StandZ = Point.TopCm + FMOFloatingIsland::TopSlabProudCm;
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi FloatingIsland: top at x=%.0f y=%.0f z=%.0f, %.0f m above the land, %.1f km away (of %d within 30 km)"), X, Y, StandZ,
+							(StandZ - Island.GroundCm) / 100.0f, FVector2D::Distance(FVector2D(From), FVector2D(X, Y)) / 100000.0, Islands.Num());
+						BeginDevTeleportLanding(Traveller, FVector(X, Y, StandZ), FRotator(-6.0f, FMath::RandRange(0.0f, 360.0f), 0.0f));
+						return;
+					}
+				}
+			}
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi FloatingIsland: none within 30 km to stand on (%d found)"), Islands.Num());
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOConsole", "PoiNoIsland", "No floating island within 30 km."), 5.0f);
+		}
 		return;
 	}
 	UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(this);

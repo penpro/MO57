@@ -2504,3 +2504,7 @@ References: CL-0385, CL-0386, CL-0391
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0393
 Status: CLAIM MOSpawnManagerSubsystem.h/.cpp, MOPlayerController.h/.cpp, MOCheatSubsystem.cpp, Tests/MOFrameworkTests.cpp for the `spawn` console command and menu (N-353), and MOCharacter.cpp, whose N-332 fix the promo session handed over. The promo is on hold on Wes's verdict (Docs/DECISIONS.md) and CL-0385's window ends. The editor PID 44864 and its game PID 46852 are Wes's: no agent closes them. When he closes them this session takes the build window: ue.py build (dev saves scrapped), ue.py auto, then spawn and check_ai_walk in a -game instance.
 References: CL-0385, CL-0391, CL-0392
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0394
+Status: RELEASE CL-0393: no editor, build or instance of mine runs; the editor is Wes's. N-353 and N-332 built and verified on DARKSIDE: ue.py auto 458 / 0, Tools/check_spawn_menu.py PASS, Tools/check_dev_tools.py PASS, Tools/check_ai_walk.py AI WALK PASS at 116 fps. Not run: a joiner in co-op on any of these, and a Shipping build. UNCOMMITTED and needed: Plugins/MOFramework/Content/UI/WBP_ConfirmationWidget.uasset, WBP_TextInputModal.uasset, WBP_QuickPickModal.uasset, UI/Splash/T_Splash_PenumbraMark.uasset. Without them a clone has the old dialogs with no Menu button and the old mark, and no error.
+References: CL-0391, CL-0392, CL-0393

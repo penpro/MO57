@@ -513,6 +513,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
+	/** The view from the eyes instead of over the shoulder (Wes, Nov 6 2026): the camera on the head's bone, the head hidden from this player's own view, the body turning
+	 *  with the look. Local to the player whose view it is (AMOPlayerController::DevSetFirstPerson). */
+	void SetFirstPersonView(bool bFirstPerson);
+	bool IsFirstPersonView() const { return bFirstPersonView; }
+
+	/** What this player's own view hides in first person. */
+	virtual void ApplyFirstPersonVisibility(bool bFirstPerson);
+
 	/** Apply game settings (FOV, sensitivity) to this character's camera. */
 	UFUNCTION(BlueprintCallable, Category="MO|Camera")
 	void ApplyGameSettings();
@@ -1509,6 +1517,19 @@ private:
 
 	/** Space is held while swimming: rise (a local input flag; the movement component replicates the resulting move). */
 	bool bSwimUpHeld = false;
+
+	/** Space is held while flying: rise. TickFlightInput adds it, and Ctrl or C to sink, to the move. */
+	bool bFlyUpHeld = false;
+	void TickFlightInput();
+
+	/** SetFirstPersonView: what the arm goes back to. */
+	bool bFirstPersonView = false;
+	float ThirdPersonArmLength = 0.0f;
+	FVector ThirdPersonSocketOffset = FVector::ZeroVector;
+	FVector ThirdPersonBoomLocation = FVector::ZeroVector;
+	bool bThirdPersonBoomCollision = true;
+	bool bThirdPersonCameraLag = false;
+	bool bThirdPersonCameraRotationLag = false;
 	bool bWasSwimmingLastTick = false;
 
 	// ---- swim animation ----

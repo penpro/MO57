@@ -10,6 +10,8 @@
 #include "MOHarvestActions.h"        // FMOInstanceRef, FMOHarvestOutcome (ServerBeginHarvest, ClientHarvestOutcome)
 #include "MOKnowledgeComponent.h"     // FMOInspectionResult (ClientInspectionResult)
 #include "MOSurvivorCommands.h"       // FMOSurvivorCommand (ServerSurvivorCommand)
+#include "MODevCinema.h"
+#include "MOHUDMode.h"
 #include "MOPlayerController.generated.h"
 
 /**
@@ -974,6 +976,37 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerDevTeleportToFeature(FName FeatureId);
 
+	/** Open the spawn menu: survivors and every animal (UMOSpawnManagerSubsystem::GetDevSpawnChoices). With a name it skips the popup and spawns Count of it. */
+	void OpenDevSpawnPicker(const FString& Id = FString(), int32 Count = 1);
+
+	/** Put Count (at most 20) of a spawn-menu choice on the ground in front of THIS player's view. Only a name on the menu spawns: a client can't name any class. */
+	UFUNCTION(Server, Reliable)
+	void ServerDevSpawn(FName Id, int32 Count);
+
+	/** The spawn menu's Prey AI / Predator AI switch. State: 1 on, 0 off, -1 the other way from now. */
+	void DevToggleCreatureAI(bool bPredator, int32 State = -1);
+
+	UFUNCTION(Server, Reliable)
+	void ServerDevSetCreatureAI(bool bPredator, bool bOn);
+
+	/** What the server's switches are now, so this player's spawn menu shows them right. */
+	UFUNCTION(Client, Reliable)
+	void ClientDevCreatureAIState(bool bPreyOn, bool bPredatorOn);
+
+	/** First person on the pawn this player drives, and on any it possesses after. State: 1 on, 0 off, -1 the other way from now. */
+	void DevSetFirstPerson(int32 State = -1);
+
+	/** Flying (UMOCharacterMovementComponent::SetWantsToFly), and a double jump toggles it from then on. State as above. */
+	void DevSetFlying(int32 State = -1);
+
+	/** The `cinema` console command: no arguments opens the controls; start, end, play [seconds], stop. */
+	void DevCinemaCommand(const TArray<FString>& Args);
+	void OpenDevCinemaMenu();
+	void DevCinemaCapture(bool bEnd);
+	void DevCinemaPlay();
+	void DevCinemaStop(bool bFinished);
+	bool IsDevCinemaPlaying() const { return bDevCinemaPlaying; }
+
 protected:
 	/** The popup currently open, if any (prevents stacking a second one). */
 	TWeakObjectPtr<UMOTextInputDialog> DevConsoleDialog;
@@ -1010,6 +1043,29 @@ protected:
 
 	/** Last few commands, shown in the popup as a reminder. */
 	TArray<FString> DevConsoleHistory;
+
+	/** The server's Prey AI / Predator AI switches as this player last heard them. */
+	bool bDevPreyAIShown = true;
+	bool bDevPredatorAIShown = true;
+
+	/** DevSetFirstPerson: wanted, and on which pawn it is now. */
+	bool bDevFirstPerson = false;
+	TWeakObjectPtr<class AMOCharacter> DevFirstPersonPawn;
+	void ApplyDevFirstPerson(APawn* InPawn);
+
+	/** A double jump toggles flying: in a creative world from the start, anywhere else once `fly` has been typed. */
+	bool bDevFlyUnlocked = false;
+	double LastJumpPressSeconds = -1000.0;
+	static constexpr double DoubleJumpSeconds = 0.3;
+
+	/** `cinema`: the two captures, and the move while it plays. */
+	FMODevCinema DevCinema;
+	bool bDevCinemaPlaying = false;
+	float DevCinemaElapsed = 0.0f;
+	TWeakObjectPtr<class ACameraActor> DevCinemaCamera;
+	EMOHUDMode DevCinemaHUDBefore = EMOHUDMode::Full;
+	TArray<TWeakObjectPtr<AActor>> DevCinemaHidden;
+	void TickDevCinema(float DeltaTime);
 
 	// ============================================================================
 	// INPUT HANDLERS - BUILDING

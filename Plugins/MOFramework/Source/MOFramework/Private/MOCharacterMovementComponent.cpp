@@ -5,6 +5,7 @@
 #include "MOBuildableActor.h"
 #include "MONetDiagnostics.h"
 #include "MODevMode.h"
+#include "MOWorldCreationTypes.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PhysicsVolume.h"
@@ -22,6 +23,10 @@ static TAutoConsoleVariable<float> CVarGlideSpeed(TEXT("MO.Dev.GlideSpeed"), 110
 	TEXT("Dev glider (MO.Dev.Glider): the forward speed it settles to, cm/s (default 1100 = 40 km/h, a hang glider at trim)."), ECVF_Default);
 static TAutoConsoleVariable<float> CVarGlideSink(TEXT("MO.Dev.GlideSink"), 100.0f,
 	TEXT("Dev glider (MO.Dev.Glider): the steady descent, cm/s (default 100 = 1 m/s)."), ECVF_Default);
+
+// ---- flying (see UMOCharacterMovementComponent::SetWantsToFly) ----
+static TAutoConsoleVariable<float> CVarFlySpeed(TEXT("MO.Dev.FlySpeed"), 2000.0f, TEXT("Flying (fly): the speed, cm/s (default 2000 = 72 km/h)."), ECVF_Default);
+static TAutoConsoleVariable<float> CVarFlySprintSpeed(TEXT("MO.Dev.FlySprintSpeed"), 6000.0f, TEXT("Flying (fly): the speed with Shift held, cm/s (default 6000 = 216 km/h)."), ECVF_Default);
 
 static TAutoConsoleVariable<int32> CVarDebugClimbCorners(TEXT("MO.Debug.ClimbCorners"), 0,
 	TEXT("Log every climbing step that meets rock while moving across: what it met, whether the climber turned into an inside corner, and whether the hold rule undid the step (off by default)."),
@@ -61,6 +66,7 @@ public:
 	uint8 bSavedWantsToJog : 1;
 	uint8 bSavedWantsToSprint : 1;
 	uint8 bSavedWantsToGlide : 1;
+	uint8 bSavedWantsToFly : 1;
 	// The traversal under way and the face held at the start of the move: a replay after a correction runs them the same way (MOTraversal.h).
 	UMOCharacterMovementComponent::FTraverseState SavedTraverse;
 	FVector SavedClimbNormal = FVector::ZeroVector;
@@ -68,7 +74,7 @@ public:
 	// How far the move rode the waves (RideTheWaves), recorded after it ran: a replay re-applies it instead of reading the waves of now.
 	float SavedRideCm = 0.0f;
 
-	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0), bSavedWantsToGlide(0) {}
+	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0), bSavedWantsToGlide(0), bSavedWantsToFly(0) {}
 
 	virtual void Clear() override
 	{
@@ -76,6 +82,7 @@ public:
 		bSavedWantsToJog = 0;
 		bSavedWantsToSprint = 0;
 		bSavedWantsToGlide = 0;
+		bSavedWantsToFly = 0;
 		SavedTraverse = UMOCharacterMovementComponent::FTraverseState();
 		SavedClimbNormal = FVector::ZeroVector;
 		SavedClimbSurface = EMOClimbSurface::None;
@@ -107,13 +114,17 @@ public:
 		{
 			Result |= FLAG_Custom_2;
 		}
+		if (bSavedWantsToFly)
+		{
+			Result |= FLAG_Custom_3;
+		}
 		return Result;
 	}
 
 	virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override
 	{
 		const FSavedMove_MO* Other = static_cast<const FSavedMove_MO*>(NewMove.Get());
-		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint || bSavedWantsToGlide != Other->bSavedWantsToGlide)
+		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint || bSavedWantsToGlide != Other->bSavedWantsToGlide || bSavedWantsToFly != Other->bSavedWantsToFly)
 		{
 			return false;   // a gait (or glider) change is a move boundary: the server must see where it happened
 		}
@@ -132,6 +143,7 @@ public:
 			bSavedWantsToJog = Move->bWantsToJog;
 			bSavedWantsToSprint = Move->bWantsToSprint;
 			bSavedWantsToGlide = Move->bWantsToGlide;
+			bSavedWantsToFly = Move->bWantsToFly;
 			SavedTraverse = Move->Traverse;
 			SavedClimbNormal = Move->ClimbNormal;
 			SavedClimbSurface = Move->ClimbSurface;
@@ -146,6 +158,7 @@ public:
 			Move->bWantsToJog = bSavedWantsToJog;   // a replayed move runs at the gait it was made with
 			Move->bWantsToSprint = bSavedWantsToSprint;
 			Move->bWantsToGlide = bSavedWantsToGlide;
+			Move->bWantsToFly = bSavedWantsToFly;
 			Move->Traverse = SavedTraverse;          // ... and from the traversal / climb it started in
 			Move->ClimbNormal = SavedClimbNormal;
 			Move->ClimbSurface = SavedClimbSurface;
@@ -191,6 +204,7 @@ void UMOCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 	bWantsToJog = bJog;
 	bWantsToSprint = bSprint;
 	bWantsToGlide = (Flags & FSavedMove_Character::FLAG_Custom_2) != 0;   // the developer gate is IsGliding's, judged here by the server's own mode
+	bWantsToFly = (Flags & FSavedMove_Character::FLAG_Custom_3) != 0;     // the gate is IsFlightAllowed's, judged the same way
 	if (bChanged && MOOwner && !MOOwner->IsLocallyControlled())
 	{
 		MOOwner->ApplyGaitFromMovement(bJog, bSprint);   // the server's copy of the character learns the gait (exertion, metabolism, what other players see)
@@ -215,6 +229,8 @@ UMOCharacterMovementComponent::UMOCharacterMovementComponent()
 	bWantsToJog = 0;
 	bWantsToSprint = 0;
 	bWantsToGlide = 0;
+	bWantsToFly = 0;
+	BrakingDecelerationFlying = 8000.0f;   // let go of the keys and it stops within a second, instead of drifting on (the stock 0)
 	// Stock swimming defaults are for a game character; these are a person's (a steady crawl is about 1 m/s; fast front crawl 1.5-2 m/s).
 	MaxSwimSpeed = 110.0f;
 	BrakingDecelerationSwimming = 300.0f;
@@ -354,6 +370,20 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 	RefreshWater();
 	bSwimmableWater = !bBuried && ShouldSwim(MovementMode == MOVE_Swimming, WaterColumnDepthCm, SwimEnterDepthCm, SwimExitDepthCm);
 
+	// Flying is asked for in the moves. It starts from the ground, air or water modes only (never a climb's custom mode or a ragdoll), and nothing else in the game flies.
+	if (CharacterOwner)
+	{
+		const bool bFly = bWantsToFly && IsFlightAllowed();
+		if (bFly && (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking || MovementMode == MOVE_Falling || MovementMode == MOVE_Swimming))
+		{
+			SetMovementMode(MOVE_Flying);
+		}
+		else if (!bFly && MovementMode == MOVE_Flying)
+		{
+			SetMovementMode(MOVE_Falling);
+		}
+	}
+
 	// Mode changes only from the ground / air / water modes: never override flying, a custom mode or the ragdoll's disabled movement.
 	if (CharacterOwner && CanEverSwim())
 	{
@@ -380,6 +410,10 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 
 float UMOCharacterMovementComponent::GetMaxAcceleration() const
 {
+	if (MovementMode == MOVE_Flying)
+	{
+		return 8000.0f;   // up to full speed in under a second: a way to get around, not a body's strength
+	}
 	// GASP sets its acceleration on the ground and in the air alike (air control scales it there); the other modes keep MaxAcceleration, and so does
 	// the dev glider (its input is the move's acceleration over this: a value that moved with the speed gave the joiner 8 corrections a flight, Oct 28).
 	if (bAnimationSetMovement && (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking || (MovementMode == MOVE_Falling && !IsGliding())))
@@ -428,6 +462,10 @@ FRotator UMOCharacterMovementComponent::GetDeltaRotation(float DeltaTime) const
 float UMOCharacterMovementComponent::GetMaxSpeed() const
 {
 	float Base = Super::GetMaxSpeed();
+	if (MovementMode == MOVE_Flying)
+	{
+		return bWantsToSprint ? CVarFlySprintSpeed.GetValueOnAnyThread() : CVarFlySpeed.GetValueOnAnyThread();   // any thread: see the glider below
+	}
 	if (MovementMode == MOVE_Falling && IsGliding())
 	{
 		// PhysFalling's CalcVelocity brakes any air speed above the max (the walk speed) back down to it, every step: measured on two processes
@@ -464,6 +502,11 @@ FVector UMOCharacterMovementComponent::GlideVelocity(const FVector& Velocity, co
 		Z = FMath::FInterpTo(FMath::Min(Velocity.Z, -(double)SinkCm), -(double)SinkCm, (double)DeltaSeconds, 3.0);   // the wing's lift brakes a faster fall
 	}
 	return FVector(Horizontal.X, Horizontal.Y, Z);
+}
+
+bool UMOCharacterMovementComponent::IsFlightAllowed() const
+{
+	return FMODevMode::IsHostInDevMode(this) || FMOWorldRules::IsCreative(this);
 }
 
 bool UMOCharacterMovementComponent::IsGliding() const

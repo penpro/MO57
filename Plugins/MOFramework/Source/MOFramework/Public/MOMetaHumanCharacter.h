@@ -221,6 +221,7 @@ protected:
 	/** The skin look pass (AMOCharacter) + this character's grooms and colours (skin tone, hair, eyes): it runs at BeginPlay and again once the
 	 *  MetaHuman component has rebuilt its face materials, so the look survives that rebuild. */
 	virtual void ApplySkinLook() override;
+	virtual void ApplyFirstPersonVisibility(bool bFirstPerson) override;
 
 public:
 	/** Its base's sex (the base replicates and saves with the look); the class default without a base. */

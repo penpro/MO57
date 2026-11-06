@@ -121,3 +121,5 @@ UI group, no mips, sRGB; `BIOME_PREVIEW_SOURCES` re-imports one card and leaves 
 - Wes's vote, Oct 23: no high-elevation starts and a strand start faces the water (N-203, built: section 2). The panel itself: thumbs up.
 - End to end: `python Tools/world_creation_check.py` (host + joiner: the shape reaches the joiner's terrain, a pace scales an
   inspection, the start lands in the biome, save / load keeps it all with no GENERATOR CHANGED).
+
+**Flying in a creative world (Nov 6 2026, Wes):** a double jump toggles flying with nothing typed (`fly`, `Docs/UI.md`). Like instant digging, it is the world's rule, never a survival world's.

@@ -1454,6 +1454,8 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
 	static bool GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out);
 	static bool GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out);
+	/** The floating islands within RadiusCm of (X, Y) in world XY, nearest first. */
+	static void FindFloatingIslands(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FMOFloatingIsland>& Out);
 	static float IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static float IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
 	static float IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm);

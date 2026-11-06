@@ -636,6 +636,7 @@ void AMOCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	TickWater(DeltaTime);
+	TickFlightInput();
 	UpdateLandingForAnimation();
 	UpdateDriverHold();
 	UpdateTraversalAnimation(DeltaTime);
@@ -820,7 +821,9 @@ void AMOCharacter::RequestMove_Implementation(FVector2D MovementInput)
 			const float Excess = FMath::Max(FMath::Abs(Pitch) - DeadZone, 0.0f);
 			SwimRotation.Pitch = FMath::Sign(Pitch) * Excess * (90.0f / (90.0f - DeadZone));
 		}
-		const FVector ForwardDirection = IsSwimming() ? SwimRotation.Vector() : FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		// Flying goes where you look, up and down included.
+		const bool bFlying = GetCharacterMovement() && GetCharacterMovement()->IsFlying();
+		const FVector ForwardDirection = bFlying ? Rotation.Vector() : (IsSwimming() ? SwimRotation.Vector() : FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X));
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
 		AddMovementInput(ForwardDirection, MovementInput.Y);
@@ -857,6 +860,11 @@ void AMOCharacter::RequestLook_Implementation(FVector2D LookInput)
 
 void AMOCharacter::RequestJumpStart_Implementation()
 {
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFlying())
+	{
+		bFlyUpHeld = true;   // rise while held (TickFlightInput adds the input)
+		return;
+	}
 	if (IsSwimming())
 	{
 		bSwimUpHeld = true;   // rise while held (TickWater adds the input)
@@ -876,6 +884,7 @@ void AMOCharacter::RequestJumpStart_Implementation()
 void AMOCharacter::RequestJumpEnd_Implementation()
 {
 	bSwimUpHeld = false;
+	bFlyUpHeld = false;
 	StopJumping();
 }
 
@@ -898,6 +907,10 @@ void AMOCharacter::RequestToggleJog_Implementation()
 
 void AMOCharacter::RequestCrouchToggle_Implementation()
 {
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFlying())
+	{
+		return;   // flying: the crouch key sinks while held (TickFlightInput)
+	}
 	if (bIsCrouched)
 	{
 		UnCrouch();
@@ -1062,9 +1075,92 @@ void AMOCharacter::ApplyGameSettings()
 	LookSensitivity = Settings->CameraSensitivity;
 }
 
+void AMOCharacter::TickFlightInput()
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move || !Move->IsFlying())
+	{
+		bFlyUpHeld = false;
+		return;
+	}
+	if (bIsDead || !IsLocallyControlled())
+	{
+		return;
+	}
+	// The crouch action is a toggle on press, and flying wants held: the keys themselves (the local input; the movement component replicates the resulting move).
+	const APlayerController* PC = Cast<APlayerController>(Controller);
+	const bool bSink = PC && (PC->IsInputKeyDown(EKeys::LeftControl) || PC->IsInputKeyDown(EKeys::C));
+	const float Climb = (bFlyUpHeld ? 1.0f : 0.0f) - (bSink ? 1.0f : 0.0f);
+	if (Climb != 0.0f)
+	{
+		AddMovementInput(FVector::UpVector, Climb);
+	}
+}
+
+void AMOCharacter::SetFirstPersonView(bool bFirstPerson)
+{
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (bFirstPersonView == bFirstPerson || !CameraBoom || !Move)
+	{
+		return;
+	}
+	bFirstPersonView = bFirstPerson;
+	USkeletalMeshComponent* Body = GetMesh();
+	static const FName HeadBone(TEXT("head"));
+	if (bFirstPerson)
+	{
+		// The arm's end sits at the eyes, moving with the head's bone (a creature with no head bone: at eye height on the capsule). The body turns with the view.
+		bIsCameraTransitioning = false;
+		ThirdPersonArmLength = CameraBoom->TargetArmLength;
+		ThirdPersonSocketOffset = CameraBoom->SocketOffset;
+		ThirdPersonBoomLocation = CameraBoom->GetRelativeLocation();
+		bThirdPersonBoomCollision = CameraBoom->bDoCollisionTest;
+		bThirdPersonCameraLag = CameraBoom->bEnableCameraLag;
+		bThirdPersonCameraRotationLag = CameraBoom->bEnableCameraRotationLag;
+		CameraBoom->TargetArmLength = 0.0f;
+		CameraBoom->SocketOffset = FVector(12.0f, 0.0f, 8.0f);   // in front of the head's bone, at the eyes
+		CameraBoom->bDoCollisionTest = false;
+		CameraBoom->bEnableCameraLag = false;
+		CameraBoom->bEnableCameraRotationLag = false;
+		if (Body && Body->DoesSocketExist(HeadBone))
+		{
+			CameraBoom->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetNotIncludingScale, HeadBone);
+			CameraBoom->SetRelativeLocation(FVector::ZeroVector);
+		}
+		else
+		{
+			CameraBoom->SetRelativeLocation(FVector(0.0f, 0.0f, BaseEyeHeight));
+		}
+	}
+	else
+	{
+		CameraBoom->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		CameraBoom->SetRelativeLocation(ThirdPersonBoomLocation);
+		CameraBoom->TargetArmLength = ThirdPersonArmLength;
+		CameraBoom->SocketOffset = ThirdPersonSocketOffset;
+		CameraBoom->bDoCollisionTest = bThirdPersonBoomCollision;
+		CameraBoom->bEnableCameraLag = bThirdPersonCameraLag;
+		CameraBoom->bEnableCameraRotationLag = bThirdPersonCameraRotationLag;
+	}
+	bUseControllerRotationYaw = bFirstPerson;
+	Move->bOrientRotationToMovement = !bFirstPerson;
+	ApplyFirstPersonVisibility(bFirstPerson);
+}
+
+void AMOCharacter::ApplyFirstPersonVisibility(bool bFirstPerson)
+{
+	// A body with no head bone would fill the view: gone from this player's own view, its shadow kept. A survivor hides less (AMOMetaHumanCharacter).
+	USkeletalMeshComponent* Body = GetMesh();
+	if (Body && !Body->DoesSocketExist(TEXT("head")))
+	{
+		Body->SetOwnerNoSee(bFirstPerson);
+		Body->SetCastHiddenShadow(bFirstPerson);
+	}
+}
+
 void AMOCharacter::ToggleCameraShoulder()
 {
-	if (!CameraBoom)
+	if (!CameraBoom || bFirstPersonView)
 	{
 		return;
 	}
@@ -1141,6 +1237,14 @@ void AMOCharacter::SetUpLocomotionDriver()
 		return;
 	}
 	LoadedBodyRetargeter = Retargeter;
+
+	// GASP's motion matching picks its pose from the trajectory it predicts out of the movement's velocity and acceleration. Path following by default sets the velocity and leaves
+	// the acceleration at 0, so an AI-walked pawn's legs ran at half their cadence while it went along at full speed (Wes, Nov 6: "drag floating instead of walking"; N-332,
+	// Tools/check_ai_walk.py: at the same 200 cm/s the player's feet pass 2.0 times a second, the survivor's 1.0). Following the path through acceleration, it walks as a player does.
+	if (FNavMovementProperties* NavProperties = Move->GetNavMovementProperties())
+	{
+		NavProperties->bUseAccelerationForPaths = true;
+	}
 
 	// The driver sits exactly on the body (attached at identity), so it follows every offset ACharacter gives the body -- the crouch's capsule
 	// adjustment, the network smoothing, the swimmer's lift -- and GASP's foot placement traces from where the body stands.

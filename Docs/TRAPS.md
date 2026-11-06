@@ -272,6 +272,8 @@
 
 - **`MO.Test.HitTest` does not click** (Oct 25): it only asks Slate where a real click at a widget's centre WOULD land (REACHES /
   BLOCKED). Style swaps logged after a hit test were Wes clicking in the instance window. `MO.Test.ClickWidget` clicks (simulated).
+- **`MO.UI.Close` does not close a modal popup** (Nov 6): a quick-pick menu stays open and holds every game key, so input tests after it read nothing. Press Esc: `MO.Test.PressKey Escape`.
+- **Two injected key presses need timing from inside the game** (Nov 6): `ui.console` waits half a second after each command, and `MO.Delay` runs at whole seconds, so `MO.Delay 0.05` and `MO.Delay 0.22` ran 13 ms apart: one held press, no double jump. `Tools/check_dev_tools.py` `jump_twice` times them with a Slate tick callback. A control that passes because the press never counted proves nothing: test the positive too.
 - **Screenshots seconds apart cannot measure jitter** (Oct 25, groom hair): the idle animation and the wind move more between two `shot`s
   than any per-frame fault -> consecutive frames (`Tools/motion_probe.py capture`, ~23 fps of a game window), a frozen body
   (`set_component_tick_enabled(False)` on its skeletal meshes) or Wes's eye. `r.DumpingMovie 1` writes MovieFrame*.png asynchronously.

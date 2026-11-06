@@ -111,6 +111,27 @@ bool FMOWorldGen::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 C
 	return bFound;
 }
 
+void FMOWorldGen::FindFloatingIslands(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FMOFloatingIsland>& Out)
+{
+	const double Cell = FMath::Max(1.0f, Params.Tuning.IslandCellCm);
+	const FVector2D From(X, Y);
+	int64 Cx0 = 0, Cy0 = 0;
+	WorldToCell(Params, X, Y, Cell, Cx0, Cy0);
+	const int64 Span = (int64)FMath::CeilToDouble(RadiusCm / Cell) + 1;
+	for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
+	{
+		for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
+		{
+			FMOFloatingIsland Island;
+			if (GetFloatingIslandInCell(Params, Cx, Cy, Seed, Island) && FVector2D::Distance(Island.Center, From) <= RadiusCm)
+			{
+				Out.Add(Island);
+			}
+		}
+	}
+	Out.Sort([From](const FMOFloatingIsland& A, const FMOFloatingIsland& B) { return FVector2D::DistSquared(A.Center, From) < FVector2D::DistSquared(B.Center, From); });
+}
+
 bool FMOWorldGen::GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out)
 {
 	const bool bFound = FMOWorldGenDomain::GetFloatingIslandInCell(Params, CellX, CellY, Seed, Out);

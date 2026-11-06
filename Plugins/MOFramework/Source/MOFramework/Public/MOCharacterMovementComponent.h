@@ -76,6 +76,18 @@ public:
 	/** Flying the glider right now: wants to, falling, and the world's host is in developer mode. */
 	bool IsGliding() const;
 
+	// ---- flying (Wes, Nov 6 2026: "a fly mode in creative where you double jump to turn on flying") ----
+	//
+	// A creative world's way to get around, and a developer's anywhere: never a survival world's simulation (Principle 11, its creative exception). It is movement
+	// input like the gait and the glider: it rides in the saved moves (FLAG_Custom_3) and the server judges the gate itself. Space rises, Ctrl or C sinks, Shift is faster.
+
+	/** Set where the input happens (the owning client, or the host for its own pawn); the server takes it from the moves. */
+	void SetWantsToFly(bool bFly) { bWantsToFly = bFly; }
+	bool WantsToFly() const { return bWantsToFly; }
+
+	/** May this pawn fly here: a creative world, or the world's host is in developer mode. */
+	bool IsFlightAllowed() const;
+
 	// ---- traversal: vault / hop up / pull up, and climbing (MOTraversal.h; Wes, Oct 26 2026) ----
 	//
 	// Two custom movement modes. Traverse follows the path worked out at the jump (FMOTraversal::FPath) for the move's duration; Climb holds the body
@@ -369,6 +381,9 @@ private:
 	uint8 bWantsToSprint : 1;
 	/** The dev glider (see SetWantsToGlide); in the saved moves as FLAG_Custom_2. */
 	uint8 bWantsToGlide : 1;
+
+	/** Flying (see SetWantsToFly); in the saved moves as FLAG_Custom_3. */
+	uint8 bWantsToFly : 1;
 	float GaitJogSpeed = 550.0f;
 	float GaitSprintSpeed = 700.0f;
 

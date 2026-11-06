@@ -6,6 +6,8 @@
 #include "MOCreatureDefinitionRow.h"
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
+#include "BrainComponent.h"
+#include "MOSpawnManagerSubsystem.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISense.h"
 #include "Perception/AISenseConfig_Sight.h"
@@ -70,6 +72,17 @@ void AMOCreatureController::Tick(float DeltaTime)
 			UpdateBlackboardThreatInfo();
 		}
 	}
+}
+
+bool AMOCreatureController::RunBehaviorTree(UBehaviorTree* BTAsset)
+{
+	const bool bRan = Super::RunBehaviorTree(BTAsset);
+	const UMOSpawnManagerSubsystem* Spawner = GetWorld() ? GetWorld()->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+	if (bRan && BrainComponent && Spawner && !Spawner->ShouldCreatureThink(GetPawn()))
+	{
+		BrainComponent->StopLogic(TEXT("DevAIOff"));
+	}
+	return bRan;
 }
 
 void AMOCreatureController::OnPossess(APawn* InPawn)

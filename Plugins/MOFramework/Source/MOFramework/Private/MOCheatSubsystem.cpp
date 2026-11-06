@@ -4114,23 +4114,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 10000.0, 2000000.0) : 300000.0;
 			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
 			const FVector C = Pawn->GetActorLocation();
-			const double Cell = FMath::Max(1.0f, P->Tuning.IslandCellCm);
-			int64 Cx0 = 0, Cy0 = 0;
-			FMOWorldGen::WorldToCell(*P, C.X, C.Y, Cell, Cx0, Cy0);
-			const int64 Span = (int64)FMath::CeilToDouble(Radius / Cell) + 1;
 			TArray<FMOFloatingIsland> Found;
-			for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
-			{
-				for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
-				{
-					FMOFloatingIsland I;
-					if (FMOWorldGen::GetFloatingIslandInCell(*P, Cx, Cy, Seeds->GetActiveTerrainSeed(), I) && FVector2D::Distance(I.Center, FVector2D(C)) <= Radius)
-					{
-						Found.Add(I);
-					}
-				}
-			}
-			Found.Sort([&C](const FMOFloatingIsland& A, const FMOFloatingIsland& B) { return FVector2D::DistSquared(A.Center, FVector2D(C)) < FVector2D::DistSquared(B.Center, FVector2D(C)); });
+			FMOWorldGen::FindFloatingIslands(*P, C.X, C.Y, Radius, Seeds->GetActiveTerrainSeed(), Found);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindIsland radius=%.0f found=%d (IslandChance %.2f)"), Radius, Found.Num(), P->Tuning.IslandChance);
 			for (int32 K = 0; K < FMath::Min(8, Found.Num()); ++K)
 			{
@@ -6548,6 +6533,68 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			if (PC)
 			{
 				PC->OpenDevFeaturePicker(Args.Num() > 0 ? Args[0] : FString());
+			}
+		}),
+		ECVF_Default));
+
+	// `spawn` opens a menu of survivors and every animal; the pick appears on the ground in front of you (Wes, Nov 6 2026). `spawn wolf 3` skips the popup.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("spawn"),
+		TEXT("Dev: pop up a menu of survivors and every animal; the pick appears on the ground in front of you. Usage: spawn [Name] [Count]  (spawn wolf 3, spawn Survivor_Zuri)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!PC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] spawn: needs a local player controller"));
+				return;
+			}
+			const bool bPreyAI = Args.Num() > 0 && Args[0].Equals(TEXT("preyai"), ESearchCase::IgnoreCase);
+			if (bPreyAI || (Args.Num() > 0 && Args[0].Equals(TEXT("predatorai"), ESearchCase::IgnoreCase)))
+			{
+				PC->DevToggleCreatureAI(!bPreyAI, Args.Num() > 1 ? (Args[1].ToBool() ? 1 : 0) : -1);
+				return;
+			}
+			PC->OpenDevSpawnPicker(Args.Num() > 0 ? Args[0] : FString(), Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 1);
+		}),
+		ECVF_Default));
+
+	// `cinema` opens the cinema controls: capture the camera's start and end, then Play hides the screen's UI and moves the camera between them (Wes, Nov 6 2026).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("cinema"),
+		TEXT("Dev: the cinema controls: capture the camera's start and end, then play the move between them with nothing else on screen (Esc stops it). Usage: cinema [start|end|play [seconds]|stop]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr)
+			{
+				PC->DevCinemaCommand(Args);
+			}
+		}),
+		ECVF_Default));
+
+	// `firstperson` / `fp`: the view from the eyes. `fly`: flying, which also lets a double jump toggle it from then on (a creative world allows that from the start).
+	for (const TCHAR* Name : { TEXT("firstperson"), TEXT("fp") })
+	{
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			Name,
+			TEXT("Dev: the first-person view. Usage: firstperson [0|1] (no argument toggles)"),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+			{
+				if (AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr)
+				{
+					PC->DevSetFirstPerson(Args.Num() > 0 ? (Args[0].ToBool() ? 1 : 0) : -1);
+				}
+			}),
+			ECVF_Default));
+	}
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("fly"),
+		TEXT("Dev: fly. Space rises, Ctrl or C sinks, Shift is faster; a double jump toggles it from then on. Usage: fly [0|1] (no argument toggles)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr)
+			{
+				PC->DevSetFlying(Args.Num() > 0 ? (Args[0].ToBool() ? 1 : 0) : -1);
 			}
 		}),
 		ECVF_Default));

@@ -18,7 +18,11 @@
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOMetaHumanCharacter.h"
+#include "MOSurvivorBase.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Misc/PackageName.h"
 #include "EngineUtils.h"
 #include "AIController.h"
 #include "BrainComponent.h"
@@ -485,8 +489,207 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 
 	// Select random class
 	const int32 ClassIndex = FMath::RandRange(0, Config.SpawnableClasses.Num() - 1);
-	TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[ClassIndex];
+	return ForceSpawnClassAtLocation(Category, Config.SpawnableClasses[ClassIndex], Location, Rotation);
+}
 
+TArray<FMODevSpawnChoice> UMOSpawnManagerSubsystem::GetDevSpawnChoices()
+{
+	TArray<FMODevSpawnChoice> Choices;
+
+	FMODevSpawnChoice Survivor;
+	Survivor.Id = FName(TEXT("Survivor"));
+	Survivor.Label = NSLOCTEXT("MOConsole", "SpawnSurvivor", "Survivor");
+	Survivor.bSurvivor = true;
+	Choices.Add(Survivor);
+	for (const FMOSurvivorBase& Base : UMOSurvivorBaseSettings::GetBases())
+	{
+		FMODevSpawnChoice Choice = Survivor;
+		Choice.Id = FName(*FString::Printf(TEXT("Survivor_%s"), *Base.Id.ToString()));
+		Choice.Label = FText::Format(NSLOCTEXT("MOConsole", "SpawnSurvivorBase", "Survivor: {0}"), Base.DisplayName);
+		Choice.SurvivorBase = Base.Id;
+		Choices.Add(Choice);
+	}
+
+	// Species -> class path. A folder's BP_<Species> wins over a plain <Species> (the wolf's Blueprint has no prefix).
+	TMap<FString, FString> Animals;
+	const FString MobsPath(TEXT("/MOFramework/MOBS"));
+	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+	TArray<FAssetData> Assets;
+	Registry.GetAssetsByPath(FName(*MobsPath), Assets, /*bRecursive=*/true);
+	for (const FAssetData& Asset : Assets)
+	{
+		// Editor: a Blueprint; cooked: its BlueprintGeneratedClass. The package name is the same in both.
+		const FString PackagePath = Asset.PackagePath.ToString();
+		if (!Asset.AssetClassPath.GetAssetName().ToString().Contains(TEXT("Blueprint")) || !PackagePath.StartsWith(MobsPath + TEXT("/")))
+		{
+			continue;
+		}
+		const FString Species = PackagePath.RightChop(MobsPath.Len() + 1);
+		const FString Name = FPackageName::GetShortName(Asset.PackageName);
+		const bool bPrefixed = Name == TEXT("BP_") + Species;
+		if (Species.Contains(TEXT("/")) || (!bPrefixed && Name != Species) || (!bPrefixed && Animals.Contains(Species)))
+		{
+			continue;
+		}
+		Animals.Add(Species, FString::Printf(TEXT("%s/%s.%s_C"), *PackagePath, *Name, *Name));
+	}
+	// The spawn categories' classes too: the world spawns them, and the registry may still be scanning in an uncooked game.
+	if (const UMOSpawnSettings* Settings = GetDefault<UMOSpawnSettings>())
+	{
+		for (const FMOSpawnCategoryConfig* Config : { &Settings->PreyConfig, &Settings->PredatorConfig })
+		{
+			for (const TSubclassOf<APawn>& Class : Config->SpawnableClasses)
+			{
+				if (Class)
+				{
+					FString Species = Class->GetName();
+					Species.RemoveFromStart(TEXT("BP_"));
+					Species.RemoveFromEnd(TEXT("_C"));
+					Animals.FindOrAdd(Species, Class->GetPathName());
+				}
+			}
+		}
+	}
+	Animals.KeySort([](const FString& A, const FString& B) { return A < B; });
+	for (const TPair<FString, FString>& Animal : Animals)
+	{
+		FMODevSpawnChoice Choice;
+		Choice.Id = FName(*Animal.Key);
+		Choice.Label = FText::FromString(FName::NameToDisplayString(Animal.Key, false));
+		Choice.ClassPath = Animal.Value;
+		Choices.Add(Choice);
+	}
+	return Choices;
+}
+
+bool UMOSpawnManagerSubsystem::FindDevSpawnChoice(FName Id, FMODevSpawnChoice& OutChoice)
+{
+	for (const FMODevSpawnChoice& Choice : GetDevSpawnChoices())
+	{
+		if (Choice.Id == Id)   // FName comparison: not case sensitive
+		{
+			OutChoice = Choice;
+			return true;
+		}
+	}
+	return false;
+}
+
+APawn* UMOSpawnManagerSubsystem::DevSpawnChoice(const FMODevSpawnChoice& Choice, const APawn* Viewer, const FRotator& ViewRotation, float SideCm, FString& OutFailure)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Viewer || World->GetNetMode() == NM_Client)
+	{
+		OutFailure = TEXT("needs the server and a pawn");
+		return nullptr;
+	}
+
+	EMOSpawnCategory Category = EMOSpawnCategory::Survivor;
+	TSubclassOf<APawn> PawnClass;
+	if (Choice.bSurvivor)
+	{
+		const TArray<TSubclassOf<APawn>> Classes = GetCategoryConfig(EMOSpawnCategory::Survivor).SpawnableClasses;
+		PawnClass = Classes.Num() > 0 ? Classes[FMath::RandRange(0, Classes.Num() - 1)] : TSubclassOf<APawn>();
+	}
+	else
+	{
+		PawnClass = LoadClass<APawn>(nullptr, *Choice.ClassPath);
+		const AMOCreature* Creature = PawnClass ? Cast<AMOCreature>(PawnClass->GetDefaultObject()) : nullptr;
+		const FMOCreatureDefinitionRow* Definition = Creature ? Creature->GetCreatureDefinitionRow() : nullptr;
+		Category = Definition && Definition->bIsPredator ? EMOSpawnCategory::Predator : EMOSpawnCategory::Prey;
+	}
+	if (!PawnClass)
+	{
+		OutFailure = FString::Printf(TEXT("no class for %s (%s)"), *Choice.Id.ToString(), *Choice.ClassPath);
+		return nullptr;
+	}
+
+	const FVector Forward = FRotator(0.0f, ViewRotation.Yaw, 0.0f).Vector();
+	const FVector Right(-Forward.Y, Forward.X, 0.0f);
+	const FVector At = Viewer->GetActorLocation() + Forward * DevSpawnDistanceCm + Right * SideCm;
+	FHitResult Hit;
+	if (!MOSpawnClearance::TraceVoxelGround(World, At.X, At.Y, At.Z + 5000.0f, At.Z - 10000.0f, Viewer, Hit))
+	{
+		OutFailure = TEXT("no ground there");
+		return nullptr;
+	}
+	if (MOSpawnClearance::IsUnderOpenWater(World, Hit.ImpactPoint))
+	{
+		OutFailure = TEXT("that spot is under water");
+		return nullptr;
+	}
+
+	const FVector Location = Hit.ImpactPoint + FVector(0.0f, 0.0f, MOSpawnClearance::CapsuleOf(PawnClass).HalfHeight + 5.0f);
+	const FRotator Facing(0.0f, (Viewer->GetActorLocation() - Location).Rotation().Yaw, 0.0f);
+	APawn* Spawned = ForceSpawnClassAtLocation(Category, PawnClass, Location, Facing, /*bFreeze=*/false);
+	if (!Spawned)
+	{
+		OutFailure = TEXT("the spawn failed");
+		return nullptr;
+	}
+
+	const FMOSurvivorBase* Base = UMOSurvivorBaseSettings::Find(Choice.SurvivorBase);
+	if (AMOMetaHumanCharacter* Human = Base ? Cast<AMOMetaHumanCharacter>(Spawned) : nullptr)
+	{
+		FMOCharacterAppearance Look = Human->GetAppearance();
+		Base->ApplyToLook(Look);
+		Human->SetAppearanceLook(Look);
+		Human->ApplyBaseStartingBody();
+	}
+	return Spawned;
+}
+
+bool UMOSpawnManagerSubsystem::ShouldCreatureThink(const APawn* Pawn) const
+{
+	const AMOCreature* Creature = Cast<AMOCreature>(Pawn);
+	if (!Creature)
+	{
+		return true;
+	}
+	const FMOCreatureDefinitionRow* Definition = Creature->GetCreatureDefinitionRow();
+	return IsDevCreatureAIOn(Definition && Definition->bIsPredator);
+}
+
+int32 UMOSpawnManagerSubsystem::SetDevCreatureAI(bool bPredator, bool bOn)
+{
+	(bPredator ? bDevPredatorAI : bDevPreyAI) = bOn;
+	int32 Changed = 0;
+	UWorld* World = GetWorld();
+	for (TActorIterator<AMOCreature> It(World); It && World; ++It)
+	{
+		AMOCreature* Creature = *It;
+		const FMOCreatureDefinitionRow* Definition = Creature->GetCreatureDefinitionRow();
+		AAIController* AI = Cast<AAIController>(Creature->GetController());
+		UBrainComponent* Brain = AI ? AI->GetBrainComponent() : nullptr;
+		if ((Definition && Definition->bIsPredator) != bPredator || !Brain || Creature->IsDead())
+		{
+			continue;
+		}
+		if (bOn)
+		{
+			// One the manager froze for being far away wakes by its own rule (WakeSpawnedPawn asks ShouldCreatureThink).
+			const bool bFrozen = SpawnedEntities.ContainsByPredicate([Creature](const FMOSpawnedEntityRecord& Record) { return Record.SpawnedPawn.Get() == Creature && Record.bFrozenByManager; });
+			if (!bFrozen)
+			{
+				Brain->RestartLogic();
+			}
+		}
+		else
+		{
+			Brain->StopLogic(TEXT("DevAIOff"));
+			AI->StopMovement();
+			if (UCharacterMovementComponent* Movement = Creature->GetCharacterMovement())
+			{
+				Movement->StopMovementImmediately();
+			}
+		}
+		++Changed;
+	}
+	return Changed;
+}
+
+APawn* UMOSpawnManagerSubsystem::ForceSpawnClassAtLocation(EMOSpawnCategory Category, TSubclassOf<APawn> PawnClass, FVector Location, FRotator Rotation, bool bFreeze)
+{
 	APawn* SpawnedPawn = SpawnPawnAtLocation(PawnClass, Location, Rotation);
 	if (SpawnedPawn)
 	{
@@ -499,7 +702,7 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 		// pawn's final spawn state, and so Last() is still our record.
 		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Category));
 		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
-		if (ShouldFreezeCategory(Category))
+		if (bFreeze && ShouldFreezeCategory(Category))
 		{
 			FreezeSpawnedPawn(SpawnedEntities.Last());
 		}
@@ -1492,7 +1695,8 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(FMOSpawnedEntityRecord& Record)
 	// 1. Resume the AI brain.
 	if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 	{
-		if (UBrainComponent* Brain = AIController->GetBrainComponent())
+		UBrainComponent* Brain = AIController->GetBrainComponent();
+		if (Brain && ShouldCreatureThink(Pawn))
 		{
 			Brain->RestartLogic();
 		}

@@ -1,4 +1,7 @@
 #include "Misc/AutomationTest.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "MOSpawnManagerSubsystem.h"
+#include "MOSurvivorBase.h"
 #include "MOSkillsComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSurvivalStatsComponent.h"
@@ -781,6 +784,72 @@ bool FMOConsole_PopupInputIsSanitised::RunTest(const FString& Parameters)
 	TestEqual(TEXT("leading tildes and spaces stripped"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("  ~~ MO.Clock.Info  ")), FString(TEXT("MO.Clock.Info")));
 	TestEqual(TEXT("only the opening key press is stripped"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("a`b~c")), FString(TEXT("a`b~c")));
 	TestTrue(TEXT("a lone tilde becomes empty (nothing to run)"), AMOPlayerController::SanitizeDevConsoleInput(TEXT(" ` ")).IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOConsole_CinemaMove,
+	"MOFramework.Console.CinemaMove",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOConsole_CinemaMove::RunTest(const FString& Parameters)
+{
+	FMODevCinemaShot From, To;
+	From.Location = FVector(0.0, 0.0, 100.0);
+	From.Rotation = FRotator(0.0f, 0.0f, 0.0f).Quaternion();
+	From.FieldOfView = 90.0f;
+	To.Location = FVector(1000.0, 0.0, 300.0);
+	To.Rotation = FRotator(0.0f, 90.0f, 0.0f).Quaternion();
+	To.FieldOfView = 50.0f;
+	TestTrue(TEXT("it begins exactly at the start"), FMODevCinema::Evaluate(From, To, 0.0f, true).Location.Equals(From.Location));
+	TestTrue(TEXT("it ends exactly at the end"), FMODevCinema::Evaluate(From, To, 1.0f, true).Location.Equals(To.Location));
+	TestTrue(TEXT("past the end it stays at the end"), FMODevCinema::Evaluate(From, To, 1.5f, true).Location.Equals(To.Location));
+	TestTrue(TEXT("steady speed: a quarter of the way at a quarter of the time"), FMath::IsNearlyEqual(FMODevCinema::Evaluate(From, To, 0.25f, false).Location.X, 250.0, 0.01));
+	TestTrue(TEXT("eased: slower than that near the start"), FMODevCinema::Evaluate(From, To, 0.25f, true).Location.X < 250.0);
+	TestTrue(TEXT("eased: half way at half time"), FMath::IsNearlyEqual(FMODevCinema::Evaluate(From, To, 0.5f, true).Location.X, 500.0, 0.01));
+	TestTrue(TEXT("the rotation turns the short way, half way at half time"), FMath::IsNearlyEqual(FMODevCinema::Evaluate(From, To, 0.5f, true).Rotation.Rotator().Yaw, 45.0, 0.01));
+	TestTrue(TEXT("the field of view moves too"), FMath::IsNearlyEqual(FMODevCinema::Evaluate(From, To, 0.5f, true).FieldOfView, 70.0f, 0.01f));
+	FMODevCinema Cinema;
+	TestFalse(TEXT("nothing captured: not ready to play"), Cinema.IsReady());
+	Cinema.Start.bSet = true;
+	TestFalse(TEXT("only a start: not ready to play"), Cinema.IsReady());
+	Cinema.End.bSet = true;
+	TestTrue(TEXT("both: ready"), Cinema.IsReady());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOConsole_SpawnMenuListsEverything,
+	"MOFramework.Console.SpawnMenuListsEverything",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOConsole_SpawnMenuListsEverything::RunTest(const FString& Parameters)
+{
+	// Wes, Nov 6 2026: "add survivors and wolves and all the animals and shit to the spawn menu". The list comes from the species folders and the bases, not from code.
+	FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get().ScanPathsSynchronous(TArray<FString>{ FString(TEXT("/MOFramework/MOBS")) }, /*bForceRescan=*/false);
+	FMODevSpawnChoice Choice;
+	for (const TCHAR* Species : { TEXT("Wolf"), TEXT("Bear"), TEXT("Deer"), TEXT("Pig"), TEXT("Fox"), TEXT("Boar"), TEXT("Rabbit"), TEXT("Chicken"), TEXT("Cow"), TEXT("Goat"), TEXT("Sheep") })
+	{
+		if (TestTrue(FString::Printf(TEXT("%s is on the menu"), Species), UMOSpawnManagerSubsystem::FindDevSpawnChoice(FName(Species), Choice)))
+		{
+			TestFalse(FString::Printf(TEXT("%s is an animal"), Species), Choice.bSurvivor);
+			UClass* Class = LoadClass<APawn>(nullptr, *Choice.ClassPath);
+			TestNotNull(FString::Printf(TEXT("%s's class path %s loads as a pawn"), Species, *Choice.ClassPath), Class);
+		}
+	}
+	TestTrue(TEXT("a survivor is on the menu"), UMOSpawnManagerSubsystem::FindDevSpawnChoice(FName(TEXT("Survivor")), Choice) && Choice.bSurvivor);
+	for (const FMOSurvivorBase& Base : UMOSurvivorBaseSettings::GetBases())
+	{
+		const FName Id(*FString::Printf(TEXT("Survivor_%s"), *Base.Id.ToString()));
+		TestTrue(FString::Printf(TEXT("%s is on the menu with its base"), *Id.ToString()), UMOSpawnManagerSubsystem::FindDevSpawnChoice(Id, Choice) && Choice.bSurvivor && Choice.SurvivorBase == Base.Id);
+	}
+	TestTrue(TEXT("a typed name need not match case"), UMOSpawnManagerSubsystem::FindDevSpawnChoice(FName(TEXT("wolf")), Choice));
+	TestFalse(TEXT("a name not on the menu spawns nothing"), UMOSpawnManagerSubsystem::FindDevSpawnChoice(FName(TEXT("NotAnAnimal")), Choice));
+	TSet<FName> Seen;
+	for (const FMODevSpawnChoice& Each : UMOSpawnManagerSubsystem::GetDevSpawnChoices())
+	{
+		bool bAlready = false;
+		Seen.Add(Each.Id, &bAlready);
+		TestFalse(FString::Printf(TEXT("%s is listed once"), *Each.Id.ToString()), bAlready);
+	}
 	return true;
 }
 

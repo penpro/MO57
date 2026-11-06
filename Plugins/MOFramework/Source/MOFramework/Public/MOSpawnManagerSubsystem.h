@@ -81,6 +81,19 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEntityDespawned, APawn*, Despa
  * World subsystem managing dynamic entity spawning.
  * See file header for spawn algorithm and pitfalls.
  */
+/** One button of the dev console's `spawn` menu: a survivor (optionally of one base) or an animal. */
+struct FMODevSpawnChoice
+{
+	/** What the menu sends the server and what `spawn <Id>` takes: Wolf, Survivor, Survivor_Zuri. */
+	FName Id;
+	FText Label;
+	/** The animal's class path; empty for a survivor (the Survivor category's class). */
+	FString ClassPath;
+	bool bSurvivor = false;
+	/** A survivor's base (UMOSurvivorBaseSettings); None = the pawn Blueprint's own look. */
+	FName SurvivorBase;
+};
+
 UCLASS()
 class MOFRAMEWORK_API UMOSpawnManagerSubsystem : public UTickableWorldSubsystem
 {
@@ -158,6 +171,39 @@ public:
 	/** Force spawn at a specific location (bypasses cooldowns and spawn points) */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
 	APawn* ForceSpawnAtLocation(EMOSpawnCategory Category, FVector Location, FRotator Rotation = FRotator::ZeroRotator);
+
+	/** ForceSpawnAtLocation with the class chosen. bFreeze = false leaves the pawn awake (the dev spawn menu: it is right in front of a player). */
+	APawn* ForceSpawnClassAtLocation(EMOSpawnCategory Category, TSubclassOf<APawn> PawnClass, FVector Location, FRotator Rotation, bool bFreeze = true);
+
+	/**
+	 * Everything the dev console's `spawn` menu offers, survivors first, then every animal by name. An animal is a species folder under /MOFramework/MOBS
+	 * holding BP_<Species> or <Species> (read from the asset registry, nothing loads), plus the spawn categories' classes: a new species is on the menu with
+	 * no code. Safe on a client: a joiner's menu lists the same config and the same assets.
+	 */
+	static TArray<FMODevSpawnChoice> GetDevSpawnChoices();
+
+	/** The menu's choice of this name (not case sensitive). False = not on the menu: the server spawns nothing a client merely names. */
+	static bool FindDevSpawnChoice(FName Id, FMODevSpawnChoice& OutChoice);
+
+	/**
+	 * Put a menu choice on the ground in front of a view, DevSpawnDistanceCm ahead and SideCm to the right, facing the viewer, through the real force-spawn
+	 * path (a survivor gets her name, clothes and campfire; everything is tracked). Server only. On failure returns null and says why in OutFailure.
+	 */
+	APawn* DevSpawnChoice(const FMODevSpawnChoice& Choice, const APawn* Viewer, const FRotator& ViewRotation, float SideCm, FString& OutFailure);
+
+	/** How far ahead of the viewer the dev spawn menu puts things. */
+	static constexpr float DevSpawnDistanceCm = 600.0f;
+
+	/**
+	 * The dev spawn menu's Prey AI / Predator AI switches (Wes, Nov 6 2026: "disables everything but the idle animation stuff so they stay put when spawned"). Off: every creature
+	 * of that kind has its brain stopped and stands playing its idle, those already in the world and those that spawn after, until it is switched on again. Server only; not saved.
+	 * Returns how many creatures it changed.
+	 */
+	int32 SetDevCreatureAI(bool bPredator, bool bOn);
+	bool IsDevCreatureAIOn(bool bPredator) const { return bPredator ? bDevPredatorAI : bDevPreyAI; }
+
+	/** False while the switch for this creature's kind is off (any other pawn: true). What starts a brain asks this first. */
+	bool ShouldCreatureThink(const APawn* Pawn) const;
 
 	/** Despawn the oldest entity of the given category (respects persistence) */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
@@ -246,6 +292,9 @@ protected:
 	/** All spawned entities tracked by this subsystem */
 	UPROPERTY(Transient)
 	TArray<FMOSpawnedEntityRecord> SpawnedEntities;
+
+	bool bDevPreyAI = true;
+	bool bDevPredatorAI = true;
 
 	/** Last spawn time per category */
 	UPROPERTY(Transient)

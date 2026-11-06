@@ -69,6 +69,7 @@
 #include "MOTextInputDialog.generated.h"
 
 class UEditableTextBox;
+class UMOCommonButton;
 
 /** Confirmation delegate that carries the entered text. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOTextInputConfirmedDelegate, const FText&, EnteredText);
@@ -108,6 +109,12 @@ public:
 		const FText& ConfirmText = INVTEXT("Confirm"),
 		const FText& CancelText = INVTEXT("Cancel"));
 
+	/**
+	 * Show the optional third button (the console's Menu) with this label for this open: a click closes the dialog and calls OnClick. Call after ConfigureWithText, which hides it
+	 * again for the next open (instances are pooled). A WBP without the button (ExtraButton is optional) just never shows it.
+	 */
+	void SetExtraButton(const FText& Label, TFunction<void()> OnClick);
+
 	/** Read the currently entered text from the input field. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|TextInput")
 	FText GetEnteredText() const;
@@ -139,6 +146,14 @@ protected:
 
 	UFUNCTION()
 	void HandleTextChanged(const FText& InText);
+
+	void HandleExtraClicked();
+
+	/** The optional third button: SetExtraButton. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> ExtraButton;
+
+	TFunction<void()> ExtraClick;
 
 	/** Single-line text input. Required BindWidget on the BP. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))

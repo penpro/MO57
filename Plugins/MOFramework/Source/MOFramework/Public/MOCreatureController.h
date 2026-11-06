@@ -223,6 +223,9 @@ public:
 	static const TCHAR* JudgeChase(float DistanceToQuarry, float DistanceFromHome, double Now, float AttackReach, float LeashRadius,
 		float NoGainSeconds, float& InOutMarkDistance, double& InOutLastGainTime);
 
+	/** Every creature's brain starts here: stopped again at once while the dev spawn menu's switch for its kind is off (UMOSpawnManagerSubsystem::ShouldCreatureThink). */
+	virtual bool RunBehaviorTree(UBehaviorTree* BTAsset) override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;

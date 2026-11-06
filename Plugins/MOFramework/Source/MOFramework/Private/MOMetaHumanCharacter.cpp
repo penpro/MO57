@@ -45,6 +45,26 @@ AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectIni
 	}
 }
 
+void AMOMetaHumanCharacter::ApplyFirstPersonVisibility(bool bFirstPerson)
+{
+	Super::ApplyFirstPersonVisibility(bFirstPerson);
+	// The face and the grooms would be inside the camera; the body stays, to look down at. Their shadows stay too.
+	TArray<USceneComponent*> Parts;
+	if (GetMesh())
+	{
+		GetMesh()->GetChildrenComponents(/*bIncludeAllDescendants=*/true, Parts);
+	}
+	for (USceneComponent* Part : Parts)
+	{
+		UPrimitiveComponent* Shown = Cast<UPrimitiveComponent>(Part);
+		if (Shown && (Shown == FaceMesh || Shown->GetClass()->GetName().Contains(TEXT("Groom"))))
+		{
+			Shown->SetOwnerNoSee(bFirstPerson);
+			Shown->SetCastHiddenShadow(bFirstPerson);
+		}
+	}
+}
+
 void AMOMetaHumanCharacter::BeginPlay()
 {
 	Super::BeginPlay();
