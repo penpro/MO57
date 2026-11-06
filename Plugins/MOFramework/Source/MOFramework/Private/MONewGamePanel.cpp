@@ -71,8 +71,18 @@ void UMONewGamePanel::NativeConstruct()
 		ResetCreationButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleResetCreationClicked);
 	}
 
-	// Generate initial random seed and default world name
-	GenerateRandomSeed();
+	// Generate initial random seed and default world name. A new game already on its way keeps its seed: a dev verb (MO.BiomeTest, MO.NewGame) set the one it asked for, and the menu the
+	// intro's end builds here must not overwrite it (N-318). The game mode clears the flag and saves it when it consumes the seed, so it is never stale at a later menu.
+	const UMOGameSettings* PendingSettings = UMOGameSettings::GetMOGameSettings();
+	if (PendingSettings && PendingSettings->bPendingNewGame && PendingSettings->PendingWorldSeed != 0)
+	{
+		SetSeed(PendingSettings->PendingWorldSeed);
+		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] Keeping the pending new game's seed: %d"), PendingSettings->PendingWorldSeed);
+	}
+	else
+	{
+		GenerateRandomSeed();
+	}
 	GenerateDefaultWorldName();
 
 	// A new world starts as authored (every knob 1, the coast) until the player changes it.
