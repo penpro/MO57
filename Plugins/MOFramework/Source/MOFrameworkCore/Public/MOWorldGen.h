@@ -1038,6 +1038,8 @@ struct FMOFloatingIsland
 	// An island drawn as a stamp: its top slab (the grass) stands this far proud of the rock's top, so the ground a plant stands on is TopCm + this.
 	static constexpr float TopSlabDepthCm = 250.0f;   // its grass top: this much of the rock's top is soil
 	static constexpr float TopSlabProudCm = 20.0f;
+	/** Nothing rooted or lying within this of a rim (the plants; the sticks and stones). */
+	static constexpr float RootInsetCm = 300.0f;
 	// Its underside (v14, N-331): a cone whose folds change the depth by up to this share, with at least this much rock under the top at the rim.
 	static constexpr float UndersideFoldShare = 0.18f;
 	static constexpr float RimThicknessCm = 300.0f;

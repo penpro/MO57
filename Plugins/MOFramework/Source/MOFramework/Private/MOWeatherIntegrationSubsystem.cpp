@@ -11,7 +11,13 @@
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "MOGameState.h"
+#include "MOWorldGen.h"
+#include "MOWorldSeedSubsystem.h"
+#include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "Kismet/KismetMaterialLibrary.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraParameterCollection.h"
 #include "Materials/MaterialParameterCollection.h"
 
 void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -317,6 +323,78 @@ void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)
 		CheckForWeatherChanges();
 		UpdateGroundWeather();
 	}
+
+	TimeSinceClearAirUpdate += DeltaTime;
+	if (TimeSinceClearAirUpdate >= 0.2f)
+	{
+		UpdateAirUnderIsland(TimeSinceClearAirUpdate);
+		TimeSinceClearAirUpdate = 0.0f;
+	}
+}
+
+void UMOWeatherIntegrationSubsystem::UpdateAirUnderIsland(float Seconds)
+{
+	UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		return;
+	}
+	static const IConsoleVariable* CVarClearAir = IConsoleManager::Get().RegisterConsoleVariable(TEXT("mo.Weather.ClearAirUnderIslands"), 1,
+		TEXT("Dev: 1 = the rain and snow in the air clear under a floating island, 0 = they fall there (the control for the look)."), ECVF_Default);
+	const FVector Camera = PC->PlayerCameraManager->GetCameraLocation();
+
+	float Target = 0.0f;
+	if (CVarClearAir->GetInt() != 0 && IsUnderFloatingIsland(Camera))
+	{
+		// As wide as the rock goes in all eight directions, up to the rain's own reach (UDW's spawn distance 20 m, its far sprites 25 m).
+		static constexpr float Rings[] = { 250.0f, 500.0f, 1000.0f, 2000.0f, 3000.0f };
+		static const FVector2D Directions[] = { {1.0, 0.0}, {0.7071, 0.7071}, {0.0, 1.0}, {-0.7071, 0.7071}, {-1.0, 0.0}, {-0.7071, -0.7071}, {0.0, -1.0}, {0.7071, -0.7071} };
+		bool bOpen = false;
+		for (const float Ring : Rings)
+		{
+			for (const FVector2D& Dir : Directions)
+			{
+				bOpen = bOpen || !IsUnderFloatingIsland(Camera + FVector(Dir.X * Ring, Dir.Y * Ring, 0.0f));
+			}
+			if (bOpen)
+			{
+				break;
+			}
+			Target = Ring;
+		}
+	}
+	ClearAirRadiusCm = FMath::FInterpConstantTo(ClearAirRadiusCm, Target, Seconds, 1500.0f);
+	if (ClearAirRadiusCm == ClearAirRadiusWritten && ClearAirRadiusCm == 0.0f)
+	{
+		return;
+	}
+
+	if (!WeatherParticleParameters)
+	{
+		WeatherParticleParameters = LoadObject<UNiagaraParameterCollection>(nullptr, TEXT("/Game/UltraDynamicSky/Particles/UDW_Niagara_Parameters.UDW_Niagara_Parameters"));
+		if (WeatherParticleParameters)
+		{
+			TArray<FNiagaraVariable> Parameters;
+			WeatherParticleParameters->GetDefaultInstance()->GetParameters(Parameters);
+			for (const FNiagaraVariable& Parameter : Parameters)
+			{
+				FString Name = Parameter.GetName().ToString();
+				if (Name.Contains(TEXT("Kill")))
+				{
+					int32 Dot = INDEX_NONE;
+					KillSphereParameter = Name.FindLastChar(TEXT('.'), Dot) ? Name.RightChop(Dot + 1) : Name;
+				}
+			}
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] the air under an island: collection %s, kill sphere parameter '%s'"), WeatherParticleParameters ? TEXT("found") : TEXT("MISSING"), *KillSphereParameter);
+	}
+	UNiagaraParameterCollectionInstance* Instance = WeatherParticleParameters && !KillSphereParameter.IsEmpty() ? UNiagaraFunctionLibrary::GetNiagaraParameterCollection(World, WeatherParticleParameters) : nullptr;
+	if (Instance)
+	{
+		Instance->SetColorParameter(KillSphereParameter, FLinearColor((float)Camera.X, (float)Camera.Y, (float)Camera.Z, ClearAirRadiusCm));
+		ClearAirRadiusWritten = ClearAirRadiusCm;
+	}
 }
 
 TStatId UMOWeatherIntegrationSubsystem::GetStatId() const
@@ -504,7 +582,23 @@ FMOWeatherExposure UMOWeatherIntegrationSubsystem::GetWeatherExposureAtLocation(
 	Exposure.Snow = Scale(Exposure.Snow);
 	Exposure.Wind = Scale(Exposure.Wind);
 	Exposure.Dust = Scale(Exposure.Dust);
+	if (IsUnderFloatingIsland(Location))
+	{
+		Exposure.Rain = 0.0f;
+		Exposure.Snow = 0.0f;
+	}
 	return Exposure;
+}
+
+bool UMOWeatherIntegrationSubsystem::IsUnderFloatingIsland(const FVector& Location) const
+{
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return false;
+	}
+	const float Underside = FMOWorldGen::IslandUndersideCm(*FMOWorldGenParamsProvider::Get(), Location.X, Location.Y, Seeds->GetActiveTerrainSeed());
+	return Underside > -1.0e8f && Location.Z < Underside;
 }
 
 bool UMOWeatherIntegrationSubsystem::IsLocationSheltered(const FVector& Location) const

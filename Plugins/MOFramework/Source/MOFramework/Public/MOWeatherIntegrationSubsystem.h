@@ -59,6 +59,7 @@
 
 class IMOWeatherProviderInterface;
 class UMaterialParameterCollection;
+class UNiagaraParameterCollection;
 
 /** What the air feels like at a place, and why (N-093): the one computation behind GetFeelsLikeTemperature, so a readout can say what makes it cold. */
 struct FMOFeelsLike
@@ -140,9 +141,9 @@ public:
 	{
 		return GetWeatherExposureAtLocation(Location);
 	}
-	virtual float GetAmbientRainIntensity01() const override
+	virtual float GetAmbientRainIntensity01(const FVector& Location) const override
 	{
-		return GetCurrentWeatherState().RainIntensity;
+		return IsUnderFloatingIsland(Location) ? 0.0f : GetCurrentWeatherState().RainIntensity;
 	}
 	//~ End IMOAmbientEnvironmentProvider
 
@@ -237,6 +238,17 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Weather")
 	FMOWeatherExposure GetWeatherExposureAtLocation(const FVector& Location) const;
+
+	/**
+	 * Whether a floating island's rock hangs over this location: nothing falls here (N-272). The shelter rays reach 50 m and an island is 300-950 m up, so the generator
+	 * answers, the same on every machine and whether or not the island is stamped yet. It keeps off rain and snow, not the cold: it is no roof (the vitals' shelter warmth stays with the rays).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Weather")
+	bool IsUnderFloatingIsland(const FVector& Location) const;
+
+	/** How far round this machine's camera the falling rain and snow are cleared because an island hangs over it, cm (0 = not under one). See UpdateAirUnderIsland. */
+	UFUNCTION(BlueprintPure, Category="MO|Weather")
+	float GetClearAirRadiusCm() const { return ClearAirRadiusCm; }
 
 	/**
 	 * Check if a location is sheltered from weather.
@@ -675,6 +687,21 @@ private:
 
 	/** Time since last weather check. */
 	float TimeSinceLastCheck = 0.0f;
+
+	/**
+	 * The falling particles live round the camera and know nothing 300 m up (UDW's own occlusion traces 40 m, and an island's far rock has no collision), so a player under an island stood in the rain (N-272).
+	 * UDW's rain, snow and dust systems kill what falls inside ONE sphere (UDW_Niagara_Parameters' kill sphere, a Niagara collection: per machine, nothing replicated). This keeps it on the camera, as wide as the
+	 * rock goes on every side up to the rain's own reach, so the rain thins in as a player walks out from under the edge.
+	 */
+	void UpdateAirUnderIsland(float Seconds);
+
+	float TimeSinceClearAirUpdate = 0.0f;
+	float ClearAirRadiusCm = 0.0f;
+	float ClearAirRadiusWritten = 0.0f;
+	FString KillSphereParameter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraParameterCollection> WeatherParticleParameters;
 
 	/** Pending weather save data to apply when provider registers. */
 	FMOWeatherSaveData PendingSaveData;

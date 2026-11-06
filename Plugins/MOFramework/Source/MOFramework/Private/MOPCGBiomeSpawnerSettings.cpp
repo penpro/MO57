@@ -365,7 +365,6 @@ namespace
 	// Floating islands are voxel stamps (Wes, Nov 4: "make sure they have trees and such on them too though? not just grass"). The sampler's points are on the height layer, which knows nothing of
 	// a stamp, so each point with an island over it is planted a second time, on the island's top. Every tier comes through here.
 	TAutoConsoleVariable<int32> CVarIslandPlants(TEXT("mo.PCG.IslandPlants"), 1, TEXT("Dev: 1 = the biome spawner plants the tops of floating islands, 0 = bare tops (the frame-time control). Next generation."), ECVF_Default);
-	constexpr float IslandPlantInsetCm = 300.0f;            // nothing rooted within 3 m of a rim
 	constexpr float IslandForestMinTreesPerHectare = 100.0f;   // a biome thinner than this gives way to the densest forest: Wes asked for trees, and the top is green grass whatever lies below
 	constexpr double IslandObstacleHeightCm = 5000.0;       // a forest over a forest: an obstacle further than this above or below is on the other level
 	constexpr float IslandRockFootToleranceCm = 100.0f;     // how far out of the rock the corners of a rock's bounds may be (a bounds corner is rarely rock itself)
@@ -684,7 +683,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			FCyScope GenStage(Cy.Gen, bProfile);
 			const FVector Under = Points[PointIndex]->Transform.GetLocation();
 			FMOIslandSurfacePoint Top;
-			if (!FMOWorldGen::SampleIslandSurface(*GenParams, Under.X, Under.Y, TerrainSeed, IslandPlantInsetCm, Top))
+			if (!FMOWorldGen::SampleIslandSurface(*GenParams, Under.X, Under.Y, TerrainSeed, FMOFloatingIsland::RootInsetCm, Top))
 			{
 				return;
 			}

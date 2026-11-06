@@ -106,6 +106,8 @@
   overnight stop (Oct 27 02:02) with Wes's mesh / MetaHuman editors open; reproduced 3 of 3 with `QUIT_EDITOR`, 0 of 2 with the File >
   Exit path, and MO57's editor stops the new way with no Save Content dialog (22 s). `QUIT_EDITOR` stays fine in `-ExecCmds` runs that
   open no asset editor.
+- **`ue.py editor stop` can report GONE after a burst of inspect scripts** (Nov 6): the editor took `CLOSE_SLATE_MAINFRAME` and died in `python311` (access violation reading a stale address) while closing, after several `ue.py py --file` inspections
+  of widget assets. Nothing was lost: the asset had saved before the stop. Seen once; a crash on the way out is not a reason to distrust what was saved, but check the file's date.
 - **A package redirect cannot rename the OBJECT** (Oct 25, MetaHuman groom import): `+PackageRedirects=(OldName=".../MI_PeachFuzz", NewName=
   ".../MI_Facial_Hair")` loads the new package but still looks for an object named `MI_PeachFuzz` in it -> the import fails and the slot is
   left empty -> redirect only to a package holding the same object name, and fix the rest after the resave (`resave_metahuman_grooms.py`).

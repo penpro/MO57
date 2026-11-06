@@ -6,6 +6,9 @@
 #include "MOWorldRemovalSubsystem.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "MOWeightedSelector.h"
+#include "MOWorldGen.h"
+#include "MOWorldSeedSubsystem.h"
+#include "HAL/IConsoleManager.h"
 
 #include "PCGComponent.h"
 #include "PCGContext.h"
@@ -207,9 +210,62 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
+	// A floating island's top gets its sticks and stones too (N-272): the same points over again, each lifted onto the top over it, flat on its slope with the point's own yaw. After the land's, so the land's draw
+	// does not change; the graph's points are the land's, so nothing here asks about the land's water or caves. From the seed alone, like the plants: the same on every machine.
+	const UMOWorldSeedSubsystem* IslandSeeds = UMOWorldSeedSubsystem::Get(TargetActor);
+	static const IConsoleVariable* CVarIslandPlants = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.PCG.IslandPlants"));
+	const FMOWorldGenParamsRef GenParams = FMOWorldGenParamsProvider::Get();
+	int32 TotalIslandPoints = 0;
+	if (IslandSeeds && IslandSeeds->HasActiveSeed() && GenParams->Tuning.IslandChance > 0.0f && (!CVarIslandPlants || CVarIslandPlants->GetInt() != 0))
+	{
+		const int32 TerrainSeed = IslandSeeds->GetActiveTerrainSeed();
+		for (const FPCGTaggedData& Input : Inputs)
+		{
+			const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data);
+			if (!InputPointData || InputPointData->GetPoints().Num() == 0)
+			{
+				continue;
+			}
+			FBox Bounds(ForceInit);
+			for (const FPCGPoint& Point : InputPointData->GetPoints())
+			{
+				Bounds += Point.Transform.GetLocation();
+			}
+			if (!FMOWorldGen::IslandReachesBox(*GenParams, Bounds.Min.X, Bounds.Min.Y, Bounds.Max.X, Bounds.Max.Y, TerrainSeed))
+			{
+				continue;
+			}
+			for (const FPCGPoint& Point : InputPointData->GetPoints())
+			{
+				const FVector Under = Point.Transform.GetLocation();
+				FMOIslandSurfacePoint Top;
+				if (!FMOWorldGen::SampleIslandSurface(*GenParams, Under.X, Under.Y, TerrainSeed, FMOFloatingIsland::RootInsetCm, Top))
+				{
+					continue;
+				}
+				const FVector Location(Under.X, Under.Y, (double)Top.TopCm + FMOFloatingIsland::TopSlabProudCm);
+				if (TerrainMod && TerrainMod->IsLocationModified(Location))
+				{
+					++TotalPointsSuppressedByTerrainMod;
+					continue;
+				}
+				const FMOPCGItemSpawnEntry* SelectedEntry = FMOWeightedSelector::SelectWeightedIf(Settings->ItemsToSpawn, TotalWeight, RandomStream, HasValidMesh);
+				FItemSpawnData* ItemData = SelectedEntry ? ItemDataMap.Find(SelectedEntry->ItemId) : nullptr;
+				if (ItemData && ItemData->Mesh)
+				{
+					FTransform Lifted = Point.Transform;
+					Lifted.SetLocation(Location);
+					Lifted.SetRotation(FQuat::FindBetweenNormals(FVector::UpVector, Top.Normal) * FQuat(FVector::UpVector, FMath::DegreesToRadians(Point.Transform.Rotator().Yaw)));
+					ItemData->Transforms.Add(Lifted);
+					++TotalIslandPoints;
+				}
+			}
+		}
+	}
+
 	MOHARVEST_LOG(TargetActor, "PCG-MeshSpawner",
-		"Execute END: processed=%d discarded=%d suppressedByTerrainMod=%d",
-		TotalPointsProcessed, TotalPointsDiscarded, TotalPointsSuppressedByTerrainMod);
+		"Execute END: processed=%d discarded=%d suppressedByTerrainMod=%d onIslandTops=%d",
+		TotalPointsProcessed, TotalPointsDiscarded, TotalPointsSuppressedByTerrainMod, TotalIslandPoints);
 
 	// Get PCG interaction subsystem for registering tag mappings
 	UMOPCGInteractionSubsystem* PCGSubsystem = nullptr;

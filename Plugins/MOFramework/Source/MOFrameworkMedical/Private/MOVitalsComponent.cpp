@@ -1348,14 +1348,14 @@ void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
 	// never knows the weather subsystem.
 	UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this);
 	IMOAmbientEnvironmentProvider* Env = Ambient ? Ambient->GetProvider() : nullptr;
-	const float RainIntensity = Env ? Env->GetAmbientRainIntensity01() : 0.0f;
+	const FVector Origin = Owner->GetActorLocation();
+	const float RainIntensity = Env ? Env->GetAmbientRainIntensity01(Origin) : 0.0f;
 
 	float NewLevel = WetnessLevel;
 
 	// F1: warmth from a nearby fire dries clothing regardless of weather —
 	// the drying rate scales with the local heat boost, and it applies even
 	// while rain falls, so a hot fire under cover out-dries a drizzle.
-	const FVector Origin = Owner->GetActorLocation();
 	const float LocalHeat = Ambient ? Ambient->GetLocalHeatDeltaAt(Origin) : 0.0f;
 	const float DryRatePerSecond =
 		WetnessDecayPerSecond * (1.0f + LocalHeat * HeatDryingBoostPerCelsius);

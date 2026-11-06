@@ -6177,9 +6177,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			if (const APawn* Pawn = World->GetFirstPlayerController() ? World->GetFirstPlayerController()->GetPawn() : nullptr)
 			{
 				const FMOWeatherExposure Exposure = Sys->GetWeatherExposureAtLocation(Pawn->GetActorLocation());
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] at the pawn: exposure rain=%.2f snow=%.2f wind=%.2f sheltered=%d feels=%.1fC"),
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] at the pawn: exposure rain=%.2f snow=%.2f wind=%.2f sheltered=%d feels=%.1fC underIsland=%d clearAir=%.0fcm"),
 					Exposure.Rain, Exposure.Snow, Exposure.Wind, Exposure.bIsSheltered ? 1 : 0,
-					Sys->GetFeelsLikeTemperature(Pawn->GetActorLocation(), EMOTemperatureUnit::Celsius));
+					Sys->GetFeelsLikeTemperature(Pawn->GetActorLocation(), EMOTemperatureUnit::Celsius),
+					Sys->IsUnderFloatingIsland(Pawn->GetActorLocation()) ? 1 : 0, Sys->GetClearAirRadiusCm());
 			}
 		}),
 		ECVF_Default));

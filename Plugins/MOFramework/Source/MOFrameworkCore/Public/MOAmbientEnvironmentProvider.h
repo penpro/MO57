@@ -40,8 +40,8 @@ public:
 	/** Rain/snow/wind exposure at a world location. */
 	virtual FMOWeatherExposure GetAmbientExposure(const FVector& Location) const = 0;
 
-	/** Global rain intensity 0..1 (wetness accumulation input). */
-	virtual float GetAmbientRainIntensity01() const = 0;
+	/** Rain coming down at a world location, 0..1 (wetness accumulation input): the weather's rain, none under rock far overhead (a floating island). Near cover is the caller's own rays. */
+	virtual float GetAmbientRainIntensity01(const FVector& Location) const = 0;
 };
 
 /**
