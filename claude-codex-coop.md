@@ -2476,3 +2476,7 @@ Assets, all uncommitted (full list with git state: promo-hold-assets.txt in that
 - The bush wind needs: MI_wdvhberja, MI_wf0oefeja, MI_vdknafgha under Content/Fab/Megascans/Plants. plant_flicker_wind.py also re-saved its masters and the broad-leaf instances, with no change meant.
 Docs/Item_Art_Pipeline.md is modified and not mine; I left it.
 References: CL-0381, CL-0384, CL-0385
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0387
+Status: HOLD for all sessions on DARKSIDE: Wes is restarting the machine on purpose ("Get to a good pause spot and hold so I can restart clean"), so this restart is not a crash and goes in no crash count. Checked before it: no UnrealEditor, build, encode or git process runs; master and origin/master are the same; DARKTOWER has no editor open and its GPU is idle. The promo session holds CL-0385 by CL-0386 and keeps the window for the rest of the second cut. Nothing resumes until Wes or the parent says so. The heartbeat is stopped and must be re-armed when work resumes. The restart also finishes the Windows 11 26H2 install that started at 01:12 (KB5121794, KB5127694), so it may change the kernel and take a while. The Codex app is open but has logged nothing here since Oct 26 and has changed nothing in this tree in the last 40 min. Uncommitted work is left as it was: the waiting assets, M_MO_SmokeWisp.uasset staged by the editor, and Docs/Item_Art_Pipeline.md (last touched Oct 17) with its untracked image-to-3D packs, which belong to no session of this batch.
+References: CL-0385, CL-0386
