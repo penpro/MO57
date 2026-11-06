@@ -122,14 +122,19 @@ def surface_material(name):
         h = nb.m("ADD", h, nb.m("MULTIPLY", lent, 0.15))
         rough = nb.m("ADD", 0.72, nb.m("MULTIPLY", crack, 0.2))
     elif name == "Rod":
-        streak = noise4(nb, 60, 3, 4.0, 0.5, seed=1)
-        mott = noise4(nb, 4, 8, 4.0, 0.5, seed=2)
-        dots = nb.m("SUBTRACT", 1.0, nb.step(voronoi4(nb, 18, 40, seed=3), 0.1, 0.03))
-        col = nb.ramp(nb.m("ADD", nb.m("MULTIPLY", mott, 0.7), nb.m("MULTIPLY", streak, 0.3)), [(0.3, c("#3e2418")), (0.75, c("#7a4a30"))])
-        col = nb.mix(nb.m("MULTIPLY", dots, 0.8), col, c("#c4ab84"))
-        col = nb.mix(nb.m("MULTIPLY", nb.step(noise4(nb, 3, 5, 3.0, seed=4), 0.62, 0.05), 0.5), col, c("#6f6a5c"))   # grey bloom
-        h = nb.m("ADD", nb.m("MULTIPLY", streak, 0.25), nb.m("MULTIPLY", dots, 0.2))
-        rough = nb.m("ADD", 0.48, nb.m("MULTIPLY", mott, 0.15))
+        # Nov 5, Wes: "the wood is shiny and too uniform": matte, thin bark split along the rod, grey-brown with paler lenticels and darker scuffs where it was handled
+        streak = noise4(nb, 70, 3, 5.0, 0.6, seed=1)
+        mott = noise4(nb, 5, 9, 5.0, 0.55, seed=2)
+        dots = nb.m("SUBTRACT", 1.0, nb.step(voronoi4(nb, 16, 34, seed=3), 0.1, 0.03))
+        split = nb.m("SUBTRACT", 1.0, nb.step(voronoi4(nb, 26, 5, "DISTANCE_TO_EDGE", seed=5), 0.03, 0.02))
+        rough_n = noise4(nb, 40, 40, 5.0, 0.65, seed=6)
+        col = nb.ramp(nb.m("ADD", nb.m("MULTIPLY", mott, 0.65), nb.m("MULTIPLY", streak, 0.35)), [(0.28, c("#2f261d")), (0.72, c("#6a5742"))])
+        col = nb.mix(nb.m("MULTIPLY", dots, 0.55), col, c("#a39880"))
+        col = nb.mix(nb.m("MULTIPLY", split, 0.7), col, c("#1d1712"))
+        col = nb.mix(nb.m("MULTIPLY", nb.step(noise4(nb, 3, 5, 3.0, seed=4), 0.55, 0.08), 0.6), col, c("#7b766a"))   # grey bloom
+        h = nb.m("ADD", nb.m("MULTIPLY", streak, 0.55), nb.m("MULTIPLY", rough_n, 0.5))
+        h = nb.m("ADD", h, nb.m("SUBTRACT", nb.m("MULTIPLY", dots, 0.2), nb.m("MULTIPLY", split, 0.8)))
+        rough = nb.m("ADD", 0.84, nb.m("MULTIPLY", rough_n, 0.12))
     elif name in ("Hewn", "Plank"):
         grain = noise4(nb, 90, 3, 6.0, 0.55, distortion=0.6, seed=1)
         rays = nb.step(noise4(nb, 140, 12, 2.0, seed=2), 0.68, 0.03)
@@ -277,7 +282,12 @@ def bake_surface(name, res):
 def run_surfaces():
     BI.setup_scene()
     os.makedirs(OUT, exist_ok=True)
-    made = {name: bake_surface(name, RES) for name in BP.SURFACES}
+    only = ARGS[ARGS.index("--only") + 1].split(",") if "--only" in ARGS else list(BP.SURFACES)   # --only Rod,Bark: the rest stay as they were baked
+    known = {}
+    if os.path.isfile(os.path.join(OUT, "Surfaces.json")):
+        with open(os.path.join(OUT, "Surfaces.json")) as f:
+            known = json.load(f)
+    made = {name: bake_surface(name, RES) if name in only else known[name] for name in BP.SURFACES}
     # a contact sheet: each surface 2 x 2 tiles (the seams show if a pattern does not wrap)
     sw = 256
     names = list(made)
@@ -401,11 +411,12 @@ def natural_stick(pts, lengths, seed, bow):
     return [p + side * bow * (math.sin(math.pi * l / L) + 0.3 * math.sin(TAU * l / L + seed)) for p, l in zip(pts, lengths)]
 
 
-def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, caps=(True, True), twist=0.0, bow=None, swell=0.07, cut=None):
+def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, caps=(True, True), twist=0.0, bow=None, swell=0.07, cut=None, keep_look=False):
     """A round stick along pts (Unreal cm): radius(t) or a number; bark UVs: u around (cm / tile), v along. Cut ends in cap_surf.
     Natural by default: bowed (natural_stick), swelling and narrowing along its length (swell, of the radius), each cut end on a slant (cut
-    degrees; None = 5..30 on a bark or rod stick, square on anything else), its own seed when none is given."""
-    m.begin()
+    degrees; None = 5..30 on a bark or rod stick, square on anything else), its own seed when none is given. keep_look: part of the stick before it (a nub)."""
+    if not keep_look:
+        m.begin()
     if not seed:
         seed = VARY.seed()
     rfn = radius if callable(radius) else (lambda t, r=radius: r)
@@ -470,6 +481,56 @@ def tube(m, pts, radius, surf, sides=8, cap_surf="Hewn", wobble=0.0, seed=0, cap
             k1 = (k + 1) % sides
             tri = (ring[k1], ring[k], ci) if which == "s" else (ring[k], ring[k1], ci)
             m.face(tri, [((m.v[j] - c).x / tc + 0.5, (m.v[j] - c).y / tc + 0.5) for j in tri], cap_surf, smooth=False)
+    return m
+
+
+def rough_stick(m, pts, r_butt, r_tip, surf, rng, sides=9, wobble=0.16, nub_every=(8.0, 22.0), nub_chance=0.75, kink=0.55, nub_len=(0.8, 3.2)):
+    """A stick as it comes off the tree (Wes, Nov 5: "perfect tubes with perfectly woven curves ... no natural nubs from being de-limbed"): it thickens at the nodes
+    where it branched, kinks a little at each, is not round, and the side shoots it lost stand as nubs cut off short. Hazel and willow rods look like this; a tube does not."""
+    seed = VARY.seed()
+    lengths = [0.0]
+    for i in range(1, len(pts)):
+        lengths.append(lengths[-1] + (pts[i] - pts[i - 1]).length)
+    L = max(lengths[-1], 1e-3)
+    nodes = []
+    at = rng.uniform(3.0, nub_every[1])
+    while at < L - 2.0:
+        nodes.append((at, rng.uniform(0.10, 0.30)))
+        at += rng.uniform(*nub_every)
+    bent = []
+    for p, l, i in zip(pts, lengths, range(len(pts))):
+        d = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        a, b = frame_of(d)
+        off = a * noise.noise(Vector((l * 0.075, seed, 1.3))) + b * noise.noise(Vector((l * 0.075, seed, 7.9)))
+        off += (a * noise.noise(Vector((l * 0.24, seed, 3.1))) + b * noise.noise(Vector((l * 0.24, seed, 5.3)))) * 0.3
+        bent.append(p + off * kink)
+
+    def radius(t):
+        l = t * L
+        r = r_butt + (r_tip - r_butt) * t ** 0.85
+        r *= 1.0 + 0.15 * noise.noise(Vector((l * 0.07, seed, 2.0))) + 0.06 * noise.noise(Vector((l * 0.3, seed, 4.0)))
+        for n, a in nodes:
+            r += (r_butt + (r_tip - r_butt) * (n / L)) * a * math.exp(-((l - n) / 1.5) ** 2)
+        return r
+
+    tube(m, bent, radius, surf, sides=sides, wobble=wobble, seed=seed, bow=0.0, swell=0.0, cut=rng.uniform(12.0, 42.0))
+    # the nubs: where each side shoot was trimmed, leaning the way the stick grew
+    for n, _a in nodes:
+        if rng.random() > nub_chance:
+            continue
+        i = next((q for q in range(1, len(lengths)) if lengths[q] >= n), len(lengths) - 1)
+        d = (bent[min(i + 1, len(bent) - 1)] - bent[max(i - 1, 0)]).normalized()
+        a, b = frame_of(d)
+        ang = rng.uniform(0.0, TAU)
+        out = a * math.cos(ang) + b * math.sin(ang)
+        lean = math.radians(rng.uniform(35.0, 75.0))
+        way = (out * math.sin(lean) + d * math.cos(lean)).normalized()
+        rl = radius(n / L)
+        p0 = bent[i] + out * rl * 0.35
+        nl = rng.uniform(*nub_len)
+        rn = rl * rng.uniform(0.3, 0.55)
+        tube(m, [p0 + way * nl * q / 3.0 for q in range(4)], lambda t, rn=rn: rn * (1.0 - 0.3 * t), surf, sides=6, wobble=0.12, seed=seed + n, caps=(False, True), bow=0.0, swell=0.0,
+             cut=rng.uniform(10.0, 40.0), keep_look=True)
     return m
 
 
@@ -648,13 +709,13 @@ def by_eye(ys, rng, jitter):
 
 
 def stakes_row(ys, z0, z1, r, rng, seed=0, x=WX):
-    """Stakes driven in a row: each its own thickness, leaning a little, cut off at its own height."""
+    """Stakes driven in a row: each its own thickness and lean, crooked, knotted where its limbs were cut, broken off at its own height."""
     m = Mesh()
     for i, y in enumerate(ys):
-        rr = r * rng.uniform(0.8, 1.2)
-        top = Vector((x + rng.uniform(-1.2, 1.2), y + rng.uniform(-1.8, 1.8), z1 + rng.uniform(-4.0, 1.5)))
-        tube(m, path(Vector((x, y, z0)), top, 10, seed=seed + i * 3.1, wander=0.8),
-             lambda t, rr=rr: rr * (1.0 - 0.12 * t), "Bark", sides=9, wobble=0.06, seed=seed + i)
+        rr = r * rng.uniform(0.75, 1.35)
+        top = Vector((x + rng.uniform(-2.2, 2.2), y + rng.uniform(-2.8, 2.8), z1 + rng.uniform(-7.0, 3.0)))
+        rough_stick(m, path(Vector((x, y, z0)), top, 18, seed=seed + i * 3.1, wander=1.4), rr, rr * rng.uniform(0.72, 0.9), "Bark", rng, sides=10, wobble=0.14,
+                    nub_every=(10.0, 28.0), nub_chance=0.6, kink=0.7, nub_len=(1.0, 3.5))
     return m
 
 
@@ -666,34 +727,40 @@ def packed_courses(z0, z1, rod_r, rng, spread=(0.65, 1.35)):
     while z + r < z1:
         out.append((z, r))
         r2 = rod_r * rng.uniform(*spread)
-        z += r + r2 + rng.uniform(0.0, 0.35)
+        z += r + r2 + rng.uniform(-0.2, 1.0)     # beaten down by hand: some bite into each other, some leave a gap the light comes through
         r = r2
     return out
 
 
 def weave_courses(ys, courses, stake_r, rng, seed=0, x=WX, y_end=51.0):
-    """One rod per course, passing in front of one stake and behind the next; alternate courses in opposite phase. ys may be uneven (the weave
-    turns at each stake); courses [(z, r)]; each rod tapers from its butt (either end), runs a little uphill or down and ends where it ends."""
+    """Rods worked round the stakes by hand, not a sine wave: a course is one rod or two that overlap where the first ran out, each tapering hard from its own butt and
+    pushed in as far as it went, running up and down a little and sticking out past the panel by its own amount. ys may be uneven; courses [(z, r)]."""
     rods = []
     ext = [ys[0] - (ys[1] - ys[0])] + list(ys) + [ys[-1] + (ys[-1] - ys[-2])]
     for k, (z, r) in enumerate(courses):
         m = Mesh()
-        amp = stake_r + r * 0.95
-        y0 = -y_end - rng.uniform(0.0, 5.0)
-        y1 = y_end + rng.uniform(0.0, 5.0)
-        slope = rng.uniform(-0.008, 0.008)
-        butt_left = rng.random() < 0.5
-        pts = []
-        n = 48
-        for i in range(n + 1):
-            y = y0 + (y1 - y0) * i / n
-            j = max(0, min(len(ext) - 2, next((q for q in range(len(ext) - 1) if y < ext[q + 1]), len(ext) - 2)))
-            t = (y - ext[j]) / (ext[j + 1] - ext[j])
-            sign = 1.0 if (j + k) % 2 == 0 else -1.0
-            off = amp * sign * math.cos(math.pi * t)
-            pts.append(Vector((x + off, y, z + slope * y + noise.noise(Vector((y * 0.05, k * 1.7, seed))) * 0.35)))
-        taper = (lambda t, r=r: r * (1.0 - 0.3 * t)) if butt_left else (lambda t, r=r: r * (0.7 + 0.3 * t))
-        tube(m, pts, taper, "Rod", sides=7, wobble=0.05, seed=seed + k * 1.9)
+        spans = [(-y_end - rng.uniform(0.0, 9.0), y_end + rng.uniform(0.0, 9.0))]
+        if rng.random() < 0.45:
+            split, lap = rng.uniform(-24.0, 24.0), rng.uniform(8.0, 24.0)
+            spans = [(spans[0][0], split + lap * 0.5), (split - lap * 0.5, spans[0][1])]
+        for w, (y0, y1) in enumerate(spans):
+            rb, rt = r * rng.uniform(1.0, 1.4), r * rng.uniform(0.5, 0.78)
+            if rng.random() < 0.5:
+                rb, rt = rt, rb
+            push = rng.uniform(0.8, 1.2)
+            rise = rng.uniform(-0.035, 0.035)
+            n = max(24, int((y1 - y0) * 0.75))
+            s0 = seed + k * 2.3 + w * 7.7
+            pts = []
+            for i in range(n + 1):
+                y = y0 + (y1 - y0) * i / n
+                j = max(0, min(len(ext) - 2, next((q for q in range(len(ext) - 1) if y < ext[q + 1]), len(ext) - 2)))
+                t = (y - ext[j]) / (ext[j + 1] - ext[j])
+                sign = 1.0 if (j + k) % 2 == 0 else -1.0
+                amp = (stake_r + r * 0.95) * push * (1.0 + 0.28 * noise.noise(Vector((y * 0.06, s0, 1.0))))
+                dz = rise * (y - (y0 + y1) * 0.5) + 1.25 * noise.noise(Vector((y * 0.035, s0, 2.0))) + 0.5 * noise.noise(Vector((y * 0.13, s0, 3.0)))
+                pts.append(Vector((x + amp * sign * math.cos(math.pi * t), y, z + dz)))
+            rough_stick(m, pts, rb, rt, "Rod", rng, sides=8, wobble=0.14)
         rods.append(m)
     return rods
 
@@ -712,38 +779,122 @@ def group(meshes, n):
 
 def geo_wattle_wall(rng, x=WX, z0=-50.0, z1=50.0, stages=8):
     """A wattle panel between heights z0 and z1 on the plane x: the stakes driven 8 cm below its foot, standing 7 cm over its head."""
-    ys = by_eye([-40.0, -20.0, 0.0, 20.0, 40.0], rng, 3.0)
-    parts = [("Stakes", stakes_row(ys, z0 - 8.0, z1 + 7.0, 1.9, rng, seed=1, x=x))]
-    rods = weave_courses(ys, packed_courses(z0 + 0.3, z1 - 0.5, 1.1, rng), 1.9, rng, seed=3, x=x)
+    ys = by_eye([-40.0, -20.0, 0.0, 20.0, 40.0], rng, 4.5)
+    parts = [("Stakes", stakes_row(ys, z0 - 8.0, z1 + 7.0, 2.1, rng, seed=1, x=x))]
+    rods = weave_courses(ys, packed_courses(z0 + 0.3, z1 - 0.5, 1.2, rng, spread=(0.55, 1.5)), 2.1, rng, seed=3, x=x)
     for i, g in enumerate(group(rods, stages)):
         parts.append(("Weave%d" % (i + 1), g))
     return parts
 
 
-def geo_moss_daub(rng, bands=8, x=WX, z0=-50.0, z1=50.0):
-    """Moss stuffed into the weave by the handful from the bottom up: clumps of every size packed edge to edge over both faces (many small,
-    a few big mats), each turned its own way, standing proud by its own amount, a few wisps hanging; staged in bands from the bottom."""
+def moss_tri(m, ids, uvs, pts, out):
+    """One triangle with its outward side towards out (a blob's winding: the cross of its first two edges points outward)."""
+    p = [pts[i] for i in ids]
+    if (p[1] - p[0]).cross(p[2] - p[0]).dot(out) < 0.0:
+        ids, uvs = (ids[0], ids[2], ids[1]), (uvs[0], uvs[2], uvs[1])
+    m.face(ids, uvs, "Moss")
+
+
+def geo_moss_daub(rng, bands=8, x=WX, z0=-50.0, z1=50.0, wattle="WattleWall"):
+    """Moss on the weave (Wes, Nov 5: "a MUCH thinner layer and the wattle should still be visible through it"). No sheet and no lumps: thousands of small flakes and fine
+    strands rooted on the wattle's own rods and stakes (it builds that wattle again from the same seed), thick where a handful was pressed in and thinning to nothing at the
+    edges, so nothing floats and the weave and the light come through. Strands from a rod's top or underside reach across the gap. Dark at the root, light at the tip.
+    Staged in bands from the bottom."""
     out = [Mesh() for _ in range(bands)]
-    for side in (1, -1):
-        placed = []
-        for _ in range(int(5000 * (z1 - z0) / 100.0)):
-            r = 2.4 + 6.0 * rng.random() ** 2.0
-            y, z = rng.uniform(-50.0 + r * 0.4, 50.0 - r * 0.4), rng.uniform(z0 + r * 0.4, z1 - r * 0.4)
-            if any((y - py) ** 2 + (z - pz) ** 2 < ((r + pr) * 0.48) ** 2 for py, pz, pr in placed):
-                continue
-            placed.append((y, z, r))
-        for i, (y, z, r) in enumerate(placed):
-            m = out[min(bands - 1, int((z - z0) / ((z1 - z0) / bands)))]
-            # a soft cushion, its surface all small bumps (the moss's own tufts), overlapping its neighbours into one stuffed mass that stands
-            # proud of the weave (the rods reach ~4.5 cm off the panel's plane: none may show through); clumps of one gathering, so their
-            # tints stay close
-            rad = (r * rng.uniform(0.3, 0.45), r * rng.uniform(0.95, 1.3), r * rng.uniform(0.8, 1.15))
-            c = Vector((x + side * (3.6 + rad[0] * 0.5 + rng.uniform(-0.3, 0.6)), y, z))
-            rot = Matrix.Rotation(rng.uniform(0.0, math.pi), 3, "X") @ Matrix.Rotation(rng.uniform(-0.2, 0.2), 3, "Z")
-            blob(m, c, rad, "Moss", rot=rot, seed=side * 7.0 + i * 1.37, rough=0.2, rings=7, segs=14, freq=4.5, spread=0.4)
-            if r > 4.5 and rng.random() < 0.3:   # a wisp hanging from a big clump
-                blob(m, c + Vector((side * 0.6, rng.uniform(-1.5, 1.5), -r * 0.8)), (0.7, 1.0, rng.uniform(2.5, 4.5)), "Moss",
-                     rot=Matrix.Rotation(rng.uniform(-0.3, 0.3), 3, "X"), seed=i * 2.9, rough=0.3, rings=4, segs=6)
+    T = tile("Moss")
+    stages = bands
+
+    def band_of(z):
+        return min(bands - 1, max(0, int((z - z0) / ((z1 - z0) / bands))))
+
+    # the wattle this moss sits on: every triangle within the panel, with its area
+    tris, cum, total = [], [], 0.0
+    for _, part in geo_wattle_wall(random.Random(zlib.crc32(wattle.encode()) & 0xFFFF), x=x, z0=z0, z1=z1, stages=stages):
+        for f in part.f:
+            for k in range(1, len(f) - 1):
+                p0, p1, p2 = part.v[f[0]], part.v[f[k]], part.v[f[k + 1]]
+                if not (z0 <= (p0.z + p1.z + p2.z) / 3.0 <= z1):
+                    continue
+                n = (p1 - p0).cross(p2 - p0)
+                area = n.length * 0.5
+                if area < 1e-4:
+                    continue
+                total += area
+                tris.append((p0, p1, p2, n.normalized()))
+                cum.append(total)
+
+    offs = {1: rng.uniform(0.0, 50.0), -1: rng.uniform(0.0, 50.0)}
+
+    def cover(y, z, side):
+        # where the handfuls went: a slow field, torn by finer noise, so a third of each face has any and the rest is bare wattle
+        s0 = offs[side]
+        return (noise.noise(Vector((y * 0.035 + s0, z * 0.05, side * 2.0))) + 0.5 * noise.noise(Vector((y * 0.13, z * 0.16 + s0, side * 5.0)))
+                + 0.3 * noise.noise(Vector((y * 0.5 + s0, z * 0.5, side * 8.0))))
+
+    tries = int(115000 * (z1 - z0) / 100.0)
+    for t0 in rng.choices(tris, cum_weights=cum, k=tries):
+        p0, p1, p2, nrm = t0
+        side = 1 if nrm.x >= 0.0 else -1
+        u, v = rng.random(), rng.random()
+        if u + v > 1.0:
+            u, v = 1.0 - u, 1.0 - v
+        c = p0 + (p1 - p0) * u + (p2 - p0) * v
+        thick = (cover(c.y, c.z, side) - 0.02) / 0.36    # none below the edge, full in the middle of a handful
+        if thick <= 0.0 or rng.random() > thick:
+            continue
+        m = out[band_of(c.z)]
+        m.begin(0.0)
+        s0 = offs[side]
+        n1 = noise.noise(Vector((c.y * 0.05 + s0, c.z * 0.05, 9.0)))
+        n2 = noise.noise(Vector((c.y * 0.07, c.z * 0.07 + s0, 13.0)))
+        light = min(1.0, max(0.0, 0.5 + 0.7 * n1 + rng.uniform(-0.14, 0.14)))
+        weather = min(1.0, max(0.0, 0.25 + 0.8 * n2 + rng.uniform(-0.1, 0.1)))
+        e1, e2 = frame_of(nrm)
+        uv0 = (c.y / T, c.z / T)
+        if rng.random() < 0.55:
+            # a flake lying on the bark: a small torn scrap, its rim a little off the surface
+            r = 0.25 + 0.6 * rng.random() ** 1.7
+            base = c + nrm * 0.05
+            m.look = (light * 0.65, weather)
+            centre = m.vert(base)
+            pts = {centre: base}
+            ring = []
+            segs = rng.randint(4, 6)
+            ang = rng.uniform(0.0, TAU)
+            for k in range(segs):
+                a_k = ang + TAU * (k + rng.uniform(-0.25, 0.25)) / segs
+                pk = base + (e1 * math.cos(a_k) + e2 * math.sin(a_k)) * r * rng.uniform(0.55, 1.15) + nrm * rng.uniform(0.0, 0.22)
+                m.look = (min(1.0, light * 1.1), weather)
+                vid = m.vert(pk)
+                pts[vid] = pk
+                ring.append((vid, (pk.y / T, pk.z / T)))
+            for k in range(segs):
+                v1, u1 = ring[k]
+                v2, u2 = ring[(k + 1) % segs]
+                moss_tri(m, (centre, v1, v2), (uv0, u1, u2), pts, nrm)
+        else:
+            # a strand: a thin three-sided spike. From a rod's top or underside (its normal mostly up or down) it reaches on across the gap.
+            across = abs(nrm.z) > 0.6
+            L = (0.7 + 1.5 * rng.random() ** 2.0) if across else (0.4 + 1.1 * rng.random() ** 1.7)
+            w = 0.07 + 0.13 * rng.random()
+            ang = rng.uniform(0.0, TAU)
+            dirn = (nrm * (1.0 if across else rng.uniform(0.3, 0.9)) + (e1 * math.cos(ang) + e2 * math.sin(ang)) * rng.uniform(0.3, 0.9)).normalized()
+            e3, e4 = frame_of(dirn)
+            m.look = (light * 0.35, weather)
+            base = []
+            for k in range(3):
+                a_k = TAU * k / 3.0
+                base.append(m.vert(c + (e3 * math.cos(a_k) + e4 * math.sin(a_k)) * w))
+            tip_p = c + dirn * L
+            m.look = (min(1.0, light * 1.25 + 0.1), weather)
+            tip = m.vert(tip_p)
+            pts = {v: m.v[v] for v in base + [tip]}
+            centre_line = c + dirn * (L * 0.4)
+            for k in range(3):
+                v1, v2 = base[k], base[(k + 1) % 3]
+                mid = (m.v[v1] + m.v[v2]) * 0.5
+                uvs = (uv0, (uv0[0] + w * 2.0 / T, uv0[1]), (uv0[0] + w / T, uv0[1] + L / T))
+                moss_tri(m, (v1, v2, tip), uvs, pts, mid - centre_line)
     return [("Moss%d" % (i + 1), m) for i, m in enumerate(out)]
 
 
@@ -1347,7 +1498,7 @@ GEOMETRY = {
     "hide_leanto": geo_hide_leanto, "hide_tent": geo_hide_tent,
     # Nov 3: the half wall's pieces (built in the stick half wall's panel), the peak's thatch, the dry-stone wall
     "wattle_half": lambda rng: geo_wattle_wall(rng, stages=4, **HALF),
-    "moss_daub_half": lambda rng: geo_moss_daub(rng, bands=4, **HALF),
+    "moss_daub_half": lambda rng: geo_moss_daub(rng, bands=4, wattle="WattleHalfWall", **HALF),
     "clay_daub_half": lambda rng: geo_clay_daub(rng, nb=4, **HALF),
     "peak_thatch": geo_peak_thatch, "dry_stone_wall": geo_dry_stone_wall,
 }
@@ -1577,8 +1728,35 @@ def run_supports():
     log("done: %d support posts" % len(SUPPORTS))
 
 
+def run_wall_look():
+    """The wattle wall and its moss together, to look at from a player's distance and close to (job wall_look <out_dir>)."""
+    global VARY
+    BI.setup_scene()
+    os.makedirs(OUT, exist_ok=True)
+    obs = {}
+    for piece in ("WattleWall", "MossDaub"):
+        VARY = Vary(piece)
+        rng = random.Random(zlib.crc32(piece.encode()) & 0xFFFF)
+        parts = GEOMETRY[BP.PIECES[piece]["geometry"]](rng)
+        obs[piece] = [to_object("%s_%02d" % (piece, i), m)[0] for i, (pn, m) in enumerate(parts)]
+        log("%s: %d parts, %d triangles" % (piece, len(parts), sum(m.tris() for pn, m in parts)))
+    cam = BI.preview_rig()
+    c = Vector((-50.0, 0.0, 0.0))
+    shots = []
+    for moss in (False, True):
+        for ob in obs["MossDaub"]:
+            ob.hide_render = not moss
+        tag = "moss" if moss else "bare"
+        shots.append(BI.shoot(cam, c, (1.0, -0.15, 0.08), 135.0, os.path.join(OUT, "_%s_front.png" % tag), res=(960, 960)))
+        shots.append(BI.shoot(cam, c + Vector((0.0, -12.0, 8.0)), (1.0, -0.5, 0.25), 48.0, os.path.join(OUT, "_%s_close.png" % tag), res=(960, 960)))
+    print(BI.sheet(shots, os.path.join(OUT, "wall_look.png"), 2))
+    log("done")
+
+
 if __name__ == "__main__":
-    if JOB == "supports":
+    if JOB == "wall_look":
+        run_wall_look()
+    elif JOB == "supports":
         run_supports()
     elif JOB == "surfaces":
         run_surfaces()

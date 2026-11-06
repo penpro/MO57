@@ -2444,3 +2444,7 @@ References: CL-0378
 ### 2026-11-05 Pacific Standard Time — CLAUDE (parent session) — CL-0380
 Status: the hold in CL-0378 ends, on Wes's word ("let's just ignore it for now and hope it goes away"). The crashes are NOT explained or fixed: the cause is open, and DARKSIDE may blue-screen again without warning. So commit and push often, expect a run to die with no note, and retry a one-off failure once before debugging it. Windows' component store also reports corruption (0x80073712, Nov 5 18:25) and 26H2 will not install; nobody is to run DISM or sfc unless Wes asks. Window order: WorldLab's re-carve (CL-0377 stands; its copy and carve must be run again), then this session merges darktower/batch-2026-11-05-4 and runs its in-game pass.
 References: CL-0377, CL-0378, CL-0379
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (promo video side session) — CL-0381
+Status: WAITING, not a claim: when CL-0377 releases and the parent has merged lane batch 4 and run its pass, I take DARKSIDE for the promo's second cut from Wes's notes (game fixes for the campfire smoke, bush wind, wattle and moss; retakes on the merged build; beds re-recorded without the level music), on the parent's word. Until then Blender, audio and edit work only, no Unreal process. Tools/promo/ and Docs/Promo_Video.md are mine.
+References: CL-0377, CL-0375, CL-0380

@@ -24,7 +24,7 @@ ScrapedHide01 1.5 kg, Moss01 0.5 kg (an armful, new), FieldStone01 12 kg (a buil
 # Blender previews.
 SURFACES = {
     "Bark":   dict(tile_cm=60.0, light=(0.72, 1.28), weather=(1.10, 1.08, 1.02), weather_amount=0.75),   # a pole's bark: grey-brown, fine fissures along it, lenticels across
-    "Rod":    dict(tile_cm=40.0, light=(0.68, 1.32), weather=(1.00, 0.95, 0.80), weather_amount=0.65),   # hazel / willow rods: smooth red-brown bark, pale lenticels
+    "Rod":    dict(tile_cm=32.0, light=(0.55, 1.38), weather=(1.05, 1.00, 0.88), weather_amount=0.75),   # hazel / willow rods, rough and matte since Nov 5: grey-brown split bark, pale lenticels, each rod its own shade
     "Hewn":   dict(tile_cm=100.0, light=(0.80, 1.20), weather=(1.08, 1.06, 1.02), weather_amount=0.70),  # axe-hewn oak: scalloped facets across, grain along
     "Plank":  dict(tile_cm=100.0, light=(0.78, 1.22), weather=(1.08, 1.06, 1.02), weather_amount=0.70),  # riven oak boards
     "Moss":   dict(tile_cm=50.0, light=(0.70, 1.30), weather=(1.45, 1.15, 0.45), weather_amount=0.70),   # packed moss: green clumps, brown dead stems

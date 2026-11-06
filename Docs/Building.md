@@ -294,6 +294,12 @@ building stone" on a boulder with a hammerstone; the boulder stays) -- `UMOCover
 - The clay daubs' two big faces pointed inward until Nov 3 (`daub_slab` reversed the wrong face): Unreal culled them, so clay daub never
   showed in a game (Blender draws back faces, the previews looked right). Fixed; the stick walls stand ~9 cm out from their panel's plane,
   so the clay daub now stands 6.5 cm (lumps 5-8) off it.
-- Look-and-feel (the moss lumps, the daub, the stone courses, the thatch's colour) is on Wes's by-eye list (`Docs/BACKLOG.md`).
+- Look-and-feel (the moss, the daub, the stone courses, the thatch's colour) is on Wes's by-eye list (`Docs/BACKLOG.md`).
+- **Wattle and moss, second pass (Wes, Nov 5: "perfect tubes with perfectly woven curves", "the moss should be a MUCH thinner layer and the wattle should still be visible
+  through it").** Stakes and rods go through `rough_stick`: node swellings, kinks, a section that isn't round, trimmed nubs where a limb came off. A course is one or two
+  overlapping rods with a hard taper and its own push and rise, and the rod surface is rebaked matte with split bark. The moss has no sheet and no lumps: thin flakes and fine
+  strands rooted on the wattle's own rods and stakes (`geo_moss_daub` rebuilds that wattle from the same seed), so nothing floats and most of the weave stays bare. Rendering
+  the panel to look at it: `blender -b --factory-startup --python Tools/blender_buildings_blender.py -- wall_look Saved/BlenderBuildings/_look`. The door and the half wall share
+  these functions.
 - The pieces' assets (`/Game/BlenderBuildings`) and the changed stick Blueprints stay local until the LFS budget allows (as the Blender
   items): `python Tools/blender_buildings.py --surfaces --rows` remakes all of them on another machine.
