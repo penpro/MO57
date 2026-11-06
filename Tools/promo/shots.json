@@ -686,23 +686,24 @@
   },
   "follow": {
    "offset": [
-    -170,
-    -130,
-    190
+    -400,
+    -220,
+    20
    ],
    "look": [
-    10,
     0,
-    10
+    0,
+    30
    ],
-   "smooth": 0.08,
-   "fov": 50
+   "smooth": 0.06,
+   "fov": 48,
+   "bearing": -119
   },
   "after": [
    "MO.Test.InjectInput IA_MOMove 0 0 0.1"
   ],
   "exposure": {
-   "bias": 1.1
+   "bias": 0.9
   },
   "preroll_actions": [
    "MO.Test.InjectInput IA_MOMove 0 1 9999"
@@ -757,32 +758,57 @@
    20
   ],
   "director": false,
-  "settle": 10,
-  "preroll": 48,
+  "settle": 12,
+  "preroll": 96,
+  "ease": 0.4,
   "pawn": {
    "hide": true,
    "fly": true,
    "at": [
-    14994,
-    123000,
-    700
+    431085,
+    517200,
+    13000
    ]
   },
-  "follow": {
-   "actor": "Female_C_26",
-   "offset": [
-    400,
-    -110,
-    66
-   ],
-   "look": [
-    0,
-    0,
-    64
-   ],
-   "smooth": 0.03,
-   "fov": 17
-  }
+  "exposure": {
+   "bias": 0.8
+  },
+  "before_py": [
+   "p = [a for a in unreal.GameplayStatics.get_all_actors_of_class(ctx.world, unreal.Pawn) if a.get_name().endswith('Female_C_8')][0]; p.set_actor_location(unreal.Vector(430080, 518640, 12500), False, True)"
+  ],
+  "preroll_py": [
+   "p = [a for a in unreal.GameplayStatics.get_all_actors_of_class(ctx.world, unreal.Pawn) if a.get_name().endswith('Female_C_8')][0]; p.get_controller().set_stay_at_location(unreal.Vector(430980, 518640, 12260))"
+  ],
+  "keys": [
+   {
+    "t": 0.0,
+    "pos": [
+     430560,
+     517900,
+     12500
+    ],
+    "look": [
+     430420,
+     518640,
+     12350
+    ],
+    "fov": 45
+   },
+   {
+    "t": 1.0,
+    "pos": [
+     430880,
+     517120,
+     12600
+    ],
+    "look": [
+     430900,
+     518686,
+     12380
+    ],
+    "fov": 45
+   }
+  ]
  },
  "G20_fire_group": {
   "film_frames": 120,
