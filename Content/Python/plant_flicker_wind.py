@@ -62,6 +62,9 @@ DEFAULTS = {"Flicker Strength": 0.035, "Flicker Height Cap": 100.0, "Flicker Gus
             "Flicker Fade Start": 2000.0, "Flicker Fade End": 4000.0, "Flicker Gust Drift": unreal.LinearColor(0.35, 0.22, 0.15, 0.0)}
 BROAD_LEAF_STRENGTH = 0.006  # on instances, over the function's 0.035: M_MS_CustomFoliage* and the seedlings and saplings
 BROAD_MASTERS = ("M_MS_CustomFoliage", "M_MS_CustomFoliageNoOpacity")
+# Wes, Nov 5 (the knee-high locust in the promo's co-op shot): "the wind animation on the bush looks spazzy and jank so dial down the bush wind like we did for the grass".
+# Whole leafy branches a metre from the camera read like the ferns did, so the shrubs on M_MS_Foliage take the broad leaves' value (0.6 cm at the cap, not 3.5); the grass and the crops keep 0.035.
+BUSH_FOLDERS = ("/Game/Fab/Megascans/Plants/Black_Locust_wdvhberja", "/Game/Fab/Megascans/Plants/Raspberry_wf0oefeja", "/Game/Fab/Megascans/Plants/Dead_Shrubs_vdknafgha")
 MAX_DISPLACEMENT = 12.0   # Nanite bounds: 3.5 cm at the cap x Wind Strength Plants up to ~6 / 2 (M_MS_CustomFoliage's 3 would clip it)
 
 eal = unreal.EditorAssetLibrary
@@ -322,6 +325,21 @@ def set_broad_masters():
     out("PLANTFLICKER broad leaves: %d instances at Flicker Strength %.3f" % (n, BROAD_LEAF_STRENGTH))
 
 
+def set_bushes():
+    flt = unreal.ARFilter(class_paths=[unreal.TopLevelAssetPath("/Script/Engine", "MaterialInstanceConstant")], package_paths=list(BUSH_FOLDERS), recursive_paths=True)
+    n = 0
+    for a in reg.get_assets(flt):
+        mi = a.get_asset()
+        base = mi.get_base_material()
+        if base and base.get_name() == "M_MS_Foliage":
+            mel.set_material_instance_scalar_parameter_value(mi, "Flicker Strength", BROAD_LEAF_STRENGTH)
+            mel.update_material_instance(mi)
+            eal.save_asset(str(a.package_name), only_if_is_dirty=False)
+            out("PLANTFLICKER   bush: " + str(a.asset_name))
+            n += 1
+    out("PLANTFLICKER bushes: %d instances at Flicker Strength %.3f" % (n, BROAD_LEAF_STRENGTH))
+
+
 def main():
     func = build_function()
     for p in SMALL_ONLY:
@@ -330,6 +348,7 @@ def main():
         wire_with_trees(p, func)
     set_small_woody()
     set_broad_masters()
+    set_bushes()
 
 
 main()

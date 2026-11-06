@@ -130,11 +130,12 @@ def surface_master():
     return m
 
 
-def surfaces():
+def surfaces(only=None):
+    """Import the baked surfaces (only: a list of names, the rest are left as they are and not returned)."""
     folder = DEST + "/Surfaces"
     master = surface_master()
     mis = {}
-    for name in BP.SURFACES:
+    for name in (only or BP.SURFACES):
         keys = ("BaseColor", "Normal", "ORM")
         IBI._import([IBI._task(os.path.join(SRC, "Surfaces", "T_Surf_%s_%s.png" % (name, k)), folder, "T_Surf_%s_%s" % (name, k)) for k in keys])
         tex = {k: unreal.load_asset("%s/T_Surf_%s_%s" % (folder, name, k)) for k in keys}
@@ -495,8 +496,11 @@ def supports(mis):
     return [import_mesh(os.path.join(SRC, "Supports", n + ".fbx"), DEST + "/Supports", "SM_" + n, mis, collision=True).get_path_name() for n in names]
 
 
-def run(pieces=None, do_surfaces=True):
+def run(pieces=None, do_surfaces=True, only_surfaces=None):
     pieces = pieces or list(BP.PIECES)
+    if only_surfaces:
+        surfaces(only_surfaces)
+        do_surfaces = False
     mis = surfaces() if do_surfaces else surface_mis()
     supports(mis)
     report = {"surfaces": list(mis), "pieces": {}}

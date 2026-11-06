@@ -37,6 +37,10 @@ AMOCraftingStationActor::AMOCraftingStationActor()
 	ActiveParticleComponent->SetupAttachment(RootComponent);
 	ActiveParticleComponent->bAutoActivate = false;
 
+	ActiveSmokeComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("ActiveSmokeComponent"));
+	ActiveSmokeComponent->SetupAttachment(RootComponent);
+	ActiveSmokeComponent->bAutoActivate = false;
+
 	// Create light component for fire glow
 	ActiveLightComponent = CreateDefaultSubobject<UPointLightComponent>(TEXT("ActiveLightComponent"));
 	ActiveLightComponent->SetupAttachment(RootComponent);
@@ -541,6 +545,22 @@ void AMOCraftingStationActor::ActivateParticles()
 		return;
 	}
 
+	ActiveParticleComponent->SetRelativeScale3D(FVector(ActiveParticleScale));
+
+	// Wes, Nov 5 2026 (a campfire): "turn down the smoke effects a LOT, it's fucking massive and a giant wide cone, and make it slower"
+	if (ActiveSmokeComponent && !ActiveSmokeSystem.IsNull())
+	{
+		if (UNiagaraSystem* Smoke = ActiveSmokeSystem.LoadSynchronous())
+		{
+			ActiveSmokeComponent->SetRelativeLocation(FVector(0.0f, 0.0f, ActiveSmokeHeight));
+			ActiveSmokeComponent->SetRelativeScale3D(FVector(ActiveSmokeScale));
+			ActiveSmokeComponent->SetAsset(Smoke);
+			ActiveSmokeComponent->SetForceSolo(ActiveSmokeTimeDilation != 1.0f);
+			ActiveSmokeComponent->SetCustomTimeDilation(ActiveSmokeTimeDilation);
+			ActiveSmokeComponent->Activate();
+		}
+	}
+
 	// Load and set particle system if configured
 	if (!ActiveParticleSystem.IsNull())
 	{
@@ -567,6 +587,10 @@ void AMOCraftingStationActor::DeactivateParticles()
 		ActiveParticleComponent->Deactivate();
 		// DEBUG (MOCraftingStationActor, disabled Oct 18): re-enable to trace verbose detail
 		// UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated particles"));
+	}
+	if (ActiveSmokeComponent && ActiveSmokeComponent->IsActive())
+	{
+		ActiveSmokeComponent->Deactivate();
 	}
 }
 

@@ -4,9 +4,9 @@ assets 'pop in' as building goes on"). Per piece (Tools/building_pieces.py PIECE
   2. the editor imports them, lays a cobble piece's stones and makes BP_Piece_<Piece> (Content/Python/import_blender_buildings.py);
   3. with --rows, the recipe rows go into the Recipes table and the new materials' rows into DT_Items (`ue.py rows set`, readback-verified).
 
-    python Tools/blender_buildings.py [Piece ...] [--surfaces] [--blender-only] [--no-blender] [--rows]
+    python Tools/blender_buildings.py [Piece ...] [--surfaces[=Name,Name]] [--blender-only] [--no-blender] [--rows]
 
-No pieces = all of them. --surfaces bakes the tiling surfaces again first (and imports them). Blender 5.2; steps 2-3 need the editor (bridge,
+No pieces = all of them. --surfaces bakes the tiling surfaces again first and imports them (=Name,Name: only those). Blender 5.2; steps 2-3 need the editor (bridge,
 PIE not running). Verify in the game with Tools/check_buildings.py.
 """
 import json
@@ -46,10 +46,10 @@ ITEM_ROWS = {
 }
 
 
-def blender(job):
+def blender(job, *extra):
     out = os.path.join(OUT, {"surfaces": "Surfaces", "supports": "Supports"}.get(job, job))
     proc = subprocess.run([BLENDER, "-b", "--factory-startup", "--python", os.path.join(ROOT, "Tools", "blender_buildings_blender.py"), "--",
-                           job, out], capture_output=True, text=True)
+                           job, out] + list(extra), capture_output=True, text=True)
     lines = [l for l in proc.stdout.splitlines() if l.startswith("BLENDERBUILD")]
     print("\n".join(lines) or proc.stdout[-3000:] + proc.stderr[-2000:], flush=True)
     if not any("done" in l for l in lines):
@@ -79,20 +79,22 @@ def rows_set(table, rows, name):
 
 def main():
     pieces = [a for a in sys.argv[1:] if not a.startswith("--")] or list(BP.PIECES)
+    only = next((a.split("=", 1)[1].split(",") for a in sys.argv[1:] if a.startswith("--surfaces=")), None)
+    do_surfaces = "--surfaces" in sys.argv or only is not None
     unknown = [p for p in pieces if p not in BP.PIECES]
     if unknown:
         sys.exit("unknown pieces: %s" % unknown)
     if "--no-blender" not in sys.argv:
-        if "--surfaces" in sys.argv:
-            blender("surfaces")
+        if do_surfaces:
+            blender("surfaces", *(["--only", ",".join(only)] if only else []))
         blender("supports")
         for p in pieces:
             blender(p)
         blender("Moss01")
     if "--blender-only" in sys.argv:
         return
-    report = ue_py("import importlib, import_blender_buildings as b; importlib.reload(b); out(b.run(%r, do_surfaces=%r))"
-                   % (pieces, "--surfaces" in sys.argv))
+    report = ue_py("import importlib, import_blender_buildings as b; importlib.reload(b); out(b.run(%r, do_surfaces=%r, only_surfaces=%r))"
+                   % (pieces, do_surfaces, only))
     print(json.dumps(report["pieces"], indent=1), flush=True)
     ue_py("import importlib, import_blender_buildings as b; importlib.reload(b); import json; out(json.dumps(b.moss_item()))")
     if "--rows" in sys.argv:

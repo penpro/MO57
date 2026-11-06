@@ -369,7 +369,7 @@ then a strafe at walking pace, a screenshot mid-pan and one converged; `Tools/fl
   seedlings and saplings take it through the static switch `Small Plant Flicker` on the masters they share with trees (`M_Foliage`, `M_Foliage_TwoSided`,
   `MA_Foliage`: default off, on for all 34 of their instances). **Trees keep their sway.** Test `MOFramework.Rendering.SmallPlantsFlicker`.
   - **What it does:** two fast waves (2.0 and 3.3 Hz) phased per plant and per part of the plant, a horizontal offset growing with the height above the pivot
-    (2.7 cm at the tip of a 85 cm barley, 0.6 cm on a 30 cm tuft, capped at 3.5 cm; broad leaves and fronds take Strength 0.006 against 0.035), times a noise gate
+    (2.7 cm at the tip of a 85 cm barley, 0.6 cm on a 30 cm tuft, capped at 3.5 cm; broad leaves and fronds take Strength 0.006 against 0.035, and so, since Nov 5, do the shrubs on `M_MS_Foliage`: knee-high locust, raspberry, dead shrubs. Wes: "the wind animation on the bush looks spazzy and jank so dial down the bush wind like we did for the grass"), times a noise gate
     (patches of ~1.5 m lasting 2-3 s, broken up per plant) and a distance fade (20-40 m). `Wind Strength Plants` (the world's MPC) scales it. Precision by
     construction: the world position is `Fmod` 4000 before the noise's time term is added, and `Time` wraps every 600 s, a whole number of cycles of both waves.
   - **Measured** (`Tools/check_plant_wind.py`, seed 777, the same cameras, TSR on; reach = per-pixel temporal std, grey levels; speed = levels / frame):
