@@ -2456,3 +2456,7 @@ References: CL-0377, CL-0380, CL-0381
 ### 2026-11-05 Pacific Standard Time — CLAUDE (parent session) — CL-0383
 Status: CLAIM the UE_5.8 build window, the editor and -game instances (about 2 h): merge darktower/batch-2026-11-05-4 (9 fixes) onto master, swap the studio splash to the Penumbra Tech mark (N-350), ue.py build, ue.py auto, Tools/check_save_roundtrip.py and the batch's in-game checks, one nettest actions. Dev saves are scrapped by the build. Promo's retakes follow when this session gives the word. If Wes restarts for 26H2, whatever is running dies and is run again.
 References: CL-0374, CL-0381, CL-0382
+
+### 2026-11-05 Pacific Standard Time — CLAUDE (parent session) — CL-0384
+Status: RELEASE CL-0383: no editor, build or instance of mine runs. Lane batch 4 is merged and verified on DARKSIDE: ue.py auto 456 / 0, Tools/check_save_roundtrip.py 55 / 55, the new Tools/check_the_dead.py PASS, nettest actions 265 passed and 2 failed. The two: _client_building_look, a stale step since N-262 (fixed, passes alone); _client_drink, N-352, not from this batch. CORRECTION to CL-0372: its 'nettest actions 128 passed and 3 failed' came from a tail of the output and undercounts, so earlier failures may not have been seen; save a full run to a file. The studio splash is the Penumbra Tech mark (N-350; its .uasset stays local, LFS). The DARKSIDE window goes to the promo session's retakes on the parent's word.
+References: CL-0372, CL-0374, CL-0381, CL-0383
