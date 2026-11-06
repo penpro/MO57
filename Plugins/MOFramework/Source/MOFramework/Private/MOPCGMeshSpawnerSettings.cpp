@@ -213,10 +213,10 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	// A floating island's top gets its sticks and stones too (N-272): the same points over again, each lifted onto the top over it, flat on its slope with the point's own yaw. After the land's, so the land's draw
 	// does not change; the graph's points are the land's, so nothing here asks about the land's water or caves. From the seed alone, like the plants: the same on every machine.
 	const UMOWorldSeedSubsystem* IslandSeeds = UMOWorldSeedSubsystem::Get(TargetActor);
-	static const IConsoleVariable* CVarIslandPlants = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.PCG.IslandPlants"));
+	static const IConsoleVariable* IslandPlantsSwitch = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.PCG.IslandPlants"));
 	const FMOWorldGenParamsRef GenParams = FMOWorldGenParamsProvider::Get();
 	int32 TotalIslandPoints = 0;
-	if (IslandSeeds && IslandSeeds->HasActiveSeed() && GenParams->Tuning.IslandChance > 0.0f && (!CVarIslandPlants || CVarIslandPlants->GetInt() != 0))
+	if (IslandSeeds && IslandSeeds->HasActiveSeed() && GenParams->Tuning.IslandChance > 0.0f && (!IslandPlantsSwitch || IslandPlantsSwitch->GetInt() != 0))
 	{
 		const int32 TerrainSeed = IslandSeeds->GetActiveTerrainSeed();
 		for (const FPCGTaggedData& Input : Inputs)
