@@ -226,6 +226,12 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 				{
 					Known->Gender = Identity->Gender;
 				}
+				// The record can predate the recruitment: saved as a stranger, recruited since. The live pawn decides, or a new recruit stays out of the Characters menu until the next save (N-313).
+				if (!Known->bIsPlayerControllable && (bDrivenByOther || IsPawnAvailableTo(Pawn, Requester)))
+				{
+					Known->bIsPlayerControllable = true;
+					Known->StatusText = TEXT("Recruited");
+				}
 			}
 			++AlreadyKnown;
 			continue;
