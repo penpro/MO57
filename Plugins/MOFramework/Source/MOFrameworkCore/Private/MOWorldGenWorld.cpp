@@ -106,7 +106,16 @@ bool FMOWorldGen::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 C
 	const bool bFound = FMOWorldGenDomain::GetCaveEntranceInCell(Params, CellX, CellY, Seed, Out);
 	if (bFound)
 	{
+		const FVector2D DomainCenter = Out.Center;
 		ToWorld(Params, Out.Center);
+		const FVector Shift(Out.Center.X - DomainCenter.X, Out.Center.Y - DomainCenter.Y, 0.0);
+		Out.ShelterMiddle += FVector2D(Shift);
+		Out.MainChamber += Shift;
+		for (TPair<FVector, FVector>& Pass : Out.Passages)
+		{
+			Pass.Key += Shift;
+			Pass.Value += Shift;
+		}
 	}
 	return bFound;
 }

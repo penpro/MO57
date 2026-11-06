@@ -233,11 +233,12 @@ bool FMOWorldGen_CaveEntranceBuilt::RunTest(const FString& Parameters)
 {
 	using namespace MOCaveReachTest;
 	const FMOWorldGenParamsRef Shipped = UMOWorldGenSettings::BuildParams();
-	const FMOWorldGenParamsRef P = Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 50000.0f; T.CaveEntranceChance = 1.0f; });
+	// Every cell a shallow one (the mix has its own test, CaveEntranceMix).
+	const FMOWorldGenParamsRef P = Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 50000.0f; T.CaveEntranceChance = 1.0f; T.CaveOverhangShare = 0.0f; T.CaveDeepShare = 0.0f; });
 	const FMOWorldGenParamsRef Off = Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceChance = 0.0f; });   // the field without the feature
 	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(670711536);
 	// On by default since generator v12 (F30 A, Wes Oct 19 2026: "turn on built cave entrances in limestone").
-	TestEqual(TEXT("on by default: 70 % of the 500 m cells"), Shipped->Tuning.CaveEntranceChance, 0.7f);
+	TestEqual(TEXT("on by default: 90 % of the 400 m cells (v15)"), Shipped->Tuning.CaveEntranceChance, 0.9f);
 	TestNotEqual(TEXT("on by default: the feature is part of the shipped params hash"), Shipped->GetHash(),
 		Variant(Shipped, [](FMOWorldGenTuning& T) { T.CaveEntranceCellCm = 12345678.0f; })->GetHash());
 
@@ -338,6 +339,218 @@ bool FMOWorldGen_CaveEntranceBuilt::RunTest(const FString& Parameters)
 	}
 	AddInfo(FString::Printf(TEXT("%d cell(s) with an entrance in 2,500 (chance 1: the rest failed the dry / karst / slope / height gates); %d checked"), Found, Checked));
 	TestTrue(TEXT("some entrances exist with the feature on"), Found > 0);
+	return true;
+}
+
+// BR23-18 (Wes, Oct 23: "a mix: ~2/4 small overhangs (room for a fire, partial shelter), 1/4 deeper branching caves, 1/4 shallow caves as now"). What each kind must be, read back from the cave field itself:
+// an overhang has a level floor with standing room, roofed by rock you cannot see sky through, and you walk into it from the bowl; a deep cave's branches are air you can stand in, under rock, off a chamber.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveEntranceMix,
+	"MOFramework.WorldGen.CaveEntranceMix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_CaveEntranceMix::RunTest(const FString& Parameters)
+{
+	using namespace MOCaveReachTest;
+	const FMOWorldGenParamsRef P = UMOWorldGenSettings::BuildParams();
+	const FMOWorldGenParamsRef Off = Variant(P, [](FMOWorldGenTuning& T) { T.CaveEntranceChance = 0.0f; });
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(670711536);
+	const float Voxel = P->Tuning.VoxelSizeCm;
+	const auto Field = [&P, Seed, Voxel](double X, double Y, double Z) { return FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, Voxel), Seed, Voxel); };
+
+	int32 Counts[3] = {};
+	int32 OverhangsChecked = 0, DeepsChecked = 0, RoomsTotal = 0, PassagesTotal = 0;
+	float DeepestUnderHollow = 0.0f, LongestDeep = 0.0f, RoofThinnest = 1.0e6f;
+	for (int64 Cy = -60; Cy < 60; ++Cy)
+	{
+		for (int64 Cx = -60; Cx < 60; ++Cx)
+		{
+			FMOCaveEntranceHollow E;
+			if (!FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, Seed, E))
+			{
+				continue;
+			}
+			++Counts[(int32)E.Kind];
+			const FString At = FString::Printf(TEXT("(%.0f, %.0f)"), E.Center.X, E.Center.Y);
+			const FVector2D Across(-E.Uphill.Y, E.Uphill.X);
+
+			// No kind opens the ground beyond its hollow (1.3 x the radius on; a hollow's uphill cut is measured by OpeningKeepOut), and the field keeps the cave tests' gradient limit round it.
+			const bool bCheck = (E.Kind == EMOCaveEntranceKind::Overhang && OverhangsChecked < 8) || (E.Kind == EMOCaveEntranceKind::Deep && DeepsChecked < 6);
+			if (bCheck)
+			{
+				int32 Holes = 0;
+				for (int32 R = (int32)(E.RadiusCm * 1.5f); R <= 10000; R += 250)
+				{
+					for (int32 A = 0; A < 48; ++A)
+					{
+						const double X = E.Center.X + R * FMath::Cos(A * PI / 24.0), Y = E.Center.Y + R * FMath::Sin(A * PI / 24.0);
+						const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, Voxel);
+						Holes += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, G - 60.0f, G, Seed, Voxel) < 0.0f && FMOWorldGen::SampleCaveDistanceAtGround(*Off, X, Y, G - 60.0f, G, Seed, Voxel) >= 0.0f ? 1 : 0;
+					}
+				}
+				TestEqual(FString::Printf(TEXT("%s: no opening in the ground beyond its hollow"), *At), Holes, 0);
+				float MaxGrad = 0.0f;
+				for (int32 Ix = -40; Ix <= 40; Ix += 3)
+				{
+					for (int32 Iy = -40; Iy <= 40; Iy += 3)
+					{
+						const double X = E.Center.X + Ix * 100.0, Y = E.Center.Y + Iy * 100.0;
+						const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, Voxel);
+						for (float Below = 50.0f; Below <= 3000.0f; Below += 350.0f)
+						{
+							const float Z = G - Below;
+							const float D0 = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, G, Seed, Voxel);
+							const float Dz = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z + 100.0f, G, Seed, Voxel) - D0;
+							const float Dx = Field(X + 100.0, Y, Z) - D0;
+							MaxGrad = FMath::Max3(MaxGrad, FMath::Abs(Dz) / 100.0f, FMath::Abs(Dx) / 100.0f);
+						}
+					}
+				}
+				TestTrue(FString::Printf(TEXT("%s: the field has no cliff (max |gradient| %.2f < 40)"), *At, MaxGrad), MaxGrad < 40.0f);
+			}
+
+			if (E.Kind == EMOCaveEntranceKind::Overhang && OverhangsChecked < 8)
+			{
+				++OverhangsChecked;
+				const float Floor = E.GroundCm - E.DepthCm;
+				// A level floor with standing room, 3 x 3 m round the shelter's middle: rock 60 cm under the floor, air 180 cm over it.
+				int32 Standing = 0, Level = 0, Spots = 0;
+				for (int32 Ia = -1; Ia <= 1; ++Ia)
+				{
+					for (int32 Ib = -1; Ib <= 1; ++Ib)
+					{
+						const FVector2D Spot = E.ShelterMiddle + E.Uphill * (Ia * 150.0) + Across * (Ib * 150.0);
+						++Spots;
+						Standing += Field(Spot.X, Spot.Y, Floor + 180.0f) < 0.0f ? 1 : 0;
+						Level += Field(Spot.X, Spot.Y, Floor - 60.0f) > 0.0f && Field(Spot.X, Spot.Y, Floor + 60.0f) < 0.0f ? 1 : 0;
+					}
+				}
+				TestEqual(FString::Printf(TEXT("%s: standing room over 3 x 3 m of the shelter"), *At), Standing, Spots);
+				TestEqual(FString::Printf(TEXT("%s: the shelter's floor is level, at the hollow's floor"), *At), Level, Spots);
+				// Roofed: 2.5 m further in, going up from the floor there is air to crouch in, then at least a metre of rock: the bowl's wall, between the shelter's ceiling and the open air over the bowl.
+				const FVector2D Back = E.ShelterMiddle + E.Uphill * 250.0;
+				TestTrue(FString::Printf(TEXT("%s: air at the back of the shelter"), *At), Field(Back.X, Back.Y, Floor + 100.0f) < 0.0f);
+				float RoofCm = 0.0f;
+				for (float Z = Floor + 100.0f; Z <= E.GroundCm + 800.0f; Z += 20.0f)
+				{
+					RoofCm += Field(Back.X, Back.Y, Z) >= 0.0f ? 20.0f : 0.0f;
+				}
+				RoofThinnest = FMath::Min(RoofThinnest, RoofCm);
+				TestTrue(FString::Printf(TEXT("%s: the roof over the back of the shelter is rock (%.0f cm)"), *At, RoofCm), RoofCm >= 100.0f);
+				// You walk in: every metre from the hollow's middle to the shelter's middle has knee-to-head air over the floor.
+				int32 Blocked = 0;
+				const double Way = FVector2D::Distance(E.Center, E.ShelterMiddle);
+				for (double S = 0.0; S <= Way; S += 100.0)
+				{
+					const FVector2D WayPoint = E.Center + E.Uphill * S;
+					Blocked += Field(WayPoint.X, WayPoint.Y, Floor + 100.0f) < 0.0f ? 0 : 1;
+				}
+				TestEqual(FString::Printf(TEXT("%s: the way in from the bowl is clear"), *At), Blocked, 0);
+			}
+
+			if (E.Kind == EMOCaveEntranceKind::Deep)
+			{
+				PassagesTotal += E.Passages.Num();
+				RoomsTotal += E.NumRooms;
+				if (DeepsChecked < 6)
+				{
+					++DeepsChecked;
+					TestTrue(FString::Printf(TEXT("%s: a deep cave branches"), *At), E.Passages.Num() >= 1);
+					float Length = 0.0f;
+					int32 Samples = 0, Air = 0, Covered = 0;
+					for (const TPair<FVector, FVector>& Pass : E.Passages)
+					{
+						Length += (float)FVector::Distance(Pass.Key, Pass.Value);
+						for (int32 K = 0; K <= 10; ++K)
+						{
+							const FVector On = FMath::Lerp(Pass.Key, Pass.Value, K / 10.0);
+							const float G = FMOWorldGen::SampleHeightCm(*P, On.X, On.Y, Seed, Voxel);
+							++Samples;
+							Air += Field(On.X, On.Y, On.Z) < 0.0f ? 1 : 0;
+							Covered += G - On.Z >= 300.0f ? 1 : 0;
+							DeepestUnderHollow = FMath::Max(DeepestUnderHollow, E.GroundCm - (float)On.Z);
+						}
+					}
+					LongestDeep = FMath::Max(LongestDeep, Length);
+					// The field's own gates (a limestone contact, water near) may close a stretch; most of it must be there.
+					TestTrue(FString::Printf(TEXT("%s: its branches are air (%d of %d samples)"), *At, Air, Samples), Air * 10 >= Samples * 8);
+					TestEqual(FString::Printf(TEXT("%s: its branches are under rock"), *At), Covered, Samples);
+				}
+			}
+		}
+	}
+	const int32 Total = Counts[0] + Counts[1] + Counts[2];
+	AddInfo(FString::Printf(TEXT("%d built entrance(s) in 48 x 48 km: %d overhangs (thinnest roof checked %.0f cm), %d shallow, %d deep; deep: %d passages, %d rooms, at most %.0f m of branches, %.0f m under the hollow's rim"),
+		Total, Counts[0], RoofThinnest, Counts[1], Counts[2], PassagesTotal, RoomsTotal, LongestDeep / 100.0f, DeepestUnderHollow / 100.0f));
+	TestTrue(TEXT("enough entrances to measure the mix (>= 40)"), Total >= 40);
+	// Wes's own "~": the mix each machine gets is the hash's, and an overhang's gates differ a little from a passage's.
+	TestTrue(FString::Printf(TEXT("about half are overhangs (%d of %d)"), Counts[0], Total), Counts[0] * 100 >= Total * 35 && Counts[0] * 100 <= Total * 65);
+	TestTrue(FString::Printf(TEXT("about a quarter are deep (%d of %d)"), Counts[2], Total), Counts[2] * 100 >= Total * 12 && Counts[2] * 100 <= Total * 38);
+	TestTrue(FString::Printf(TEXT("about a quarter are shallow (%d of %d)"), Counts[1], Total), Counts[1] * 100 >= Total * 12 && Counts[1] * 100 <= Total * 38);
+	TestTrue(TEXT("overhangs were checked"), OverhangsChecked > 0);
+	TestTrue(TEXT("deep caves were checked"), DeepsChecked > 0);
+
+	// The same cell gives the same cave whatever was generated before it on this thread (the settled entrance lives in a per-thread cache whose slots are reused: a passage once kept the room of the cell
+	// before it, and the same world counted 2,322 rooms in one run and 2,316 in the next). Backwards through the cells, so every slot has held something else: a co-op machine meets them in its own order.
+	TMap<FIntPoint, TPair<int32, int32>> FirstPass;
+	for (int64 Cy = -60; Cy < 60; ++Cy)
+	{
+		for (int64 Cx = -60; Cx < 60; ++Cx)
+		{
+			FMOCaveEntranceHollow E;
+			if (FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, Seed, E))
+			{
+				FirstPass.Add(FIntPoint((int32)Cx, (int32)Cy), TPair<int32, int32>(E.Passages.Num(), E.NumRooms));
+			}
+		}
+	}
+	int32 Differ = 0;
+	for (int64 Cy = 59; Cy >= -60; --Cy)
+	{
+		for (int64 Cx = 59; Cx >= -60; --Cx)
+		{
+			FMOCaveEntranceHollow E;
+			if (FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, Seed, E))
+			{
+				const TPair<int32, int32>* Was = FirstPass.Find(FIntPoint((int32)Cx, (int32)Cy));
+				Differ += !Was || Was->Key != E.Passages.Num() || Was->Value != E.NumRooms ? 1 : 0;
+			}
+		}
+	}
+	TestEqual(TEXT("each cell's cave is the same whatever order the cells are asked in"), Differ, 0);
+
+	// What it costs: one 34^3 chunk of the cave field at 100 cm round a cave's chamber, by kind (the number is printed, not gated: it depends on the machine).
+	for (const EMOCaveEntranceKind Kind : { EMOCaveEntranceKind::Shallow, EMOCaveEntranceKind::Deep, EMOCaveEntranceKind::Overhang })
+	{
+		bool bDone = false;
+		for (int64 Cy = -60; Cy < 60 && !bDone; ++Cy)
+		{
+			for (int64 Cx = -60; Cx < 60 && !bDone; ++Cx)
+			{
+				FMOCaveEntranceHollow E;
+				if (!FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, Seed, E) || E.Kind != Kind)
+				{
+					continue;
+				}
+				bDone = true;
+				const FVector At = Kind == EMOCaveEntranceKind::Overhang ? FVector(E.ShelterMiddle.X, E.ShelterMiddle.Y, E.GroundCm - E.DepthCm) : E.MainChamber;
+				const double Started = FPlatformTime::Seconds();
+				float Sum = 0.0f;
+				for (int32 Iy = -17; Iy < 17; ++Iy)
+				{
+					for (int32 Ix = -17; Ix < 17; ++Ix)
+					{
+						const double X = At.X + Ix * 100.0, Y = At.Y + Iy * 100.0;
+						const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, Voxel);
+						for (int32 Iz = -17; Iz < 17; ++Iz)
+						{
+							Sum += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, At.Z + Iz * 100.0, G, Seed, 100.0f);
+						}
+					}
+				}
+				AddInfo(FString::Printf(TEXT("kind %d: a 34^3 chunk of the field round its chamber %.1f ms (sum %.0f)"), (int32)Kind, (FPlatformTime::Seconds() - Started) * 1000.0, Sum));
+			}
+		}
+	}
 	return true;
 }
 

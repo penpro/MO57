@@ -2804,6 +2804,9 @@ void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 	});
 	// Caves are not world features (they are the generator's cave field, only in limestone): their own entry, searched by FMOWorldGen::FindNearestCaveMouth.
 	Options.Add({ FName(TEXT("CaveEntrance")), NSLOCTEXT("MOConsole", "PoiCave", "Cave entrance") });
+	// The built entrances' other two kinds (BR23-18): to go and look at one without searching.
+	Options.Add({ FName(TEXT("Overhang")), NSLOCTEXT("MOConsole", "PoiOverhang", "Overhang") });
+	Options.Add({ FName(TEXT("DeepCave")), NSLOCTEXT("MOConsole", "PoiDeepCave", "Deep cave") });
 	// Nor are floating islands: the generator's too, each with its own voxel stamps.
 	Options.Add({ FName(TEXT("FloatingIsland")), NSLOCTEXT("MOConsole", "PoiIsland", "Floating island") });
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
@@ -2846,6 +2849,45 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi CaveEntrance: mouth at %s (slope %.0f deg), %.1f km away, found in %.1f s"), *Mouth.ToCompactString(), SlopeDeg,
 			FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Mouth)) / 100000.0, FPlatformTime::Seconds() - Start);
 		BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
+		return;
+	}
+	if (Traveller && (FeatureId == FName(TEXT("Overhang")) || FeatureId == FName(TEXT("DeepCave"))))
+	{
+		// Square rings of cells outward: the first found is near enough the nearest. On the hollow's downhill rim, looking in at what it leads to.
+		const EMOCaveEntranceKind Wanted = FeatureId == FName(TEXT("Overhang")) ? EMOCaveEntranceKind::Overhang : EMOCaveEntranceKind::Deep;
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(this);
+		const FVector From = Traveller->GetActorLocation();
+		const double Cell = FMath::Max(1.0f, Params->Tuning.CaveEntranceCellCm);
+		int64 Cx0 = 0, Cy0 = 0;
+		FMOWorldGen::WorldToCell(*Params, From.X, From.Y, Cell, Cx0, Cy0);
+		const int32 Rings = FMath::CeilToInt32(3000000.0 / Cell);
+		for (int32 Ring = 0; Seeds && Seeds->HasActiveSeed() && Ring <= Rings; ++Ring)
+		{
+			for (int64 Cy = Cy0 - Ring; Cy <= Cy0 + Ring; ++Cy)
+			{
+				for (int64 Cx = Cx0 - Ring; Cx <= Cx0 + Ring; ++Cx)
+				{
+					FMOCaveEntranceHollow Hollow;
+					if ((FMath::Abs(Cx - Cx0) != Ring && FMath::Abs(Cy - Cy0) != Ring) || !FMOWorldGen::GetCaveEntranceInCell(*Params, Cx, Cy, Seeds->GetActiveTerrainSeed(), Hollow) || Hollow.Kind != Wanted)
+					{
+						continue;
+					}
+					const FVector2D StandXY = Hollow.Center - Hollow.Uphill * (double)(Hollow.RadiusCm * 1.1f);
+					const float StandGround = FMOWorldGen::SampleHeightCm(*Params, StandXY.X, StandXY.Y, Seeds->GetActiveTerrainSeed(), Params->Tuning.VoxelSizeCm);
+					const FRotator Facing(-12.0f, FMath::RadiansToDegrees(FMath::Atan2(Hollow.Uphill.Y, Hollow.Uphill.X)), 0.0f);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: hollow at x=%.0f y=%.0f ground=%.0f, %.1f km away"), *FeatureId.ToString(), Hollow.Center.X, Hollow.Center.Y, Hollow.GroundCm,
+						FVector2D::Distance(FVector2D(From), Hollow.Center) / 100000.0);
+					BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
+					return;
+				}
+			}
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: none within 30 km"), *FeatureId.ToString());
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOConsole", "PoiNoKind", "None within 30 km."), 5.0f);
+		}
 		return;
 	}
 	if (Traveller && FeatureId == FName(TEXT("FloatingIsland")))

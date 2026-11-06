@@ -216,6 +216,7 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	if (T.CaveEntranceChance > 0.0f)
 	{
 		H = FnvAddFloat(FnvAddFloat(H, T.CaveEntranceCellCm), T.CaveEntranceChance);
+		H = FnvAddFloat(FnvAddFloat(H, T.CaveOverhangShare), T.CaveDeepShare);
 	}
 	// Ravines, floating islands and lobed lakes (v13): only while on, the same way.
 	if (T.bEnableWater && T.LakeLobes > 1)

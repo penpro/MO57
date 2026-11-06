@@ -30,6 +30,11 @@ namespace
 			P->Tuning.RavineChance = 0.0f;
 			P->Tuning.IslandChance = 0.0f;
 			P->Tuning.LakeLobes = 1;
+			// ... and v12's built entrances: every one a shallow cave, 70 % of the 500 m cells (v15's mix off).
+			P->Tuning.CaveEntranceCellCm = 50000.0f;
+			P->Tuning.CaveEntranceChance = 0.7f;
+			P->Tuning.CaveOverhangShare = 0.0f;
+			P->Tuning.CaveDeepShare = 0.0f;
 		}
 		if (!bWater)
 		{

@@ -49,6 +49,10 @@ What a save must keep, in a real world (Nov 5): `python Tools/check_save_roundtr
 `python Tools/check_spawn_menu.py [--seed N] [--keep] [--shots DIR]` -- `spawn` in a real game: every species, three at once, a survivor of one base, the menu; CONTROL: a name not on the menu spawns nothing.
 `python Tools/check_dev_tools.py [--seed N] [--keep] [--shots DIR] [--only notice,menu,ai,firstperson,fly,cinema,island]` -- the early access notice, the console's Menu, the AI switches, first person, flying with real double jumps (survival and creative), cinema, the floating island POI, each with a control; `--shots` keeps what Wes judges by eye.
 `python Tools/check_sky_coop.py [--seed 777]` -- host and joiner over an island: one seed, checksum, the same stamps, rock heights and plants, digs from both sides reach both. Verbs `MO.WorldGen.FindIsland`, `.FindRavine`, `.FindLake`, `.IslandPlants`; cvars `mo.WorldGen.IslandChance`, `.RavineChance`, `.LakeLobes`, `.IslandStampMaxLOD`, `mo.PCG.IslandPlants`.
+`python Tools/check_cave_mix.py [--seed 777] [--shots DIR]` -- the built entrances' mix (BR23-18) walked with real collision: into a deep cave's passage and into an overhang, a campfire on its floor, the shelter rays under its roof against open ground.
+
+`python Tools/check_island_rain.py [--seed 777] [--shots DIR]` -- nothing falls under a floating island (N-272): exposure, wetting and the rain's streaks in the air, against open ground beside it.
+
 `python Tools/check_forest_light.py [--seed 777] [--shots DIR]` -- the forest floor under Epic's hardware Lumen (N-333): the project's Ray Lighting Mode is Hit Lighting, and one forest camera is at least 1.3 x as bright as with Surface Cache, the control; prints each frame time and keeps both shots.
 Cave mouths (Nov 3, BR23-1): `python Tools/check_cave_mouths.py [--seed 5730] [--at X Y] [--mouths 3] [--shots]` -- a new world, the built
 entrances near a point, `MO.PCG.OpeningAudit` at each (per mesh: over carved ground, on walls / ceilings, floating); FAIL when the cave

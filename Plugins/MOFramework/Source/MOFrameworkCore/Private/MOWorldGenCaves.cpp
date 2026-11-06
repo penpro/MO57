@@ -804,6 +804,12 @@ namespace
 	constexpr float EntranceHollowStepFraction = 0.9f;
 	constexpr float EntranceHollowMinRadiusCm = 1100.0f;
 
+	/** A deep cave's jitter margin (share of the cell): its centre keeps to the middle third, so its branches have room and stay in the cell. */
+	constexpr float DeepEntranceMargin = 0.33f;
+	constexpr float EntranceMargin = 0.18f;
+	/** An overhang's shelter sits this share of the hollow's radius out from its centre: where the cap's wall has climbed to about the shelter's height, so the front half of it is the open bowl and the back half lies under rock. */
+	constexpr float ShelterOffset = 0.8f;
+
 	struct FEntranceBasics
 	{
 		double CenterX = 0.0, CenterY = 0.0;   // the hollow's centre (cm)
@@ -812,6 +818,24 @@ namespace
 		float DirX = 1.0f, DirY = 0.0f;        // the passage's heading in plan (unit, one of 16 exact directions)
 		float Run = 0.0f;                      // the passage's length in plan (cm)
 		float ChamberRadius = 0.0f;            // (cm)
+		EMOCaveEntranceKind Kind = EMOCaveEntranceKind::Shallow;
+		float ShelterHalfDepth = 0.0f, ShelterHalfWidth = 0.0f, ShelterHeight = 0.0f;   // an overhang's (cm)
+	};
+
+	/** A deep cave's branching passages past its chamber (BR23-18): straight runs down a walkable grade, each from where its parent ended; a passage that forks no further ends in a small room.
+	 *  Offsets in plan from the hollow's centre, absolute Z. */
+	struct FEntrancePassage
+	{
+		float Ax = 0.0f, Ay = 0.0f, Az = 0.0f;   // its start, on its axis
+		float Vx = 0.0f, Vy = 0.0f, Vz = 0.0f;   // start to end
+		float Radius = 0.0f;
+		float RoomRadius = 0.0f;                 // 0 = no room at its end
+	};
+	constexpr int32 MaxEntrancePassages = 8;
+	struct FEntranceTree
+	{
+		int32 Num = 0;
+		FEntrancePassage Passages[MaxEntrancePassages];
 	};
 
 	/** The cell's entrance without touching the ground (pure hashing). The 18 % jitter margin keeps the whole entrance inside its cell: the run is shortened
@@ -830,23 +854,44 @@ namespace
 		const uint32 H1 = HashLattice2(CellX, CellY, S + 1u);
 		const uint32 H2 = HashLattice2(CellX, CellY, S + 2u);
 		const uint32 H3 = HashLattice2(CellX, CellY, S + 3u);
-		Out.CenterX = ((double)CellX + (double)(0.18f + 0.64f * Unit16(H1))) * (double)T.CaveEntranceCellCm;
-		Out.CenterY = ((double)CellY + (double)(0.18f + 0.64f * Unit16(H1 >> 16))) * (double)T.CaveEntranceCellCm;
+		const uint32 H4 = HashLattice2(CellX, CellY, S + 4u);
+		const float KindRoll = Unit16(H4);
+		Out.Kind = KindRoll < T.CaveOverhangShare ? EMOCaveEntranceKind::Overhang : KindRoll < T.CaveOverhangShare + T.CaveDeepShare ? EMOCaveEntranceKind::Deep : EMOCaveEntranceKind::Shallow;
+		const float MarginShare = Out.Kind == EMOCaveEntranceKind::Deep ? DeepEntranceMargin : EntranceMargin;
+		Out.CenterX = ((double)CellX + (double)(MarginShare + (1.0f - 2.0f * MarginShare) * Unit16(H1))) * (double)T.CaveEntranceCellCm;
+		Out.CenterY = ((double)CellY + (double)(MarginShare + (1.0f - 2.0f * MarginShare) * Unit16(H1 >> 16))) * (double)T.CaveEntranceCellCm;
 		Out.HollowRadius = EntranceHollowMinRadiusCm + 400.0f * Unit16(H2);
 		Out.HollowDepth = 350.0f + 150.0f * Unit16(H2 >> 16);
 		const uint32 Dir = H3 & 15u;
 		Out.DirX = (float)ShoreRing[Dir][0];
 		Out.DirY = (float)ShoreRing[Dir][1];
+		if (Out.Kind == EMOCaveEntranceKind::Overhang)
+		{
+			// Deeper than a passage's hollow: the roof is what stands between the shelter's height and the ground.
+			Out.HollowDepth = 450.0f + 100.0f * Unit16(H2 >> 16);
+			Out.ShelterHalfDepth = 550.0f + 150.0f * Unit16(H4 >> 16);
+			Out.ShelterHalfWidth = 450.0f + 250.0f * Unit16(H3 >> 4);
+			Out.ShelterHeight = 270.0f + 50.0f * Unit16(H3 >> 20);
+			return true;
+		}
 		Out.ChamberRadius = 450.0f + 200.0f * Unit16(H3 >> 20);
-		const float Margin = 0.18f * T.CaveEntranceCellCm;
+		const float Margin = MarginShare * T.CaveEntranceCellCm;
 		const float Fixed = Out.HollowRadius * 0.35f + Out.ChamberRadius + FMOWorldGenDomain::CaveFarCm + 300.0f;
 		Out.Run = FMath::Min(2200.0f + 1000.0f * Unit16(H3 >> 4), Margin - Fixed);
 		return Out.Run >= 800.0f;
 	}
 
 	/** Horizontal distance from the hollow's centre beyond which the entrance's field is >= CaveFarCm (skipping it there is exact). <= the jitter margin. */
-	FORCEINLINE float EntranceReach(const FEntranceBasics& B)
+	FORCEINLINE float EntranceReach(const FEntranceBasics& B, const FMOWorldGenTuning& T)
 	{
+		if (B.Kind == EMOCaveEntranceKind::Deep)
+		{
+			return DeepEntranceMargin * T.CaveEntranceCellCm;   // its branches keep CaveFarCm + 300 inside this (BuildEntranceTree)
+		}
+		if (B.Kind == EMOCaveEntranceKind::Overhang)
+		{
+			return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * ShelterOffset + B.ShelterHalfDepth) + FMOWorldGenDomain::CaveFarCm + 300.0f;
+		}
 		return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGenDomain::CaveFarCm + 300.0f;
 	}
 
@@ -881,6 +926,17 @@ namespace
 			B.DirX = (float)ShoreRing[BestK][0];
 			B.DirY = (float)ShoreRing[BestK][1];
 		}
+		if (B.Kind == EMOCaveEntranceKind::Overhang)
+		{
+			// Dry + karst at the hollow and the shelter's back, with rock over the shelter's middle: it is a roof or it is nothing.
+			const float Floor = GroundCm - B.HollowDepth;
+			const float Out = B.HollowRadius * ShelterOffset + B.ShelterHalfDepth;
+			const double BackX = B.CenterX + B.DirX * Out, BackY = B.CenterY + B.DirY * Out;
+			const double MidX = B.CenterX + B.DirX * B.HollowRadius * ShelterOffset * 1.3f, MidY = B.CenterY + B.DirY * B.HollowRadius * ShelterOffset * 1.3f;
+			return FMOWorldGenDomain::SampleHeightCm(P, MidX, MidY, Seed, T.VoxelSizeCm) - (Floor + B.ShelterHeight) >= 120.0f
+				&& WaterGate(P, B.CenterX, B.CenterY, Floor, Seed) <= 0.0f
+				&& WaterGate(P, BackX, BackY, Floor, Seed) <= 0.0f;
+		}
 		const float Lead = B.HollowRadius * 0.35f;
 		const float EndZ = GroundCm - B.HollowDepth - B.Run * EntranceGrade;
 		const double EndX = B.CenterX + B.DirX * (Lead + B.Run), EndY = B.CenterY + B.DirY * (Lead + B.Run);
@@ -891,9 +947,98 @@ namespace
 			&& WaterGate(P, EndX, EndY, EndZ, Seed) <= 0.0f;
 	}
 
+	/**
+	 * A deep cave's branches, laid out once its heading has settled: two or three passages from the main chamber (one on each side, sometimes one ahead), each forking once or twice more. Every run is
+	 * kept only if it stays inside the cell's margin and has 3 m of rock over its middle and end, dry and on karst there; a passage with nothing past it ends in a room. All pure functions of the cell.
+	 */
+	void BuildEntranceTree(const FMOWorldGenParams& P, const FEntranceBasics& B, int64 CellX, int64 CellY, float GroundCm, int32 Seed, FEntranceTree& Out)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const uint32 S = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance) + 16u;
+		const float Limit = DeepEntranceMargin * T.CaveEntranceCellCm - FMOWorldGenDomain::CaveFarCm - 300.0f;
+
+		int32 Heading = 0;
+		double BestDot = -2.0;
+		for (int32 K = 0; K < 16; ++K)
+		{
+			const double Dot = ShoreRing[K][0] * B.DirX + ShoreRing[K][1] * B.DirY;
+			if (Dot > BestDot) { BestDot = Dot; Heading = K; }
+		}
+		struct FTip { float X = 0.0f, Y = 0.0f, Z = 0.0f; int32 Heading = 0; };
+		const auto TryRun = [&](const FTip& From, int32 Dir, float Run, float Grade, float Radius, FTip& OutTip) -> bool
+		{
+			if (Out.Num >= MaxEntrancePassages)
+			{
+				return false;
+			}
+			const float Dx = (float)ShoreRing[Dir & 15][0], Dy = (float)ShoreRing[Dir & 15][1];
+			const float RoomRoom = 450.0f;
+			const float Ex = From.X + Dx * Run, Ey = From.Y + Dy * Run, Ez = From.Z - Run * Grade;
+			if (Ex * Ex + Ey * Ey > FMath::Square(Limit - RoomRoom))
+			{
+				return false;
+			}
+			for (const float Share : { 0.5f, 1.0f })
+			{
+				const double X = B.CenterX + (double)(From.X + Dx * Run * Share), Y = B.CenterY + (double)(From.Y + Dy * Run * Share);
+				const float Z = From.Z - Run * Grade * Share;
+				if (FMOWorldGenDomain::SampleHeightCm(P, X, Y, Seed, T.VoxelSizeCm) - (Z + Radius) < 300.0f || WaterGate(P, X, Y, Z, Seed) > 0.0f)
+				{
+					return false;
+				}
+			}
+			FEntrancePassage& Pass = Out.Passages[Out.Num++];
+			Pass.Ax = From.X; Pass.Ay = From.Y; Pass.Az = From.Z;
+			Pass.Vx = Dx * Run; Pass.Vy = Dy * Run; Pass.Vz = -Run * Grade;
+			Pass.Radius = Radius;
+			Pass.RoomRadius = 0.0f;   // the slot is reused from whichever cell this thread's cache held before: nothing of that may survive
+			OutTip.X = Ex; OutTip.Y = Ey; OutTip.Z = Ez; OutTip.Heading = Dir;
+			return true;
+		};
+
+		const float Lead = B.HollowRadius * 0.35f;
+		FTip Chamber;
+		Chamber.X = B.DirX * (Lead + B.Run);
+		Chamber.Y = B.DirY * (Lead + B.Run);
+		Chamber.Z = GroundCm - B.HollowDepth + EntrancePassageRadiusCm * 0.8f - B.Run * EntranceGrade;
+		Chamber.Heading = Heading;
+
+		const uint32 H0 = HashLattice2(CellX, CellY, S);
+		const int32 First[3] = { Heading + 4 + (int32)(H0 & 3u), Heading - 4 - (int32)((H0 >> 2) & 3u), Heading - 1 + (int32)((H0 >> 4) & 3u) };
+		const int32 NumFirst = 2 + (int32)((H0 >> 6) & 1u);
+		for (int32 F = 0; F < NumFirst; ++F)
+		{
+			const uint32 H = HashLattice2(CellX, CellY, S + 1u + (uint32)F);
+			FTip Tip;
+			const int32 ParentIndex = Out.Num;
+			if (!TryRun(Chamber, First[F], 2500.0f + 2000.0f * Unit16(H), 0.08f + 0.14f * Unit16(H >> 16), 150.0f + 40.0f * Unit16(H >> 8), Tip))
+			{
+				continue;
+			}
+			const uint32 H5 = HashLattice2(CellX, CellY, S + 8u + (uint32)F);
+			const int32 NumForks = 1 + (int32)(H5 & 1u);
+			int32 Forked = 0;
+			for (int32 K = 0; K < NumForks; ++K)
+			{
+				const uint32 Hf = HashLattice2(CellX, CellY, S + 12u + (uint32)(F * 2 + K));
+				const int32 Offset = (K == 0 ? 1 : -1) * (2 + (int32)(Hf & 1u) + (int32)((Hf >> 1) & 1u));
+				FTip End;
+				if (TryRun(Tip, Tip.Heading + Offset, 1500.0f + 1500.0f * Unit16(Hf >> 2), 0.05f + 0.15f * Unit16(Hf >> 16), 140.0f + 40.0f * Unit16(Hf >> 8), End))
+				{
+					Out.Passages[Out.Num - 1].RoomRadius = 300.0f + 150.0f * Unit16(Hf >> 24);
+					++Forked;
+				}
+			}
+			if (Forked == 0)
+			{
+				Out.Passages[ParentIndex].RoomRadius = 300.0f + 150.0f * Unit16(H5 >> 16);
+			}
+		}
+	}
+
 	/** Ground at the hollow's centre and whether the entrance is allowed there, memoised per thread like the sinkhole's ground (pure functions of params, seed
 	 *  and cell: the cache only saves work). A chunk asks for the same cell thousands of times, and the slope check alone costs four height samples. */
-	bool EntranceGround(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FEntranceBasics& B, float& OutGround)
+	bool EntranceGround(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FEntranceBasics& B, float& OutGround, const FEntranceTree** OutTree = nullptr)
 	{
 		struct FEntry
 		{
@@ -903,6 +1048,7 @@ namespace
 			float DirX = 1.0f, DirY = 0.0f;
 			bool bAllowed = false;
 			bool bValid = false;
+			FEntranceTree Tree;
 		};
 		thread_local FEntry Cache[16];
 		const uint32 Slot = (uint32)(((uint64)CellX * 83492791ull) ^ ((uint64)CellY * 2971215073ull)) & 15u;
@@ -917,11 +1063,20 @@ namespace
 			E.bAllowed = SettleEntrance(P, B, E.Ground, Seed);
 			E.DirX = B.DirX;
 			E.DirY = B.DirY;
+			E.Tree.Num = 0;
+			if (E.bAllowed && B.Kind == EMOCaveEntranceKind::Deep)
+			{
+				BuildEntranceTree(P, B, CellX, CellY, E.Ground, Seed, E.Tree);
+			}
 			E.bValid = true;
 		}
 		B.DirX = E.DirX;
 		B.DirY = E.DirY;
 		OutGround = E.Ground;
+		if (OutTree)
+		{
+			*OutTree = &E.Tree;
+		}
 		return E.bAllowed;
 	}
 
@@ -938,13 +1093,14 @@ namespace
 		}
 		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
 		const float H2 = Dx * Dx + Dy * Dy;
-		const float Reach = EntranceReach(B);
+		const float Reach = EntranceReach(B, T);
 		if (H2 > Reach * Reach)
 		{
 			return FMOWorldGenDomain::CaveFarCm;
 		}
 		float Ground = 0.0f;
-		if (!EntranceGround(P, CellX, CellY, Seed, B, Ground))
+		const FEntranceTree* Tree = nullptr;
+		if (!EntranceGround(P, CellX, CellY, Seed, B, Ground, &Tree))
 		{
 			return FMOWorldGenDomain::CaveFarCm;
 		}
@@ -955,7 +1111,20 @@ namespace
 		const float DzS = Z0 - (Ground - B.HollowDepth + Rs);
 		float D = FMath::Sqrt(H2 + DzS * DzS) - Rs;
 
-		if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction)
+		if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction && B.Kind == EMOCaveEntranceKind::Overhang)
+		{
+			// The shelter: a half dome standing on a flat floor at the hollow's bottom, centred where the cap's wall has climbed to about its height, so its front opens to the bowl and its back lies under
+			// the rock of the uphill rim. An approximate ellipsoid distance (k0 (k0 - 1) / k1), cut flat by the floor: nothing past the floor is carved, so a fire and a sleeper have level ground.
+			const float Along = Dx * B.DirX + Dy * B.DirY - B.HollowRadius * ShelterOffset;
+			const float Across = Dy * B.DirX - Dx * B.DirY;
+			const float Over = Z0 - (Ground - B.HollowDepth);
+			const float Rx = B.ShelterHalfDepth, Ry = B.ShelterHalfWidth, Rz = B.ShelterHeight;
+			const float K0 = FMath::Sqrt(Along * Along / (Rx * Rx) + Across * Across / (Ry * Ry) + Over * Over / (Rz * Rz));
+			const float K1 = FMath::Sqrt(Along * Along / (Rx * Rx * Rx * Rx) + Across * Across / (Ry * Ry * Ry * Ry) + Over * Over / (Rz * Rz * Rz * Rz));
+			const float Dome = K1 > 1.0e-6f ? K0 * (K0 - 1.0f) / K1 : -Rz;
+			D = SmoothMin(D, FMath::Max(Dome, -Over), 120.0f);
+		}
+		else if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction)
 		{
 			// The passage: from the hollow's floor, out through its side, down at EntranceGrade; flattened like a gallery (TunnelVerticalSquash).
 			const float Lead = B.HollowRadius * 0.35f;
@@ -973,6 +1142,24 @@ namespace
 			const float Cz = (Z0 - (Az + Vz + 0.3f * B.ChamberRadius)) * 1.5f;
 			const float Dc = FMath::Sqrt(Cx * Cx + Cy * Cy + Cz * Cz) - B.ChamberRadius;
 			D = SmoothMin(D, SmoothMin(Dp, Dc, 200.0f), 250.0f);
+
+			// A deep cave's branches past the chamber, each flattened like the passage, with its room.
+			for (int32 K = 0; Tree && K < Tree->Num; ++K)
+			{
+				const FEntrancePassage& Pass = Tree->Passages[K];
+				const float Qx0 = Dx - Pass.Ax, Qy0 = Dy - Pass.Ay, Qz0 = (Z0 - Pass.Az) * Sq;
+				const float PassVzS = Pass.Vz * Sq;
+				const float Along = FMath::Clamp((Qx0 * Pass.Vx + Qy0 * Pass.Vy + Qz0 * PassVzS) / (Pass.Vx * Pass.Vx + Pass.Vy * Pass.Vy + PassVzS * PassVzS), 0.0f, 1.0f);
+				const float Rx = Qx0 - Along * Pass.Vx, Ry = Qy0 - Along * Pass.Vy, Rz = Qz0 - Along * PassVzS;
+				float Branch = FMath::Sqrt(Rx * Rx + Ry * Ry + Rz * Rz) - Pass.Radius;
+				if (Pass.RoomRadius > 0.0f)
+				{
+					const float Mx = Pass.Ax + Pass.Vx - Dx, My = Pass.Ay + Pass.Vy - Dy;
+					const float Mz = (Z0 - (Pass.Az + Pass.Vz + 0.3f * Pass.RoomRadius)) * 1.5f;
+					Branch = SmoothMin(Branch, FMath::Sqrt(Mx * Mx + My * My + Mz * Mz) - Pass.RoomRadius, 150.0f);
+				}
+				D = SmoothMin(D, Branch, 150.0f);
+			}
 		}
 		return D;
 	}
@@ -1132,7 +1319,8 @@ bool FMOWorldGenDomain::GetCaveEntranceInCell(const FMOWorldGenParams& Params, i
 	}
 	FEntranceBasics B;
 	float Ground = 0.0f;
-	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground))
+	const FEntranceTree* Tree = nullptr;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground, &Tree))
 	{
 		return false;
 	}
@@ -1140,6 +1328,26 @@ bool FMOWorldGenDomain::GetCaveEntranceInCell(const FMOWorldGenParams& Params, i
 	Out.RadiusCm = B.HollowRadius;
 	Out.DepthCm = B.HollowDepth;
 	Out.GroundCm = Ground;
+	Out.Kind = B.Kind;
+	Out.Uphill = FVector2D(B.DirX, B.DirY);
+	Out.ShelterMiddle = Out.Center + Out.Uphill * (double)(B.HollowRadius * ShelterOffset);
+	Out.ShelterHalfDepthCm = B.ShelterHalfDepth;
+	Out.ShelterHalfWidthCm = B.ShelterHalfWidth;
+	Out.ShelterHeightCm = B.ShelterHeight;
+	Out.Passages.Reset();
+	Out.NumRooms = 0;
+	if (B.Kind != EMOCaveEntranceKind::Overhang)
+	{
+		const float Lead = B.HollowRadius * 0.35f;
+		Out.MainChamber = FVector(B.CenterX + B.DirX * (Lead + B.Run), B.CenterY + B.DirY * (Lead + B.Run), Ground - B.HollowDepth + EntrancePassageRadiusCm * 0.8f - B.Run * EntranceGrade);
+	}
+	for (int32 K = 0; Tree && K < Tree->Num; ++K)
+	{
+		const FEntrancePassage& Pass = Tree->Passages[K];
+		const FVector Start(B.CenterX + Pass.Ax, B.CenterY + Pass.Ay, Pass.Az);
+		Out.Passages.Add(TPair<FVector, FVector>(Start, Start + FVector(Pass.Vx, Pass.Vy, Pass.Vz)));
+		Out.NumRooms += Pass.RoomRadius > 0.0f ? 1 : 0;
+	}
 	return true;
 }
 

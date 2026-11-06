@@ -4126,6 +4126,48 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.WorldGen.Entrances [radius] ----------
+	// The built cave entrances near the local pawn with what each leads to (BR23-18).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Entrances"),
+		TEXT("Dev: list the built cave entrances near the local pawn and what each leads to. Usage: MO.WorldGen.Entrances [radius_cm=300000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Entrances FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 10000.0, 2000000.0) : 300000.0;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			const double Cell = FMath::Max(1.0f, P->Tuning.CaveEntranceCellCm);
+			int64 Cx0 = 0, Cy0 = 0;
+			FMOWorldGen::WorldToCell(*P, C.X, C.Y, Cell, Cx0, Cy0);
+			const int64 Span = (int64)FMath::CeilToDouble(Radius / Cell) + 1;
+			int32 Counts[3] = {};
+			for (int64 Cy = Cy0 - Span; Cy <= Cy0 + Span; ++Cy)
+			{
+				for (int64 Cx = Cx0 - Span; Cx <= Cx0 + Span; ++Cx)
+				{
+					FMOCaveEntranceHollow E;
+					if (!FMOWorldGen::GetCaveEntranceInCell(*P, Cx, Cy, Seeds->GetActiveTerrainSeed(), E) || FVector2D::Distance(E.Center, FVector2D(C)) > Radius)
+					{
+						continue;
+					}
+					++Counts[(int32)E.Kind];
+					static const TCHAR* const Names[] = { TEXT("Overhang"), TEXT("Shallow"), TEXT("Deep") };
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Entrance kind=%s x=%.0f y=%.0f ground=%.0f floor=%.0f uphill=%.3f,%.3f shelter=%.0f,%.0f passages=%d rooms=%d"), Names[(int32)E.Kind], E.Center.X, E.Center.Y, E.GroundCm,
+						E.GroundCm - E.DepthCm, E.Uphill.X, E.Uphill.Y, E.ShelterMiddle.X, E.ShelterMiddle.Y, E.Passages.Num(), E.NumRooms);
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Entrances radius=%.0f overhangs=%d shallow=%d deep=%d"), Radius, Counts[0], Counts[1], Counts[2]);
+		}),
+		ECVF_Default));
+
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.WorldGen.FindRavine"),
 		TEXT("Dev: list the ravines near the local pawn. Usage: MO.WorldGen.FindRavine [radius_cm=150000]"),

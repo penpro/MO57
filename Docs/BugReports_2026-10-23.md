@@ -29,7 +29,7 @@
 | BR23-15 | db5aeede | harvesting with full invetory | yields that do not fit drop to the ground | the harvest outcome (server) | DONE: `_client_harvest_full_pack` |
 | BR23-16 | 926ca09e | lake changes | (a) water sounds -80 %: the Water ambience (DT_AmbientLayers: river flow, waterfalls, brook -- moving water at a still lake); (b) wavelength -80 %, amplitude down ("almost still"); (c) water noise -90 %; (d) vegetation round lakes even in dry scrub | (a) BaseLayerVolume / EventVolume x0.2; (b) `mo.Lakes.WaveScale` 0.4 -> 0.1, a wavelength scale 0.2 (speed by deep-water dispersion); (c) the procedural turbulence x0.1; (d) PCG, batch 2 | a-d DONE (the look: thumbs up Oct 23); a still-water sound bed OPEN |
 | BR23-17 | 9970cb4b | breath meter is hard to read | HUD (the report screenshot hides the HUD) | look at the meter, make it readable | DONE: 56 x 18, strong label |
-| BR23-18 | c4aa1cdb | add to cave spawn | a mix: ~2/4 small overhangs (room for a fire, partial shelter), 1/4 deeper branching caves, 1/4 shallow caves as now | cave generator | OPEN: batch 3 |
+| BR23-18 | c4aa1cdb | add to cave spawn | a mix: ~2/4 small overhangs (room for a fire, partial shelter), 1/4 deeper branching caves, 1/4 shallow caves as now | cave generator | DONE Nov 6, generator v15: `Docs/Caves_And_Geology.md` section 1 |
 | BR23-19 | 1680cdbf | adjust the height splitting blend | the height-band transitions read as straight lines at distance: blend them over 25-50 m of elevation (not at the water line / beaches) | the terrain material's height bands (`Docs/Terrain_Generation_Exploration.md`) | OPEN (round 2): the edge wanders +-285 m at most; the snow line's fine fringe would need the material |
 
 ## Wes's votes on the review page (Oct 23, 20:22-20:27 PDT)

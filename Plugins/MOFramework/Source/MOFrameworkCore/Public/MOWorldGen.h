@@ -626,11 +626,16 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	 * per cell of this edge (cm), on karst (bCavesOnlyInLimestone), dry and below the high ground like every cave feature.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="20000"))
-	float CaveEntranceCellCm = 50000.0f;
-	/** Chance (0..1) that a cell holds a built entrance (0.7: a walk-in mouth in ~25 % of 1 km tiles of cave country, MOFramework.WorldGen.CaveReach).
-	 *  0 = the feature is off (and out of the params hash). */
+	float CaveEntranceCellCm = 40000.0f;
+	/** Chance (0..1) that a cell holds a built entrance: with the 400 m cell, twice the v14 count (500 m, 0.7), half of them the overhangs, so the walk-in caves stay as many as they were
+	 *  (a mouth in ~25 % of 1 km tiles of cave country, MOFramework.WorldGen.CaveReach). 0 = the feature is off (and out of the params hash). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
-	float CaveEntranceChance = 0.7f;
+	float CaveEntranceChance = 0.9f;
+	/** The mix of what a built entrance leads to (BR23-18, Wes Oct 23: "~2/4 small overhangs (room for a fire, partial shelter), 1/4 deeper branching caves, 1/4 shallow caves as now"): these two shares, the rest shallow. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
+	float CaveOverhangShare = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
+	float CaveDeepShare = 0.25f;
 
 	// --- Ravines and floating islands (v13, fork F62, option A; Wes, Nov 3: "floating islands and better caves with chasms more like minecraft").
 
@@ -837,7 +842,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 14;   // v14: a floating island's underside is one height per column, smoother, its crags are rocks (N-331, Wes Nov 5); v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
+	static constexpr uint32 CurrentGeneratorVersion = 15;   // v15: the built entrances are a mix, half overhangs, a quarter deep branching caves, a quarter shallow; a 400 m cell (BR23-18, Wes Oct 23); v14: a floating island's underside is one height per column, smoother, its crags are rocks (N-331, Wes Nov 5); v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
 
 	FMOWorldGenTuning Tuning;
 
@@ -1009,14 +1014,33 @@ struct FMOSinkhole
 	float GroundCm = 0.0f;                      // ground height at Center
 };
 
-/** A built cave entrance's hollow (F30): a spherical cap DepthCm deep and RadiusCm across, its rim at GroundCm (the ground at Center); the passage
- *  leaves it downhill. On a slope the cap cuts the ground wider uphill than RadiusCm (FMOWorldGen::SampleOpeningDistanceUnderCm). */
+/** What a built entrance leads to (BR23-18). */
+enum class EMOCaveEntranceKind : uint8
+{
+	Overhang,   // a rock shelter in the hollow's uphill wall: a flat floor under a low roof, room for a fire; nothing further in
+	Shallow,    // a passage down into one chamber
+	Deep,       // that passage and chamber, then passages branching on further down, ending in small rooms
+};
+
+/** A built cave entrance's hollow (F30): a spherical cap DepthCm deep and RadiusCm across, its rim at GroundCm (the ground at Center); the passage or shelter
+ *  goes in uphill. On a slope the cap cuts the ground wider uphill than RadiusCm (FMOWorldGen::SampleOpeningDistanceUnderCm). */
 struct FMOCaveEntranceHollow
 {
 	FVector2D Center = FVector2D::ZeroVector;   // world XY (cm) from FMOWorldGen
 	float RadiusCm = 0.0f;
 	float DepthCm = 0.0f;
 	float GroundCm = 0.0f;
+	EMOCaveEntranceKind Kind = EMOCaveEntranceKind::Shallow;
+	FVector2D Uphill = FVector2D(1.0, 0.0);     // unit: the way in
+	// Overhang: the shelter's middle (world XY) on its flat floor at GroundCm - DepthCm, how far it goes each way from there along Uphill and across it, and its height at the middle (cm).
+	FVector2D ShelterMiddle = FVector2D::ZeroVector;
+	float ShelterHalfDepthCm = 0.0f;
+	float ShelterHalfWidthCm = 0.0f;
+	float ShelterHeightCm = 0.0f;
+	// Deep: each branching passage's start and end on its axis (world), past the main passage's chamber; and that chamber.
+	FVector MainChamber = FVector::ZeroVector;
+	TArray<TPair<FVector, FVector>, TInlineAllocator<8>> Passages;
+	int32 NumRooms = 0;
 };
 
 /** A floating island: a cluster of torn clumps of rock, its top about TopCm, RadiusCm its size (every clump within 1.3 x), its deepest ThicknessCm under the top; GroundCm is the ground
@@ -1127,7 +1151,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	/** v12's world, which must still come out of this code to the bit with v13's features off (RunProbe(true, true), WorldGen.Sky.SkyOffIsV12). */
 	static constexpr uint32 PinnedProbeHeightV12 = 0x3343B4EBu;
 	static constexpr uint32 PinnedProbeCaveV12 = 0xAB796FA0u;
-	static constexpr uint32 PinnedProbeCave = 0x7469A6CBu;     // v13 (ravines, on the lobed lakes' ground: F62 A); v12 0xAB796FA0 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0x7F5B0A5Bu;     // v15 (the built entrances' mix, BR23-18); v13 0x7469A6CB (ravines, on the lobed lakes' ground: F62 A); v12 0xAB796FA0 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
