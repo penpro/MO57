@@ -94,6 +94,23 @@ bool FMOGraphics_ScalabilityFile::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOGraphics_RayLightingMode,
+	"MOFramework.Graphics.RayLightingMode",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOGraphics_RayLightingMode::RunTest(const FString& Parameters)
+{
+	// Hardware Lumen must light its ray hits where they land (N-333, Nov 6). Our plants carry no Lumen surface cache (the spawners turn it off: their counts would swamp it), and a hit on a surface with no
+	// surface cache reads black. Under a canopy nearly every ray from the floor ends on a leaf, which made the floor black round every tuft. It is a project setting because the cvar has no ECVF_Scalability
+	// flag, so it cannot live in DefaultScalability.ini; below Epic hardware Lumen is off and this costs nothing.
+	const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Lumen.HardwareRayTracing.LightingMode"));
+	if (TestNotNull(TEXT("the engine still has the cvar"), CVar))
+	{
+		TestEqual(TEXT("Ray Lighting Mode is Hit Lighting for GI and reflections (Config/DefaultEngine.ini)"), CVar->GetInt(), 1);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOGraphics_ApplyKeepsTheDisplay,
 	"MOFramework.Graphics.ApplyKeepsTheDisplay",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

@@ -169,6 +169,42 @@ and UDS's player-occlusion component; mean brightness of 1280x720 shots, 0-255):
   `UMOSceneLightingSubsystem`, `mo.Light.InteriorSkyLight`): enclosed places dim to about a third of the sky light instead of going black.
   Caves are no longer pitch black either -- Wes's call: a little unnaturally bright over a switch.
 
+## The black paint under the plants (Nov 6, N-333)
+
+Wes: "it looked good at some point and now it's like shitty black paint poured under each plant". Measured on seed 777 at one forest camera, Epic, 1080p, RTX 4090.
+
+**The cause.** Under Epic's hardware Lumen a ray that lands on a plant reads black. Our spawners turn off `bAffectDynamicIndirectLighting` on every plant (`MOPCGBiomeSpawnerSettings`, `MOPCGMeshSpawnerSettings`, `MOPCGResourceSpawnerSettings`, since Jul 4), so plants have no Lumen surface cache, but trees and shrubs stay in the ray-traced scene and stop rays. Lumen's default lights a hit from the surface cache, and a hit with none returns nothing. Under a canopy nearly every ray from the floor ends on a leaf, so the floor gets almost no light from those rays and depends on screen traces, which grass blocks: hence a dark ring round every tuft. Hardware Lumen on Epic dates from Oct 11 (91df49b8), which is when it changed; below Epic, software Lumen has no plants in its distance fields, its rays reach the sky, and there are no halos.
+
+**The ground was not the problem, though Wes's question was the right one.** The level's voxel world has `bEnableLumen` and `bEnableRaytracing` on, and the terrain has lighting data at this view. With every plant out of the rays the view's mean brightness doubled (36 to 73); starting the rays 50 cm up added little (78), and taking the terrain out as well little more (82), so the terrain catching its own rays is a small part of it.
+
+**The fix:** `r.Lumen.HardwareRayTracing.LightingMode=1` (Project Settings: Ray Lighting Mode = Hit Lighting) in `Config/DefaultEngine.ini`. Lumen shades each hit where it lands, plants or not. The cvar has no `ECVF_Scalability` flag, so it cannot go in `DefaultScalability.ini`; only Epic pays, as lower tiers trace in software. Guard: `MOFramework.Graphics.RayLightingMode`.
+
+| Where (logged frame time; one reading per spot, not a bench) | As shipped | Hit lighting |
+|---|---|---|
+| Forest floor, dusk | 14.1 ms | 16.3 ms |
+| Forest floor, noon | 14.6 ms | 17.2 ms |
+| Forest floor, night | 13.2 ms | 16.2 ms |
+| Rainforest, 13:00 (the frame's worst place; 24 s) | 17.1 ms | 21.4 ms |
+| A cave, torch in hand | 12.6 ms | 13.2 ms |
+
+Options on it, rainforest: hard shadows at hits 21.3 ms, none 20.7, opaque shadow rays 20.8, `HitLighting.ForceOpaque` 20.1 (masked leaves become solid cards). None is worth its loss, so they stay at the defaults. `HitLighting.Skylight 1` (sky at each hit): same cost, the canopy flatter and greener; rejected by me, listed for Wes by eye.
+
+**What did not work:**
+
+- **Plants out of the rays** (`SetVisibleInRayTracing(false)`): the canopy goes flat and bright, as if it had no shade, and the rings stay.
+- **Plants given Lumen data** (`SetAffectDynamicIndirectLighting(true)`): no visible change after 100 s and a frame spike of 85 ms. Trunks showed pink in `r.Lumen.Visualize 5` (cards, nothing captured); about 170,000 tree instances are too many for the surface cache.
+- **Terrain out of the rays** (`voxel.render.DisableRaytracing 1`): the plants brighten, the floor goes nearly black.
+- **Bigger ray biases** (`r.Lumen.ScreenProbeGather.HardwareRayTracing.Bias`, `.NormalBias`): at 50 the rings go but the whole floor goes black.
+- **Short-range AO, SSAO, contact shadows, VSM screen rays, VSM, local exposure, DFAO, `SkipFoliageHits`, probe spacing:** none removes them.
+- `r.RayTracing.Geometry.InstancedStaticMeshes 0` changed nothing live, so it proves nothing.
+- **A wrong turn of mine:** `LightingMode 2` is hit lighting for reflections only. I tried that first, it did nothing, and I wrote hit lighting off. Mode 1 is the one that covers GI.
+
+**Reading `r.Lumen.Visualize 5`:** the label says "Yellow - culled Surface Cache", but the shader's yellow is an object with no mesh cards at all (`LumenSurfaceCacheSampling.ush`: `bValidMeshCardsIndex` false). Pink has cards and no captured surface at that point.
+
+**Caves.** Rock near the camera has data; further down a tunnel it goes pink, and the cave dressing is yellow. The plugin gives each chunk six cards round its bounds (`VoxelMeshRenderProxy.cpp`), and a card sees only the first surface from outside, so that is the likely reason (not proven). A torch-lit tunnel barely changes in overall brightness with hit lighting (mean 69.8 to 71.3) because the torch's direct light dominates, but rays there no longer depend on that data.
+
+**N-202's reading below needs this caveat:** "Lumen works" was true, but its dark canopy was partly this bug, and Skylight Leaking 0.1 (and the interior floor) was tuned against it. They stay as they are until Wes has looked; with this fix they may be more than a forest needs.
+
 ## Sun and moon below the horizon (cave walls lit from below)
 
 Measured Oct 10 with `MO.Light.Test <pitch> <yaw> <lux>` in a sinkhole chamber: a light from ABOVE leaves enclosed tunnels pitch black

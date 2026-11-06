@@ -223,6 +223,7 @@
   takes what exists from the table's row list now (Nov 3).
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **The editor or later instances suddenly look low quality after a test** -> `Scalability 0` (or any `sg.*` console change) in a `-game` instance is SAVED to `Saved/Config/WindowsEditor/GameUserSettings.ini`, the settings the editor uses too. A visual A/B after it runs on low settings and proves nothing (Nov 6). Check `[ScalabilityGroups]` there; never leave a scalability change behind in a test.
 - **A background loop waiting on a coop claim woke by mistake** -> `grep "RELEASE.*CL-0356"` matched "RELEASE CL-0355 and CL-0357: ... (CL-0356 was waiting
   on it)", a line the session wrote itself (Nov 4) -> don't poll the coop log for your turn: the parent session hands the window over, and
   `Tools/session_heartbeat.py` watches for stand-offs (`Docs/TOOLING.md` § Session heartbeat).
@@ -618,6 +619,9 @@
 
 ## 12. Light, rendering, materials
 
+- **Forest floors and rainforests are black under Epic's hardware Lumen, with dark rings round the grass** -> a ray hit on a surface with no Lumen surface cache reads black, and our plants carry none. Fixed with `r.Lumen.HardwareRayTracing.LightingMode=1` (N-333, `Docs/Light_Sources.md`). If it comes back, check that cvar first. Mode 2 is reflections only, so it proves nothing about GI (cost me a wrong conclusion, Nov 6).
+- **`r.Lumen.Visualize 5` shows yellow and you read it as "culled"** -> the shader's yellow means the object has no mesh cards at all; pink means cards with nothing captured at that point (Nov 6).
+- **A plant test over `HierarchicalInstancedStaticMeshComponent` finds almost nothing** -> most of our plants come out as plain `InstancedStaticMeshComponent` in a running game (only flowers were HISMs at the Nov 6 count). Query the base class.
 - **A swapped-in groom is bald in third person but fine up close** -> the swap dropped the Blueprint's per-group settings: the MetaHuman
   Blueprint's groom components carry LOD bias -7 on each group (the strands at every distance), and `UGroomComponent` re-initialises its
   groups to the defaults whenever a groom with ANOTHER GROUP COUNT goes on (`UpdateHairGroupsDesc`). From the cards' distance on the

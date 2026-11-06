@@ -56,7 +56,7 @@ applies the non-resolution engine settings (the class skips `Super::ApplySetting
 quality combo, VSync, the display's real resolution list. Tests: `MOFramework.Graphics.*`.
 
 Measured tiers (avg fps Rainforest / Temperate / Meadow, 4090, 1080p, packaged, Oct 12): Epic 59/65/69, High 69/78/81, Medium 77/85/87,
-Low 115/121/129 (GPU floor ~6-7 ms). Lumen HWRT is off below Epic. A `-game` instance has GIsEditor false, so it WOULD benchmark: every
+Low 115/121/129 (GPU floor ~6-7 ms). Lumen HWRT is off below Epic. **These Epic figures predate hit lighting (N-333, Nov 6), which adds 2-4 ms on Epic only (17.1 to 21.4 ms in the rainforest, one spot, `Docs/Light_Sources.md`): re-run the tour when no crash cluster is on.** A `-game` instance has GIsEditor false, so it WOULD benchmark: every
 harness launch passes `-NoQualityBenchmark` (`ue_inst.py`, `perf_experiments.sh`, `ov_task.sh`). Epic texture pool 4000 MB (Cine 6000),
 `LimitPoolSizeToVRAM` (the 1000 MB default printed "STREAMING POOL OVER BUDGET").
 

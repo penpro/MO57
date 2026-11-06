@@ -2508,3 +2508,11 @@ References: CL-0385, CL-0391, CL-0392
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0394
 Status: RELEASE CL-0393: no editor, build or instance of mine runs; the editor is Wes's. N-353 and N-332 built and verified on DARKSIDE: ue.py auto 458 / 0, Tools/check_spawn_menu.py PASS, Tools/check_dev_tools.py PASS, Tools/check_ai_walk.py AI WALK PASS at 116 fps. Not run: a joiner in co-op on any of these, and a Shipping build. UNCOMMITTED and needed: Plugins/MOFramework/Content/UI/WBP_ConfirmationWidget.uasset, WBP_TextInputModal.uasset, WBP_QuickPickModal.uasset, UI/Splash/T_Splash_PenumbraMark.uasset. Without them a clone has the old dialogs with no Menu button and the old mark, and no error.
 References: CL-0391, CL-0392, CL-0393
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0395
+Status: CLAIM the DARKSIDE window (instances, then a build) and MOPCGBiomeSpawnerSettings.cpp, MOPCGMeshSpawnerSettings.cpp, MOPCGResourceSpawnerSettings.cpp for N-333. The forest floor reads black under Epic because plants sit in the ray-traced scene with no Lumen lighting data, so a ray that hits one returns black. The terrain is in the Lumen data. Testing fixes now.
+References: CL-0394
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0396
+Status: Wes asleep, working the backlog overnight under CL-0395. Building now with N-333 (hit lighting), N-318, N-313 and N-315. Nothing else is running on DARKSIDE.
+References: CL-0395

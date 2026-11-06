@@ -542,18 +542,17 @@ going down this path — easy to deadlock.
 to bounce light correctly. Verify with **Show → Lumen → Lumen Overview**;
 if voxel terrain appears in the overview, Lumen sees it.
 
-### Hardware ray tracing — **incompatible** as of Voxel 2.0 P7
+### Hardware ray tracing: works in our build (checked Nov 6, N-333)
 
-The voxel plugin **does not support hardware ray tracing** (HWRT) yet. If
-your project has HWRT enabled, voxel terrain won't contribute to Lumen.
-Symptom: voxel surface looks unlit / black in Lumen Overview, with yellow
-"HWRT" text instead of "SWRT".
+The old advice here ("incompatible as of Voxel 2.0 P7, turn HWRT off") is out of date. Our copy has
+`[56050342c] Fixed voxel meshes not showing up in ray tracing / Lumen (hardware ray tracing) on UE 5.8`.
+Measured in game (seed 777, Epic): the level's `VoxelLandscape_0` has `bEnableLumen` and `bEnableRaytracing`
+on, and the terrain shows in `r.Lumen.Visualize 3` and `5` with real lighting data. `AVoxelWorld` defaults both
+to false (`VoxelWorld.h`), so a NEW voxel world needs them ticked.
 
-Fix:
-- Project Settings → search "lumen" →
-  **Use Hardware Ray Tracing When Available = false**.
-- If that's grayed out, hardware ray tracing is already off project-wide —
-  no change needed.
+How the plugin gives a chunk its Lumen data: six axis-aligned cards round the chunk's bounds
+(`VoxelMeshRenderProxy.cpp`, with its own `TODO IMPROVE`). A card sees only the first surface from outside, so
+a surface hidden from all six sides has no data. That is the suspect for cave interiors: see `Docs/Light_Sources.md`.
 
 ### Nanite
 
@@ -754,7 +753,7 @@ Order of magnitude per chunk (rough — depends on chunk size + LOD):
 | Cliff at water level | Coast is unusable | Apply Beach Flattening recipe (Terrain_Foundation_Plan §3). |
 | Subtractive mesh stamp set to Additive by mistake | Stamps appear inside the player; player falls through | Set Behavior = Subtractive on cave-carving mesh stamps. |
 | Character teleports / jitters on voxel terrain | Wrong base class | Use `AVoxelCharacter`, not `ACharacter`. |
-| Voxel surface looks unlit in Lumen | Hardware ray tracing enabled | Project Settings → "Use Hardware Ray Tracing When Available" = false. Voxel 2.0 doesn't support HWRT. |
+| Voxel surface looks unlit in Lumen | `Enable Lumen` / `Enable Raytracing` off on the voxel world (both default false) | Tick them, then look at `r.Lumen.Visualize 5`. HWRT itself works in our build (§9). |
 | PCG `Get Point Attribute <metadata>` returns nothing | Metadata not in Voxel Sampler's Query Metadata list | Add the metadata layer to Query Metadata explicitly. |
 | Static Mesh Spawner attribute selection wildcard error | Attribute type defaulted to wildcard | In VPCG, explicitly cast the attribute to `Soft Object Path`. |
 | Voxel mesh stamp looks blocky | World VoxelSize too coarse | Reduce VoxelSize (200→100→50). Trade-off: chunk count quadruples each halving. |
@@ -1052,7 +1051,7 @@ manifestation of that rule.
   pattern. Task #120.
 - **AMOCharacter parent class** — currently `ACharacter`, should be
   `AVoxelCharacter`. Task #116.
-- **Lumen / HWRT config** — verify HWRT off so voxel surfaces participate.
+- **Lumen / HWRT config** — HWRT on at Epic, software below (`Config/DefaultScalability.ini`); voxel surfaces take part in both (§9).
   Task #117.
 
 ---
@@ -1265,7 +1264,7 @@ already dispatches to `VolumeDig` / etc.).
 | **Mega material** | (alias for MegaMaterial above) |
 | **Chunk** | The unit voxel data loads/streams in. Configurable; default ~3200³ voxel units. |
 | **LOD** | Level of detail. Voxel auto-downsamples distant chunks. |
-| **HWRT vs SWRT** | Hardware vs Software ray tracing. Voxel 2.0 P7 supports only SWRT for Lumen. |
+| **HWRT vs SWRT** | Hardware vs Software ray tracing. Both work for Lumen in our build (§9). |
 
 ---
 
@@ -1283,3 +1282,19 @@ already dispatches to `VolumeDig` / etc.).
 | same file + `VoxelNaniteMaterialRendererImpl.h` (2026-10-21, N-185 / N-084) | the selection pass resolves what it reads ON THE RENDER THREAD AT SETUP (`ResolveMaterialSelection`: the MegaMaterial's proxy, material, shader, the render index -> Nanite shading bin table built from the scene's shading pipeline map) into an `FVoxelNaniteMaterialSelection` copy, and the pass executes from that copy only (`ExecuteMaterialSelection`, static); was `ComputeMaterialSelection` reading all of it inside the pass | NeverParallel keeps the pass off the parallel workers but not off RDG's async execute task: a pass may run there while the render thread sets up the next frame, which reassigns `MaterialRef` / `UsedSurfaceTypes` / `PrimitiveUniformBuffer` and updates the scene's Nanite shading pipelines. The joiner died reading 0xffffffffffffffff in `VoxelNaniteMaterialSelection` on an `RDGTask_*` thread (Oct 21, UECC-...8B29F5E8..., 3 s after a cliff assembly spawned, while 38 terrain materials were getting new uniform buffers). The material's own uniform buffer is still read in the pass: the engine waits for the async execute before it replaces one |
 
 Measure a voxel stall: `voxel.LogStateTime 1` (each state's wall time vs summed task time), `-DumpVoxelStatus` on the command line (pending tasks / promises every 10 frames), then `voxel.render.LogSlowChunkMs 250`.
+
+## Is a newer plugin worth taking? (read Nov 6 through `gh api` on `VoxelPlugin/VoxelPlugin`; nothing downloaded)
+
+**No: don't re-vendor.** Wes asked for this while chasing N-333 ("see if there's other shit we want from the updated versions"). Our copy is at `[4a23b78fa]` (Jun 26 2026). `dev` (58909934d, Aug 26) is 13 commits past it and `dev-phy` (96a5b7a6a, Jul 31) 5; the two have diverged (dev-phy 4 ahead, 12 behind). `stable`, `release` and `2.0` stop in Nov 2025, older than ours; `master` in 2023. No newer commit touches Lumen or ray tracing (the last is `56050342c`, Jun 23, already ours), and none is a performance change.
+
+| Commit | Branch | What | For us |
+|--------|--------|------|--------|
+| `c57e4e741` | dev-phy | PCG Sample Voxel World **V2** stops clamping to the voxel world's bounds | none: our graphs use the V1 sampler (`MOPCG_StampScatter1`, `MOPCG_FarTrees`, `PCG_StampScatter`) |
+| `01beadcf4` | dev-phy | the PCG stamp spawner keeps identical stamps registered, so a regenerate no longer invalidates the world | small: one POI graph uses it (`PCG_FreshWaterSpring`) |
+| `c92dcee35` | dev | `PCGWaitForVoxelWorld` forwards its input as-is | already ours (first local patch above) |
+| `48c3195fd` | dev | the object pin-type map's first use is thread-safe (a `check` in async loading) | never seen in our logs; `check` is compiled out of Shipping. Take it only if it shows up |
+| `33c6cc80f` | dev | MegaMaterial 5.8 shader-map crash also covers PixelDepthOffset and Displacement | never seen in our logs |
+| `f1479a55a`, `afb9009ff` | dev | heightmap stamp NaN, heightmaps 2050+ wide | none found: no heightmap stamp in our code or scatter graphs (a grep of each, not of every asset) |
+| `74bceaf4c`, `530c29ed1`, `d61691e4e` | dev | debug draw option, a standalone editor assert, a unity-build export | none |
+
+A re-vendor would also mean re-applying the patches above and proving N-185 / N-084 again. Look again when upstream changes Lumen cards or ships a performance item: `gh api repos/VoxelPlugin/VoxelPlugin/compare/4a23b78fa...dev`.
