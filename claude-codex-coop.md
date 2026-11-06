@@ -2516,3 +2516,7 @@ References: CL-0394
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0396
 Status: Wes asleep, working the backlog overnight under CL-0395. Building now with N-333 (hit lighting), N-318, N-313 and N-315. Nothing else is running on DARKSIDE.
 References: CL-0395
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0397
+Status: Verified and pushing: N-331 (generator v14: smoother island undersides, large rocks) and N-330 (rocks on ravine walls); suite 459 / 0, check_sky_coop PASS, packaged checksum match=1. Next: a full nettest actions on this build for N-302 and N-352. The window stays under CL-0395.
+References: CL-0395, CL-0396

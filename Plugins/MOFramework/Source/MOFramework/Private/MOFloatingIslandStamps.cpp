@@ -3,6 +3,7 @@
 // the rest of the terrain; nothing is replicated. The biome spawner plants the tops from the generator alone (FMOWorldGen::SampleIslandSurface), so the reach here is well past its farthest tier.
 
 #include "MOFloatingIslandShape.h"
+#include "MOFeatureRocks.h"
 #include "MOWorldFeatureSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOFramework.h"
@@ -72,6 +73,16 @@ namespace
 	// rock itself is drawn while the cells are fine against its thickness, its stand-in at each LOD past that, up to this one: an island whose reach runs past 32 km is thick enough to be its own rock there.
 	constexpr int32 IslandFarMaxLOD = 9;
 	constexpr int32 IslandTopMaxLOD = 6;                   // the grass top is 2.5 m of slab: nothing past this resolves it
+
+	// The large rocks that make the smooth underside craggy (N-331; Wes, Nov 5: "just use large rocks to make it look more jagged and craggy").
+	constexpr float IslandRockMinSizeCm = 700.0f;          // half a typical rock's width: a fifth of the clump's thickness, within these
+	constexpr float IslandRockMaxSizeCm = 5000.0f;
+	constexpr float IslandRockSpacing = 1.5f;              // apart, in those half widths: the rock shows between them
+	constexpr int32 IslandRockMaxPerClump = 260;
+	constexpr float IslandRockMinHalfHeightCm = 150.0f;    // smaller than this at a thin rim: leave it out
+
+	TAutoConsoleVariable<int32> CVarIslandRocks(TEXT("mo.WorldGen.IslandRocks"), 1,
+		TEXT("Dev: hang large rocks from a floating island's underside (0 = the voxel underside alone). Read when an island is stamped."), ECVF_Default);
 
 	double IslandStampReach(const FMOFloatingIsland& I)
 	{
@@ -256,8 +267,8 @@ void UMOWorldFeatureSubsystem::UpdateIslandStamps()
 		return;
 	}
 
-	// Its bounds: the cluster's reach (1.3 x its radius: a clump's warped, lobed outline stays inside it), and from the top's bump (up to 300 + 0.03 R) over the highest clump down to the torn
-	// underside (the clump's thickness, +0.3 of it in hanging chunks, +3 m of fine rock) under the lowest.
+	// Its bounds: the cluster's reach (1.3 x its radius: a clump's warped, lobed outline stays inside it), and from the top's bump (up to 300 + 0.03 R) over the highest clump down to the
+	// underside (the clump's thickness, and its folds) under the lowest.
 	const FMOFloatingIsland& I = Nearest;
 	float MaxThick = 0.0f, MinLift = 0.0f, MaxLift = 0.0f;
 	for (int32 K = 0; K < I.NumClumps; ++K)
@@ -324,6 +335,64 @@ void UMOWorldFeatureSubsystem::UpdateIslandStamps()
 	}
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOFloatingIsland] stamped the island at (%.0f, %.0f): radius %.0f, top %.0f over ground %.0f, %d stamps (its rock to LOD %d), %.0f m from the nearest player; %d stamped now"),
 		I.Center.X, I.Center.Y, I.RadiusCm, I.TopCm, I.GroundCm, Actors.Num(), RockMaxLOD, NearestDist / 100.0, IslandStamps.Num());
+	if (AActor* Rocks = SpawnIslandRocks(I, *Params, Seed))
+	{
+		Actors.Add(Rocks);
+	}
+}
+
+AActor* UMOWorldFeatureSubsystem::SpawnIslandRocks(const FMOFloatingIsland& I, const FMOWorldGenParams& Params, int32 Seed)
+{
+	UWorld* World = GetWorld();
+	if (!World || CVarIslandRocks.GetValueOnGameThread() == 0)
+	{
+		return nullptr;
+	}
+	TArray<UStaticMesh*> Meshes;
+	TArray<MOFeatureRocks::FMeshSize> Sizes;
+	MOFeatureRocks::LoadMeshes(Meshes, Sizes);
+	if (Meshes.IsEmpty())
+	{
+		return nullptr;
+	}
+	TArray<TArray<FTransform>> ByMesh;
+	ByMesh.SetNum(Meshes.Num());
+
+	// From the seed and the island alone: every machine hangs the same rocks.
+	FRandomStream Rng((int32)HashCombine(GetTypeHash(Seed), GetTypeHash(FIntPoint(FMath::RoundToInt32(I.Center.X * 0.01), FMath::RoundToInt32(I.Center.Y * 0.01)))));
+	int32 Placed = 0;
+	for (int32 K = 0; K < I.NumClumps; ++K)
+	{
+		const float R = I.ClumpRadiusCm[K];
+		const float Size = FMath::Clamp(0.2f * I.ClumpThicknessCm[K], IslandRockMinSizeCm, IslandRockMaxSizeCm);
+		const int32 Tries = FMath::Clamp(FMath::CeilToInt32(UE_PI * FMath::Square(1.2f * R) / FMath::Square(IslandRockSpacing * Size)), 12, IslandRockMaxPerClump);
+		for (int32 N = 0; N < Tries; ++N)
+		{
+			const float Angle = Rng.FRandRange(0.0f, 2.0f * UE_PI);
+			const float Out = 1.2f * R * FMath::Sqrt(Rng.FRand());
+			const double X = I.ClumpCenter[K].X + Out * FMath::Cos(Angle), Y = I.ClumpCenter[K].Y + Out * FMath::Sin(Angle);
+			const int32 MeshIndex = Rng.RandRange(0, Meshes.Num() - 1);
+			const float Grow = FMath::Lerp(0.5f, 1.4f, FMath::Pow(Rng.FRand(), 2.0f));   // most modest, a few big
+			const float Stretch = Rng.FRandRange(1.1f, 1.8f);                            // hanging, taller than wide
+			const FRotator Rotation(Rng.FRandRange(-20.0f, 20.0f), Rng.FRandRange(0.0f, 360.0f), Rng.FRandRange(-20.0f, 20.0f));
+			const float Under = FMOWorldGen::IslandUndersideCm(Params, X, Y, Seed);
+			const float Top = FMOWorldGen::IslandTopCm(Params, X, Y, Seed);
+			if (Under < -1.0e8f || Top < -1.0e8f)
+			{
+				continue;   // past the outline here
+			}
+			// A rock is set into the underside about a third of its height, and must end inside the rock's thickness there: at the rim it is smaller, or it would come up through the grass.
+			const float HalfHeight = FMath::Min(Size * Grow * Stretch, FMath::Max(0.0f, (Top - Under - 50.0f) / 1.3f));
+			if (HalfHeight < IslandRockMinHalfHeightCm)
+			{
+				continue;
+			}
+			ByMesh[MeshIndex].Add(MOFeatureRocks::MakeInstance(Sizes[MeshIndex], FVector(X, Y, (double)Under + 0.3 * HalfHeight), Rotation, HalfHeight / Stretch, HalfHeight));
+			++Placed;
+		}
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOFloatingIsland] %d rocks under the island at (%.0f, %.0f)"), Placed, I.Center.X, I.Center.Y);
+	return MOFeatureRocks::SpawnHolder(World, Meshes, ByMesh);
 }
 
 // ---------- MO.WorldGen.IslandPlants: what stands on the islands, and how it meets the rock ----------

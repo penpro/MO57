@@ -837,7 +837,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 13;   // v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
+	static constexpr uint32 CurrentGeneratorVersion = 14;   // v14: a floating island's underside is one height per column, smoother, its crags are rocks (N-331, Wes Nov 5); v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
 
 	FMOWorldGenTuning Tuning;
 
@@ -1038,6 +1038,9 @@ struct FMOFloatingIsland
 	// An island drawn as a stamp: its top slab (the grass) stands this far proud of the rock's top, so the ground a plant stands on is TopCm + this.
 	static constexpr float TopSlabDepthCm = 250.0f;   // its grass top: this much of the rock's top is soil
 	static constexpr float TopSlabProudCm = 20.0f;
+	// Its underside (v14, N-331): a cone whose folds change the depth by up to this share, with at least this much rock under the top at the rim.
+	static constexpr float UndersideFoldShare = 0.18f;
+	static constexpr float RimThicknessCm = 300.0f;
 };
 
 /** Where a plant can stand on a floating island's top (FMOWorldGen::SampleIslandSurface). World Z. */
@@ -1224,7 +1227,14 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	/** A floating island's rock at a point (cm, negative inside a clump; 1e6 where no island reaches): the shape its stamps draw (FMOFloatingIslandShape). */
 	static float IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
 
-	/** The stand-in a far chunk draws for that rock (same sign, same 1e6): smooth, no 3D crags, the outline GrowCm wider and the underside ThickenCm deeper, so a chunk whose cells are as big as the
+	/** A point of a ravine's wall (N-330): S along it (0..1), Side -1 or 1 of its path, DepthShare of the way down to its floor there. OutAirward is the way out of the rock into the slot. False near its ends, or where no wall is
+	 *  there with the height terrain over it. The rocks set into its walls stand here. World XY. */
+	static bool SampleRavineWall(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, float S, float Side, float DepthShare, FVector& OutPoint, FVector2D& OutAirward);
+
+	/** The lowest underside of a floating island's rock over the column (world Z; -1e9 off every clump): where the rocks that make it craggy hang (UMOWorldFeatureSubsystem). */
+	static float IslandUndersideCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** The stand-in a far chunk draws for that rock (same sign, same 1e6): the same underside, the outline GrowCm wider and the underside ThickenCm deeper, so a chunk whose cells are as big as the
 	 *  rock is thick still finds it; the top stays where it is, under the island's trees. */
 	static float IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm);
 
@@ -1458,6 +1468,8 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	static void FindFloatingIslands(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FMOFloatingIsland>& Out);
 	static float IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static float IslandRockDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed);
+	static bool SampleRavineWall(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, float S, float Side, float DepthShare, FVector& OutPoint, FVector2D& OutAirward);
+	static float IslandUndersideCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static float IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm);
 	static bool SampleIslandSurface(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float InsetCm, FMOIslandSurfacePoint& Out);
 	static bool IslandReachesBox(const FMOWorldGenParams& Params, double MinX, double MinY, double MaxX, double MaxY, int32 Seed);

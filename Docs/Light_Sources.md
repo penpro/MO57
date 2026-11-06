@@ -187,6 +187,8 @@ Wes: "it looked good at some point and now it's like shitty black paint poured u
 | Rainforest, 13:00 (the frame's worst place; 24 s) | 17.1 ms | 21.4 ms |
 | A cave, torch in hand | 12.6 ms | 13.2 ms |
 
+A packaged Development build behaves the same at the forest camera: mean brightness 59.6 with hit lighting, 38.9 with Surface Cache, the setting `LastSetBy: ProjectSetting`. It built 29 ray tracing pipelines in the run (about 5 s in all, the largest 0.6 s, nearly all while the world loaded) and logged no hitch. Not checked: Shipping, or Steam.
+
 Options on it, rainforest: hard shadows at hits 21.3 ms, none 20.7, opaque shadow rays 20.8, `HitLighting.ForceOpaque` 20.1 (masked leaves become solid cards). None is worth its loss, so they stay at the defaults. `HitLighting.Skylight 1` (sky at each hit): same cost, the canopy flatter and greener; rejected by me, listed for Wes by eye.
 
 **What did not work:**

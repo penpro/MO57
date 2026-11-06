@@ -580,6 +580,7 @@ void UMOWorldFeatureSubsystem::Deinitialize()
 	}
 	Spawned.Reset();
 	ClearIslandStamps();
+	ClearRavineRocks();
 	Placer.Reset();
 	Super::Deinitialize();
 }
@@ -874,6 +875,7 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 	}
 	TickAccumulator = 0.0f;
 	UpdateIslandStamps();   // not a catalog's: the generator's own, with or without POIs
+	UpdateRavineRocks();
 	UWorld* World = GetWorld();
 	if (!World || !IsReady())
 	{

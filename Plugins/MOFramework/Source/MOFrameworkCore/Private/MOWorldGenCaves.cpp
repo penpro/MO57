@@ -265,7 +265,13 @@ namespace
 			const float Top = Ground + B.Height + C.Lift + Bump - Rim - Jag;
 			Col.Outline[K] = Outline;
 			Col.Top[K] = Top;
-			Col.Under2D[K] = Top - C.Thickness * FMath::Pow(Deep01, 0.6f);
+			// The underside is one height per column (v14, N-331; Wes, Nov 5: "make the bottom of the island a little smoother in terms of the voxels and just use large rocks to make it look more jagged and
+			// craggy"). A cone with broad ridged folds; the crags are rocks (UMOWorldFeatureSubsystem::SpawnIslandRocks). With one height per column no piece of the underside can hang loose, and the far
+			// stand-in draws this same surface, so it no longer changes shape as an island's LOD changes. The rim keeps a minimum thickness: a knife edge read as holes.
+			const double Lu = FMath::Max(1500.0, 0.2 * (double)C.R);
+			const float Folds = 1.0f - 2.0f * FMath::Abs(GradientNoise2(X / Lu, Y / Lu, ShapeSalt + 60u + (uint32)K).Value);
+			const float Cone = C.Thickness * FMath::Pow(Deep01, 0.6f) * (1.0f + FMOFloatingIsland::UndersideFoldShare * Folds);
+			Col.Under2D[K] = Top - FMath::Max(Cone, FMOFloatingIsland::RimThicknessCm);
 			Col.Union = FMath::Min(Col.Union, Outline);
 			if (Outline < 0.0f)
 			{
@@ -290,29 +296,19 @@ namespace
 		return Col.Union < 0.0f ? Col.MaxTop : -1.0e9f;
 	}
 
-	/** The island's rock (cm, negative inside a clump): each clump's rock lies between its torn underside and its top; off the cluster's footprint, the least outline. */
-	float IslandRockAt(const FIslandBasics& B, const FIslandColumn& Col, double X, double Y, double Z, int32 Seed)
+	/** The island's rock (cm, negative inside a clump): each clump's rock lies between its underside and its top; off the cluster's footprint, the least outline. */
+	float IslandRockAt(const FIslandBasics& B, const FIslandColumn& Col, double Z)
 	{
 		if (Col.Union >= 0.0f)
 		{
 			return FMath::Max(Col.Union, 1.0f);
 		}
-		const uint32 RockSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltIslandRock);
 		float Rock = 1.0e9f;   // the nearest clump's rock: negative inside one
 		for (int32 K = 0; K < B.NumClumps; ++K)
 		{
-			const FIslandClump& C = B.Clumps[K];
-			if (Col.Outline[K] > 0.25f * C.Thickness)
-			{
-				Rock = FMath::Min(Rock, Col.Outline[K]);   // well off this clump: its outline is the distance
-				continue;
-			}
-			// The torn underside: ridged hanging chunks (sharp creases) and finer broken rock over the column's cone.
-			const double Lc = FMath::Max(800.0, 0.15 * (double)C.R), Lf = FMath::Max(300.0, 0.05 * (double)C.R);
-			const float Chunks = 1.0f - 2.0f * FMath::Abs(GradientNoise3(X / Lc, Y / Lc, Z / Lc, RockSalt + (uint32)K));
-			const float Fine = GradientNoise3(X / Lf, Y / Lf, Z / Lf, RockSalt + 11u);
-			const float Under = Col.Under2D[K] + C.Thickness * (0.22f * Chunks + 0.08f * Fine) + 300.0f * GradientNoise3(X / 700.0, Y / 700.0, Z / 700.0, RockSalt + 23u);
-			Rock = FMath::Min(Rock, FMath::Max3(Under - (float)Z, (float)Z - Col.Top[K], Col.Outline[K]));
+			Rock = FMath::Min(Rock, Col.Outline[K] > 0.25f * B.Clumps[K].Thickness
+				? Col.Outline[K]   // well off this clump: its outline is the distance
+				: FMath::Max3(Col.Under2D[K] - (float)Z, (float)Z - Col.Top[K], Col.Outline[K]));
 		}
 		return Rock;
 	}
@@ -1196,6 +1192,66 @@ bool FMOWorldGenDomain::GetRavineInCell(const FMOWorldGenParams& Params, int64 C
 	return true;
 }
 
+bool FMOWorldGenDomain::SampleRavineWall(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, float S, float Side, float DepthShare, FVector& OutPoint, FVector2D& OutAirward)
+{
+	FRavineBasics B;
+	if (!Params.Tuning.bEnableCaves || !RavineBasics(Params.Tuning, CellX, CellY, Seed, B))
+	{
+		return false;
+	}
+	const float Ground = AnchorGroundCm(Params, SaltRavine, CellX, CellY, Seed, B.CenterX, B.CenterY);
+	const float Env = RavineEnvelope(S);
+	if (Env < 0.15f || !RavineAllowed(Params, B, Ground, Seed))
+	{
+		return false;   // near its ends it has no walls to speak of
+	}
+	const double Z = (double)Ground - (double)DepthShare * (double)RavineDepth(Params, B, Ground) * (double)FMath::Pow(Env, 0.5f);
+	auto PathAt = [&B](float U)
+	{
+		const float Along = (U - 0.5f) * B.Length;
+		const float Across = B.Bend * FMath::Sin(2.0f * UE_PI * B.Waves * U + B.Phase);
+		return FVector2D(B.CenterX + B.DirX * Along - B.DirY * Across, B.CenterY + B.DirY * Along + B.DirX * Across);
+	};
+	const FVector2D Path = PathAt(S);
+	const FVector2D Tangent = (PathAt(S + 0.01f) - PathAt(S - 0.01f)).GetSafeNormal();
+	const FVector2D Out = FVector2D(-Tangent.Y, Tangent.X) * (Side < 0.0f ? -1.0 : 1.0);
+	constexpr float Resolve = 50.0f;
+	auto RockAt = [&](double T) { const FVector2D Q = Path + Out * T; return RavineDistance(Params, Q.X, Q.Y, Z, Seed, Resolve) >= 0.0f; };
+	if (RockAt(0.0))
+	{
+		return false;   // no slot at this depth here
+	}
+	// Out from the path, air to rock: coarse to find it, then halved to about 10 cm. A wall's crags can make a pocket: the first rock is the wall.
+	double Air = 0.0, Rock = -1.0;
+	for (double T = 150.0; T <= 2.5 * (double)B.HalfWidth; T += 150.0)
+	{
+		if (RockAt(T))
+		{
+			Rock = T;
+			break;
+		}
+		Air = T;
+	}
+	if (Rock < 0.0)
+	{
+		return false;
+	}
+	for (int32 I = 0; I < 4; ++I)
+	{
+		const double Mid = 0.5 * (Air + Rock);
+		(RockAt(Mid) ? Rock : Air) = Mid;
+	}
+	const FVector2D Wall = Path + Out * Rock;
+	// The anchor's ground is not the ground here: the slot's top can stand over lower land, where this height is open air and a rock would float.
+	if (FMOWorldGenDomain::SampleHeightCm(Params, Wall.X, Wall.Y, Seed) < Z + 150.0)
+	{
+		return false;
+	}
+	OutPoint = FVector(Wall.X, Wall.Y, Z);
+	OutAirward = -Out;
+	return true;
+}
+
 float FMOWorldGenDomain::IslandTopCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
 {
 	FIslandBasics B;
@@ -1215,7 +1271,27 @@ float FMOWorldGenDomain::IslandRockDistanceCm(const FMOWorldGenParams& Params, d
 	{
 		return 1.0e6f;
 	}
-	return IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), X, Y, Z, Seed);
+	return IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), Z);
+}
+
+float FMOWorldGenDomain::IslandUndersideCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	FIslandBasics B;
+	float Ground = 0.0f;
+	if (!FindIslandAt(Params, X, Y, Seed, B, Ground))
+	{
+		return -1.0e9f;
+	}
+	const FIslandColumn& Col = IslandColumnAt(B, Ground, X, Y, Seed);
+	float Lowest = -1.0e9f;
+	for (int32 K = 0; K < B.NumClumps; ++K)
+	{
+		if (Col.Outline[K] < 0.0f && (Lowest < -1.0e8f || Col.Under2D[K] < Lowest))
+		{
+			Lowest = Col.Under2D[K];
+		}
+	}
+	return Lowest;
 }
 
 float FMOWorldGenDomain::IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm)
@@ -1251,7 +1327,7 @@ bool FMOWorldGenDomain::SampleIslandSurface(const FMOWorldGenParams& Params, dou
 	}
 	// Solid under the top: near the rim the torn underside can come up past the top, and the column has a top but no rock (the rim's holes).
 	constexpr float SolidCm = 100.0f;
-	if (IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), X, Y, (double)Top - SolidCm, Seed) >= 0.0f)
+	if (IslandRockAt(B, IslandColumnAt(B, Ground, X, Y, Seed), (double)Top - SolidCm) >= 0.0f)
 	{
 		return false;
 	}

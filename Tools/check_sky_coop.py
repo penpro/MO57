@@ -1,4 +1,4 @@
-"""Floating islands in co-op (generator v13, fork F62): a joiner stamps the same islands, grows the same forests and digs the same rock as the host.
+"""Floating islands in co-op (generator v13 on, fork F62): a joiner stamps the same islands, grows the same forests and digs the same rock as the host.
 
     python Tools/check_sky_coop.py [--seed 777] [--keep]
 
@@ -126,7 +126,7 @@ def main():
         seeds = {n: ui._seed_query(n) for n in (host, client)}
         rep.step("both machines run one seed", all(seeds.values()) and seeds[host][1] == seeds[client][1], str(seeds))
         sums = {n: checksum(n) for n in (host, client)}
-        rep.step("MO.WorldGen.Checksum match=1 on both, generator v13", all(m and m.group(6) == "1" and m.group(4) == "13" for m in sums.values()),
+        rep.step("MO.WorldGen.Checksum match=1 on both, one generator version, v13 or later (islands)", all(m and m.group(6) == "1" and int(m.group(4)) >= 13 for m in sums.values()) and len({m.group(4) for m in sums.values() if m}) == 1,
                  " / ".join(m.group(0)[:110] if m else "no line" for m in sums.values()))
 
         # 2. The nearest island, both pawns over it.
@@ -148,6 +148,12 @@ def main():
         stamped = {n: re.findall(r"\[MOFloatingIsland\] stamped the island at \((-?\d+), (-?\d+)\)", ui.read_log_from(n, 0)) for n in (host, client)}
         here = (str(int(round(x))), str(int(round(y))))
         rep.step("both machines stamped this island by themselves", all(here in s for s in stamped.values()), f"host {len(stamped[host])} stamped in all, joiner {len(stamped[client])}")
+        # The rocks under the islands and in the ravines' walls come from the seed alone (N-330, N-331): where both machines have one, the same count.
+        for what, pattern in (("island", r"\[MOFloatingIsland\] (\d+) rocks under the island at \((-?\d+), (-?\d+)\)"), ("ravine", r"\[MORavineRocks\] (\d+) rocks in the ravine of cell \((-?\d+), (-?\d+)\)")):
+            placed = {n: {(m[1], m[2]): m[0] for m in re.findall(pattern, ui.read_log_from(n, 0))} for n in (host, client)}
+            both = set(placed[host]) & set(placed[client])
+            rep.step(f"{what} rocks: the same on both machines", all(placed[host][k] == placed[client][k] for k in both) and (what == "ravine" or bool(both)),
+                     f"{len(both)} on both, host {len(placed[host])}, joiner {len(placed[client])}")
         rock = {}
         bad = []
         for dx, dy in ((0.0, 0.0), (800.0, 0.0), (-800.0, 300.0), (0.0, 800.0), (400.0, -800.0)):

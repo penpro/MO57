@@ -116,6 +116,7 @@ bool FMOWorldGen_OriginEquivalence::RunTest(const FString& Parameters)
 				const FMOOreSample Oa = FMOWorldGen::SampleOre(PO, W.X, W.Y, Z, Seed), Ob = FMOWorldGen::SampleOre(P0, Fx, Fy, Z, Seed);
 				C.Check(TEXT("SampleOre"), Oa.Kind == Ob.Kind && SameBits(Oa.Grade, Ob.Grade), O, W);
 				C.Check(TEXT("SoilDepthCm"), SameBits(FMOWorldGen::SoilDepthCm(PO, W.X, W.Y, Seed), FMOWorldGen::SoilDepthCm(P0, Fx, Fy, Seed)), O, W);
+				C.Check(TEXT("IslandUndersideCm"), SameBits(FMOWorldGen::IslandUndersideCm(PO, W.X, W.Y, Seed), FMOWorldGen::IslandUndersideCm(P0, Fx, Fy, Seed)), O, W);
 				const FMODigSample Da = FMOWorldGen::SampleDig(PO, W.X, W.Y, Z, Seed), Db = FMOWorldGen::SampleDig(P0, Fx, Fy, Z, Seed);
 				C.Check(TEXT("SampleDig"), Da.Material == Db.Material && Da.Bedrock == Db.Bedrock && Da.Ore == Db.Ore && SameBits(Da.Grade, Db.Grade), O, W);
 

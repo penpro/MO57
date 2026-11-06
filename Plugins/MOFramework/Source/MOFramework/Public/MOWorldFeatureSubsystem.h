@@ -18,6 +18,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Async/Future.h"
+#include "Engine/StaticMesh.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MOWorldFeatureTypes.h"
 #include "MOWorldGen.h"
@@ -157,6 +159,19 @@ private:
 	FVector2D IslandStampsOrigin = FVector2D::ZeroVector;
 	void UpdateIslandStamps();
 	void ClearIslandStamps();
+	/** The large rocks hanging from an island's underside (N-331): the same on every machine, from the seed. Returns the actor holding them, which goes with the island's stamps. */
+	AActor* SpawnIslandRocks(const struct FMOFloatingIsland& Island, const struct FMOWorldGenParams& Params, int32 Seed);
+
+	/** Ravines: large and small rocks set into the walls of each ravine within reach of a player (N-330), by ravine cell, each machine its own, placed off the game thread (MORavineRocks.cpp). */
+	TMap<FIntPoint, TWeakObjectPtr<AActor>> RavineRocks;
+	FIntPoint RavineRockJobCell = FIntPoint::ZeroValue;
+	TFuture<TArray<TArray<FTransform>>> RavineRockJob;
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMesh>> RavineRockMeshes;
+	int32 RavineRocksSeed = 0;
+	FVector2D RavineRocksOrigin = FVector2D::ZeroVector;
+	void UpdateRavineRocks();
+	void ClearRavineRocks();
 
 	bool EnsurePlacer();
 

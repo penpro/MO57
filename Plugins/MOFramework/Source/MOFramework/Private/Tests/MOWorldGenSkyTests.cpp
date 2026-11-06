@@ -64,7 +64,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_FloatingIslands,
 bool FMOWorldGen_FloatingIslands::RunTest(const FString& Parameters)
 {
 	const FMOWorldGenParamsRef P = MakeSkyParams(0.5f, 0.0f);
-	int32 Islands = 0, Floating = 0, GroundUnder = 0, TopNearTuned = 0, InRange = 0, Torn = 0, Apart = 0, Twins = 0;
+	int32 Islands = 0, Floating = 0, GroundUnder = 0, TopNearTuned = 0, InRange = 0, Torn = 0, Apart = 0, Twins = 0, UnderChecked = 0, UnderNoRock = 0, UnderLoose = 0;
 	float MinRadius = 1.0e9f, MaxRadius = 0.0f, MinOver = 1.0e9f, MaxOver = 0.0f, MinCv = 1.0e9f;
 	TArray<TArray<double>> Profiles;
 	for (int64 Cy = -6; Cy < 6 && Islands < 12; ++Cy)
@@ -182,6 +182,27 @@ bool FMOWorldGen_FloatingIslands::RunTest(const FString& Parameters)
 			const bool bAir = Rock(0.5 * ((double)Real + Underside)) > 0.0f;
 			const bool bBody = Rock(ClumpTop - 0.15 * I.ThicknessCm) < 0.0f;
 			const bool bClear = Underside > (double)Real;
+			// N-331: nothing hangs loose under the rock. Across the island: rock just above the lowest underside, air just under it and on down for 30 m.
+			for (int32 K = 0; K < 120; ++K)
+			{
+				const double A = K * 0.61803, Rr = 1.2 * I.RadiusCm * FMath::Sqrt((K + 0.5) / 120.0);
+				const double Px = X + Rr * FMath::Cos(A * 2.0 * UE_DOUBLE_PI), Py = Y + Rr * FMath::Sin(A * 2.0 * UE_DOUBLE_PI);
+				const float Under = FMOWorldGen::IslandUndersideCm(*P, Px, Py, SkyTestSeed);
+				if (Under < -1.0e8f)
+				{
+					continue;
+				}
+				++UnderChecked;
+				UnderNoRock += FMOWorldGen::IslandRockDistanceCm(*P, Px, Py, (double)Under + 20.0, SkyTestSeed) < 0.0f ? 0 : 1;
+				for (float Down = 20.0f; Down <= 3000.0f; Down += 140.0f)
+				{
+					if (FMOWorldGen::IslandRockDistanceCm(*P, Px, Py, (double)Under - Down, SkyTestSeed) <= 0.0f)
+					{
+						++UnderLoose;
+						break;
+					}
+				}
+			}
 			Floating += bAir && bBody ? 1 : 0;
 			GroundUnder += bClear ? 1 : 0;
 			AddInfo(FString::Printf(TEXT("island at (%.0f, %.0f): radius %.0f, ground %.0f, top %.0f, thickness %.0f -- air under it %d, body %d, clear of the ground %d"),
@@ -199,6 +220,10 @@ bool FMOWorldGen_FloatingIslands::RunTest(const FString& Parameters)
 	TestEqual(TEXT("round 3: every island's outline is torn, not a disc"), Torn, Islands);
 	TestTrue(TEXT("round 3: a quarter of the islands or more have a chunk apart from the main mass"), Apart * 4 >= Islands && Apart > 0);
 	TestEqual(TEXT("round 3: no two islands share a shape"), Twins, 0);
+	AddInfo(FString::Printf(TEXT("undersides: %d columns, %d without rock above the underside, %d with rock hanging loose under it"), UnderChecked, UnderNoRock, UnderLoose));
+	TestTrue(TEXT("the undersides were looked at"), UnderChecked > 100);
+	TestEqual(TEXT("N-331: IslandUndersideCm is where the rock ends"), UnderNoRock, 0);
+	TestEqual(TEXT("N-331: nothing hangs loose under an island's rock"), UnderLoose, 0);
 	return true;
 }
 
@@ -291,7 +316,7 @@ bool FMOWorldGen_Ravines::RunTest(const FString& Parameters)
 	const FMOWorldGenParamsRef P = MakeSkyParams(0.0f, 0.35f);
 	const FMOWorldGenParamsRef NoRavines = MakeSkyParams(0.0f, 0.0f);
 	const float Vox = P->Tuning.VoxelSizeCm;
-	int32 Ravines = 0, Open = 0, Floored = 0, Walled = 0;
+	int32 Ravines = 0, Open = 0, Floored = 0, Walled = 0, WallPoints = 0, WallRepeats = 0, WallAirOut = 0, WallRockIn = 0;
 	double SliceMs = 0.0, ControlMs = 0.0;
 	float MinDepth = 1.0e9f, MaxDepth = 0.0f;
 	int32 Slices = 0;
@@ -307,6 +332,26 @@ bool FMOWorldGen_Ravines::RunTest(const FString& Parameters)
 			++Ravines;
 			MinDepth = FMath::Min(MinDepth, V.DepthCm);
 			MaxDepth = FMath::Max(MaxDepth, V.DepthCm);
+			// N-330: the wall the rocks are set into: air just out of it, rock just into it, and the same point twice.
+			for (int32 K = 0; K < 16; ++K)
+			{
+				FVector Wall, Again;
+				FVector2D Air, AirAgain;
+				const float S = 0.15f + 0.045f * K, Side = K % 2 ? 1.0f : -1.0f, Down = 0.1f + 0.05f * K;
+				if (!FMOWorldGen::SampleRavineWall(*P, Cx, Cy, SkyTestSeed, S, Side, Down, Wall, Air))
+				{
+					continue;
+				}
+				++WallPoints;
+				WallRepeats += FMOWorldGen::SampleRavineWall(*P, Cx, Cy, SkyTestSeed, S, Side, Down, Again, AirAgain) && Again == Wall && AirAgain == Air ? 1 : 0;
+				auto Cave = [&](double Off)
+				{
+					const double Qx = Wall.X + Air.X * Off, Qy = Wall.Y + Air.Y * Off;
+					return FMOWorldGen::SampleCaveDistanceAtGround(*P, Qx, Qy, Wall.Z, FMOWorldGen::SampleHeightCm(*P, Qx, Qy, SkyTestSeed, Vox), SkyTestSeed, Vox);
+				};
+				WallAirOut += Cave(40.0) < 0.0f ? 1 : 0;
+				WallRockIn += Cave(-40.0) >= 0.0f ? 1 : 0;
+			}
 			// The slot across its middle: the cell's centre lies on the ravine's chord, and its bends carry it up to a sixth of its length off it, so
 			// look along the perpendicular through the centre at mid-depth for the air, then test there.
 			const double Px = -V.Dir.Y, Py = V.Dir.X;
@@ -381,6 +426,11 @@ bool FMOWorldGen_Ravines::RunTest(const FString& Parameters)
 	TestEqual(TEXT("each ravine has a rock floor"), Floored, Ravines);
 	TestEqual(TEXT("rock beside each ravine"), Walled, Ravines);
 	TestTrue(TEXT("every ravine is 50-100 m deep at its middle (Wes: \"50-100m deep\")"), Ravines > 0 && MinDepth >= 0.5f * P->Tuning.RavineDepthMaxCm - 1.0f && MaxDepth <= P->Tuning.RavineDepthMaxCm + 1.0f);
+	AddInfo(FString::Printf(TEXT("ravine walls: %d points, %d repeat exactly, air just out of %d, rock just into %d"), WallPoints, WallRepeats, WallAirOut, WallRockIn));
+	TestTrue(TEXT("N-330: the walls are found"), WallPoints >= Ravines * 8);
+	TestEqual(TEXT("N-330: a wall point is a pure function of the world (every machine sets the same rocks)"), WallRepeats, WallPoints);
+	TestTrue(TEXT("N-330: nine in ten have air just out of them (crags can hide a few)"), WallAirOut * 10 >= WallPoints * 9);
+	TestTrue(TEXT("N-330: nine in ten have rock just into them"), WallRockIn * 10 >= WallPoints * 9);
 	return true;
 }
 

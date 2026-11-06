@@ -166,6 +166,24 @@ float FMOWorldGen::IslandRockDistanceCm(const FMOWorldGenParams& Params, double 
 	return FMOWorldGenDomain::IslandRockDistanceCm(Params, Fx(Params, X), Fy(Params, Y), Z, Seed);
 }
 
+bool FMOWorldGen::SampleRavineWall(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, float S, float Side, float DepthShare, FVector& OutPoint, FVector2D& OutAirward)
+{
+	const bool bFound = FMOWorldGenDomain::SampleRavineWall(Params, CellX, CellY, Seed, S, Side, DepthShare, OutPoint, OutAirward);
+	if (bFound)
+	{
+		FVector2D Where(OutPoint.X, OutPoint.Y);
+		ToWorld(Params, Where);
+		OutPoint.X = Where.X;
+		OutPoint.Y = Where.Y;
+	}
+	return bFound;
+}
+
+float FMOWorldGen::IslandUndersideCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	return FMOWorldGenDomain::IslandUndersideCm(Params, Fx(Params, X), Fy(Params, Y), Seed);
+}
+
 float FMOWorldGen::IslandFarDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float GrowCm, float ThickenCm)
 {
 	return FMOWorldGenDomain::IslandFarDistanceCm(Params, Fx(Params, X), Fy(Params, Y), Z, Seed, GrowCm, ThickenCm);
