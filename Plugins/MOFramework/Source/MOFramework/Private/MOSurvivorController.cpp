@@ -1483,11 +1483,24 @@ int32 AMOSurvivorController::UpdateJobMoveLeg(float DeltaTime, float ArriveDist,
 	{
 		return -1;
 	}
+	// Arrived: stop, and say so once the pawn has stopped. Since it follows paths through acceleration (N-332) it brakes to a halt, and a stay-put action begun while it still slides
+	// was cancelled as "moved" on its first tick: AMOCharacter's movement interrupt fires on the first tick an action listens to a pawn that is moving (the medic's bandage, Nov 6, N-302).
+	// A second at most, as something else may be pushing it.
+	auto Arrived = [this, ControlledPawn, DeltaTime]()
+	{
+		StopMovement();
+		if (ControlledPawn->GetVelocity().SizeSquared() > 25.0f && MoveLegBrakeSeconds < 1.0f)
+		{
+			MoveLegBrakeSeconds += DeltaTime;
+			return 0;
+		}
+		MoveLegBrakeSeconds = 0.0f;
+		return 1;
+	};
 	const float Distance = FVector::Dist2D(ControlledPawn->GetActorLocation(), SimpleJobTargetLocation);
 	if (Distance <= ArriveDist)
 	{
-		StopMovement();
-		return 1; // arrived
+		return Arrived();
 	}
 	// NO-PROGRESS WATCHDOG: a pawn wedged in collision keeps path status
 	// "Moving" at zero velocity FOREVER — the status check below never
@@ -1514,8 +1527,7 @@ int32 AMOSurvivorController::UpdateJobMoveLeg(float DeltaTime, float ArriveDist,
 	{
 		if (Distance <= StallDist)
 		{
-			StopMovement();
-			return 1; // close enough - nav stopped at the building's bounds
+			return Arrived(); // close enough - nav stopped at the building's bounds
 		}
 		UE_LOG(LogMOFramework, Warning,
 			TEXT("[MOSurvivorController] Job move leg stalled %.0fuu from target - failing"), Distance);
@@ -1883,9 +1895,10 @@ void AMOSurvivorController::UpdateTreatJobExecution(float DeltaTime)
 			if (Arrive < 0)
 			{
 				// A standing body carves the nav mesh around itself: the path ends a couple of metres short of the patient (Oct 20: stalled at
-				// 202 cm, again every upkeep tick). The last stretch is open ground: walk straight in, once.
+				// 202 cm, again every upkeep tick). The last stretch is open ground: walk straight in, once. Up to 10 m: a medic also gave up 4.6 m off with a whole 5 m path, having hardly
+				// moved (N-302, twice in full nettest runs). A wall in the way still fails honestly: the straight walk stops making progress.
 				const float Short = FVector::Dist2D(Medic->GetActorLocation(), Patient->GetActorLocation());
-				if (!bTreatDirectApproach && Short < 400.0f)
+				if (!bTreatDirectApproach && Short < 1000.0f)
 				{
 					bTreatDirectApproach = true;
 					MoveLegBestDistance = FLT_MAX;
