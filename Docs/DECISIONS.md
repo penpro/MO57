@@ -87,6 +87,10 @@
 
 ## Decisions, newest first
 
+### 2026-11-06 (Wes, on the promo footage)
+
+- **Wes shoots the promo himself; the opening stays.** He judged the second cut's footage: "most of it is 'meh' at best", "the landing on the planet opening scene is good enough but your ability to direct art sucks ass", "it takes for FUCKING EVER", "i can't iterate very fast and it takes like 16 hours to capture the video for two minutes", "i'll go get some of my own". The promo session is on hold unless he reopens it. Every take stays in `Saved/Promo/mezz/`, and `G01_pod.mov` is the opening he accepted. Agents do not direct or reshoot promo footage unprompted; what he asked for instead is a tool, the `spawn` menu (N-353). The promo forks F68 to F71 wait until he has his footage.
+
 ### 2026-11-05 (Claude's small calls, DARKTOWER batch 4; say if any is wrong)
 
 - **Vitamins and minerals are stores** (N-310): a full store with none in the diet reaches the deficiency line in 14 days (potassium, sodium), 30 (B), 60 (C), 90 (D) or a year (A, iron, calcium). The rate was a flat 100 % a day, so a day without vitamin C stopped wounds healing; Principle 11 names game-y decay rates, so this is the simulation tuned, not a new mechanic. The numbers are general medical knowledge and from memory, component defaults; food amounts are unchanged, so stores refill fast. A diet with no fruit now costs nothing for weeks, which is a real change in how the game plays: say if the old pressure was wanted.

@@ -1,7 +1,8 @@
 # The promo video
 
 > **What this is:** the production book of MO57's promo film: concept, script, shot-by-shot storyboard, how every picture and sound is made, and how to re-use the kit for the next one.
-> **Current state (2026-11-05):** first cut delivered to Wes: 2:00, 4K, all game shots captured on generator v13 from the real game, -14.0 LUFS with the game's own sound. Whether it looks and sounds right is Wes's call (section 7 has the list and says where it falls short).
+> **On hold (2026-11-06):** Wes judged the footage "'meh' at best" and the capture too slow to iterate on (about 16 h for 2 min), and shoots his own; the landing opening stays (`Docs/DECISIONS.md`). Nothing below is being worked on.
+> **State as of 2026-11-05:** first cut delivered to Wes: 2:00, 4K, all game shots captured on generator v13 from the real game, -14.0 LUFS with the game's own sound. Whether it looks and sounds right is Wes's call (section 7 has the list and says where it falls short).
 > **Entry points:** `Tools/promo/film.py` (the film as data), `Tools/promo/capture.py` + `Content/Python/promo_shot.py` (footage), `Tools/promo/kit/` (Blender), `Tools/promo/audio/` (score and mix), `Tools/promo/edit.py` (assembly, grade, masters). Everything heavy lands in `Saved/Promo/` (not in git).
 > **Related:** `Docs/VISION.md`, `Docs/PROJECT_STATUS.md`, `Docs/Audio.md`, `SteamArt/README.md` (the wordmark and the Field Ledger palette), `Art/References/ImageTo3D/2026-10-18-clone-egg/README.md` (the pod's story).
 
