@@ -68,13 +68,17 @@ struct MOFRAMEWORK_API FMOWorldShape
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
 	float Caves = 1.0f;
 
+	/** How often a floating island hangs over the land (its cells' chance; a chance never passes 1). 0 = none. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
+	float Islands = 1.0f;
+
 	/** Every biome species' density (trees, plants, rocks). Above 1 costs frame time. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category="MO|World")
 	float Vegetation = 1.0f;
 
 	bool operator==(const FMOWorldShape& O) const
 	{
-		return BiomeSize == O.BiomeSize && WorldHeight == O.WorldHeight && Mountains == O.Mountains && Lakes == O.Lakes && Caves == O.Caves && Vegetation == O.Vegetation;
+		return BiomeSize == O.BiomeSize && WorldHeight == O.WorldHeight && Mountains == O.Mountains && Lakes == O.Lakes && Caves == O.Caves && Islands == O.Islands && Vegetation == O.Vegetation;
 	}
 	bool operator!=(const FMOWorldShape& O) const { return !(*this == O); }
 	bool IsDefault() const { return *this == FMOWorldShape(); }

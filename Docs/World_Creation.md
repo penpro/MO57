@@ -20,7 +20,8 @@ existing save (a save from before Oct 22 reads the defaults, which is the world 
 | World height | 0.5-1.5 | the generator's `VerticalScale`: hills, valleys and mountains alike |
 | Mountains | 0-2 | massif, peak, coastal-range and old mountain amplitudes |
 | Lakes | 0-2 | pond, lake and upland-lake cell chances (capped at 1) |
-| Caves | 0-2 | the cave-entrance cell chance (capped at 1); 0 = no cave mouths |
+| Caves | 0-2 | the cave-entrance and ravine cell chances (capped at 1); 0 = no cave mouths or ravines |
+| Floating islands | 0-2 | the island cell chance (capped at 1); 0 = none (N-272, Nov 6). Host and joiner get it with the rest of the shape |
 | Vegetation | 0.25-1.5 | every biome species' density (`FMOWorldGenTuning::VegetationDensityScale`); above 1 costs frame time |
 | Gathering time | 0.1-4 | harvest / chop / mine (`UMOHarvestSubsystem`), foraging (ground menu), gathering cover, butchering, survivor gather jobs |
 | Crafting time | 0.1-4 | every recipe (`UMOCraftingSubsystem` adjusted time, the queue, the recipe panels) |

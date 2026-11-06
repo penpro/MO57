@@ -39,6 +39,8 @@ namespace
 			0.0f, 2.0f, 0.1f, [](FMOWorldCreationSettings& S) { return &S.Shape.Lakes; }));
 		K.Add(Knob(TEXT("Caves"), G::Shape, LOCTEXT("Caves", "Caves"), LOCTEXT("CavesHint", "How often a cave opens to the surface. 0 = no cave mouths."),
 			0.0f, 2.0f, 0.1f, [](FMOWorldCreationSettings& S) { return &S.Shape.Caves; }));
+		K.Add(Knob(TEXT("Islands"), G::Shape, LOCTEXT("Islands", "Floating islands"), LOCTEXT("IslandsHint", "How often a floating island hangs over the land. 0 = none."),
+			0.0f, 2.0f, 0.1f, [](FMOWorldCreationSettings& S) { return &S.Shape.Islands; }));
 		K.Add(Knob(TEXT("Vegetation"), G::Shape, LOCTEXT("Vegetation", "Vegetation"), LOCTEXT("VegetationHint", "How thickly trees, plants and rocks grow. Above 1 costs frame rate."),
 			0.25f, 1.5f, 0.05f, [](FMOWorldCreationSettings& S) { return &S.Shape.Vegetation; }));
 		K.Add(Knob(TEXT("Gathering"), G::Pace, LOCTEXT("Gathering", "Gathering time"), LOCTEXT("GatheringHint", "Harvesting, chopping, mining, foraging and butchering. 1 = real time."),
@@ -156,6 +158,10 @@ void FMOWorldCreation::ApplyShape(const FMOWorldShape& Shape, FMOWorldGenTuning&
 	{
 		T.CaveEntranceChance = FMath::Clamp(T.CaveEntranceChance * Shape.Caves, 0.0f, 1.0f);
 		T.RavineChance = FMath::Clamp(T.RavineChance * Shape.Caves, 0.0f, 1.0f);
+	}
+	if (Shape.Islands != 1.0f)
+	{
+		T.IslandChance = FMath::Clamp(T.IslandChance * Shape.Islands, 0.0f, 1.0f);
 	}
 	T.VegetationDensityScale *= Shape.Vegetation;
 }

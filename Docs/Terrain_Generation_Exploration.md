@@ -33,7 +33,7 @@
 Fork F62, option A (Wes, Nov 4: "Yes, option A"; asked for Nov 3: "floating islands and better caves with chasms more like minecraft"). Built and measured in `MO_WorldLab` (`Docs/Islands_Ravines.md`,
 `Docs/Voxel_Stamps.md` there), then brought here; `CurrentGeneratorVersion` 13, goldens re-pinned, and v12's world still comes out of this code to the bit with the three features off
 (`RunProbe(true, true)` against `PinnedProbeHeightV12` / `PinnedProbeCaveV12`, test `WorldGen.Sky.SkyOffIsV12`). Defaults, a small call: `IslandChance` 0.5 per 8 km cell, `RavineChance` 0.35 per 500 m cell,
-`LakeLobes` 4 (the values the lab tested); dev cvars `mo.WorldGen.IslandChance`, `.RavineChance`, `.LakeLobes` apply at the next world start. No New Game knob for islands yet; the Caves knob scales the ravines.
+`LakeLobes` 4 (the values the lab tested); dev cvars `mo.WorldGen.IslandChance`, `.RavineChance`, `.LakeLobes` apply at the next world start. The New Game panel's "Floating islands" knob scales `IslandChance` (0-2, 0 = none; Nov 6); the Caves knob scales the ravines.
 
 - **Floating islands are not terrain height.** `FMOWorldGen::GetFloatingIslandInCell` gives one island per 8 km cell (radius 115 m-2.9 km, 300-950 m over the land, a cluster of torn clumps), and the height
   terrain and the cave field know nothing of it: no rock disc on the ground under it, no pillar past the cave stamp's LOD 4, no needles (the earlier raise-and-carve way had all three: rejected, DECISIONS F62).

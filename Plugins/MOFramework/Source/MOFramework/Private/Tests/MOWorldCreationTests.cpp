@@ -49,6 +49,20 @@ bool FMOWorldCreation_DefaultIsAuthored::RunTest(const FString& Parameters)
 	UMOWorldGenSettings::SetActiveWorldShape(FMOWorldShape());
 	TestEqual(TEXT("vegetation 0.5 reaches the tuning"), Thin->Tuning.VegetationDensityScale, 0.5f);
 	TestNotEqual(TEXT("vegetation 0.5 changes the hash"), Thin->GetHash(), Authored->GetHash());
+
+	// Floating islands (N-272): the knob scales the cell chance, capped at 1, and 0 means none.
+	TestEqual(TEXT("island chance at the default"), T.IslandChance, Authored->Tuning.IslandChance);
+	FMOWorldShape NoIslands;
+	NoIslands.Islands = 0.0f;
+	FMOWorldGenTuning NoneT = Authored->Tuning;
+	FMOWorldCreation::ApplyShape(NoIslands, NoneT);
+	TestEqual(TEXT("islands 0: no chance of one"), NoneT.IslandChance, 0.0f);
+	FMOWorldShape ManyIslands;
+	ManyIslands.Islands = 2.0f;
+	FMOWorldGenTuning ManyT = Authored->Tuning;
+	ManyT.IslandChance = 0.7f;
+	FMOWorldCreation::ApplyShape(ManyIslands, ManyT);
+	TestEqual(TEXT("islands 2 on a chance of 0.7: capped at 1"), ManyT.IslandChance, 1.0f);
 	return true;
 }
 
@@ -79,7 +93,7 @@ bool FMOWorldCreation_Knobs::RunTest(const FString& Parameters)
 		}
 		++PerGroup.FindOrAdd(K.Group);
 	}
-	TestEqual(TEXT("six shape knobs"), PerGroup.FindRef(EMOWorldKnobGroup::Shape), 6);
+	TestEqual(TEXT("seven shape knobs (Floating islands: Nov 6)"), PerGroup.FindRef(EMOWorldKnobGroup::Shape), 7);
 	TestEqual(TEXT("seven pace knobs (Growing season: Oct 26)"), PerGroup.FindRef(EMOWorldKnobGroup::Pace), 7);
 	TestEqual(TEXT("one world rule (creative mode)"), PerGroup.FindRef(EMOWorldKnobGroup::Rules), 1);
 
