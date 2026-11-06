@@ -1183,11 +1183,12 @@ void UMOBuildProgressComponent::NotifyInterrupt_Implementation(const FMOInterrup
 		break;
 
 	case EMOInterruptReason::Death:
-		// Builder is gone. Don't try to refund — that's the death pipeline's
-		// concern. Just stop the timer and unregister.
-		UE_LOG(LogMOFramework, Log,
-			TEXT("[MOBuildProgressComponent] Builder died — cancelling construction (no refund here; death pipeline owns cleanup)"));
-		CancelConstruction(/*bRefundMaterials=*/false);
+		// The work stands when the worker falls (N-306). This was a cancel with no refund, on the word of a "death pipeline" that owns no such
+		// thing: it emptied the deposited materials and put the progress back to a ghost, so a wolf at the builder took the house with it.
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOBuildProgressComponent] Builder died -- construction paused at %.1f%%, its materials stay on the site for whoever takes it up"),
+			Progress.GetOverallProgress() * 100.0f);
+		PauseConstruction();
 		break;
 
 	case EMOInterruptReason::UserCancel:

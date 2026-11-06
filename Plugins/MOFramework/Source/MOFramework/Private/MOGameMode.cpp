@@ -207,6 +207,8 @@ void AMOGameMode::HandlePendingNewGame()
 			if (UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
 			{
 				Persistence->ResetForNewWorld(Settings->PendingNewGameSlot);
+				Persistence->SetWorldDisplayName(Settings->PendingWorldName);
+				Settings->PendingWorldName.Empty();   // this flow's: a later world without a panel names itself after its slot
 			}
 			if (UMOQuestSubsystem* Quests = GameInstance->GetSubsystem<UMOQuestSubsystem>())
 			{

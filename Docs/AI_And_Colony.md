@@ -74,6 +74,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
   within HearingRange x loudness. A deer (HearingRange 20 m) hears a sprinting player or a running wolf at 20 m, a walk at 6 m, a
   crouched creep at ~1.5 m. A wolf used to be stuck at the walk value (its gait state is player-only).
 - **A body is nobody's quarry** (`AMOCreatureController::IsQuarryGone`, Nov 5, N-300): a dead pawn is not taken and is let go within a fifth of a second, and a threat destroyed outright reaches the blackboard (one more push after it goes). Until then a wolf stood biting a corpse for good, a deer ran from one, and a tree stayed on HasTarget with no target.
+- **The dead are off the roster** (`UMOColonyManagerSubsystem::IsLivingColonist`, Nov 5, N-303; `AMOCharacter::IsDeadBody` is the one question): a dead colonist keeps its recruited state and its body, and until then it stayed a colonist: the living grew bonds with it, courted it and could conceive with it, it kept its bed, the colony list showed it "Idle", and it counted toward the settlers that switch on the standing gate. Its bed goes back at the next upkeep (`VacateBedsOfTheDead`). A widow stays married: `IsMarried` counts a dead spouse (not changed). A stranger's corpse answers E with "... is dead." (N-304).
 - **A wound names its cause**: every hit carries its attacker (`FMOCombatHitInfo::Instigator`, the wolf's bite passes the wolf) into
   `UMOAnatomyComponent::InflictDamage(..., DamageInstigator)`, kept as `GetLastDamageInstigator()`. A creature's death names it as the
   killer (was always None).
@@ -94,6 +95,7 @@ Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight 
 
 ### Melee damage (Oct 18 2026)
 
+- **A body is nothing to fight** (`ProcessHit`, Nov 5, N-305): a blow on a corpse strikes nothing, so it trains no Melee (2 XP a blow since N-288, and a body never dodges), wears no weapon and wounds no dead.
 - **One blow, one strike on a body** (`OneHitPerActor`, Nov 5, N-301): a sweep can touch a body twice, and each hit struck it.
 - **The blow**: `UMOCombatComponent::ProcessHit` -> `BaseDamage` x distance falloff (1.0 at the body, 0.7 at full range) -> the target's
   `ReceiveAttack` -> `UMOCombatMedicalHelpers::ApplyCombatDamage` -> `InflictDamage(part, BaseDamage x CriticalMultiplier, wound type of
@@ -246,7 +248,7 @@ Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
   Met already: "Ohh, you already built one!?" and she joins on the spot (`EMORecruitmentOutcome::QuestAlreadyMet`). Back early: the
   reminder; back with it built: "You built one!" and she joins. The ask is for the first settlers: once the colony has
   `RecruitGateMinRoster` (3) a stranger drops it and the trust gate decides (V2.3; she greets you and says "I don't know your people yet",
-  the notification gives the numbers). The ask's timeout (10 real hours, then she is lost) is unchanged. Test
+  the notification gives the numbers). The ask's timeout is 10 hours with the world running, then she is lost; until Nov 5 (N-311) it ran on the wall clock, game closed or not, so a night away lost her at the next load. Test
   `MOFramework.Colony.SurvivorDialogue`.
 - **A survivor near every player** (Oct 29, Wes: "i haven't seen one in ages and another player asked about them also saying he's never seen
   one ... let's make it so there's always one within 200m with the campfire going"). Why none were met: the survivor category spawned one in

@@ -87,6 +87,10 @@
 
 ## Decisions, newest first
 
+### 2026-11-05 (Claude's small calls, DARKTOWER batch 4; say if any is wrong)
+
+- **Vitamins and minerals are stores** (N-310): a full store with none in the diet reaches the deficiency line in 14 days (potassium, sodium), 30 (B), 60 (C), 90 (D) or a year (A, iron, calcium). The rate was a flat 100 % a day, so a day without vitamin C stopped wounds healing; Principle 11 names game-y decay rates, so this is the simulation tuned, not a new mechanic. The numbers are general medical knowledge and from memory, component defaults; food amounts are unchanged, so stores refill fast. A diet with no fruit now costs nothing for weeks, which is a real change in how the game plays: say if the old pressure was wanted.
+
 ### 2026-11-04 (Claude's small calls, DARKTOWER batch; say if any is wrong)
 
 - **A fight trains at 2 XP a blow** (N-288): a landed blow Melee, a blow turned aside Defense, no toast (fights are fast). A component default, `XPPerLandedBlow` / `XPPerBlowTurnedAside`.

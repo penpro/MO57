@@ -109,9 +109,9 @@ struct MOFRAMEWORK_API FMORecruitmentSaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
 	FMORecruitmentQuest ActiveQuest;
 
-	/** When the quest started (ticks since epoch) */
+	/** Seconds the ask has stood with the world running (N-311). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
-	int64 QuestStartTimeTicks = 0;
+	float QuestElapsedSeconds = 0.0f;
 
 	/** Whether this save data is valid/populated */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
@@ -244,9 +244,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Recruitment")
 	FMORecruitmentQuest ActiveQuest;
 
-	/** When the current quest was started */
-	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
-	FDateTime QuestStartTime;
+	/** How long the current ask has stood with the world running: it does not run while the game is closed (N-311). */
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Recruitment")
+	float QuestElapsedSeconds = 0.0f;
 
 	// ============================================================================
 	// EVENTS

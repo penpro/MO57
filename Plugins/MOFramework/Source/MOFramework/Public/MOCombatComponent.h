@@ -584,6 +584,8 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	friend class FMOCombatNoBlowOnTheDead;
+
 	/** Guard for Server RPC implementations: false (with a warning) when the RPC
 	 *  executed at local callspace without authority (dead-world pawn) — calling
 	 *  back into the forwarding public verb from there would recurse infinitely. */

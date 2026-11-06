@@ -104,8 +104,11 @@ void AMOPlayerController::BeginPlay()
 	// Setup default input context
 	SetupDefaultInputContext();
 
-	// Apply any saved custom key bindings
-	FMOKeyBindingManager::ApplyAllBindingsFromSettings(this);
+	// Apply any saved custom key bindings: this machine's own player only. A host holds a controller per joiner too, and each logged "ApplyBinding failed - no local player".
+	if (IsLocalPlayerController())
+	{
+		FMOKeyBindingManager::ApplyAllBindingsFromSettings(this);
+	}
 
 	// Notify UI manager subsystem that this player has been added
 	// This creates the primary game layout widget with layer stacks

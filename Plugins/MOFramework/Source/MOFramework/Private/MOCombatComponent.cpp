@@ -1401,6 +1401,12 @@ bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		return false;
 	}
 
+	// A body is nothing to fight (N-305): nobody defends it, so each blow trained Melee for free, wore the weapon and wounded the dead.
+	if (AMOCharacter::IsDeadBody(HitActor))
+	{
+		return false;
+	}
+
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{

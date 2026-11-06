@@ -41,6 +41,7 @@
   one. No UI path writes a second slot of a world (no Save As) or loads the world you are in. The main menu therefore lists one entry
   per world (old saves are not kept: Oct 13). Every save also records the world's id (`UMOWorldSaveGame::WorldId`, N-158, Oct 20): minted by `ResetForNewWorld`, adopted from the
   save on load (a save from before keeps the minted one and writes it at its next save), carried by every save; `FMOSaveMetadata::WorldId`.
+  **What the Load list calls a world** (Nov 5, N-309): the name typed at New Game or Host, or its last rename, carried by every save (`GetWorldDisplayName`); a world with no name shows its slot's. Every save used to write the slot's name, so the typed name went nowhere and the next autosave undid a rename. The slot stays `World_<time>`.
   "The world you are in" (the in-game Load list, the load refusal) matches the id as well as the slot (`IsSlotOfCurrentWorld`). `GetCurrentWorldIdentifier` /
   `WorldName` is the MAP name, which every world shares; it is not a world identity.
 - **When the world is saved:** the in-game Save button and every way out (Exit to Main Menu, Exit Game, loading another world, the

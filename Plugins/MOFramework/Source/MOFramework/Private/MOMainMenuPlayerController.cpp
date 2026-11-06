@@ -651,6 +651,7 @@ void AMOMainMenuPlayerController::StartHosting(const FString& SessionDisplayName
 		{
 			Settings->bPendingNewGame = true;
 			Settings->PendingNewGameSlot = FString::Printf(TEXT("World_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+			Settings->PendingWorldName = SessionDisplayName;   // what the host called it names the save too (N-309)
 			// Fresh world = fresh seed. PendingWorldSeed is never cleared, so without this a hosted world reused whatever
 			// seed the last New Game panel / loaded save / hosted game left behind (every hosted world had the same
 			// terrain). 0 = "pick a random seed" in AMOGameMode::HandlePendingNewGame.

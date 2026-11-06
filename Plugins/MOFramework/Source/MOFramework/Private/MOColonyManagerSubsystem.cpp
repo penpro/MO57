@@ -120,13 +120,38 @@ TArray<APawn*> UMOColonyManagerSubsystem::GetColonyRoster() const
 		{
 			continue;
 		}
-		const UMORecruitmentComponent* Recruit = Pawn->FindComponentByClass<UMORecruitmentComponent>();
-		if (Recruit && Recruit->IsPossessable() && GetPawnGuid(Pawn).IsValid())
+		if (IsLivingColonist(Pawn))
 		{
 			Roster.Add(Pawn);
 		}
 	}
 	return Roster;
+}
+
+bool UMOColonyManagerSubsystem::IsLivingColonist(const APawn* Pawn)
+{
+	if (!IsValid(Pawn) || AMOCharacter::IsDeadBody(Pawn))
+	{
+		return false;
+	}
+	const UMORecruitmentComponent* Recruit = Pawn->FindComponentByClass<UMORecruitmentComponent>();
+	return Recruit && Recruit->IsPossessable() && GetPawnGuid(Pawn).IsValid();
+}
+
+void UMOColonyManagerSubsystem::VacateBedsOfTheDead()
+{
+	if (Residency.IsEmpty())
+	{
+		return;
+	}
+	for (TActorIterator<AMOCharacter> It(GetWorld()); It; ++It)
+	{
+		const FGuid PawnGuid = It->IsDead() ? GetPawnGuid(*It) : FGuid();
+		if (PawnGuid.IsValid() && Residency.Remove(PawnGuid) > 0)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] %s died: its bed goes back to the house"), *It->GetName());
+		}
+	}
 }
 
 // ============================================================================
@@ -549,7 +574,7 @@ void UMOColonyManagerSubsystem::RunRelationshipPass(const TArray<APawn*>& Roster
 	for (TActorIterator<APawn> It(World); It; ++It)
 	{
 		APawn* Candidate = *It;
-		if (!IsValid(Candidate) || Roster.Contains(Candidate))
+		if (!IsValid(Candidate) || Roster.Contains(Candidate) || AMOCharacter::IsDeadBody(Candidate))
 		{
 			continue;
 		}
@@ -746,6 +771,8 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 	LastUpkeepGameSeconds = NowGameSeconds;
 
 	const TArray<APawn*> Roster = GetColonyRoster();
+
+	VacateBedsOfTheDead();
 
 	// The bleeding first (N-061): an idle hand dresses a wound before taking standing orders.
 	RunMedicPass(Roster);

@@ -18,11 +18,14 @@
 #include "MOIdentityComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOMetabolismComponent.h"
+#include "MOPersistenceSubsystem.h"
 #include "MOPersonalityComponent.h"
+#include "MORecruitmentComponent.h"
 #include "MORespirationComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOVitalsComponent.h"
 #include "Components/PoseableMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -125,6 +128,12 @@ namespace MOSaveStateTest
 			}
 			Line += FString::Printf(TEXT(" digesting=%d vitaminc=%.2f"), Data.DigestingFood.Num(), VitaminC);
 		}
+		if (const UMORecruitmentComponent* Recruitment = Pawn.FindComponentByClass<UMORecruitmentComponent>())
+		{
+			FMORecruitmentSaveData Data;
+			Recruitment->BuildSaveData(Data);
+			Line += Data.RecruitmentState == EMORecruitmentState::QuestActive ? FString::Printf(TEXT(" ask=%.1f"), Data.QuestElapsedSeconds) : FString(TEXT(" ask=none"));
+		}
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE %s"), *Line);
 	}
 
@@ -188,7 +197,10 @@ static FAutoConsoleCommandWithWorldAndArgs GMOTestSaveState(
 			++Carcasses;
 		}
 		const AMOGameState* State = World->GetGameState<AMOGameState>();
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE end seed=%d people=%d carcasses=%d"), State ? State->GetWorldSeedInfo().Seed : 0, People, Carcasses);
+		const UGameInstance* Game = World->GetGameInstance();
+		const UMOPersistenceSubsystem* Persistence = Game ? Game->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SAVESTATE end seed=%d people=%d carcasses=%d world=\"%s\""), State ? State->GetWorldSeedInfo().Seed : 0, People, Carcasses,
+			Persistence ? *Persistence->GetWorldDisplayName() : TEXT(""));
 	}));
 
 #endif

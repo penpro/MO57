@@ -851,12 +851,7 @@ bool AMOCreatureController::IsOutOfTheWorld(const AActor* Actor)
 
 bool AMOCreatureController::IsQuarryGone(const AActor* Quarry)
 {
-	if (!IsValid(Quarry))
-	{
-		return true;
-	}
-	const AMOCharacter* Character = Cast<AMOCharacter>(Quarry);
-	return Character && Character->IsDead();
+	return !IsValid(Quarry) || AMOCharacter::IsDeadBody(Quarry);
 }
 
 void AMOCreatureController::ForgetOutOfTheWorldThreat()

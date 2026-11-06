@@ -89,6 +89,18 @@ UMOTerrainModificationSubsystem* UMOTerrainModificationSubsystem::Get(const UObj
 // PRODUCER API
 // ============================================================================
 
+bool UMOTerrainModificationSubsystem::TryMergeZone(FMOTerrainModifiedZone& Existing, const FVector& Location, float Radius, float InMergeDistanceFactor)
+{
+	const float Distance = FVector::Dist(Existing.Location, Location);
+	if (Distance > FMath::Max(Existing.Radius, Radius) * InMergeDistanceFactor)
+	{
+		return false;
+	}
+	// Cover both (N-307): the radius used to take the larger of the two with the center left where it was, so the far edge of every dig that merged was in no zone, and its grass stood over the dug ground.
+	Existing.Radius = FMath::Max(Existing.Radius, Distance + Radius);
+	return true;
+}
+
 void UMOTerrainModificationSubsystem::RegisterModifiedZone(const FVector& Location, float Radius)
 {
 	Radius = FMath::Max(1.0f, Radius);
@@ -102,16 +114,10 @@ void UMOTerrainModificationSubsystem::RegisterModifiedZone(const FVector& Locati
 	// runs at most once per terraform action, not per frame.
 	for (FMOTerrainModifiedZone& Existing : Zones)
 	{
-		const float Threshold = FMath::Max(Existing.Radius, Radius) * MergeDistanceFactor;
-		if (FVector::Dist(Existing.Location, Location) <= Threshold)
+		const float OldRadius = Existing.Radius;
+		if (TryMergeZone(Existing, Location, Radius, MergeDistanceFactor))
 		{
-			// Merge: expand to cover both.
-			const float OldRadius = Existing.Radius;
-			Existing.Radius = FMath::Max(Existing.Radius, Radius);
-			// Center stays — keeps the grid index valid. Re-indexing is only
-			// needed if the radius grew enough to touch new cells; since
-			// MergeDistanceFactor < 1, the new bounds stay near the old.
-			// For simplicity and correctness, re-index this zone if it grew.
+			// Center stays — keeps the grid index valid. Re-index this zone if it grew into new cells.
 			if (Existing.Radius > OldRadius)
 			{
 				const int32 ZoneIdx = static_cast<int32>(&Existing - Zones.GetData());

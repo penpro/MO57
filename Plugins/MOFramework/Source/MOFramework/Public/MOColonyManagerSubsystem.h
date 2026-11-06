@@ -94,6 +94,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Colony")
 	TArray<APawn*> GetColonyRoster() const;
 
+	/** On the roster: recruited, identified, and alive. A dead colonist keeps its recruited state and its body (N-155), but it no longer eats, courts, marries, holds a bed or stands in the colony's list (N-303). */
+	static bool IsLivingColonist(const APawn* Pawn);
+
 	// =========================================================================
 	// HOUSING
 	// =========================================================================
@@ -356,6 +359,9 @@ public:
 
 private:
 	void TryFeedVillager(APawn* Villager, const FGuid& PawnGuid);
+
+	/** A bed goes back when its sleeper dies; the body stays where it fell (N-303). */
+	void VacateBedsOfTheDead();
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunHearthPass(const TArray<APawn*>& Roster);
