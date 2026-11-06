@@ -1,6 +1,8 @@
 #!/bin/sh
 # Every game-audio bed the mix asks for, in place, in a sound instance: python Tools/promo/capture.py boot --fps 0 --res 1920x1080 --sound, then this. About 10 minutes. Positions are seed 777's.
 C="python Tools/promo/capture.py"
+# the game's own sound only: the level's music leaked into every bed of the first cut (Wes heard it under the pod, Nov 5). The pawn must also stand still: a pacing pawn left footsteps in cave.wav.
+$C run "MO.Audio.MusicVolume 0"
 $C bed shore_dawn --seconds 30 --at -300 -700 760 --clock 6 30 --settle 15
 $C bed meadow_dawn --seconds 30 --at 200 900 760 --clock 6 45 --settle 10
 $C bed sea --seconds 30 --at -5000 -5000 800 --clock 7 15 --settle 18

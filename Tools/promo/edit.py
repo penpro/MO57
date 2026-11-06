@@ -41,9 +41,33 @@ def run(cmd):
     return r
 
 
+# a shot cut from frames of another kit shot's run: (folder, first frame, last frame) in order. The title and the end card are one camera move, numbered through both folders.
+KIT_CUTS = {"S05_end": [("S04_title", 201, 240), ("S05_end", 241, 320)]}
+
+
+def cut_folder(shot_id):
+    """The folder a kit shot is read from: KIT_CUTS gets its own folder of hard links (renumbered from 1), made once."""
+    if shot_id not in KIT_CUTS:
+        return shot_id
+    name = shot_id + "_cut"
+    path = os.path.join(KIT, name)
+    wanted = sum(b - a + 1 for _, a, b in KIT_CUTS[shot_id])
+    have = len([f for f in os.listdir(path) if f.startswith("f_")]) if os.path.isdir(path) else 0
+    if have != wanted:
+        os.makedirs(path, exist_ok=True)
+        i = 1
+        for folder, a, b in KIT_CUTS[shot_id]:
+            for k in range(a, b + 1):
+                to = os.path.join(path, "f_%04d.png" % i)
+                if not os.path.isfile(to):
+                    os.link(os.path.join(KIT, folder, "f_%04d.png" % k), to)
+                i += 1
+    return name
+
+
 def seq(folder):
     """An image sequence's ffmpeg pattern, or None."""
-    path = os.path.join(KIT, folder)
+    path = os.path.join(KIT, cut_folder(folder))
     if not os.path.isdir(path):
         return None
     frames = sorted(f for f in os.listdir(path) if f.startswith("f_") and f.endswith(".png"))
@@ -87,6 +111,8 @@ def overlays_for(shot, start, frames):
             out.append((tl, 0, 0, "over"))
     if shot.id == "S05_end" and os.path.isdir(os.path.join(KIT, "cards", "end_card")):
         out.append(("end_card", 0, 0, "over"))
+    if shot.id == "G01_pod" and os.path.isdir(os.path.join(KIT, "cards", "real_tag")):
+        out.append(("real_tag", 30, 0, "over"))      # as the fade from black clears: the first shot that is the game
     for bar, name in FLARE_AT.items():
         cut = film.frame(bar)
         a, b = cut - 8, cut + 8
@@ -187,7 +213,7 @@ def frame_count(path):
 def sources_stamp(shot, overlays):
     """The sources' sizes and times, so a re-rendered kit shot or a new take re-renders the shot."""
     items = []
-    for path in [os.path.join(P, "mezz", shot.id + ".mov"), os.path.join(KIT, shot.id), TUNE, os.path.join(LUTS, shot.grade + ".cube")] + [os.path.join(KIT, "cards", o[0]) for o in overlays]:
+    for path in [os.path.join(P, "mezz", shot.id + ".mov"), os.path.join(KIT, cut_folder(shot.id)), TUNE, os.path.join(LUTS, shot.grade + ".cube")] + [os.path.join(KIT, "cards", o[0]) for o in overlays]:
         if os.path.exists(path):
             st = os.stat(path)
             items.append((os.path.basename(path), st.st_mtime))

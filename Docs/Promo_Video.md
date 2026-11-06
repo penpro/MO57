@@ -54,7 +54,7 @@ The film's words, in order:
 
 > THEY SENT TRILLIONS. / NOBODY REMEMBERS WHO. // YOU WAKE WITH NOTHING. / ONLY WHAT YOUR HANDS REMEMBER. // ONE SEED. / A WHOLE WORLD. // NO FAST TRAVEL. / NO INSTANT ANYTHING. / NO HEALTH REGEN. / YOU WILL NEED HELP. // FIND SURVIVORS. / PLAY ANY OF THEM. / OR BRING YOUR FRIENDS. // METAVERSE: ORIGINS
 
-Lower thirds name each place with what the capture really was: the biome, then seed, clock and weather from the capture log. End card: `EARLY ACCESS ON STEAM`, `SOLO OR CO-OP`, and the line saying everything after the opening is the game itself, captured from the current development build, time-lapse where marked.
+Lower thirds name each place with what the capture really was: the biome, then seed, clock and weather from the capture log. End card: `EARLY ACCESS ON STEAM`, `SOLO OR CO-OP`. A `REAL GAMEPLAY` tag comes up on the first game shot, after the crash landing (Wes, Nov 5, in place of the end card's small line; his call on the wording).
 
 Acts: The seed (bars 0-5, CG, a low mass and glass tones); Wake (5-10, a thin felted piano over wind and surf); One seed, a whole world (10-18, a pulse builds and breaks open at bar 16 on the floating islands); Nothing is given (18-26, drums under each flat statement); You will need help (26-31, the theme in full); Title (31-36, the hit, the sun rising behind the stone letters, D major at last).
 
@@ -87,8 +87,8 @@ This table is `python Tools/promo/film.py table`; `film.py` is the source; every
 | 23 | 1:31.67 | 5.00 | G20_fire_group (game) | Night under an aurora: five survivors round a fire, smoke rising past the treeline | slow lateral slide, wide | real recruited survivors and a real fire; standing them in a ring is staging; night clock |  |
 | 24 | 1:36.67 | 3.33 | G21_possess (game) | The Characters menu: Select, and you are someone else, walking into the dawn | the screen, then behind the new body | the real menu and a real click (shot showui, MO.Test.ClickWidget) | PLAY ANY OF THEM. |
 | 25 | 1:40.00 | 3.33 | G22_coop (game) | Two players on a ridge, two real game processes in one world | wide, slow push | a real LAN co-op session (ue.py inst) | OR BRING YOUR FRIENDS. |
-| 26 | 1:43.33 | 10.00 | S04_title (cg) | METAVERSE, ORIGINS in stone, the sun rising behind it | slow push through drifting dust | kit: build_title.py |  |
-| 27 | 1:53.33 | 6.67 | S05_end (cg) | End card: the wordmark, status line, honesty line | still, slow fade | kit: build_endcard.py |  |
+| 26 | 1:43.33 | 8.33 | S04_title (cg) | METAVERSE, ORIGINS in stone, the sun rising behind it | slow push through drifting dust | kit: build_title.py |  |
+| 27 | 1:51.67 | 5.00 | S05_end (cg) | End card: the wordmark and the status lines | still, slow fade | kit: the title's frames 201-320 (`edit.py` `KIT_CUTS`) |  |
 
 ## 5. The kit: re-using it for the next film
 

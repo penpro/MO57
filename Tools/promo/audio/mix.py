@@ -27,7 +27,7 @@ GAME = os.path.join(AUD, "game")
 TARGET_LUFS = -14.0
 TRUE_PEAK = -1.0
 BED_RMS_DB = -24.0     # every recorded bed is brought to this before its level in BEDS: the game's own beds range from -33 to -60 LUFS at the master
-TOTAL = film.seconds(36.0)
+TOTAL = film.seconds(film.END_BAR)
 
 # the game's bed under each shot, its level (dB against the music's full level), and how long it crossfades in. Shots not here have no bed.
 BEDS = {
@@ -37,7 +37,7 @@ BEDS = {
     "G18_cave": ("cave", -14.0), "G19_survivor_meet": ("forest_day", -22.0), "G20_fire_group": ("fire_night", -16.0), "G22_coop": ("wind_high", -22.0),
 }
 # the music's level per bar range (dB), so the words and the world get room: (from bar, to bar, dB at start, dB at end)
-MUSIC_RIDE = [(0, 5.5, 0, 0), (5.5, 10, -1, -1), (10, 16, -1, 0), (16, 25, 0, 0), (25, 26, 0, -2), (26, 31, -1, 0), (31, 36, 0, 0)]
+MUSIC_RIDE = [(0, 5.5, 0, 0), (5.5, 10, -1, -1), (10, 16, -1, 0), (16, 25, 0, 0), (25, 26, 0, -2), (26, 31, -1, 0), (31, 34, 0, 0), (34, 35, 0, -60)]     # the score is 36 bars: it goes out with the picture's fade (Wes, Nov 5: "shorten the outro a bit")
 
 
 def bar_t(b):

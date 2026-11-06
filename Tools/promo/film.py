@@ -60,7 +60,7 @@ ACTS = [
     ("One seed, a whole world", 10, 18, "Pulse enters, builds, breaks open on the floating islands at bar 16."),
     ("Nothing is given", 18, 26, "Drums. The simulation pillar, stated flatly over what it means."),
     ("You will need help", 26, 31, "The theme in full. Survivors, possession, co-op."),
-    ("Title", 31, 36, "The hit, the 3D title, the end card."),
+    ("Title", 31, 35, "The hit, the 3D title, the end card."),
 ]
 
 SHOTS = [
@@ -103,8 +103,8 @@ SHOTS = [
     Shot("G21_possess", 29.0, 1.0, "game", "The Characters menu: Select, and you are someone else, walking into the dawn", "the screen, then behind the new body", "the real menu and a real click (shot showui, MO.Test.ClickWidget)", sfx=("ui_tick",), grade="neutral"),
     Shot("G22_coop", 30.0, 1.0, "game", "Two players on a ridge, two real game processes in one world", "wide, slow push", "a real LAN co-op session (ue.py inst)", grade="gold"),
     # ---- Title ----
-    Shot("S04_title", 31.0, 3.0, "cg", "METAVERSE, ORIGINS in stone, the sun rising behind it", "slow push through drifting dust", "kit: build_title.py", sfx=("hit_title",)),
-    Shot("S05_end", 34.0, 2.0, "cg", "End card: the wordmark, status line, honesty line", "still, slow fade", "kit: build_endcard.py"),
+    Shot("S04_title", 31.0, 2.5, "cg", "METAVERSE, ORIGINS in stone, the sun rising behind it", "slow push through drifting dust", "kit: build_title.py", sfx=("hit_title",)),
+    Shot("S05_end", 33.5, 1.5, "cg", "End card: the wordmark and the status lines", "still, slow fade", "kit: the title's frames 201-320 (edit.py KIT_CUTS)"),
 ]
 
 CARDS = [
@@ -122,6 +122,8 @@ CARDS = [
     Card("T12_any", 29.45, 0.55, "PLAY ANY OF THEM."),   # after the click: the menu has closed by then
     Card("T13_friends", 30.0, 1.0, "OR BRING YOUR FRIENDS."),
 ]
+
+END_BAR = SHOTS[-1].bar + SHOTS[-1].bars
 
 
 def check():

@@ -29,11 +29,10 @@ OVERLAYS = {
 }
 
 END_CARD = {
-    "style": "end", "frames_total": 160, "y": -0.235, "gap": 2.0, "stagger": 16,
+    "style": "end", "frames_total": 120, "y": -0.235, "gap": 2.0, "stagger": 16, "fade_out": False,    # the picture's own fade takes it out
     "lines": [
         {"text": "EARLY ACCESS ON STEAM", "size": 0.034, "kind": "label", "color": "parchment", "tracking": 0.2},
         {"text": "SOLO OR CO-OP", "size": 0.026, "kind": "label", "color": "teal", "tracking": 0.2},
-        {"text": "Everything after the opening is the game itself, captured from the current development build. Time-lapse where marked.", "size": 0.019, "kind": "label", "color": "dim", "tracking": 0.05},
     ],
 }
 
@@ -63,6 +62,8 @@ def jobs(scale):
     for name, cfg in OVERLAYS.items():
         out[name] = ("build_overlay.py", dict(cfg, scale=scale))
     out["end_card"] = ("build_textcard.py", dict(END_CARD, scale=scale))
+    # Wes, Nov 5: "put up a 'real game play' tag after the crash landing part" (it replaces the end card's small line)
+    out["real_tag"] = ("build_textcard.py", {"style": "lower", "text": "Real gameplay", "sub": "", "size": 0.036, "margin_y": 0.06, "frames_total": 90, "scale": scale})
     return out
 
 
