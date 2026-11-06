@@ -3659,12 +3659,10 @@ def _client_building_look(rep, host, client):
              all(ok(m, lambda parts, vis, gh, blk: vis > 0 and vis == gh and blk == 0) for m in (hm, cm)),
              f"host {show(hm)} | client {show(cm)}")
     _probe(host, mode % "False"), _probe(client, mode % "False")
-    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
-                 "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Stick01', 20)")
-    console(host, "MO.Test.Build add")
-    time.sleep(2)
-    console(host, "MO.Test.Build start")
-    time.sleep(9)  # 5 s build
+    # This case is about how a finished floor LOOKS, so it finishes it outright: since N-262 (Nov 3) a floor on uneven ground needs its posts as well, an hour of work and more materials
+    # (SetExtraWork), and "20 sticks, wait 9 s" left it unbuilt. Building itself is _client_build's case.
+    console(host, "MO.Test.PieceProgress done BP_BuildableFloorBase")
+    time.sleep(4)
     hm, cm = both()
     rep.step("built: shown in Explore with its own materials, and solid, on host AND joiner",
              all(ok(m, lambda parts, vis, gh, blk: vis > 0 and gh == 0 and blk > 0) for m in (hm, cm)),

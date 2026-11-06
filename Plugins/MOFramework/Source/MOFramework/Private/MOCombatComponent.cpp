@@ -1404,6 +1404,7 @@ bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 	// A body is nothing to fight (N-305): nobody defends it, so each blow trained Melee for free, wore the weapon and wounded the dead.
 	if (AMOCharacter::IsDeadBody(HitActor))
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s: a blow on the dead %s strikes nothing"), *GetNameSafe(GetOwner()), *HitActor->GetName());
 		return false;
 	}
 
@@ -1465,6 +1466,7 @@ bool UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 	else
 	{
 		// Non-combat actor (resources, world objects)
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s: a blow lands on %s, which does not fight (the weapon wears, no skill)"), *GetNameSafe(Owner), *HitActor->GetName());
 		OnHitNonCombatActor.Broadcast(HitActor, Hit.ImpactPoint, Hit.ImpactNormal, Hit.BoneName);
 	}
 	return true;
