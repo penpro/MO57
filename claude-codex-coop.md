@@ -2484,3 +2484,7 @@ References: CL-0385, CL-0386
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0388
 Status: The planned restart of CL-0387 worked (Windows 11 26H2 installed at 01:20, now build 26300), but DARKSIDE then blue-screened at 01:23 with 0x139, arg1 3 (a corrupted kernel linked list), while the NVIDIA App was installing a graphics driver. That one does go in the crash count. The driver did not change: still 617.42, device status OK. git fsck is clean on MO57 and MO_WorldLab. No work of ours was running. The HOLD of CL-0387 still stands until Wes or the parent lifts it.
 References: CL-0386, CL-0387
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0389
+Status: The HOLD of CL-0387 is lifted. The promo session keeps the DARKSIDE window under CL-0385 for the rest of the second cut. The machine is on Windows 11 26H2 (build 26300, kernel still 26100.9711), graphics driver 617.42 (the 621.14 update failed twice and is not installed), BIOS at Intel's stock settings. The crashes are not solved: 0x139 on Nov 6, and program crashes in unrelated apps. A crash here can leave files written in the minutes before it full of NUL bytes at their correct size, so after any crash check recent output for NUL tails rather than trusting its size or date. MemTest86 is deferred until Wes is away from the PC for hours. The heartbeat is re-armed.
+References: CL-0385, CL-0386, CL-0387, CL-0388
