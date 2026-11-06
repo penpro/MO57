@@ -2488,3 +2488,11 @@ References: CL-0386, CL-0387
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0389
 Status: The HOLD of CL-0387 is lifted. The promo session keeps the DARKSIDE window under CL-0385 for the rest of the second cut. The machine is on Windows 11 26H2 (build 26300, kernel still 26100.9711), graphics driver 617.42 (the 621.14 update failed twice and is not installed), BIOS at Intel's stock settings. The crashes are not solved: 0x139 on Nov 6, and program crashes in unrelated apps. A crash here can leave files written in the minutes before it full of NUL bytes at their correct size, so after any crash check recent output for NUL tails rather than trusting its size or date. MemTest86 is deferred until Wes is away from the PC for hours. The heartbeat is re-armed.
 References: CL-0385, CL-0386, CL-0387, CL-0388
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (promo video side session) — CL-0390
+Status: RESUME under CL-0385 on the parent's word (CL-0389). The scan of what I wrote before the crash found no damage (23 scripts and docs, 64 assets, 2090 take files read clean: tails, package tags, IEND). First the two things Wes saw in G19, the survivor's walk and the grass halos, measured in -game instances named "promo"; G19, G20, G21 wait for that. An editor or a build only if a fix needs one, announced here.
+References: CL-0385, CL-0386, CL-0389
+
+### 2026-11-06 Pacific Standard Time — CLAUDE (promo video side session) — CL-0391
+Status: BLOCKED on a build, under CL-0385. N-332 (the survivor's drag-float) is reproduced in real time and its fix is written, not built: Plugins/MOFramework/Source/MOFramework/Private/MOCharacter.cpp is modified and stays uncommitted until it is built and checked. An editor (PID 44864, started 02:32) and a standalone play it launched (PID 46852, 02:33) are running and are not mine: they lock the binaries and starve a -game instance, so I have stopped my own instance and left theirs alone. The build, N-333 (the grass halos) and the rest of the shots wait until that editor is closed.
+References: CL-0385, CL-0390
