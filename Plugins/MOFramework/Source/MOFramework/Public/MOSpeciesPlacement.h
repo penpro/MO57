@@ -14,6 +14,8 @@
 #include "CoreMinimal.h"
 #include "MOBiomeDefinitionRow.h"
 
+class UStaticMesh;
+
 struct FMOResourceNodeDefinitionRow;
 
 /** What the character should experience with a placed species. */
@@ -26,6 +28,12 @@ enum class EMOSpeciesContact : uint8
 
 struct MOFRAMEWORK_API FMOSpeciesPlacement
 {
+	/**
+	 * The bounds a spawner seats a mesh by. A closed rock (Tools/close_rocks.py, Wes, Nov 6: "the newly closed geometry assets need to still be pushed into the terrain") has a back and walls below where its open scan ended, and they are
+	 * there to be buried: seated by its whole bounds it stood on them like a pie. Its socket MOSeat holds the open scan's bottom, and these bounds stop there, so it goes into the ground exactly where the scan did. Any other mesh: its bounds.
+	 */
+	static FBoxSphereBounds SeatBounds(const UStaticMesh* Mesh);
+
 	/** The collision profile an instance is placed with: the resource type's policy (FMOResourceNodeDefinitionRow::GetPlacementCollisionProfile), DecorativeProfile without
 	 *  a resource node, and the species' own Collision say over both (Passable / Solid). */
 	static FName CollisionProfile(EMOSpeciesCollision SpeciesCollision, const FMOResourceNodeDefinitionRow* Resource, FName DecorativeProfile);

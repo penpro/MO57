@@ -49,6 +49,8 @@ What a save must keep, in a real world (Nov 5): `python Tools/check_save_roundtr
 `python Tools/check_spawn_menu.py [--seed N] [--keep] [--shots DIR]` -- `spawn` in a real game: every species, three at once, a survivor of one base, the menu; CONTROL: a name not on the menu spawns nothing.
 `python Tools/check_dev_tools.py [--seed N] [--keep] [--shots DIR] [--only notice,menu,ai,firstperson,fly,cinema,island]` -- the early access notice, the console's Menu, the AI switches, first person, flying with real double jumps (survival and creative), cinema, the floating island POI, each with a control; `--shots` keeps what Wes judges by eye.
 `python Tools/check_sky_coop.py [--seed 777]` -- host and joiner over an island: one seed, checksum, the same stamps, rock heights and plants, digs from both sides reach both. Verbs `MO.WorldGen.FindIsland`, `.FindRavine`, `.FindLake`, `.IslandPlants`; cvars `mo.WorldGen.IslandChance`, `.RavineChance`, `.LakeLobes`, `.IslandStampMaxLOD`, `mo.PCG.IslandPlants`.
+`python Tools/close_rocks.py census|one|all|swap` -- close open rock scans in Blender: rim sunk, a back joined on, skin and UVs kept, seated where the scan was (`Docs/PCG.md` section on closing). Git Bash needs `MSYS_NO_PATHCONV=1`.
+
 `python Tools/check_cave_mix.py [--seed 777] [--shots DIR]` -- the built entrances' mix (BR23-18) walked with real collision: into a deep cave's passage and into an overhang, a campfire on its floor, the shelter rays under its roof against open ground.
 
 `python Tools/check_island_rain.py [--seed 777] [--shots DIR]` -- nothing falls under a floating island (N-272): exposure, wetting and the rain's streaks in the air, against open ground beside it.

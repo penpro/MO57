@@ -1,4 +1,5 @@
 #include "MOPCGCaveSpawnerSettings.h"
+#include "MOSpeciesPlacement.h"
 #include "MOFramework.h"
 #include "MOWorldGenSettings.h"
 #include "MOWorldSeedSubsystem.h"
@@ -80,7 +81,7 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCaveSpawner] row %s: mesh %s failed to load"), *Name.ToString(), *Row.Mesh.ToString());
 			return;
 		}
-		const FBoxSphereBounds Bounds = Mesh->GetBounds();
+		const FBoxSphereBounds Bounds = FMOSpeciesPlacement::SeatBounds(Mesh);
 		Rows.Add({ Name, &Row, Mesh, Row.Material.LoadSynchronous(), -(Bounds.Origin.Z - Bounds.BoxExtent.Z) });
 	});
 	if (Rows.Num() == 0)

@@ -1,4 +1,5 @@
 #include "MOSpeciesGallery.h"
+#include "MOSpeciesPlacement.h"
 #include "MOFramework.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOPCGBiomeSpawnerSettings.h"
@@ -132,7 +133,7 @@ int32 AMOSpeciesGallery::Build(FName InBiomeId)
 			P.Profile = FMOSpeciesPlacement::CollisionProfile(Species.Collision, Resource, Decorative);
 			P.Expected = FMOSpeciesPlacement::ExpectedContact(Species, Resource, P.Profile);
 			P.Scale = 0.5f * (Species.MinScale + Species.MaxScale) * FMath::Max(0.1f, CVarGalleryScale.GetValueOnGameThread());
-			P.Bounds = Mesh->GetBounds();
+			P.Bounds = FMOSpeciesPlacement::SeatBounds(Mesh);
 			P.Radius = FMath::Max(100.0f, static_cast<float>(FMath::Max(P.Bounds.BoxExtent.X, P.Bounds.BoxExtent.Y)) * P.Scale * Species.WidthScale);
 			Pending.Add(P);
 		};

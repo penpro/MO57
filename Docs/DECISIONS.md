@@ -87,6 +87,10 @@
 
 ## Decisions, newest first
 
+### 2026-11-06 (Wes, on open rock scans)
+
+- **Open rock scans get closed in Blender, not just taken out.** Wes: "there's still a bunch of open geometry assets being used, like the circular gravel assets around the caves", "see if you can put them all into blender and curve the edges down so they sit better and close them off so worst case they're not see through from one side, it's mostly rocks", then, seeing the first ones, "the newly closed geometry assets need to still be pushed into the terrain" and "they do look significantly better though". Built: `Tools/close_rocks.py` (rim sunk, a back joined on all round, UVs and every skin triangle kept), and each closed copy remembers where the scan ended (socket `MOSeat`, `FMOSpeciesPlacement::SeatBounds`), so it goes into the ground where the scan did and its back stays under. Goes beyond the Oct 24 rule (BR25-2: shallow plates avoided); the plates taken out then could come back closed, which is his to say.
+
 ### 2026-11-06 (Wes, on the promo footage)
 
 - **Wes shoots the promo himself; the opening stays.** He judged the second cut's footage: "most of it is 'meh' at best", "the landing on the planet opening scene is good enough but your ability to direct art sucks ass", "it takes for FUCKING EVER", "i can't iterate very fast and it takes like 16 hours to capture the video for two minutes", "i'll go get some of my own". The promo session is on hold unless he reopens it. Every take stays in `Saved/Promo/mezz/`, and `G01_pod.mov` is the opening he accepted. Agents do not direct or reshoot promo footage unprompted; what he asked for instead is a tool, the `spawn` menu (N-353). The promo forks F68 to F71 wait until he has his footage.

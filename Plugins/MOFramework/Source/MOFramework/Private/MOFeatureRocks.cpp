@@ -1,4 +1,5 @@
 #include "MOFeatureRocks.h"
+#include "MOSpeciesPlacement.h"
 #include "MOFramework.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -24,7 +25,7 @@ void MOFeatureRocks::LoadMeshes(TArray<UStaticMesh*>& OutMeshes, TArray<FMeshSiz
 	{
 		if (UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path))
 		{
-			const FBoxSphereBounds Bounds = Mesh->GetBounds();
+			const FBoxSphereBounds Bounds = FMOSpeciesPlacement::SeatBounds(Mesh);
 			OutMeshes.Add(Mesh);
 			OutSizes.Add({ Bounds.Origin, Bounds.BoxExtent });
 		}

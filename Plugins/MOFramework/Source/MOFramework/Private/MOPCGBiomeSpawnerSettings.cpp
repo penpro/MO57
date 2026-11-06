@@ -935,7 +935,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			// flat spot to land on"). Eight generator samples round the footprint, only for the species that ask.
 			if (Sp.MaxGroundReliefFraction > 0.0f && Settings->bUseWorldGenerator)
 			{
-				const FBoxSphereBounds MeshBounds = Mesh->GetBounds();
+				const FBoxSphereBounds MeshBounds = FMOSpeciesPlacement::SeatBounds(Mesh);
 				const double Radius = FMath::Max(MeshBounds.BoxExtent.X, MeshBounds.BoxExtent.Y) * Width;
 				// (On an island, its own top: off the edge is -1e9, far past any relief, so the slot stays empty.)
 				const auto GroundAt = [&](double X, double Y)
@@ -986,12 +986,13 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			// A laid slab sinks along the surface normal instead, until only its face stands out.
 			if (Sp.bLieOnSlope)
 			{
-				Xf.AddToTranslation(SurfaceNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector) * FMOSpeciesPlacement::LieOffsetCm(Sp, Mesh->GetBounds(), Scale));
+				Xf.AddToTranslation(SurfaceNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector) * FMOSpeciesPlacement::LieOffsetCm(Sp, FMOSpeciesPlacement::SeatBounds(Mesh), Scale));
 			}
 			else
 			{
 				const float SlopeRad = FMath::Acos(FMath::Clamp(static_cast<float>(SurfaceNormal.Z), -1.0f, 1.0f));
-				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale) - FMOSpeciesPlacement::FaceDropCm(Sp, Mesh->GetBounds(), Scale, SlopeRad)
+				const FBoxSphereBounds SeatBounds = FMOSpeciesPlacement::SeatBounds(Mesh);
+				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, SeatBounds, Scale) - FMOSpeciesPlacement::FaceDropCm(Sp, SeatBounds, Scale, SlopeRad)
 					- FMOSpeciesPlacement::SlopeDropCm(Sp, Width, SlopeRad);
 				if (!FMath::IsNearlyZero(Offset))
 				{
@@ -1004,11 +1005,13 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			if (bIslandPoint && (Sp.bLandmark || Sp.bFaceDownhill || Sp.bLieOnSlope || IsRockSpecies(Sp)))
 			{
 				const FBox Local = Mesh->GetBoundingBox();
+				const FBoxSphereBounds FootBounds = FMOSpeciesPlacement::SeatBounds(Mesh);
+				const double FootZ = FootBounds.Origin.Z - FootBounds.BoxExtent.Z;
 				const double MidX = 0.5 * (Local.Min.X + Local.Max.X), MidY = 0.5 * (Local.Min.Y + Local.Max.Y);
 				const FVector2D Foot[5] = { { Local.Min.X, Local.Min.Y }, { Local.Max.X, Local.Min.Y }, { Local.Min.X, Local.Max.Y }, { Local.Max.X, Local.Max.Y }, { MidX, MidY } };
 				for (const FVector2D& F : Foot)
 				{
-					const FVector At = Xf.TransformPosition(FVector(F.X, F.Y, Local.Min.Z));
+					const FVector At = Xf.TransformPosition(FVector(F.X, F.Y, FootZ));
 					if (FMOWorldGen::IslandRockDistanceCm(*GenParams, At.X, At.Y, At.Z, TerrainSeed) > IslandRockFootToleranceCm)
 					{
 						return;   // the slot stays empty

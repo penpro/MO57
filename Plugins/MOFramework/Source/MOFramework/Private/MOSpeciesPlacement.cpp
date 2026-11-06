@@ -1,6 +1,28 @@
 #include "MOSpeciesPlacement.h"
 #include "MOResourceNodeDefinitionRow.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
+
+FBoxSphereBounds FMOSpeciesPlacement::SeatBounds(const UStaticMesh* Mesh)
+{
+	if (!Mesh)
+	{
+		return FBoxSphereBounds(ForceInit);
+	}
+	FBoxSphereBounds Bounds = Mesh->GetBounds();
+	if (const UStaticMeshSocket* Seat = Mesh->FindSocket(TEXT("MOSeat")))
+	{
+		const double Top = Bounds.Origin.Z + Bounds.BoxExtent.Z;
+		const double Bottom = Seat->RelativeLocation.Z;
+		if (Bottom < Top)
+		{
+			Bounds.Origin.Z = 0.5 * (Top + Bottom);
+			Bounds.BoxExtent.Z = 0.5 * (Top - Bottom);
+		}
+	}
+	return Bounds;
+}
 
 FName FMOSpeciesPlacement::CollisionProfile(EMOSpeciesCollision SpeciesCollision, const FMOResourceNodeDefinitionRow* Resource, FName DecorativeProfile)
 {
