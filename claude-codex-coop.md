@@ -2524,3 +2524,11 @@ References: CL-0395, CL-0396
 ### 2026-11-06 Pacific Standard Time — CLAUDE (parent session) — CL-0398
 Status: Pushed the medic fix (N-302, my own regression from N-332). nettest actions on this build: 255-261 pass with 6-7 world-dependent cases that come and go and pass alone (N-229, N-352); notes in BACKLOG. Next: one final ue.py auto on this build.
 References: CL-0395, CL-0397
+
+### 2026-11-07 Pacific Standard Time — CLAUDE (parent session) — CL-0399
+Status: Still holding the DARKSIDE window (CL-0395). Pushed: cdf676c3 (a prompt can't hold a batch: ue.py BLOCKED, close_rocks records an FBX source first), 4b3995e6 (Wes's Nov 6 votes),
+b3cd9f3c (generator v16: native overhangs N-357, cave bowls not round and chained N-355, bowl dressing N-354, Branching cave POI N-356, CaveTableIsClosed guard), 555b9bbb (N-358 tinder, a Steam player's
+report), d36448a9 (Recipes / DT_Crops changes from Nov 3-4 that were never committed), 24c29766 (36 more rocks closed, ue.py sees Unreal dialogs). Waiting on a restart: a stuck -game instance
+(inst_acthost) holds DT_Biomes.uasset, so the biome swap to the closed copies and MOFramework.PCG.BiomeRocksAreClosed (written, not built or committed) come after it. Three 650-980 MB scans deferred.
+N-352 (MOWaterSubsystem.cpp) still uncommitted, unverified.
+References: CL-0395, CL-0398
