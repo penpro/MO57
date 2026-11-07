@@ -26,10 +26,10 @@ const FName FMOFireActions::PutOut(TEXT("PutOut"));
 const FName FMOFireActions::LightCarried(TEXT("LightCarried"));
 const FName FMOFireActions::LightFromCarried(TEXT("LightFromCarried"));
 const FName FMOFireActions::LightFromBearer(TEXT("LightFromBearer"));
+const FName FMOFireActions::TinderQualityKey(TEXT("TinderQuality"));
 
 namespace
 {
-	const FName TinderId(TEXT("Tinder01"));
 	/** The improvised hand drill: a straight DRY stick twirled between the palms on a second one -- deadfall (Branch01, "already seasoned"); a green branch
 	 *  (Stick01) is too wet to make an ember. */
 	const FName DrillStickId(TEXT("Branch01"));
@@ -125,7 +125,68 @@ float FMOFireActions::LightFromFlameChance(bool bRaining)
 	return bRaining ? 0.6f : 0.95f;
 }
 
-float FMOFireActions::LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01)
+float FMOFireActions::GetTinderQuality(FName ItemId)
+{
+	FMOItemDefinitionRow Definition;
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, Definition))
+	{
+		for (const FMOItemScalarProperty& Property : Definition.ScalarProperties)
+		{
+			if (Property.Key == TinderQualityKey)
+			{
+				return FMath::Clamp(Property.Value, 0.0f, 1.0f);
+			}
+		}
+	}
+	return 0.0f;
+}
+
+FName FMOFireActions::FindBestTinder(const UMOInventoryComponent* Inventory, float& OutQuality)
+{
+	OutQuality = 0.0f;
+	FName Best = NAME_None;
+	if (!Inventory)
+	{
+		return Best;
+	}
+	TArray<FMOInventoryEntry> Entries;
+	Inventory->GetInventoryEntries(Entries);
+	for (const FMOInventoryEntry& Entry : Entries)
+	{
+		const float Quality = GetTinderQuality(Entry.ItemDefinitionId);
+		if (Quality > OutQuality || (Quality > 0.0f && Quality == OutQuality && Entry.ItemDefinitionId.LexicalLess(Best)))
+		{
+			OutQuality = Quality;
+			Best = Entry.ItemDefinitionId;
+		}
+	}
+	return Best;
+}
+
+FText FMOFireActions::DescribeTinders()
+{
+	// From the items themselves, best first: a new tinder needs only its row.
+	TArray<TPair<float, FName>> Found;
+	TArray<FName> ItemIds;
+	UMOItemDatabaseSettings::GetAllItemIds(ItemIds);
+	for (const FName& Id : ItemIds)
+	{
+		const float Quality = GetTinderQuality(Id);
+		if (Quality > 0.0f)
+		{
+			Found.Emplace(Quality, Id);
+		}
+	}
+	Found.Sort([](const TPair<float, FName>& A, const TPair<float, FName>& B) { return A.Key != B.Key ? A.Key > B.Key : A.Value.LexicalLess(B.Value); });
+	TArray<FText> Names;
+	for (const TPair<float, FName>& Tinder : Found)
+	{
+		Names.Add(UMOItemDatabaseSettings::GetItemDisplayName(Tinder.Value));
+	}
+	return FText::Join(LOCTEXT("TinderSeparator", ", "), Names);
+}
+
+float FMOFireActions::LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01, float TinderQuality)
 {
 	if (ToolEffectiveness <= 0.0f)
 	{
@@ -140,6 +201,7 @@ float FMOFireActions::LightChance(float ToolEffectiveness, int32 FiremakingLevel
 	{
 		Chance *= 0.6f;
 	}
+	Chance *= FMath::Clamp(TinderQuality, 0.0f, 1.0f);   // how readily what you laid it in takes the ember
 	return FMath::Clamp(Chance, 0.0f, 0.95f);
 }
 
@@ -205,15 +267,17 @@ void FMOFireActions::GetActions(const APawn* Pawn, const AMOCraftingStationActor
 		FromFlame.DisabledReason = LOCTEXT("LayFuelFlame", "Lay some fuel first.");
 	}
 	const FLightingMethod Method = FindLightingMethod(Pawn, const_cast<UMOInventoryComponent*>(Inventory));
-	const bool bTinder = Inventory->HasItem(TinderId);
+	float TinderQuality = 0.0f;
+	const FName Tinder = FindBestTinder(Inventory, TinderQuality);
+	const FText ToolName = Method.IsAvailable() && !Method.IsImprovised() ? UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId) : LOCTEXT("HandDrill", "hand drill");
 	FMOItemActionOption& LightOpt = Out.AddDefaulted_GetRef();
 	LightOpt.Id = Light;
-	LightOpt.Label = Method.IsAvailable() && !Method.IsImprovised()
-		? FText::Format(LOCTEXT("LightWith", "Light ({0})"), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId))
-		: LOCTEXT("LightHand", "Light (hand drill)");
-	LightOpt.bEnabled = Station->CurrentFuel > 0.0f && bTinder && Method.IsAvailable();
+	// It says what the attempt will spend (a player with Dried Grass and Plant Fiber was told only "needs tinder").
+	LightOpt.Label = Tinder.IsNone() ? FText::Format(LOCTEXT("LightWith", "Light ({0})"), ToolName)
+		: FText::Format(LOCTEXT("LightWithTinder", "Light ({0}, in {1})"), ToolName, UMOItemDatabaseSettings::GetItemDisplayName(Tinder));
+	LightOpt.bEnabled = Station->CurrentFuel > 0.0f && !Tinder.IsNone() && Method.IsAvailable();
 	LightOpt.DisabledReason = Station->CurrentFuel <= 0.0f ? LOCTEXT("LayFuel", "Lay some fuel first.")
-		: !bTinder ? LOCTEXT("NeedTinder", "Needs tinder (dry fibre from dead shrubs or shredded bark).")
+		: Tinder.IsNone() ? FText::Format(LOCTEXT("NeedTinder", "Needs tinder in your pack: {0}."), DescribeTinders())
 		: LOCTEXT("NeedDrill", "Needs two dry branches (deadfall) for a hand drill: green wood is too wet to make an ember.");
 }
 
@@ -401,7 +465,9 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				APawn* P = WeakPawn.Get();
 				AMOCraftingStationActor* S = WeakStation.Get();
 				UMOInventoryComponent* Inv = FireInventoryOf(P);
-				if (!P || !S || !Inv || !Inv->HasItem(TinderId))
+				float TinderQuality = 0.0f;
+				const FName Tinder = FindBestTinder(Inv, TinderQuality);
+				if (!P || !S || !Inv || Tinder.IsNone())
 				{
 					return;
 				}
@@ -409,10 +475,10 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				const UMOVitalsComponent* Vitals = P->FindComponentByClass<UMOVitalsComponent>();
 				const UMOWeatherIntegrationSubsystem* Weather = P->GetWorld() ? P->GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
 				const float Chance = LightChance(Method.Effectiveness, Skills ? Skills->GetSkillLevel(FiremakingSkill) : 0, Weather && Weather->IsRaining(),
-					Vitals ? Vitals->GetWetnessLevel() : 0.0f);
+					Vitals ? Vitals->GetWetnessLevel() : 0.0f, TinderQuality);
 				const bool bCaught = FMath::FRand() < Chance;
 				// The tinder is spent either way; each attempt burns a socket into the hearth: an improvised drill wears a branch through, a kit loses durability.
-				Inv->RemoveItemByDefinitionId(TinderId, 1);
+				Inv->RemoveItemByDefinitionId(Tinder, 1);
 				if (Method.IsImprovised())
 				{
 					Inv->RemoveItemByDefinitionId(DrillStickId, 1);
@@ -445,8 +511,8 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				{
 					Notify(P, LOCTEXT("Failed", "The ember dies in the tinder. Try again with fresh tinder."), EMONotificationType::Warning);
 				}
-				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s (%s, effectiveness %.2f): chance %.0f %% -> %s"), *P->GetName(), *S->GetName(),
-					Method.IsImprovised() ? TEXT("improvised hand drill") : *Method.ToolItemId.ToString(), Method.Effectiveness, Chance * 100.0f,
+				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s (%s, effectiveness %.2f, in %s, quality %.2f): chance %.0f %% -> %s"), *P->GetName(), *S->GetName(),
+					Method.IsImprovised() ? TEXT("improvised hand drill") : *Method.ToolItemId.ToString(), Method.Effectiveness, *Tinder.ToString(), TinderQuality, Chance * 100.0f,
 					bCaught ? TEXT("CAUGHT") : TEXT("failed"));
 			}, nullptr, 100.0f);
 	}

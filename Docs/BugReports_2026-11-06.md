@@ -23,4 +23,10 @@ Review page: https://claude.ai/artifact/LRzmvdbHmXDxw5scCjT8je (votes in its `ve
 
 "so like grass and shit on top of the overhang, dirt/rocks/vines underneath"
 
+Crash reports, `mo-crashes-2026-11-07.tar.gz` (Wes: "pretty sure all of these are ours"): 11 uploads, all from agents' runs on DARKSIDE, none from a player. 6 x an ensure in `RockUnder` under `IslandPlantsCommand` (a dev check verb's trace hit a bad voxel triangle), 2 x a stale ray tracing flag in `inst_lumenfix` runs (N-333's experiments), 1 x a voxel stamp hashing a transient object in `MO_WorldLab`, 1 x the known Python crash on `CLOSE_SLATE_MAINFRAME` (TRAPS), 1 x an access violation in `FMOWorldGenParams::Finalize` at a test launch at 12:28 Nov 6, between 1acfef4b and 05374b56 while the unity build was being fixed: Finalize runs on every launch and hundreds have passed since, so most likely a launch against a half rebuilt set of DLLs; not proven. Nothing to fix for players.
+
 So the overhangs lost their bowls altogether (N-357), and his "chain 2-5" for them became shelters scattered along their slope. The caves keep their bowls: N-354 and N-355 stand for them.
+
+## A reply for the Steam thread "Flame on?" (N-358; Wes posts it, when he wants)
+
+You weren't missing anything, this was our bug. The game told you dry grass or shredded bark would work, then only accepted one specific item. The next update fixes it: dried grass and bark fibre will light a fire as they are, and the menu will say what you're using. Until then, breaking up an old fallen log sometimes gives Dry Tinder, and that's what the drill wants. Thanks for reporting it.

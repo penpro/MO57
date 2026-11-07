@@ -376,7 +376,7 @@ void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef
 			TArray<FString> PropStrings;
 			for (const FMOItemScalarProperty& Prop : ItemDef.ScalarProperties)
 			{
-				PropStrings.Add(FString::Printf(TEXT("%s: %.1f"), *Prop.Key.ToString(), Prop.Value));
+				PropStrings.Add(FString::Printf(TEXT("%s: %.1f"), *FName::NameToDisplayString(Prop.Key.ToString(), false), Prop.Value));
 			}
 			PropertiesText->SetText(FText::FromString(FString::Join(PropStrings, TEXT("\n"))));
 		}

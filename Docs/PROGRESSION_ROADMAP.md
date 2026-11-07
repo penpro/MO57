@@ -235,6 +235,7 @@ Trees can be studied too (Oct 18 2026): a resource node's Inspect studies what i
 | SimpleBow01 | Fletching, CompositeBow | a light shaft with feathers flies straight; horn, wood and sinew glued together cast harder |
 | FireDrill01 | BowDrill | a cord wrapped round the drill spins it faster |
 | Branch01 | HandDrill | a dry stick twirled hard in a notch smokes |
+| DriedGrass01 | TinderGathering | a handful of dry grass shows how it could be teased into a bundle that takes an ember (N-358: only Tinder01 taught it, and that recipe was the way to Tinder01). Dried grass and shredded bark fibre light a fire as they are; a made bundle catches more often |
 | Stick01 | BarkFiber | a green stick's bark lifts off in long strips under a thumbnail (Wes, Oct 18: you had to find loose bark before you could strip a stick) |
 | AnimalHide01 | BrainTanning | brains worked into a hide keep it soft |
 | TannedLeather01 | LeatherArmor, LeatherClothing | thick leather softens a blow; leather can be cut and sewn |

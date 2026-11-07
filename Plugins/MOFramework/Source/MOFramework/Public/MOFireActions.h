@@ -13,6 +13,7 @@
 
 class AMOCraftingStationActor;
 class APawn;
+class UMOInventoryComponent;
 
 struct MOFRAMEWORK_API FMOFireActions
 {
@@ -58,7 +59,17 @@ struct MOFRAMEWORK_API FMOFireActions
 
 	/**
 	 * The chance one lighting attempt catches (0-1): the tool's Firestarter effectiveness (improvised 0.2, a bow drill 0.7), +0.06 per Firemaking level, x0.3 in
-	 * rain, x0.6 with wet hands (wetness over half). Capped at 0.95: friction fire always can fail. Pure, for the tests.
+	 * rain, x0.6 with wet hands (wetness over half), x the tinder's quality. Capped at 0.95: friction fire always can fail. Pure, for the tests.
 	 */
-	static float LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01);
+	static float LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01, float TinderQuality = 1.0f);
+
+	/**
+	 * What is tinder is the item's to say, not a list here (N-358; a player with dried grass and shredded bark fibre was told to "add tinder"): a DT_Items row with ScalarProperties TinderQuality, 0-1, how readily it takes an ember.
+	 * A new tinder needs only its row. An attempt spends one of the best in the pack.
+	 */
+	static const FName TinderQualityKey;
+	static float GetTinderQuality(FName ItemId);
+	static FName FindBestTinder(const UMOInventoryComponent* Inventory, float& OutQuality);
+	/** The names of everything that is tinder, best first: what the refusal tells a player to look for. */
+	static FText DescribeTinders();
 };

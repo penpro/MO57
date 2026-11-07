@@ -74,8 +74,8 @@ Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pat
 - Heat fields (Codex batch C): station building `ProvidedProcessTemperatureCelsius`, runtime
   `AMOCraftingStationActor::AchievableProcessTemperatureCelsius`, recipe `MinimumProcessTemperatureCelsius`. **No values are authored**:
   the proposed ladder is in `Docs/PROGRESSION_ROADMAP.md` §4 and waits on Wes (F10) and Codex's fuel-to-temperature rule.
-- Fire: `FMOFireActions` = AddFuel.<ItemId> / Light / PutOut. Light needs fuel + Tinder01 + FireDrill01 or Branch01 x2 (DRY
-  deadfall; Stick01 = green, refused); 3 min by hand / 90 s bow; `LightChance` 20 % (ImprovisedDrillEffectiveness 0.2) / 60 % + 6 % per level (an attempt teaches 25 Firemaking XP, a lit fire 40,
+- Fire: `FMOFireActions` = AddFuel.<ItemId> / Light / PutOut. Light needs fuel + tinder + FireDrill01 or Branch01 x2 (DRY
+  deadfall; Stick01 = green, refused). What is tinder is the item's: DT_Items `ScalarProperties` `TinderQuality` 0-1 (N-358: Tinder01 and TinderBundle01 1, DriedGrass01 and BirchBark01 0.8, PlantFiber01 0.5); an attempt spends one of the best carried, the chance is multiplied by its quality, the menu says what it will use, and the refusal lists every tinder from the table. 3 min by hand / 90 s bow; `LightChance` 20 % (ImprovisedDrillEffectiveness 0.2) / 60 % + 6 % per level (an attempt teaches 25 Firemaking XP, a lit fire 40,
   shown as a skill toast: F33 A, three failures reach level 1), rain x0.3, wet x0.6, cap
   95 %. Light a torch in the fire / a fire from a torch: `Docs/Light_Sources.md`. Station menu = `kit_station_menu.py`;
   `UMOUIUtils::RebuildActionButtons` builds runtime buttons for both menus.

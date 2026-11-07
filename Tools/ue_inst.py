@@ -2722,7 +2722,8 @@ def _client_light_fire(rep, host, client):
     25 XP a failure, 40 a fire), and the JOINER's own screen shows the skill toast -- the server -> joiner ClientShowSkillPopup path, which nothing
     else reaches (N-183, Oct 20 2026). The 3-minute drill is shortened by MO.Test.FireAttemptSeconds (test builds only)."""
     _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
-                 "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Tinder01', 1); inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Branch01', 2); out('GAVE')")
+                 "[inv.remove_item_by_definition_id(t, 99) for t in ('Tinder01', 'TinderBundle01', 'BirchBark01', 'PlantFiber01')]; "   # only grass: a player's case from the Steam hub (N-358)
+                 "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'DriedGrass01', 1); inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Branch01', 2); out('GAVE')")
     console(host, "MO.Test.FireAttemptSeconds 4")
     console(host, "MO.Fire.SpawnLit laid 1")
     # MO.Fire.Do lights the fire NEAREST the joiner, which may be one an earlier case built (_client_build): fuel every finished fire within 5 m.
@@ -2741,8 +2742,8 @@ def _client_light_fire(rep, host, client):
     time.sleep(1.0)
     during = _probe(host, down % 1) + _probe(client, down % 0)
     rep.step("client fire: the joiner kneels to drill -- on the HOST's copy and on its own", during.count("DOWN=True") == 2, " / ".join(re.findall(r"DOWN=\w+", during)))
-    lit = wait_log(host, r"\[MOFire\] \S+ lighting \S+ \(improvised hand drill[^)]*\): chance \d+ % -> (failed|CAUGHT)", since=hoff, timeout=20)
-    rep.step("client fire: the HOST ran the joiner's hand-drill attempt (timed, chancy)", bool(lit), lit.group(0) if lit else "no [MOFire] lighting line on the host")
+    lit = wait_log(host, r"\[MOFire\] \S+ lighting \S+ \(improvised hand drill[^)]*in DriedGrass01[^)]*\): chance \d+ % -> (failed|CAUGHT)", since=hoff, timeout=20)
+    rep.step("client fire: the HOST ran the joiner's hand-drill attempt, in dried grass (timed, chancy)", bool(lit), lit.group(0) if lit else "no [MOFire] lighting line on the host")
     toast = wait_log(client, r"Skill toast: \"Firemaking \+(25|40) XP\"", since=coff, timeout=10)
     rep.step("client fire: ... and the JOINER's own screen showed what it taught (the server -> joiner skill toast)", bool(toast),
              toast.group(0) if toast else "no Firemaking skill toast in the client's log")
