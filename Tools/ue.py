@@ -826,10 +826,16 @@ def _editor_prompts(pids):
             title = ctypes.create_unicode_buffer(300)
             user32.GetClassNameW(hwnd, kind, 64)
             user32.GetWindowTextW(hwnd, title, 300)
+            ex = user32.GetWindowLongW(hwnd, -20) & 0xFFFFFFFF   # GWL_EXSTYLE
+            owned = bool(user32.GetWindow(hwnd, 4))                # GW_OWNER
             if kind.value == "#32770":
                 found.append(title.value or "(an untitled dialog)")
             elif kind.value == "UnrealWindow" and title.value.endswith("Unreal Editor") and not user32.IsWindowEnabled(hwnd):
                 found.append("(the main window is disabled by a modal window)")
+            elif kind.value == "UnrealWindow" and owned and title.value and not (ex & 0x02000000) and not (ex & 0x80) and not (ex & 0x08000000):
+                # Unreal's own dialog ("Message", "Save Content"...): a Slate modal disables windows only inside Slate, so nothing native says so. An owned editor window that
+                # isn't a docked tab (WS_EX_COMPOSITED), a tool window or a menu (WS_EX_TOOLWINDOW / NOACTIVATE). It only counts once it has stayed PROMPT_GRACE_S while a call waits.
+                found.append(f"{title.value} (an Unreal dialog)")
         return True
 
     user32.EnumWindows(ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit), 0)

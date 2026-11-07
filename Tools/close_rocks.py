@@ -3,7 +3,8 @@ curve the edges down so they sit better and close them off so worst case they're
 
     python Tools/close_rocks.py census                         which rocks the world places and how open they are (Content/Python/open_mesh_census.py -> Saved/open_mesh_census.json)
     python Tools/close_rocks.py one <mesh path> [--in-place] [blender args]  one mesh: export, Tools/close_rocks_blender.py, import as /Game/ClosedRocks/<Name>/<Name>_Closed (or over itself)
-    python Tools/close_rocks.py all [--limit N] [--match TEXT]               every open rock or ground mesh of the census not closed yet (SKIP says what is not)
+    python Tools/close_rocks.py all [--limit N] [--match TEXT] [--max-export-mb N]  every open rock or ground mesh of the census not closed yet (SKIP says what is not);
+                                                                             a full-detail export over N MB (400) is deferred and listed, not closed
     python Tools/close_rocks.py swap [--dry]                   point DT_CaveScatter and DT_Biomes at the closed copies (rows get -> patch -> rows set, readback-verified)
 
 In Git Bash run it with MSYS_NO_PATHCONV=1, or the /Game paths come out as C:/Program Files/Git/Game/... (TRAPS). Needs the editor running (bridge; PIE not running) and Blender 5.2. Work files in Saved/CloseRocks/<Name>/. The originals are never touched: the vendor packs are gitignored and per machine, and a mesh's closed copy is what is in git.
@@ -54,7 +55,11 @@ def content_file(mesh):
     return os.path.join(ROOT, root, rest + ".uasset")
 
 
-def close_one(mesh, extra=(), in_place=False):
+class Deferred(Exception):
+    """Too big to close here and now: listed at the end of a batch, closed on its own (Nov 7: SM_RockFormation_03's export is 981 MB; Blender held it 30 min at 18 GB)."""
+
+
+def close_one(mesh, extra=(), in_place=False, max_export_mb=0):
     name = mesh.rsplit("/", 1)[1].split(".")[0]
     work = os.path.join(WORK, name).replace("\\", "/")
     os.makedirs(work, exist_ok=True)
@@ -69,6 +74,9 @@ def close_one(mesh, extra=(), in_place=False):
         print(f"{name}: exported {exported}", flush=True)
         if not exported.get("ok"):
             return None
+    export_mb = os.path.getsize(src_fbx) / (1024 * 1024)
+    if max_export_mb and export_mb > max_export_mb:
+        raise Deferred(f"{name}: its full-detail export is {export_mb:.0f} MB, over {max_export_mb}")
     if os.path.exists(out_fbx):
         os.remove(out_fbx)
     b = subprocess.run([BLENDER, "-b", "--factory-startup", "--python", os.path.join(ROOT, "Tools", "close_rocks_blender.py"), "--", src_fbx, out_fbx] + list(extra), capture_output=True, text=True)
@@ -155,24 +163,29 @@ def main():
     elif cmd == "all":
         limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else 10000
         match = sys.argv[sys.argv.index("--match") + 1] if "--match" in sys.argv else ""
+        max_export_mb = int(sys.argv[sys.argv.index("--max-export-mb") + 1]) if "--max-export-mb" in sys.argv else 400
         record = load_record()
         todo = [m for m in json.load(open(CENSUS, encoding="utf-8")) if (m["openness"] >= OPEN_AT or m["boundaryEdges"] > 0) and m["mesh"] not in record and not SKIP.search(m["mesh"]) and match in m["mesh"]]
         todo.sort(key=lambda m: m["triangles_lod0"])
         print(f"{len(todo)} to close", flush=True)
-        done, failed, stuck = 0, [], None
+        done, failed, stuck, deferred = 0, [], None, []
         for m in todo[:limit]:
             in_place = any(w in ("Composition", "Feature") for w in m["where"])
             print(f"--- {m['mesh']} ({'in place' if in_place else 'a copy'}), {done} done, {len(failed)} failed", flush=True)
             try:
-                result = close_one(m["mesh"], (), in_place)
+                result = close_one(m["mesh"], (), in_place, max_export_mb)
             except EditorStuck as e:
                 stuck = f"{m['mesh']}: {e}"
                 break
+            except Deferred as e:
+                print(f"DEFERRED {e}", flush=True)
+                deferred.append(m["mesh"])
+                continue
             if result:
                 done += 1
             else:
                 failed.append(m["mesh"])
-        print(f"CLOSED {done}, failed {len(failed)}: {failed}", flush=True)
+        print(f"CLOSED {done}, failed {len(failed)}: {failed}; deferred (too big) {len(deferred)}: {deferred}", flush=True)
         if stuck:
             raise SystemExit("STOPPED, the editor is stuck: " + stuck[:1500])
     elif cmd == "swap":
