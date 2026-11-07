@@ -116,8 +116,33 @@ bool FMOWorldGen::GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 C
 			Pass.Key += Shift;
 			Pass.Value += Shift;
 		}
+		for (FMOCaveEntranceHollow::FBowl& Bowl : Out.Bowls)
+		{
+			Bowl.Center += FVector2D(Shift);
+		}
+		for (FMOCaveEntranceHollow::FShelter& Shelter : Out.Shelters)
+		{
+			Shelter.Middle += FVector2D(Shift);
+		}
 	}
 	return bFound;
+}
+
+float FMOWorldGen::CaveBowlShare(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	return FMOWorldGenDomain::CaveBowlShare(Params, Fx(Params, X), Fy(Params, Y), Seed);
+}
+
+bool FMOWorldGen::IsUnderOverhang(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float* OutInFromMouthCm)
+{
+	return FMOWorldGenDomain::IsUnderOverhang(Params, Fx(Params, X), Fy(Params, Y), Seed, OutInFromMouthCm);
+}
+
+void FMOWorldGen::FindCaveBowlRocks(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, TArray<FMOCaveSurfacePoint>& Out)
+{
+	const int32 First = Out.Num();
+	FMOWorldGenDomain::FindCaveBowlRocks(Params, Seed, ToField(Params, Area), Out);
+	PointsToWorld(Params, Out, First);
 }
 
 void FMOWorldGen::FindFloatingIslands(const FMOWorldGenParams& Params, double X, double Y, double RadiusCm, int32 Seed, TArray<FMOFloatingIsland>& Out)

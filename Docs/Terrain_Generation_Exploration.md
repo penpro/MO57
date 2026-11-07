@@ -2,7 +2,7 @@
 
 > **Covers:** the C++ world generator (`FMOWorldGen`: climate, relief, mountains, coasts, rivers, lakes, biomes, spawn search), how the
 > Voxel terrain and PCG read it, the terrain ground material, and the dated build log of every generator version.
-> **Current state (2026-11-06):** generator **v15** (`CurrentGeneratorVersion` in `MOWorldGen.h`: floating islands, ravines and lobed lakes since v13, the islands' smoother undersides in v14, the mix of built cave entrances in v15, § Sky features below); the game level `MOPCGScattering` and the
+> **Current state (2026-11-06):** generator **v16** (`CurrentGeneratorVersion` in `MOWorldGen.h`: floating islands, ravines and lobed lakes since v13, the islands' smoother undersides in v14, the mix of built cave entrances in v15, their bowls not round and chained in v16, § Sky features below); the game level `MOPCGScattering` and the
 > menu level run on `VHG_MOTerrain` + the `VVG_MOCaves` stamp; world 120 km edge (`WorldHalfSizeCm` 6e6) with an island edge; per-biome relief
 > with regional (30 km) mountain ranges, VerticalScale 2, highest ground ~1.4-1.9 km; deep ocean; rivers and sea-level basins; upland lakes
 > (Oceanology surfaces); soft biome boundaries (`SampleSurfaceBiomeWeights`, `SurfaceClimateBlend` 0.12); coastal new-game spawn (never an

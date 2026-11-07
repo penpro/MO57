@@ -150,7 +150,7 @@ def main():
             print(f"open ground beside it at {open_at}: cover, walls, enclosure, indoors = {rays_out}", flush=True)
             rep.step("the overhang: partial shelter, more cover under its roof than on the open ground", bool(rays_in and rays_out) and rays_in[0] >= 0.3 and rays_in[0] > rays_out[0], f"{rays_in} against {rays_out}")
 
-        for which in ("Overhang", "DeepCave"):
+        for which in ("Overhang", "BranchingCave"):
             off = ui.log_size(NAME)
             ui.console(NAME, f"poi {which}")
             m = ui.wait_log(NAME, rf"\[MOConsole\] poi {which}: hollow at x=(-?\d+) y=(-?\d+)", since=off, timeout=30)

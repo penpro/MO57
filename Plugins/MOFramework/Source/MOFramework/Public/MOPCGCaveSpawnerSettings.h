@@ -44,9 +44,23 @@ struct MOFRAMEWORK_API FMOCaveScatterRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cave", meta=(ClampMin="0", ClampMax="1"))
 	float MinOreGrade = 0.2f;
 
-	/** Instances per square metre of that surface (where it qualifies). */
+	/** Instances per square metre of that surface (where it qualifies). On a BowlRock kind: its weight among that kind's rows. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cave", meta=(ClampMin="0"))
 	float PerSquareMetre = 0.1f;
+
+	/** In a built entrance's open bowl, its density is PerSquareMetre times this in the bowl's middle (out to a quarter of the way to the rim) ... (N-354, Wes Nov 6: "keep the gravel from the edges") */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cave", meta=(ClampMin="0"))
+	float BowlMiddleWeight = 1.0f;
+
+	/** ... and this from three quarters of the way out, a smooth step between. Under the ground and away from bowls the row is unchanged. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cave", meta=(ClampMin="0"))
+	float BowlRimWeight = 1.0f;
+
+	float BowlWeight(float BowlShare) const
+	{
+		const float Blend = FMath::Clamp((BowlShare - 0.25f) / 0.5f, 0.0f, 1.0f);
+		return FMath::Lerp(BowlMiddleWeight, BowlRimWeight, Blend * Blend * (3.0f - 2.0f * Blend));
+	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Visual")
 	TSoftObjectPtr<UStaticMesh> Mesh;
@@ -68,6 +82,10 @@ struct MOFRAMEWORK_API FMOCaveScatterRow : public FTableRowBase
 	/** Pushed this far into the rock (cm, x scale): a rubble stone half buried, an ore lump set into the wall. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Visual")
 	float SinkCm = 10.0f;
+
+	/** Hangs from the surface by its top, upright (a vine off a ceiling), instead of standing on it. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Visual")
+	bool bHangs = false;
 
 	/** DT_Resources row: makes it harvestable (tags, actions, yields). None = decorative. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Harvest")

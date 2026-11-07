@@ -35,6 +35,7 @@ namespace
 			P->Tuning.CaveEntranceChance = 0.7f;
 			P->Tuning.CaveOverhangShare = 0.0f;
 			P->Tuning.CaveDeepShare = 0.0f;
+			P->Tuning.bCaveBowlsVaried = false;   // ... each with v12's one round bowl
 		}
 		if (!bWater)
 		{

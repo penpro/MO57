@@ -2806,7 +2806,7 @@ void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 	Options.Add({ FName(TEXT("CaveEntrance")), NSLOCTEXT("MOConsole", "PoiCave", "Cave entrance") });
 	// The built entrances' other two kinds (BR23-18): to go and look at one without searching.
 	Options.Add({ FName(TEXT("Overhang")), NSLOCTEXT("MOConsole", "PoiOverhang", "Overhang") });
-	Options.Add({ FName(TEXT("DeepCave")), NSLOCTEXT("MOConsole", "PoiDeepCave", "Deep cave") });
+	Options.Add({ FName(TEXT("BranchingCave")), NSLOCTEXT("MOConsole", "PoiBranchingCave", "Branching cave") });
 	// Nor are floating islands: the generator's too, each with its own voxel stamps.
 	Options.Add({ FName(TEXT("FloatingIsland")), NSLOCTEXT("MOConsole", "PoiIsland", "Floating island") });
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
@@ -2851,7 +2851,7 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 		BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
 		return;
 	}
-	if (Traveller && (FeatureId == FName(TEXT("Overhang")) || FeatureId == FName(TEXT("DeepCave"))))
+	if (Traveller && (FeatureId == FName(TEXT("Overhang")) || FeatureId == FName(TEXT("DeepCave")) || FeatureId == FName(TEXT("BranchingCave"))))
 	{
 		// Square rings of cells outward: the first found is near enough the nearest. On the hollow's downhill rim, looking in at what it leads to.
 		const EMOCaveEntranceKind Wanted = FeatureId == FName(TEXT("Overhang")) ? EMOCaveEntranceKind::Overhang : EMOCaveEntranceKind::Deep;
@@ -2876,7 +2876,7 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 					const FVector2D StandXY = Hollow.Center - Hollow.Uphill * (double)(Hollow.RadiusCm * 1.1f);
 					const float StandGround = FMOWorldGen::SampleHeightCm(*Params, StandXY.X, StandXY.Y, Seeds->GetActiveTerrainSeed(), Params->Tuning.VoxelSizeCm);
 					const FRotator Facing(-12.0f, FMath::RadiansToDegrees(FMath::Atan2(Hollow.Uphill.Y, Hollow.Uphill.X)), 0.0f);
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: hollow at x=%.0f y=%.0f ground=%.0f, %.1f km away"), *FeatureId.ToString(), Hollow.Center.X, Hollow.Center.Y, Hollow.GroundCm,
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: hollow at x=%.0f y=%.0f ground=%.0f, %d bowls, %.1f km away"), *FeatureId.ToString(), Hollow.Center.X, Hollow.Center.Y, Hollow.GroundCm, Hollow.Bowls.Num(),
 						FVector2D::Distance(FVector2D(From), Hollow.Center) / 100000.0);
 					BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, StandGround), Facing);
 					return;

@@ -108,6 +108,7 @@
   open no asset editor.
 - **`ue.py editor stop` can report GONE after a burst of inspect scripts** (Nov 6): the editor took `CLOSE_SLATE_MAINFRAME` and died in `python311` (access violation reading a stale address) while closing, after several `ue.py py --file` inspections
   of widget assets. Nothing was lost: the asset had saved before the stop. Seen once; a crash on the way out is not a reason to distrust what was saved, but check the file's date.
+- **A Nanite mesh's fallback can read closed while its source has a hole** (Nov 6): `SM_Nordic_Beach_Rock_ukxmdhuga_01_N1` measured 0 boundary edges in `open_mesh_census.py` (render LOD0, the fallback) and 177 on its source. To know a mesh is closed, measure the source (`MOFramework.PCG.CaveTableIsClosed`).
 - **An import over an existing mesh can open a file prompt even with `task.automated = True`** (Nov 6): it is a reimport (`UFbxFactory`, `FReimportManager::Reimport` with `bAskForNewFileIfMissing`), and a mesh whose first source file isn't an .fbx or .obj
   (a scan pack's mesh with none recorded) fails `UReimportFbxStaticMeshFactory::CanReimport`, so `GetNewReimportPath` opens "Import For: <mesh>", with no unattended check on the way. It held the rock-closing batch for 7.4 hours; Wes found it. Cancelling it leaves the old
   mesh and the script carries on as if it worked (it saved a seat socket on the unclosed mesh). Record an FBX source first (`close_rocks.give_fbx_source`), and check the triangle count moved afterwards. `ue.py` now says BLOCKED (exit 5) instead of timing out.

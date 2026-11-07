@@ -140,7 +140,16 @@ enum class EMOCaveSurfaceKind : uint8
 	Ceiling,
 	/** Not a cave: bare rock on steep ground, where the soil has washed off (FMOWorldGen::FindOutcrops) -- where a seam or vein shows at the surface, the green
 	 *  stain or black band a prospector follows. */
-	Outcrop
+	Outcrop,
+	/** Not a cave: a rock of a built entrance's rim scatter (FMOWorldGen::FindCaveBowlRocks, N-354): a large one with medium ones round it, small ones round those. A row on one of these kinds is a mesh
+	 *  that may stand there, its PerSquareMetre its weight among them: each point takes one rock, whatever the density. */
+	BowlRockLarge,
+	BowlRockMedium,
+	BowlRockSmall,
+	/** Under an overhang's roof (FMOWorldGen::IsUnderOverhang, N-357): dirt and rocks on the floor, vines off the walls and ceiling; the deep caves' dressing stays out of it. */
+	ShelterFloor,
+	ShelterWall,
+	ShelterCeiling
 };
 
 /**
@@ -637,6 +646,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
 	float CaveDeepShare = 0.25f;
 
+	/** A built entrance's bowls have outlines that aren't round, lobes and chains (N-355, Wes Nov 6). Off = one round bowl, as v12-v15. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves"))
+	bool bCaveBowlsVaried = true;
+
 	// --- Ravines and floating islands (v13, fork F62, option A; Wes, Nov 3: "floating islands and better caves with chasms more like minecraft").
 
 	/** Ravines: a long, narrow, deep slot open to the sky, its walls bulging at mid-depth and its floor level (a Minecraft ravine). One candidate per
@@ -842,7 +855,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 15;   // v15: the built entrances are a mix, half overhangs, a quarter deep branching caves, a quarter shallow; a 400 m cell (BR23-18, Wes Oct 23); v14: a floating island's underside is one height per column, smoother, its crags are rocks (N-331, Wes Nov 5); v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
+	static constexpr uint32 CurrentGeneratorVersion = 16;   // v16: the built entrances' bowls are not round, have lobes, and chain in runs of 1-5 (N-355, Wes Nov 6); an overhang is a shelter cut into a hillside, in any rock, no bowl (N-357); v15: the built entrances are a mix, half overhangs, a quarter deep branching caves, a quarter shallow; a 400 m cell (BR23-18, Wes Oct 23); v14: a floating island's underside is one height per column, smoother, its crags are rocks (N-331, Wes Nov 5); v13: ravines, floating islands (their rock in shape stamps, their plants from the spawner), lobed lakes (F62 A, Wes Nov 4); v12: built cave entrances in karst (F30 A)
 
 	FMOWorldGenTuning Tuning;
 
@@ -1041,6 +1054,26 @@ struct FMOCaveEntranceHollow
 	FVector MainChamber = FVector::ZeroVector;
 	TArray<TPair<FVector, FVector>, TInlineAllocator<8>> Passages;
 	int32 NumRooms = 0;
+	// Overhang: every shelter of it (N-357; 1-5 along the slope, the first the one above). Middle in world XY, its floor flat at FloorCm, Uphill the way into the hill. An overhang has no bowls.
+	struct FShelter
+	{
+		FVector2D Middle = FVector2D::ZeroVector;
+		FVector2D Uphill = FVector2D(1.0, 0.0);
+		float HalfDepthCm = 0.0f;
+		float HalfWidthCm = 0.0f;
+		float HeightCm = 0.0f;
+		float FloorCm = 0.0f;
+	};
+	TArray<FShelter, TInlineAllocator<5>> Shelters;
+	// Every bowl of it (N-355), world XY: first the main one (Center, RadiusCm, DepthCm, GroundCm above), then its lobes and the bowls chained off it, each with its own lobes. A radius is the bowl's before its outline's stretch (0.92 - 1.22 of it by heading).
+	struct FBowl
+	{
+		FVector2D Center = FVector2D::ZeroVector;
+		float RadiusCm = 0.0f;
+		float DepthCm = 0.0f;
+		float GroundCm = 0.0f;
+	};
+	TArray<FBowl, TInlineAllocator<12>> Bowls;
 };
 
 /** A floating island: a cluster of torn clumps of rock, its top about TopCm, RadiusCm its size (every clump within 1.3 x), its deepest ThicknessCm under the top; GroundCm is the ground
@@ -1151,7 +1184,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	/** v12's world, which must still come out of this code to the bit with v13's features off (RunProbe(true, true), WorldGen.Sky.SkyOffIsV12). */
 	static constexpr uint32 PinnedProbeHeightV12 = 0x3343B4EBu;
 	static constexpr uint32 PinnedProbeCaveV12 = 0xAB796FA0u;
-	static constexpr uint32 PinnedProbeCave = 0x7F5B0A5Bu;     // v15 (the built entrances' mix, BR23-18); v13 0x7469A6CB (ravines, on the lobed lakes' ground: F62 A); v12 0xAB796FA0 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0x78E3EB88u;     // v16 (the bowls not round, chained: N-355); v15 0x7F5B0A5B (the built entrances' mix, BR23-18); v13 0x7469A6CB (ravines, on the lobed lakes' ground: F62 A); v12 0xAB796FA0 (built entrances in karst, CaveEntranceChance 0.7; the height probe is unchanged); v11 0x0FBFC116 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
@@ -1235,6 +1268,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGenDomain
 	/** The built cave entrance of grid cell (CellX, CellY) (cell edge = CaveEntranceCellCm), or false if the cell has none, it did not settle or the
 	 *  feature is off. */
 	static bool GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out);
+
+	/** How far out in a built entrance's bowls a column is: 0 at the middle of its nearest bowl, 1 at that bowl's rim, more outside it; NoCaveBowlShare where its cell has no entrance. What a bowl's dressing goes by (N-354). */
+	static constexpr float NoCaveBowlShare = 1.0e6f;
+	static float CaveBowlShare(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** Whether a column lies under an overhang's shelter (N-357): what makes a cave surface there a Shelter one. OutInFromMouthCm: how far in from the mouth, along the way in. */
+	static bool IsUnderOverhang(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float* OutInFromMouthCm = nullptr);
+
+	/** The rocks round the built entrances that fall in Area (half-open, like FindCaveSurfaces), on the ground as it is carved (N-354, Wes Nov 6: a hot spot with smaller nodes scattered round it in cascades, larger rocks towards the
+	 *  outside): large rocks round each bowl's rim, medium ones round those, small ones round those, and thinner clusters further out. Kind says which. A pure function of the world: every machine and every PCG cell agree. */
+	static void FindCaveBowlRocks(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, TArray<FMOCaveSurfacePoint>& Out);
 
 	/** The cave field 30 cm under a point on the height terrain's surface (GroundZ: what a scatter samples), cm, negative = air -- the ground there is
 	 *  carved away -- where a sinkhole or a built entrance is within reach; CaveFarCm elsewhere (one cell hash each, so a scatter can ask it of every
@@ -1464,6 +1508,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	using FMOWorldGenDomain::CaveMaxLOD;
 	using FMOWorldGenDomain::LakeShapeQ2;   // a lake's unit frame: no position
 	using FMOWorldGenDomain::NoSinkholeDistanceCm;
+	using FMOWorldGenDomain::NoCaveBowlShare;
 	using FMOWorldGenDomain::IsWaterTierResolved;
 	using FMOWorldGenDomain::BiomeReliefAt;
 	using FMOWorldGenDomain::TemperatureAtHeight;
@@ -1487,6 +1532,9 @@ struct MOFRAMEWORKCORE_API FMOWorldGen : private FMOWorldGenDomain
 	static float DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static float DistanceToCaveEntranceHollow(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 	static bool GetCaveEntranceInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOCaveEntranceHollow& Out);
+	static float CaveBowlShare(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+	static bool IsUnderOverhang(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float* OutInFromMouthCm = nullptr);
+	static void FindCaveBowlRocks(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, TArray<FMOCaveSurfacePoint>& Out);
 	static float SampleOpeningDistanceUnderCm(const FMOWorldGenParams& Params, double X, double Y, double GroundZ, int32 Seed);
 	static bool GetFloatingIslandInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOFloatingIsland& Out);
 	static bool GetRavineInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMORavine& Out);

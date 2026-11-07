@@ -807,8 +807,15 @@ namespace
 	/** A deep cave's jitter margin (share of the cell): its centre keeps to the middle third, so its branches have room and stay in the cell. */
 	constexpr float DeepEntranceMargin = 0.33f;
 	constexpr float EntranceMargin = 0.18f;
-	/** An overhang's shelter sits this share of the hollow's radius out from its centre: where the cap's wall has climbed to about the shelter's height, so the front half of it is the open bowl and the back half lies under rock. */
-	constexpr float ShelterOffset = 0.8f;
+	// An overhang is a shelter cut into a hillside (N-357): native to whatever is there, in any rock, the hill's own ground and plants right up to its lip and over its roof. Only the dome is carved, so only it wears bare rock.
+	/** The slopes that hold one: over 20 deg a roof forms within a dome's depth, past 50 deg a mouth is a cliff. */
+	constexpr double OverhangMinSlope = 0.364, OverhangMaxSlope = 1.19;
+	/** Places in its cell it tries for such a slope. Flat country has none: an overhang there simply isn't. */
+	constexpr int32 OverhangTries = 32;
+	/** A dome is about 10 m across: fine enough spacing holds it to a few hundred metres off. */
+	constexpr float OverhangMaxStepCm = 400.0f;
+	/** The rock wanted over the dome where the settle measures it. */
+	constexpr float OverhangRoofCm = 80.0f;
 
 	struct FEntranceBasics
 	{
@@ -832,10 +839,95 @@ namespace
 		float RoomRadius = 0.0f;                 // 0 = no room at its end
 	};
 	constexpr int32 MaxEntrancePassages = 8;
+
+	/** One bowl of an entrance (N-355): a spherical cap Depth deep, not quite round in plan: its rim at heading a lies at Radius x BowlStretch. Its own ground, so a bowl down a slope sits on that slope. Offsets in plan from the hollow's centre. */
+	struct FEntranceBowl
+	{
+		float X = 0.0f, Y = 0.0f;
+		float Radius = 0.0f, Depth = 0.0f;
+		float Ground = 0.0f;
+		float Mean = 1.0f;
+		float C2 = 0.0f, S2 = 0.0f, C3 = 0.0f, S3 = 0.0f;   // the outline's two waves as cos / sin weights: polynomials of the heading's cos and sin, no libm in the field
+	};
+	constexpr int32 MaxEntranceBowls = 12;
+
+	/** One shelter of an overhang (N-357): a half dome on a flat floor, its front edge where that floor meets the hillside. Its middle in plan from the entrance's centre, Dir the way into the hill. Not an exact ellipse: the same two waves as a bowl's outline. */
+	struct FEntranceShelter
+	{
+		float X = 0.0f, Y = 0.0f;
+		float DirX = 1.0f, DirY = 0.0f;
+		float HalfDepth = 0.0f, HalfWidth = 0.0f, Height = 0.0f;
+		float Floor = 0.0f;
+		float C2 = 0.0f, S2 = 0.0f, C3 = 0.0f, S3 = 0.0f;
+	};
+	constexpr int32 MaxEntranceShelters = 5;
+
+	FORCEINLINE float ShelterOutline(const FEntranceShelter& S, float Cos, float Sin)
+	{
+		return 1.0f + S.C2 * (Cos * Cos - Sin * Sin) + S.S2 * (2.0f * Sin * Cos) + S.C3 * Cos * (4.0f * Cos * Cos - 3.0f) + S.S3 * Sin * (3.0f - 4.0f * Sin * Sin);
+	}
+
+	/** How far out in its plan a column is: 1 at the dome's foot. */
+	FORCEINLINE float ShelterShareAt(const FEntranceShelter& S, float Dx, float Dy)
+	{
+		const float Qx = Dx - S.X, Qy = Dy - S.Y;
+		const float Along = (Qx * S.DirX + Qy * S.DirY) / S.HalfDepth, Across = (Qy * S.DirX - Qx * S.DirY) / S.HalfWidth;
+		const float Run = FMath::Sqrt(Along * Along + Across * Across);
+		return Run < 0.01f ? 0.0f : Run / ShelterOutline(S, Along / Run, Across / Run);
+	}
+
+	/** A half dome cut flat by its floor: nothing below the floor is carved, so a fire and a sleeper have level ground. Rough by a hand's breadth or so, so its ceiling and walls don't read as a machined ellipsoid. */
+	float ShelterDistance(const FEntranceShelter& S, float Dx, float Dy, float Z, uint32 RoughSalt)
+	{
+		const float Qx = Dx - S.X, Qy = Dy - S.Y;
+		const float Along = Qx * S.DirX + Qy * S.DirY, Across = Qy * S.DirX - Qx * S.DirY, Over = Z - S.Floor;
+		const float Ux = Along / S.HalfDepth, Uy = Across / S.HalfWidth;
+		const float Run = FMath::Sqrt(Ux * Ux + Uy * Uy);
+		const float Outline = Run < 0.01f ? 1.0f : ShelterOutline(S, Ux / Run, Uy / Run);
+		const float Rx = S.HalfDepth * Outline, Ry = S.HalfWidth * Outline, Rz = S.Height;
+		const float K0 = FMath::Sqrt(Along * Along / (Rx * Rx) + Across * Across / (Ry * Ry) + Over * Over / (Rz * Rz));
+		const float K1 = FMath::Sqrt(Along * Along / (Rx * Rx * Rx * Rx) + Across * Across / (Ry * Ry * Ry * Ry) + Over * Over / (Rz * Rz * Rz * Rz));
+		float Dome = K1 > 1.0e-6f ? K0 * (K0 - 1.0f) / K1 : -Rz;
+		if (Dome < 150.0f && Dome > -150.0f)
+		{
+			Dome += 28.0f * GradientNoise3((double)Dx / 230.0, (double)Dy / 230.0, (double)Z / 230.0, RoughSalt);
+		}
+		return FMath::Max(Dome, -Over);
+	}
+	/** The outline never narrower than 0.92 of the radius (its rim at most ~9 % steeper: 37 deg at the main bowl's 35), at most 1.22 wider. */
+	constexpr float BowlMeanStretch = 1.07f;
+	constexpr float BowlMaxStretch = 1.22f;
+
+	FORCEINLINE float BowlStretch(const FEntranceBowl& Bowl, float Cos, float Sin)
+	{
+		return Bowl.Mean + Bowl.C2 * (Cos * Cos - Sin * Sin) + Bowl.S2 * (2.0f * Sin * Cos) + Bowl.C3 * Cos * (4.0f * Cos * Cos - 3.0f) + Bowl.S3 * Sin * (3.0f - 4.0f * Sin * Sin);
+	}
+
+	/** 0 at the bowl's middle, 1 at its rim. */
+	FORCEINLINE float BowlShareAt(const FEntranceBowl& Bowl, float Dx, float Dy)
+	{
+		const float Run = FMath::Sqrt(Dx * Dx + Dy * Dy);
+		return Run < 1.0f ? 0.0f : Run / (Bowl.Radius * BowlStretch(Bowl, Dx / Run, Dy / Run));
+	}
+
+	FORCEINLINE float BowlDistance(const FEntranceBowl& Bowl, float Dx, float Dy, float Z)
+	{
+		const float SphereR = (Bowl.Radius * Bowl.Radius + Bowl.Depth * Bowl.Depth) / (2.0f * Bowl.Depth);
+		const float PlanSq = Dx * Dx + Dy * Dy;
+		const float Run = FMath::Sqrt(PlanSq);
+		const float Stretch = Run < 1.0f ? Bowl.Mean : BowlStretch(Bowl, Dx / Run, Dy / Run);
+		const float Dz = Z - (Bowl.Ground - Bowl.Depth + SphereR);
+		return FMath::Sqrt(PlanSq / (Stretch * Stretch) + Dz * Dz) - SphereR;   // a round bowl (Stretch exactly 1) is v12's cap to the bit
+	}
+
 	struct FEntranceTree
 	{
 		int32 Num = 0;
 		FEntrancePassage Passages[MaxEntrancePassages];
+		int32 NumBowls = 0;
+		FEntranceBowl Bowls[MaxEntranceBowls];
+		int32 NumShelters = 0;
+		FEntranceShelter Shelters[MaxEntranceShelters];
 	};
 
 	/** The cell's entrance without touching the ground (pure hashing). The 18 % jitter margin keeps the whole entrance inside its cell: the run is shortened
@@ -888,11 +980,13 @@ namespace
 		{
 			return DeepEntranceMargin * T.CaveEntranceCellCm;   // its branches keep CaveFarCm + 300 inside this (BuildEntranceTree)
 		}
+		// Its chained bowls keep inside the margin too (BuildEntranceBowls), and so do an overhang's shelters (SettleOverhang).
+		const float Margin = EntranceMargin * T.CaveEntranceCellCm;
 		if (B.Kind == EMOCaveEntranceKind::Overhang)
 		{
-			return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * ShelterOffset + B.ShelterHalfDepth) + FMOWorldGenDomain::CaveFarCm + 300.0f;
+			return Margin;
 		}
-		return FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGenDomain::CaveFarCm + 300.0f;
+		return FMath::Max(Margin, FMath::Max(B.HollowRadius * 1.6f, B.HollowRadius * 0.35f + B.Run + B.ChamberRadius) + FMOWorldGenDomain::CaveFarCm + 300.0f);
 	}
 
 	/**
@@ -925,17 +1019,6 @@ namespace
 			}
 			B.DirX = (float)ShoreRing[BestK][0];
 			B.DirY = (float)ShoreRing[BestK][1];
-		}
-		if (B.Kind == EMOCaveEntranceKind::Overhang)
-		{
-			// Dry + karst at the hollow and the shelter's back, with rock over the shelter's middle: it is a roof or it is nothing.
-			const float Floor = GroundCm - B.HollowDepth;
-			const float Out = B.HollowRadius * ShelterOffset + B.ShelterHalfDepth;
-			const double BackX = B.CenterX + B.DirX * Out, BackY = B.CenterY + B.DirY * Out;
-			const double MidX = B.CenterX + B.DirX * B.HollowRadius * ShelterOffset * 1.3f, MidY = B.CenterY + B.DirY * B.HollowRadius * ShelterOffset * 1.3f;
-			return FMOWorldGenDomain::SampleHeightCm(P, MidX, MidY, Seed, T.VoxelSizeCm) - (Floor + B.ShelterHeight) >= 120.0f
-				&& WaterGate(P, B.CenterX, B.CenterY, Floor, Seed) <= 0.0f
-				&& WaterGate(P, BackX, BackY, Floor, Seed) <= 0.0f;
 		}
 		const float Lead = B.HollowRadius * 0.35f;
 		const float EndZ = GroundCm - B.HollowDepth - B.Run * EntranceGrade;
@@ -1036,6 +1119,260 @@ namespace
 		}
 	}
 
+	/**
+	 * An entrance's bowls, laid out once its heading has settled (N-355, Wes Nov 6: "as with lakes, make them non uniform, right now they're like perfect little circles, chain some together, give then non-uniformity, random
+	 * scatter of like 2-5 of them"; said of the overhangs, which then became native to their hillsides: SettleOverhang). Every bowl has an outline that isn't round and a lobe or two overlapping it, and a chain of 1-5 bowls runs off the main one, away from the way in. A smaller bowl is proportionally shallower, so
+	 * its rim is no steeper than the main one's and walks the same. A bowl stands only where it leaves the way in its rock (the passage's first stretch), keeps inside the cell's margin (the entrance's whole
+	 * field stays in its cell), and sits on ground that is dry, karst and not steep. All pure functions of the cell.
+	 */
+	void BuildEntranceBowls(const FMOWorldGenParams& P, const FEntranceBasics& B, int64 CellX, int64 CellY, float GroundCm, int32 Seed, FEntranceTree& Out)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		uint32 Salt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance) + 40u;
+		const auto NextHash = [&]() { return HashLattice2(CellX, CellY, Salt++); };
+
+		const auto Outline = [&](FEntranceBowl& Bowl)
+		{
+			const uint32 H = NextHash();
+			const uint32 K = NextHash();
+			const float A2 = 0.06f + 0.04f * Unit16(H), A3 = 0.03f + 0.02f * Unit16(H >> 16);
+			Bowl.Mean = BowlMeanStretch;
+			Bowl.C2 = A2 * (float)ShoreRing[K & 15u][0];
+			Bowl.S2 = A2 * (float)ShoreRing[K & 15u][1];
+			Bowl.C3 = A3 * (float)ShoreRing[(K >> 4) & 15u][0];
+			Bowl.S3 = A3 * (float)ShoreRing[(K >> 4) & 15u][1];
+		};
+
+		// The way in keeps its rock: the passage's first stretch.
+		const float WayFrom = B.HollowRadius * 0.5f;
+		const float WayTo = B.HollowRadius * 1.3f;
+		const float WayRadius = EntrancePassageRadiusCm + 200.0f;
+		const float Limit = (B.Kind == EMOCaveEntranceKind::Deep ? DeepEntranceMargin : EntranceMargin) * T.CaveEntranceCellCm - 1000.0f;
+		const float DepthShare = FMath::Min(B.HollowDepth / B.HollowRadius, 0.32f);
+
+		const auto TryAdd = [&](float X, float Y, float Radius) -> bool
+		{
+			if (Out.NumBowls >= MaxEntranceBowls || FMath::Sqrt(X * X + Y * Y) + Radius * BowlMaxStretch > Limit)
+			{
+				return false;
+			}
+			const float Along = FMath::Clamp(X * B.DirX + Y * B.DirY, WayFrom, WayTo);
+			const float Qx = X - B.DirX * Along, Qy = Y - B.DirY * Along;
+			const float Need = Radius * BowlMaxStretch + WayRadius;
+			if (Qx * Qx + Qy * Qy < Need * Need)
+			{
+				return false;
+			}
+			const double Wx = B.CenterX + (double)X, Wy = B.CenterY + (double)Y;
+			const float Ground = FMOWorldGenDomain::SampleHeightCm(P, Wx, Wy, Seed, T.VoxelSizeCm);
+			const float Depth = FMath::Max(120.0f, Radius * DepthShare);
+			if (Ground < T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f || (T.CaveMaxGroundCm > 0.0f && Ground > T.CaveMaxGroundCm - T.CaveHighFadeCm)
+				|| GroundGradient(P, Wx, Wy, Ground, Seed).Size() > 0.364 || WaterGate(P, Wx, Wy, Ground - Depth, Seed) > 0.0f)
+			{
+				return false;
+			}
+			FEntranceBowl& Bowl = Out.Bowls[Out.NumBowls++];
+			Bowl.X = X;
+			Bowl.Y = Y;
+			Bowl.Radius = Radius;
+			Bowl.Depth = Depth;
+			Bowl.Ground = Ground;
+			Outline(Bowl);
+			return true;
+		};
+
+		const auto AddLobes = [&](const FEntranceBowl Parent, int32 Count)
+		{
+			for (int32 L = 0; L < Count; ++L)
+			{
+				const uint32 H = NextHash();
+				const double* Dir = ShoreRing[H & 15u];
+				const float Off = Parent.Radius * (0.45f + 0.3f * Unit16(H >> 4));
+				TryAdd(Parent.X + (float)Dir[0] * Off, Parent.Y + (float)Dir[1] * Off, Parent.Radius * (0.55f + 0.25f * Unit16(H >> 16)));
+			}
+		};
+
+		Out.NumBowls = 1;
+		FEntranceBowl& Main = Out.Bowls[0];
+		Main = FEntranceBowl();
+		Main.Radius = B.HollowRadius;
+		Main.Depth = B.HollowDepth;
+		Main.Ground = GroundCm;
+		if (!T.bCaveBowlsVaried)
+		{
+			return;
+		}
+		Outline(Main);
+		AddLobes(Main, 2);
+
+		// The chain: 1-5 bowls in all, wandering away from the way in, each just overlapping the last, just touching it, or a few metres on (seen in game: at more overlap than this a chain reads as one blob).
+		int32 Heading = 0;
+		double BestDot = 2.0;
+		for (int32 K = 0; K < 16; ++K)
+		{
+			const double Dot = ShoreRing[K][0] * B.DirX + ShoreRing[K][1] * B.DirY;
+			if (Dot < BestDot) { BestDot = Dot; Heading = K; }
+		}
+		const uint32 ChainHash = NextHash();
+		const float Roll = Unit16(ChainHash);
+		const int32 Chained = Roll < 0.2f ? 0 : Roll < 0.45f ? 1 : Roll < 0.7f ? 2 : Roll < 0.9f ? 3 : 4;
+		Heading += (int32)((ChainHash >> 16) % 9u) - 4;
+		FEntranceBowl Last = Main;
+		for (int32 C = 0; C < Chained; ++C)
+		{
+			const uint32 H = NextHash();
+			const float Radius = B.HollowRadius * (0.35f + 0.4f * Unit16(H >> 3));
+			const float Step = (Last.Radius + Radius) * (0.95f + 0.45f * Unit16(H >> 16));
+			const double* Dir = ShoreRing[Heading & 15];
+			if (!TryAdd(Last.X + (float)Dir[0] * Step, Last.Y + (float)Dir[1] * Step, Radius))
+			{
+				break;
+			}
+			Last = Out.Bowls[Out.NumBowls - 1];
+			AddLobes(Last, 1);
+			Heading += (int32)(H & 3u) * ((H & 4u) ? 1 : -1);
+		}
+	}
+
+	/** One shelter with its mouth at (MouthX, MouthY), or false if the ground there won't hold one. Mouth and middle are world XY here; the caller makes them offsets. */
+	bool SettleShelter(const FMOWorldGenParams& P, double MouthX, double MouthY, float HalfDepth, float HalfWidth, float Height, int32 Seed, FEntranceShelter& Out, double& OutMiddleX, double& OutMiddleY)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const float Floor = FMOWorldGenDomain::SampleHeightCm(P, MouthX, MouthY, Seed, T.VoxelSizeCm);
+		if (Floor < T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f)
+		{
+			return false;
+		}
+		const FVector2D Rise = GroundGradient(P, MouthX, MouthY, Floor, Seed);
+		const double Slope = Rise.Size();
+		if (Slope < OverhangMinSlope || Slope > OverhangMaxSlope)
+		{
+			return false;
+		}
+		int32 BestK = 0;
+		double BestDot = -2.0e9;
+		for (int32 K = 0; K < 16; ++K)
+		{
+			const double Dot = ShoreRing[K][0] * Rise.X + ShoreRing[K][1] * Rise.Y;
+			if (Dot > BestDot) { BestDot = Dot; BestK = K; }
+		}
+		const double Dx = ShoreRing[BestK][0], Dy = ShoreRing[BestK][1];
+		// Far enough in that the hill has climbed over the dome by its back half, on gentler ground a longer dome. Its front edge is the mouth, so you walk in level from the hillside.
+		const float Depth = FMath::Clamp(FMath::Max(HalfDepth, 0.8f * (Height + 60.0f) / (float)Slope), 400.0f, 1000.0f);
+		const double MiddleX = MouthX + Dx * Depth, MiddleY = MouthY + Dy * Depth;
+		// The roof: real ground over the dome at the back half's middle, near the back, and to each side.
+		const float Checks[4][2] = { { 0.45f, 0.0f }, { 0.75f, 0.0f }, { 0.55f, 0.55f }, { 0.55f, -0.55f } };
+		for (const float* Check : Checks)
+		{
+			const double At = (double)(Check[0] * Depth), Side = (double)(Check[1] * HalfWidth);
+			const double X = MiddleX + Dx * At - Dy * Side, Y = MiddleY + Dy * At + Dx * Side;
+			const float Top = Floor + Height * FMath::Sqrt(FMath::Max(0.0f, 1.0f - Check[0] * Check[0] - Check[1] * Check[1])) + 30.0f;
+			if (FMOWorldGenDomain::SampleHeightCm(P, X, Y, Seed, T.VoxelSizeCm) - Top < OverhangRoofCm)
+			{
+				return false;
+			}
+		}
+		// Dry: no water on its floor, none filling its mouth.
+		float Surface = 0.0f;
+		if ((FMOWorldGenDomain::GetWaterSurfaceCm(P, MouthX, MouthY, Seed, Surface) && Surface > Floor - 200.0f)
+			|| (FMOWorldGenDomain::GetWaterSurfaceCm(P, MiddleX, MiddleY, Seed, Surface) && Surface > Floor - 200.0f)
+			|| FMOWorldGenDomain::IsInUplandLakeZone(P, MiddleX, MiddleY, Seed))
+		{
+			return false;
+		}
+		Out.DirX = (float)Dx;
+		Out.DirY = (float)Dy;
+		Out.HalfDepth = Depth;
+		Out.HalfWidth = HalfWidth;
+		Out.Height = Height;
+		Out.Floor = Floor;
+		OutMiddleX = MiddleX;
+		OutMiddleY = MiddleY;
+		return true;
+	}
+
+	/**
+	 * An overhang looks for its hillside (N-357, Wes Nov 6: "the overhangs should be "native" to their biome ... the native biome vegetation and such should go right up to the overhang, it's suppose to give the existing biome some nice
+	 * variation not be its own little poi type thing"). Up to OverhangTries hashed places in the cell's middle; the first that holds one is its centre (its mouth). Then 0-4 more along the slope (his "random scatter of like 2-5"), each a
+	 * shelter's width or so on from the last, for as long as the ground holds them and they stay inside the cell's margin. Any rock, any biome: this isn't a solution cave. All pure functions of the cell.
+	 */
+	bool SettleOverhang(const FMOWorldGenParams& P, FEntranceBasics& B, int64 CellX, int64 CellY, int32 Seed, float& OutGround, FEntranceTree& Out)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		uint32 Salt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance) + 300u;
+		const auto NextHash = [&]() { return HashLattice2(CellX, CellY, Salt++); };
+		const auto Waves = [&](FEntranceShelter& S)
+		{
+			const uint32 H = NextHash();
+			const uint32 K = NextHash();
+			const float A2 = 0.05f + 0.05f * Unit16(H), A3 = 0.03f + 0.03f * Unit16(H >> 16);
+			S.C2 = A2 * (float)ShoreRing[K & 15u][0];
+			S.S2 = A2 * (float)ShoreRing[K & 15u][1];
+			S.C3 = A3 * (float)ShoreRing[(K >> 4) & 15u][0];
+			S.S3 = A3 * (float)ShoreRing[(K >> 4) & 15u][1];
+		};
+		Out.NumShelters = 0;
+		double MiddleX = 0.0, MiddleY = 0.0;
+		for (int32 Try = 0; Try < OverhangTries && Out.NumShelters == 0; ++Try)
+		{
+			const uint32 H = NextHash();
+			const double X = ((double)CellX + (double)(EntranceMargin + (1.0f - 2.0f * EntranceMargin) * Unit16(H))) * (double)T.CaveEntranceCellCm;
+			const double Y = ((double)CellY + (double)(EntranceMargin + (1.0f - 2.0f * EntranceMargin) * Unit16(H >> 16))) * (double)T.CaveEntranceCellCm;
+			if (SettleShelter(P, X, Y, B.ShelterHalfDepth, B.ShelterHalfWidth, B.ShelterHeight, Seed, Out.Shelters[0], MiddleX, MiddleY))
+			{
+				B.CenterX = X;
+				B.CenterY = Y;
+				Out.NumShelters = 1;
+			}
+		}
+		if (Out.NumShelters == 0)
+		{
+			return false;
+		}
+		FEntranceShelter& First = Out.Shelters[0];
+		First.X = (float)(MiddleX - B.CenterX);
+		First.Y = (float)(MiddleY - B.CenterY);
+		Waves(First);
+		B.DirX = First.DirX;
+		B.DirY = First.DirY;
+		OutGround = First.Floor;
+
+		const float Limit = EntranceMargin * T.CaveEntranceCellCm - 1000.0f;
+		const uint32 ChainHash = NextHash();
+		const float Roll = Unit16(ChainHash);
+		const int32 More = Roll < 0.3f ? 0 : Roll < 0.6f ? 1 : Roll < 0.8f ? 2 : Roll < 0.93f ? 3 : 4;
+		const float Side = (ChainHash >> 16) & 1u ? 1.0f : -1.0f;
+		double MouthX = B.CenterX, MouthY = B.CenterY;
+		float LastWidth = First.HalfWidth, LastDirX = First.DirX, LastDirY = First.DirY;
+		for (int32 M = 0; M < More; ++M)
+		{
+			const uint32 H = NextHash();
+			const uint32 H2 = NextHash();
+			const float HalfWidth = 300.0f + 400.0f * Unit16(H), HalfDepth = 400.0f + 300.0f * Unit16(H >> 16), Height = 240.0f + 80.0f * Unit16(H2);
+			// Along the slope, a width or so on, wandering a little up or down it.
+			const float Step = (LastWidth + HalfWidth) * (1.1f + 0.7f * Unit16(H2 >> 16));
+			const float Wander = 400.0f * (Unit16(H2 >> 8) - 0.5f);
+			const double NextX = MouthX - (double)(Side * LastDirY * Step) + (double)(LastDirX * Wander);
+			const double NextY = MouthY + (double)(Side * LastDirX * Step) + (double)(LastDirY * Wander);
+			FEntranceShelter& Next = Out.Shelters[Out.NumShelters];
+			if (!SettleShelter(P, NextX, NextY, HalfDepth, HalfWidth, Height, Seed, Next, MiddleX, MiddleY)
+				|| FMath::Sqrt(FMath::Square((float)(MiddleX - B.CenterX)) + FMath::Square((float)(MiddleY - B.CenterY))) + Next.HalfDepth * 1.2f > Limit)
+			{
+				break;
+			}
+			Next.X = (float)(MiddleX - B.CenterX);
+			Next.Y = (float)(MiddleY - B.CenterY);
+			Waves(Next);
+			++Out.NumShelters;
+			MouthX = NextX;
+			MouthY = NextY;
+			LastWidth = HalfWidth;
+			LastDirX = Next.DirX;
+			LastDirY = Next.DirY;
+		}
+		return true;
+	}
+
 	/** Ground at the hollow's centre and whether the entrance is allowed there, memoised per thread like the sinkhole's ground (pure functions of params, seed
 	 *  and cell: the cache only saves work). A chunk asks for the same cell thousands of times, and the slope check alone costs four height samples. */
 	bool EntranceGround(const FMOWorldGenParams& P, int64 CellX, int64 CellY, int32 Seed, FEntranceBasics& B, float& OutGround, const FEntranceTree** OutTree = nullptr)
@@ -1046,6 +1383,7 @@ namespace
 			uint32 Seed = 0, ParamsHash = 0;
 			float Ground = 0.0f;
 			float DirX = 1.0f, DirY = 0.0f;
+			double CenterX = 0.0, CenterY = 0.0;   // an overhang's is where it found its hillside
 			bool bAllowed = false;
 			bool bValid = false;
 			FEntranceTree Tree;
@@ -1059,19 +1397,37 @@ namespace
 			E.CellY = CellY;
 			E.Seed = (uint32)Seed;
 			E.ParamsHash = P.GetHash();
-			E.Ground = FMOWorldGenDomain::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
-			E.bAllowed = SettleEntrance(P, B, E.Ground, Seed);
+			E.Tree.Num = 0;
+			E.Tree.NumBowls = 0;
+			E.Tree.NumShelters = 0;
+			if (B.Kind == EMOCaveEntranceKind::Overhang)
+			{
+				E.Ground = 0.0f;
+				E.bAllowed = SettleOverhang(P, B, CellX, CellY, Seed, E.Ground, E.Tree);
+			}
+			else
+			{
+				E.Ground = FMOWorldGenDomain::SampleHeightCm(P, B.CenterX, B.CenterY, Seed, P.Tuning.VoxelSizeCm);
+				E.bAllowed = SettleEntrance(P, B, E.Ground, Seed);
+				if (E.bAllowed && B.Kind == EMOCaveEntranceKind::Deep)
+				{
+					BuildEntranceTree(P, B, CellX, CellY, E.Ground, Seed, E.Tree);
+				}
+				if (E.bAllowed)
+				{
+					BuildEntranceBowls(P, B, CellX, CellY, E.Ground, Seed, E.Tree);
+				}
+			}
 			E.DirX = B.DirX;
 			E.DirY = B.DirY;
-			E.Tree.Num = 0;
-			if (E.bAllowed && B.Kind == EMOCaveEntranceKind::Deep)
-			{
-				BuildEntranceTree(P, B, CellX, CellY, E.Ground, Seed, E.Tree);
-			}
+			E.CenterX = B.CenterX;
+			E.CenterY = B.CenterY;
 			E.bValid = true;
 		}
 		B.DirX = E.DirX;
 		B.DirY = E.DirY;
+		B.CenterX = E.CenterX;
+		B.CenterY = E.CenterY;
 		OutGround = E.Ground;
 		if (OutTree)
 		{
@@ -1080,8 +1436,8 @@ namespace
 		return E.bAllowed;
 	}
 
-	/** The entrance's distance (cm, negative inside) for the sample's cell. The passage and chamber need sample spacing fine enough to resolve a tube. */
-	float EntranceDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm)
+	/** The entrance's distance (cm, negative inside) for the sample's cell. The passage and chamber need sample spacing fine enough to resolve a tube. bOutNative: it is an overhang's, which isn't a cave: the caves' gates (water, karst, high ground) are not its (it settled its own). */
+	float EntranceDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm, bool* bOutNative = nullptr)
 	{
 		const FMOWorldGenTuning& T = P.Tuning;
 		const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
@@ -1091,10 +1447,17 @@ namespace
 		{
 			return FMOWorldGenDomain::CaveFarCm;
 		}
-		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
-		const float H2 = Dx * Dx + Dy * Dy;
+		const bool bOverhang = B.Kind == EMOCaveEntranceKind::Overhang;
 		const float Reach = EntranceReach(B, T);
-		if (H2 > Reach * Reach)
+		if (!bOverhang)   // an overhang's centre is only known once it has found its hillside
+		{
+			const float Fx0 = (float)(X - B.CenterX), Fy0 = (float)(Y - B.CenterY);
+			if (Fx0 * Fx0 + Fy0 * Fy0 > Reach * Reach)
+			{
+				return FMOWorldGenDomain::CaveFarCm;
+			}
+		}
+		else if (StepCm > OverhangMaxStepCm)
 		{
 			return FMOWorldGenDomain::CaveFarCm;
 		}
@@ -1104,27 +1467,39 @@ namespace
 		{
 			return FMOWorldGenDomain::CaveFarCm;
 		}
+		const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
 		const float Z0 = (float)Z;
-
-		// The hollow: a spherical cap HollowDepth deep and HollowRadius across, so its rim meets the ground at ~35 deg (walkable) and its floor is gentle.
-		const float Rs = (B.HollowRadius * B.HollowRadius + B.HollowDepth * B.HollowDepth) / (2.0f * B.HollowDepth);
-		const float DzS = Z0 - (Ground - B.HollowDepth + Rs);
-		float D = FMath::Sqrt(H2 + DzS * DzS) - Rs;
-
-		if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction && B.Kind == EMOCaveEntranceKind::Overhang)
+		if (bOverhang)
 		{
-			// The shelter: a half dome standing on a flat floor at the hollow's bottom, centred where the cap's wall has climbed to about its height, so its front opens to the bowl and its back lies under
-			// the rock of the uphill rim. An approximate ellipsoid distance (k0 (k0 - 1) / k1), cut flat by the floor: nothing past the floor is carved, so a fire and a sleeper have level ground.
-			const float Along = Dx * B.DirX + Dy * B.DirY - B.HollowRadius * ShelterOffset;
-			const float Across = Dy * B.DirX - Dx * B.DirY;
-			const float Over = Z0 - (Ground - B.HollowDepth);
-			const float Rx = B.ShelterHalfDepth, Ry = B.ShelterHalfWidth, Rz = B.ShelterHeight;
-			const float K0 = FMath::Sqrt(Along * Along / (Rx * Rx) + Across * Across / (Ry * Ry) + Over * Over / (Rz * Rz));
-			const float K1 = FMath::Sqrt(Along * Along / (Rx * Rx * Rx * Rx) + Across * Across / (Ry * Ry * Ry * Ry) + Over * Over / (Rz * Rz * Rz * Rz));
-			const float Dome = K1 > 1.0e-6f ? K0 * (K0 - 1.0f) / K1 : -Rz;
-			D = SmoothMin(D, FMath::Max(Dome, -Over), 120.0f);
+			if (bOutNative)
+			{
+				*bOutNative = true;
+			}
+			if (Dx * Dx + Dy * Dy > Reach * Reach)
+			{
+				return FMOWorldGenDomain::CaveFarCm;
+			}
+			const uint32 RoughSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance) + 500u;
+			float Shelter = FMOWorldGenDomain::CaveFarCm;
+			for (int32 K = 0; K < Tree->NumShelters; ++K)
+			{
+				Shelter = FMath::Min(Shelter, ShelterDistance(Tree->Shelters[K], Dx, Dy, Z0, RoughSalt));
+			}
+			return Shelter;
 		}
-		else if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction)
+
+		// The bowls: each a spherical cap, its rim meeting the ground at ~35 deg (walkable) and its floor gentle (BuildEntranceBowls). The small ones stay while the sample spacing can hold them.
+		float D = BowlDistance(Tree->Bowls[0], Dx, Dy, Z0);
+		for (int32 K = 1; K < Tree->NumBowls; ++K)
+		{
+			const FEntranceBowl& Bowl = Tree->Bowls[K];
+			if (StepCm <= Bowl.Radius * EntranceHollowStepFraction)
+			{
+				D = SmoothMin(D, BowlDistance(Bowl, Dx - Bowl.X, Dy - Bowl.Y, Z0), 200.0f);
+			}
+		}
+
+		if (StepCm <= EntrancePassageRadiusCm * TunnelStepFraction)
 		{
 			// The passage: from the hollow's floor, out through its side, down at EntranceGrade; flattened like a gallery (TunnelVerticalSquash).
 			const float Lead = B.HollowRadius * 0.35f;
@@ -1210,9 +1585,18 @@ float FMOWorldGenDomain::SampleCaveDistanceUnderGround(const FMOWorldGenParams& 
 	}
 
 	// Built entrances (F30): a hollow with a passage down into a chamber. Gated like the sinkholes (and dry + karst at both ends, uphill, covered: SettleEntrance).
-	if (T.CaveEntranceChance > 0.0f && StepCm <= EntranceHollowMinRadiusCm * EntranceHollowStepFraction && HighGround < 1.0f)
+	if (T.CaveEntranceChance > 0.0f && StepCm <= EntranceHollowMinRadiusCm * EntranceHollowStepFraction)
 	{
-		D = FMath::Min(D, EntranceDistance(Params, X, Y, Z, Seed, StepCm) + CaveFarCm * FMath::Max(HighGround, Wet));
+		bool bNative = false;
+		const float Entrance = EntranceDistance(Params, X, Y, Z, Seed, StepCm, &bNative);
+		if (bNative)
+		{
+			D = FMath::Min(D, Entrance);   // an overhang: part of the hillside, not a cave
+		}
+		else if (HighGround < 1.0f)
+		{
+			D = FMath::Min(D, Entrance + CaveFarCm * FMath::Max(HighGround, Wet));
+		}
 	}
 
 	// Everything else stays off low ground (coasts / basins) and out of the water. Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when
@@ -1330,12 +1714,45 @@ bool FMOWorldGenDomain::GetCaveEntranceInCell(const FMOWorldGenParams& Params, i
 	Out.GroundCm = Ground;
 	Out.Kind = B.Kind;
 	Out.Uphill = FVector2D(B.DirX, B.DirY);
-	Out.ShelterMiddle = Out.Center + Out.Uphill * (double)(B.HollowRadius * ShelterOffset);
-	Out.ShelterHalfDepthCm = B.ShelterHalfDepth;
-	Out.ShelterHalfWidthCm = B.ShelterHalfWidth;
-	Out.ShelterHeightCm = B.ShelterHeight;
+	Out.ShelterMiddle = Out.Center;
+	Out.ShelterHalfDepthCm = 0.0f;
+	Out.ShelterHalfWidthCm = 0.0f;
+	Out.ShelterHeightCm = 0.0f;
+	Out.Shelters.Reset();
+	for (int32 K = 0; Tree && K < Tree->NumShelters; ++K)
+	{
+		const FEntranceShelter& S = Tree->Shelters[K];
+		FMOCaveEntranceHollow::FShelter& Copy = Out.Shelters.AddDefaulted_GetRef();
+		Copy.Middle = Out.Center + FVector2D(S.X, S.Y);
+		Copy.Uphill = FVector2D(S.DirX, S.DirY);
+		Copy.HalfDepthCm = S.HalfDepth;
+		Copy.HalfWidthCm = S.HalfWidth;
+		Copy.HeightCm = S.Height;
+		Copy.FloorCm = S.Floor;
+	}
+	if (B.Kind == EMOCaveEntranceKind::Overhang && Out.Shelters.Num() > 0)
+	{
+		// Center is its mouth, on the floor; nothing of it is a hollow.
+		const FMOCaveEntranceHollow::FShelter& First = Out.Shelters[0];
+		Out.RadiusCm = First.HalfWidthCm;
+		Out.DepthCm = 0.0f;
+		Out.ShelterMiddle = First.Middle;
+		Out.ShelterHalfDepthCm = First.HalfDepthCm;
+		Out.ShelterHalfWidthCm = First.HalfWidthCm;
+		Out.ShelterHeightCm = First.HeightCm;
+	}
 	Out.Passages.Reset();
 	Out.NumRooms = 0;
+	Out.Bowls.Reset();
+	for (int32 K = 0; Tree && K < Tree->NumBowls; ++K)
+	{
+		const FEntranceBowl& Bowl = Tree->Bowls[K];
+		FMOCaveEntranceHollow::FBowl& Copy = Out.Bowls.AddDefaulted_GetRef();
+		Copy.Center = Out.Center + FVector2D(Bowl.X, Bowl.Y);
+		Copy.RadiusCm = Bowl.Radius;
+		Copy.DepthCm = Bowl.Depth;
+		Copy.GroundCm = Bowl.Ground;
+	}
 	if (B.Kind != EMOCaveEntranceKind::Overhang)
 	{
 		const float Lead = B.HollowRadius * 0.35f;
@@ -1621,10 +2038,276 @@ float FMOWorldGenDomain::DistanceToCaveEntranceHollow(const FMOWorldGenParams& P
 	const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.CaveEntranceCellCm);
 	FEntranceBasics B;
 	float Ground = 0.0f;
-	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground))
+	const FEntranceTree* Tree = nullptr;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground, &Tree))
 	{
 		return NoSinkholeDistanceCm;
 	}
-	// The hollow's rim plus a margin (the passage is open only inside the hollow; beyond it the rock is whole).
-	return (float)FVector2D::Distance(FVector2D(X, Y), FVector2D(B.CenterX, B.CenterY)) - B.HollowRadius * 1.2f;
+	// The nearest bowl's rim plus a margin of a fifth of its radius (the passage is open only inside the hollow; beyond it the rock is whole).
+	const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
+	float Best = NoSinkholeDistanceCm;
+	if (B.Kind == EMOCaveEntranceKind::Overhang)
+	{
+		// Part of the hillside: never "inside" a keep-out, so the biome's plants come right up to it and grow on its roof (a point over its open floor is dropped by SampleOpeningDistanceUnderCm, as over any carved ground). Still a distance, so a building or a spawn keeps off it.
+		for (int32 K = 0; K < Tree->NumShelters; ++K)
+		{
+			const FEntranceShelter& S = Tree->Shelters[K];
+			Best = FMath::Min(Best, (ShelterShareAt(S, Dx, Dy) - 1.0f) * FMath::Min(S.HalfDepth, S.HalfWidth));
+		}
+		return FMath::Max(Best, 1.0f);
+	}
+	for (int32 K = 0; K < Tree->NumBowls; ++K)
+	{
+		const FEntranceBowl& Bowl = Tree->Bowls[K];
+		const float Qx = Dx - Bowl.X, Qy = Dy - Bowl.Y;
+		const float Run = FMath::Sqrt(Qx * Qx + Qy * Qy);
+		const float Stretch = Run < 1.0f ? Bowl.Mean : BowlStretch(Bowl, Qx / Run, Qy / Run);
+		Best = FMath::Min(Best, Run - Bowl.Radius * (Stretch + 0.2f));
+	}
+	return Best;
+}
+
+float FMOWorldGenDomain::CaveBowlShare(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f)
+	{
+		return FMOWorldGenDomain::NoCaveBowlShare;
+	}
+	const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
+	const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.CaveEntranceCellCm);
+	FEntranceBasics B;
+	float Ground = 0.0f;
+	const FEntranceTree* Tree = nullptr;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || !EntranceGround(Params, CellX, CellY, Seed, B, Ground, &Tree))
+	{
+		return FMOWorldGenDomain::NoCaveBowlShare;
+	}
+	const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
+	float Best = FMOWorldGenDomain::NoCaveBowlShare;
+	for (int32 K = 0; K < Tree->NumBowls; ++K)
+	{
+		Best = FMath::Min(Best, BowlShareAt(Tree->Bowls[K], Dx - Tree->Bowls[K].X, Dy - Tree->Bowls[K].Y));
+	}
+	return Best;
+}
+
+namespace
+{
+	/** The ground as it is carved at a column: the terrain, or under a bowl the first rock below it. False when that is further down than a bowl goes (a shaft, a gallery's mouth: nowhere for a rim rock). */
+	bool CarvedGroundAt(const FMOWorldGenParams& P, double X, double Y, int32 Seed, float& OutGround, float& OutSurface)
+	{
+		OutGround = FMOWorldGenDomain::SampleHeightCm(P, X, Y, Seed, P.Tuning.VoxelSizeCm);
+		const auto Field = [&](double Z) { return FMOWorldGenDomain::SampleCaveDistanceAtGround(P, X, Y, Z, OutGround, Seed, 50.0f); };
+		double Rock = (double)OutGround - 5.0;
+		float D = Field(Rock);
+		if (D >= 0.0f)
+		{
+			OutSurface = OutGround;
+			return true;
+		}
+		double Air = Rock;
+		for (int32 Step = 0; Step < 24 && D < 0.0f; ++Step)
+		{
+			Air = Rock;
+			Rock -= (double)FMath::Max(-D * 0.7f, 20.0f);
+			if (Rock < (double)OutGround - 1200.0)
+			{
+				return false;
+			}
+			D = Field(Rock);
+		}
+		if (D < 0.0f)
+		{
+			return false;
+		}
+		for (int32 Step = 0; Step < 6; ++Step)
+		{
+			const double Middle = 0.5 * (Rock + Air);
+			if (Field(Middle) < 0.0f)
+			{
+				Air = Middle;
+			}
+			else
+			{
+				Rock = Middle;
+			}
+		}
+		OutSurface = (float)(0.5 * (Rock + Air));
+		return true;
+	}
+
+	/** How far a rim scatter reaches past its entrance's outermost bowl (cm): the far clusters' 3 x radius of the largest bowl, and the rocks round them. */
+	constexpr float BowlRockReachCm = 6000.0f;
+}
+
+bool FMOWorldGenDomain::IsUnderOverhang(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float* OutInFromMouthCm)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f)
+	{
+		return false;
+	}
+	const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
+	const int64 CellY = (int64)FMath::FloorToDouble(Y / (double)T.CaveEntranceCellCm);
+	FEntranceBasics B;
+	float Ground = 0.0f;
+	const FEntranceTree* Tree = nullptr;
+	if (!EntranceBasics(T, CellX, CellY, Seed, B) || B.Kind != EMOCaveEntranceKind::Overhang || !EntranceGround(Params, CellX, CellY, Seed, B, Ground, &Tree))
+	{
+		return false;
+	}
+	const float Dx = (float)(X - B.CenterX), Dy = (float)(Y - B.CenterY);
+	for (int32 K = 0; K < Tree->NumShelters; ++K)
+	{
+		const FEntranceShelter& S = Tree->Shelters[K];
+		if (ShelterShareAt(S, Dx, Dy) <= 1.15f)
+		{
+			if (OutInFromMouthCm)
+			{
+				*OutInFromMouthCm = (Dx - S.X) * S.DirX + (Dy - S.Y) * S.DirY + S.HalfDepth;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+void FMOWorldGenDomain::FindCaveBowlRocks(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, TArray<FMOCaveSurfacePoint>& Out)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableCaves || T.CaveEntranceChance <= 0.0f || !Area.bIsValid)
+	{
+		return;
+	}
+	const double Cell = (double)T.CaveEntranceCellCm;
+	const int64 Cx0 = (int64)FMath::FloorToDouble((Area.Min.X - BowlRockReachCm) / Cell), Cx1 = (int64)FMath::FloorToDouble((Area.Max.X + BowlRockReachCm) / Cell);
+	const int64 Cy0 = (int64)FMath::FloorToDouble((Area.Min.Y - BowlRockReachCm) / Cell), Cy1 = (int64)FMath::FloorToDouble((Area.Max.Y + BowlRockReachCm) / Cell);
+	const uint32 SaltRocks = (uint32)HashSeed(Seed, SaltEntrance) + 200u;
+
+	for (int64 Cy = Cy0; Cy <= Cy1; ++Cy)
+	{
+		for (int64 Cx = Cx0; Cx <= Cx1; ++Cx)
+		{
+			FEntranceBasics B;
+			float EntranceGroundCm = 0.0f;
+			const FEntranceTree* Tree = nullptr;
+			if (!EntranceBasics(T, Cx, Cy, Seed, B) || B.Kind == EMOCaveEntranceKind::Overhang || !EntranceGround(Params, Cx, Cy, Seed, B, EntranceGroundCm, &Tree))
+			{
+				continue;   // an overhang has no bowl and no rim to ring: it is part of its hillside (N-357)
+			}
+			const FEntranceTree Bowls = *Tree;   // the thread's cache slot may be reused by the samples below
+			const float WayTo = B.HollowRadius * 1.3f;
+			const float WayRadius = EntrancePassageRadiusCm + 350.0f;
+
+			const auto ShareAt = [&](float Dx, float Dy)
+			{
+				float Best = FMOWorldGenDomain::NoCaveBowlShare;
+				for (int32 K = 0; K < Bowls.NumBowls; ++K)
+				{
+					Best = FMath::Min(Best, BowlShareAt(Bowls.Bowls[K], Dx - Bowls.Bowls[K].X, Dy - Bowls.Bowls[K].Y));
+				}
+				return Best;
+			};
+			const auto Place = [&](float Dx, float Dy, EMOCaveSurfaceKind Kind, float MinShare) -> bool
+			{
+				const float Along = FMath::Clamp(Dx * B.DirX + Dy * B.DirY, 0.0f, WayTo);
+				const float Qx = Dx - B.DirX * Along, Qy = Dy - B.DirY * Along;
+				if (ShareAt(Dx, Dy) < MinShare || Qx * Qx + Qy * Qy < WayRadius * WayRadius)
+				{
+					return false;   // inside a bowl, or in the way in
+				}
+				const double X = B.CenterX + (double)Dx, Y = B.CenterY + (double)Dy;
+				if (X < Area.Min.X || X >= Area.Max.X || Y < Area.Min.Y || Y >= Area.Max.Y)
+				{
+					return true;   // another PCG cell's (its children still get their own test)
+				}
+				float Ground = 0.0f, Surface = 0.0f;
+				if (!CarvedGroundAt(Params, X, Y, Seed, Ground, Surface) || WaterGate(Params, X, Y, Surface, Seed) > 0.0f)
+				{
+					return true;
+				}
+				FVector Normal = FVector::UpVector;
+				float Lowest = Surface;
+				if (Kind != EMOCaveSurfaceKind::BowlRockSmall)
+				{
+					// It rests on the lowest ground under it, tipped with the slope.
+					const float Foot = Kind == EMOCaveSurfaceKind::BowlRockLarge ? 220.0f : 110.0f;
+					float Around[4] = { Surface, Surface, Surface, Surface };
+					const double Offsets[4][2] = { { Foot, 0.0 }, { -Foot, 0.0 }, { 0.0, Foot }, { 0.0, -Foot } };
+					for (int32 K = 0; K < 4; ++K)
+					{
+						float G = 0.0f;
+						if (CarvedGroundAt(Params, X + Offsets[K][0], Y + Offsets[K][1], Seed, G, Around[K]))
+						{
+							Lowest = FMath::Min(Lowest, Around[K]);
+						}
+					}
+					Normal = FVector((double)(Around[1] - Around[0]), (double)(Around[3] - Around[2]), 2.0 * (double)Foot).GetSafeNormal(1.0e-6, FVector::UpVector);
+				}
+				FMOCaveSurfacePoint& Point = Out.AddDefaulted_GetRef();
+				Point.Location = FVector(X, Y, (double)Lowest);
+				Point.AirNormal = Normal;
+				Point.Kind = Kind;
+				Point.AreaM2 = 1.0f;
+				Point.GroundCm = Ground;
+				return true;
+			};
+
+			uint32 Salt = SaltRocks;
+			const auto NextHash = [&]() { return HashLattice2(Cx, Cy, Salt++); };
+			// Small rocks round a medium one, medium ones round a large one, each a shrinking step out.
+			const auto SmallRound = [&](float Dx, float Dy, int32 Count)
+			{
+				for (int32 S = 0; S < Count; ++S)
+				{
+					const uint32 H = NextHash();
+					const float Off = 90.0f + 170.0f * Unit16(H >> 4);
+					Place(Dx + (float)ShoreRing[H & 15u][0] * Off, Dy + (float)ShoreRing[H & 15u][1] * Off, EMOCaveSurfaceKind::BowlRockSmall, 0.55f);
+				}
+			};
+			const auto MediumRound = [&](float Dx, float Dy, int32 Count, float MinShare)
+			{
+				for (int32 M = 0; M < Count; ++M)
+				{
+					const uint32 H = NextHash();
+					const float Off = 260.0f + 360.0f * Unit16(H >> 4);
+					const float Mx = Dx + (float)ShoreRing[H & 15u][0] * Off, My = Dy + (float)ShoreRing[H & 15u][1] * Off;
+					if (Place(Mx, My, EMOCaveSurfaceKind::BowlRockMedium, MinShare))
+					{
+						SmallRound(Mx, My, 1 + (int32)((H >> 24) & 3u));
+					}
+				}
+			};
+			for (int32 K = 0; K < Bowls.NumBowls; ++K)
+			{
+				const FEntranceBowl& Bowl = Bowls.Bowls[K];
+				// Round the rim, larger rocks about 9 m apart (seen in game: 15 m read as a few strays, not a ring), some a little inside it and some out past it.
+				const int32 NumLarge = FMath::Clamp(FMath::RoundToInt32(6.28f * Bowl.Radius / 900.0f), 3, 9);
+				const uint32 Start = NextHash();
+				for (int32 L = 0; L < NumLarge; ++L)
+				{
+					const uint32 H = NextHash();
+					const uint32 Slot = (Start + (uint32)(L * 16 / NumLarge) + ((H >> 28) & 1u)) & 15u;
+					const float Cos = (float)ShoreRing[Slot][0], Sin = (float)ShoreRing[Slot][1];
+					const float Out2 = Bowl.Radius * BowlStretch(Bowl, Cos, Sin) * (0.88f + 0.42f * Unit16(H));
+					const float Lx = Bowl.X + Cos * Out2, Ly = Bowl.Y + Sin * Out2;
+					if (Place(Lx, Ly, EMOCaveSurfaceKind::BowlRockLarge, 0.82f))
+					{
+						MediumRound(Lx, Ly, 2 + (int32)((H >> 16) & 3u), 0.72f);
+					}
+				}
+				// Further out and thinning: smaller clusters that lead up to the bowl.
+				const int32 NumFar = 2 + (int32)(NextHash() & 3u);
+				for (int32 F = 0; F < NumFar; ++F)
+				{
+					const uint32 H = NextHash();
+					const float Way = FMath::Min(1.5f + 1.5f * Unit16(H) * Unit16(H >> 16), 3.0f);   // two rolls: most near, few far
+					const float Off = Bowl.Radius * Way;
+					const uint32 Slot = (H >> 8) & 15u;
+					MediumRound(Bowl.X + (float)ShoreRing[Slot][0] * Off, Bowl.Y + (float)ShoreRing[Slot][1] * Off, 1 + (int32)((H >> 24) & 1u), 1.05f);
+				}
+			}
+		}
+	}
 }

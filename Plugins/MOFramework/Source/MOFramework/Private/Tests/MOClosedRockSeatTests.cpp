@@ -35,7 +35,7 @@ bool FMOPCG_ClosedRockSeat::RunTest(const FString& Parameters)
 	{
 		const FBoxSphereBounds Whole = Mesh->GetBounds();
 		const FBoxSphereBounds Seat = FMOSpeciesPlacement::SeatBounds(Mesh);
-		const bool bClosedCopy = Mesh->GetPathName().StartsWith(TEXT("/Game/ClosedRocks/"));
+		const bool bClosedCopy = Mesh->GetPathName().StartsWith(TEXT("/Game/ClosedRocks/")) || Mesh->FindSocket(TEXT("MOSeat"));   // a composition's mesh is closed in place
 		if (!bClosedCopy)
 		{
 			++Others;

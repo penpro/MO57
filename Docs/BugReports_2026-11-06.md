@@ -16,3 +16,11 @@ Review page: https://claude.ai/artifact/LRzmvdbHmXDxw5scCjT8je (votes in its `ve
 | A torch in a cave (`cave-torch`) | up | | Done. |
 | Floating islands: smoother rock, large rocks for the crags (`islands`) | up | | N-331 done. |
 | The Wounds tab (`wound-row`) | up | | N-315 done. |
+
+## After the votes (Nov 6, Wes, in chat)
+
+"actually i just realized you're just using the same template for the overhangs as the caves, the overhangs should be "native" to their biome, maybe some rocks and stuff exposed under the overhang but the native biome vegetationa and such should go right up to the overhang, it's suppose to give the existing biome some nice variation not be its own little poi type thing"
+
+"so like grass and shit on top of the overhang, dirt/rocks/vines underneath"
+
+So the overhangs lost their bowls altogether (N-357), and his "chain 2-5" for them became shelters scattered along their slope. The caves keep their bowls: N-354 and N-355 stand for them.

@@ -138,6 +138,8 @@ public class MOFramework : ModuleRules
 				new string[]
 				{
 					"UnrealEd",        // Thumbnail rendering, asset tools, FBlueprintEditorUtils
+					"MeshDescription",       // MOFramework.PCG.CaveTableIsClosed measures a mesh's source
+					"StaticMeshDescription", // ... and its vertex positions
 					"UMGEditor",       // UWidgetBlueprint access for widget editor utilities
 					"ContentBrowser",  // Content browser selection
 					"AssetTools",      // Asset creation utilities

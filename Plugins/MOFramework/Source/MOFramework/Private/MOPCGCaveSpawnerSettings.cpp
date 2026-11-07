@@ -16,6 +16,18 @@
 namespace
 {
 	TAutoConsoleVariable<float> CVarCaveDensityScale(TEXT("mo.PCG.CaveDensityScale"), 1.0f, TEXT("Multiplies every cave scatter row's density (MO Cave Spawner)."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarBowlRocks(TEXT("mo.PCG.BowlRocks"), 1, TEXT("0 = no rocks round the cave bowls' rims (N-354), for a compare. Read when a cell generates."), ECVF_Default);
+
+	/** Nothing lies on an overhang's floor this near its mouth: the ground falls away past the lip, and a plate lying there hung its edge over it (seen in game, Nov 6). */
+	constexpr float ShelterClearMouthCm = 250.0f;
+
+	/** Deeper than this under the ground is a passage, not the open bowl over it. */
+	constexpr float BowlDepthLimitCm = 800.0f;
+
+	FORCEINLINE bool IsBowlRock(EMOCaveSurfaceKind Kind)
+	{
+		return Kind == EMOCaveSurfaceKind::BowlRockLarge || Kind == EMOCaveSurfaceKind::BowlRockMedium || Kind == EMOCaveSurfaceKind::BowlRockSmall;
+	}
 
 	/** How far behind the surface (cm) the rock is asked what it holds: inside the wall, past the voxel mesher's rounding. */
 	constexpr double OreProbeDepthCm = 30.0;
@@ -71,6 +83,7 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		UStaticMesh* Mesh = nullptr;
 		UMaterialInterface* Material = nullptr;
 		double BottomCm = 0.0;   // the mesh's pivot above its lowest point (Megascans pivots are centred): lifts it onto the surface before the sink
+		double TopCm = 0.0;      // its highest point over the pivot: what a hanging row hangs by
 	};
 	TArray<FRow> Rows;
 	Settings->CaveScatterTable->ForeachRow<FMOCaveScatterRow>(TEXT("MOCaveSpawner"), [&Rows](const FName& Name, const FMOCaveScatterRow& Row)
@@ -82,7 +95,7 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			return;
 		}
 		const FBoxSphereBounds Bounds = FMOSpeciesPlacement::SeatBounds(Mesh);
-		Rows.Add({ Name, &Row, Mesh, Row.Material.LoadSynchronous(), -(Bounds.Origin.Z - Bounds.BoxExtent.Z) });
+		Rows.Add({ Name, &Row, Mesh, Row.Material.LoadSynchronous(), -(Bounds.Origin.Z - Bounds.BoxExtent.Z), Bounds.Origin.Z + Bounds.BoxExtent.Z });
 	});
 	if (Rows.Num() == 0)
 	{
@@ -102,6 +115,11 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	{
 		FMOWorldGen::FindOutcrops(*GenParams, TerrainSeed, Area, Settings->OutcropSpacingCm, Settings->OutcropMinSlopeDeg, Points);
 	}
+	// The rocks round the bowls, when the table has any.
+	if (CVarBowlRocks.GetValueOnGameThread() != 0 && Rows.ContainsByPredicate([](const FRow& R) { return IsBowlRock(R.Row->Surface); }))
+	{
+		FMOWorldGen::FindCaveBowlRocks(*GenParams, TerrainSeed, Area, Points);
+	}
 	const double FoundTime = FPlatformTime::Seconds();
 	if (Points.Num() == 0)
 	{
@@ -111,14 +129,29 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	// What the rock is and holds at every point, in parallel: the bedrock of its column, the ore just behind the surface.
 	TArray<EMOBedrock> Rock;
 	TArray<FMOOreSample> Ore;
+	TArray<float> BowlShare;
 	Rock.SetNumUninitialized(Points.Num());
 	Ore.SetNumUninitialized(Points.Num());
+	BowlShare.SetNumUninitialized(Points.Num());
 	ParallelFor(Points.Num(), [&](int32 I)
 	{
-		const FMOCaveSurfacePoint& P = Points[I];
+		FMOCaveSurfacePoint& P = Points[I];
+		// Under an overhang's roof the dressing is its own: dirt, rocks and vines, not the caves' (N-357).
+		float InFromMouth = 0.0f;
+		if ((P.Kind == EMOCaveSurfaceKind::Floor || P.Kind == EMOCaveSurfaceKind::Wall || P.Kind == EMOCaveSurfaceKind::Ceiling) && (double)P.GroundCm - P.Location.Z < (double)BowlDepthLimitCm
+			&& FMOWorldGen::IsUnderOverhang(*GenParams, P.Location.X, P.Location.Y, TerrainSeed, &InFromMouth))
+		{
+			if (P.Kind == EMOCaveSurfaceKind::Floor && InFromMouth < ShelterClearMouthCm)
+			{
+				P.AreaM2 = 0.0f;   // stands for no ground: no row's density takes it
+			}
+			P.Kind = P.Kind == EMOCaveSurfaceKind::Floor ? EMOCaveSurfaceKind::ShelterFloor : P.Kind == EMOCaveSurfaceKind::Wall ? EMOCaveSurfaceKind::ShelterWall : EMOCaveSurfaceKind::ShelterCeiling;
+		}
 		Rock[I] = FMOWorldGen::SampleBedrock(*GenParams, P.Location.X, P.Location.Y, TerrainSeed);
 		const FVector In = P.Location - P.AirNormal * OreProbeDepthCm;
 		Ore[I] = FMOWorldGen::SampleOreIn(*GenParams, Rock[I], In.X, In.Y, In.Z, TerrainSeed);
+		BowlShare[I] = (P.Kind == EMOCaveSurfaceKind::Floor || P.Kind == EMOCaveSurfaceKind::Wall) && (double)P.GroundCm - P.Location.Z < (double)BowlDepthLimitCm
+			? FMOWorldGen::CaveBowlShare(*GenParams, P.Location.X, P.Location.Y, TerrainSeed) : FMOWorldGen::NoCaveBowlShare;
 	});
 	const double GeologyTime = FPlatformTime::Seconds();
 
@@ -148,7 +181,7 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		B.Collision = Rows[R].Row->Collision;
 	}
 	int32 Accepted = 0, Suppressed = 0, OrePoints = 0;
-	int32 KindCount[4] = { 0, 0, 0, 0 };
+	int32 KindCount[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 	for (int32 I = 0; I < Points.Num(); ++I)
 	{
 		const FMOCaveSurfacePoint& P = Points[I];
@@ -161,10 +194,30 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		}
 		// One random stream per (point, row), from the point's place: the same instance on every generation and every co-op machine.
 		const uint32 PointHash = HashCombineFast(GetTypeHash(FIntVector(FMath::RoundToInt32(P.Location.X), FMath::RoundToInt32(P.Location.Y), FMath::RoundToInt32(P.Location.Z))), Seed);
+		// A rim rock's point takes one rock: one of its kind's rows, by weight.
+		const bool bBowlRock = IsBowlRock(P.Kind);
+		int32 PickedRow = INDEX_NONE;
+		if (bBowlRock && Density > 0.0f)
+		{
+			float Total = 0.0f;
+			for (const FRow& Candidate : Rows)
+			{
+				Total += Candidate.Row->Surface == P.Kind ? Candidate.Row->PerSquareMetre : 0.0f;
+			}
+			float Roll = FRandomStream((int32)PointHash).FRand() * Total;
+			for (int32 R = 0; R < Rows.Num() && PickedRow == INDEX_NONE; ++R)
+			{
+				if (Rows[R].Row->Surface == P.Kind && Rows[R].Row->PerSquareMetre > 0.0f)
+				{
+					Roll -= Rows[R].Row->PerSquareMetre;
+					PickedRow = Roll <= 0.0f ? R : INDEX_NONE;
+				}
+			}
+		}
 		for (int32 R = 0; R < Rows.Num(); ++R)
 		{
 			const FMOCaveScatterRow& Row = *Rows[R].Row;
-			if (Row.Surface != P.Kind || (Row.Bedrock.Num() > 0 && !Row.Bedrock.Contains(Rock[I])))
+			if (Row.Surface != P.Kind || (Row.Bedrock.Num() > 0 && !Row.Bedrock.Contains(Rock[I])) || (bBowlRock && R != PickedRow))
 			{
 				continue;
 			}
@@ -173,14 +226,17 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				continue;
 			}
 			FRandomStream Rand((int32)HashCombineFast(PointHash, (uint32)R * 0x9E3779B9u + 0x2545F491u));
-			if (Rand.FRand() >= Row.PerSquareMetre * Density * P.AreaM2)
+			const float InBowl = BowlShare[I] <= 1.3f ? Row.BowlWeight(BowlShare[I]) : 1.0f;
+			if (!bBowlRock && Rand.FRand() >= Row.PerSquareMetre * InBowl * Density * P.AreaM2)
 			{
 				continue;
 			}
 			const float Scale = Rand.FRandRange(Row.ScaleMin, FMath::Max(Row.ScaleMin, Row.ScaleMax));
-			const FVector Up = FMath::Lerp(FVector::UpVector, P.AirNormal, (double)Row.AlignToSurface).GetSafeNormal(1.0e-4, FVector::UpVector);
+			const FVector Up = Row.bHangs ? FVector::UpVector : FMath::Lerp(FVector::UpVector, P.AirNormal, (double)Row.AlignToSurface).GetSafeNormal(1.0e-4, FVector::UpVector);
 			const FQuat Rotation = FQuat(Up, Rand.FRandRange(0.0f, 2.0f * UE_PI)) * FQuat::FindBetweenNormals(FVector::UpVector, Up);
-			const FVector Location = P.Location + Up * (Rows[R].BottomCm * Scale) - P.AirNormal * (double)(Row.SinkCm * Scale);
+			const FVector Location = Row.bHangs
+				? P.Location - FVector::UpVector * (Rows[R].TopCm * Scale) + FVector::UpVector * (double)(Row.SinkCm * Scale)
+				: P.Location + Up * (Rows[R].BottomCm * Scale) - P.AirNormal * (double)(Row.SinkCm * Scale);
 			if (bAnyRemoved && Removal->IsRemoved(Location, Rows[R].Mesh))
 			{
 				++Suppressed;   // quarried for good (UMOWorldRemovalSubsystem)
@@ -190,8 +246,8 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			++Accepted;
 		}
 	}
-	FString Stage = FString::Printf(TEXT("caves %.0f geology %.0f plant %.0f; surfaces %d floor / %d wall / %d ceiling / %d outcrop, %d on ore"),
-		(FoundTime - Start) * 1000.0, (GeologyTime - FoundTime) * 1000.0, (FPlatformTime::Seconds() - GeologyTime) * 1000.0, KindCount[0], KindCount[1], KindCount[2], KindCount[3], OrePoints);
+	FString Stage = FString::Printf(TEXT("caves %.0f geology %.0f plant %.0f; surfaces %d floor / %d wall / %d ceiling / %d outcrop or rim rock, %d on ore"),
+		(FoundTime - Start) * 1000.0, (GeologyTime - FoundTime) * 1000.0, (FPlatformTime::Seconds() - GeologyTime) * 1000.0, KindCount[0] + KindCount[7], KindCount[1] + KindCount[8], KindCount[2] + KindCount[9], KindCount[3] + KindCount[4] + KindCount[5] + KindCount[6], OrePoints);
 	FString BoundsText = FString::Printf(TEXT("cave cell (%.0f,%.0f)-(%.0f,%.0f)"), Cell.Min.X, Cell.Min.Y, Cell.Max.X, Cell.Max.Y);
 	return SubmitBuckets(Context, TargetActor, MoveTemp(Buckets), Points.Num(), Accepted, Suppressed, Rows.Num(), (FPlatformTime::Seconds() - Start) * 1000.0, MoveTemp(Stage), MoveTemp(BoundsText));
 }

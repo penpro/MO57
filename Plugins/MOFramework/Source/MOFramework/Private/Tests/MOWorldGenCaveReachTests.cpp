@@ -308,6 +308,10 @@ bool FMOWorldGen_CaveEntranceBuilt::RunTest(const FString& Parameters)
 				for (int32 A = 0; A < 64; ++A)
 				{
 					const double X = Bx + R * FMath::Cos(A * PI / 32.0), Y = By + R * FMath::Sin(A * PI / 32.0);
+					if (FMOWorldGen::DistanceToCaveEntranceHollow(*P, X, Y, Seed) <= 0.0f)
+					{
+						continue;   // one of its bowls (N-355: they chain), which are openings it means to have
+					}
 					const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, 50.0f);
 					Holes += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, G - 200.0f, G, Seed, 50.0f) < 0.0f
 						&& FMOWorldGen::SampleCaveDistanceAtGround(*Off, X, Y, G - 200.0f, G, Seed, 50.0f) >= 0.0f ? 1 : 0;   // only openings the feature added
@@ -383,6 +387,20 @@ bool FMOWorldGen_CaveEntranceMix::RunTest(const FString& Parameters)
 					for (int32 A = 0; A < 48; ++A)
 					{
 						const double X = E.Center.X + R * FMath::Cos(A * PI / 24.0), Y = E.Center.Y + R * FMath::Sin(A * PI / 24.0);
+						// One of its bowls (N-355: they chain), which are openings it means to have, with the uphill cut this check has always allowed the main one: 1.5 x the radius, at the outline's widest.
+						bool bInABowl = false;
+						for (const FMOCaveEntranceHollow::FBowl& Bowl : E.Bowls)
+						{
+							bInABowl |= FVector2D::Distance(FVector2D(X, Y), Bowl.Center) < Bowl.RadiusCm * 1.5f * 1.22f;
+						}
+						for (const FMOCaveEntranceHollow::FShelter& Shelter : E.Shelters)
+						{
+							bInABowl |= FVector2D::Distance(FVector2D(X, Y), Shelter.Middle) < FMath::Max(Shelter.HalfDepthCm, Shelter.HalfWidthCm) * 1.3f;
+						}
+						if (bInABowl)
+						{
+							continue;
+						}
 						const float G = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, Voxel);
 						Holes += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, G - 60.0f, G, Seed, Voxel) < 0.0f && FMOWorldGen::SampleCaveDistanceAtGround(*Off, X, Y, G - 60.0f, G, Seed, Voxel) >= 0.0f ? 1 : 0;
 					}
@@ -426,25 +444,27 @@ bool FMOWorldGen_CaveEntranceMix::RunTest(const FString& Parameters)
 				}
 				TestEqual(FString::Printf(TEXT("%s: standing room over 3 x 3 m of the shelter"), *At), Standing, Spots);
 				TestEqual(FString::Printf(TEXT("%s: the shelter's floor is level, at the hollow's floor"), *At), Level, Spots);
-				// Roofed: 2.5 m further in, going up from the floor there is air to crouch in, then at least a metre of rock: the bowl's wall, between the shelter's ceiling and the open air over the bowl.
+				// Roofed: 2.5 m further in, going up from the floor there is air to crouch in, then rock up to the hillside's own ground: the hill, between the shelter's ceiling and the sky.
 				const FVector2D Back = E.ShelterMiddle + E.Uphill * 250.0;
+				const float BackGround = FMOWorldGen::SampleHeightCm(*P, Back.X, Back.Y, Seed, Voxel);
 				TestTrue(FString::Printf(TEXT("%s: air at the back of the shelter"), *At), Field(Back.X, Back.Y, Floor + 100.0f) < 0.0f);
 				float RoofCm = 0.0f;
-				for (float Z = Floor + 100.0f; Z <= E.GroundCm + 800.0f; Z += 20.0f)
+				for (float Z = Floor + 100.0f; Z <= BackGround; Z += 20.0f)
 				{
 					RoofCm += Field(Back.X, Back.Y, Z) >= 0.0f ? 20.0f : 0.0f;
 				}
 				RoofThinnest = FMath::Min(RoofThinnest, RoofCm);
-				TestTrue(FString::Printf(TEXT("%s: the roof over the back of the shelter is rock (%.0f cm)"), *At, RoofCm), RoofCm >= 100.0f);
-				// You walk in: every metre from the hollow's middle to the shelter's middle has knee-to-head air over the floor.
+				TestTrue(FString::Printf(TEXT("%s: the roof over the back of the shelter is rock (%.0f cm)"), *At, RoofCm), RoofCm >= 60.0f);
+				// You walk in level from the hillside: every metre from the mouth to the middle has air at knee height over the floor, whether cut or the open air over the slope below it.
 				int32 Blocked = 0;
 				const double Way = FVector2D::Distance(E.Center, E.ShelterMiddle);
-				for (double S = 0.0; S <= Way; S += 100.0)
+				for (double S = 100.0; S <= Way; S += 100.0)
 				{
 					const FVector2D WayPoint = E.Center + E.Uphill * S;
-					Blocked += Field(WayPoint.X, WayPoint.Y, Floor + 100.0f) < 0.0f ? 0 : 1;
+					const float WayGround = FMOWorldGen::SampleHeightCm(*P, WayPoint.X, WayPoint.Y, Seed, Voxel);
+					Blocked += Floor + 60.0f > WayGround || Field(WayPoint.X, WayPoint.Y, Floor + 60.0f) < 0.0f ? 0 : 1;
 				}
-				TestEqual(FString::Printf(TEXT("%s: the way in from the bowl is clear"), *At), Blocked, 0);
+				TestEqual(FString::Printf(TEXT("%s: the way in from the hillside is clear"), *At), Blocked, 0);
 			}
 
 			if (E.Kind == EMOCaveEntranceKind::Deep)
@@ -482,10 +502,9 @@ bool FMOWorldGen_CaveEntranceMix::RunTest(const FString& Parameters)
 	AddInfo(FString::Printf(TEXT("%d built entrance(s) in 48 x 48 km: %d overhangs (thinnest roof checked %.0f cm), %d shallow, %d deep; deep: %d passages, %d rooms, at most %.0f m of branches, %.0f m under the hollow's rim"),
 		Total, Counts[0], RoofThinnest, Counts[1], Counts[2], PassagesTotal, RoomsTotal, LongestDeep / 100.0f, DeepestUnderHollow / 100.0f));
 	TestTrue(TEXT("enough entrances to measure the mix (>= 40)"), Total >= 40);
-	// Wes's own "~": the mix each machine gets is the hash's, and an overhang's gates differ a little from a passage's.
-	TestTrue(FString::Printf(TEXT("about half are overhangs (%d of %d)"), Counts[0], Total), Counts[0] * 100 >= Total * 35 && Counts[0] * 100 <= Total * 65);
-	TestTrue(FString::Printf(TEXT("about a quarter are deep (%d of %d)"), Counts[2], Total), Counts[2] * 100 >= Total * 12 && Counts[2] * 100 <= Total * 38);
-	TestTrue(FString::Printf(TEXT("about a quarter are shallow (%d of %d)"), Counts[1], Total), Counts[1] * 100 >= Total * 12 && Counts[1] * 100 <= Total * 38);
+	// The caves' half of Wes's mix is the hash's: as many deep as shallow. Overhangs go by the land now (a cell of flat country holds none, N-357), so only that some stand.
+	TestTrue(FString::Printf(TEXT("overhangs stand (%d)"), Counts[0]), Counts[0] > 0);
+	TestTrue(FString::Printf(TEXT("about as many deep as shallow (%d, %d)"), Counts[2], Counts[1]), Counts[2] * 100 >= Counts[1] * 60 && Counts[1] * 100 >= Counts[2] * 60);
 	TestTrue(TEXT("overhangs were checked"), OverhangsChecked > 0);
 	TestTrue(TEXT("deep caves were checked"), DeepsChecked > 0);
 
