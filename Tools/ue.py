@@ -176,6 +176,7 @@ _MARKER_ACK = re.compile(r'\[py-(ok|err)\] out\("<[BE] [0-9a-f]{8}>"\)')
 
 
 ALIVE_CHECK_S = 2.0   # how often a bridge call that is still waiting checks the editor is alive (a process listing takes ~1 s)
+PROMPT_GRACE_S = 10.0   # a prompt still up after this long stops the call waiting (exit 5 BLOCKED): a prompt that only flashes past is not one
 
 
 def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
@@ -193,6 +194,7 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
 
     deadline = time.time() + timeout
     next_alive_check = time.time() + ALIVE_CHECK_S
+    prompt_since = None
     buf = ""
     while time.time() < deadline:
         buf = _read_from(OUT_FILE, out_off)
@@ -201,11 +203,16 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
         if time.time() >= next_alive_check:
             # A crash mid-call is not a slow call: say so now instead of waiting out the timeout on a dead process (Oct 26 2026).
             next_alive_check = time.time() + ALIVE_CHECK_S
-            if not any(not cmd or _is_this_project(cmd) for _, cmd in _unreal_processes()):   # an unreadable command line: alive
+            procs = _unreal_processes()
+            if not any(not cmd or _is_this_project(cmd) for _, cmd in procs):   # an unreadable command line: alive
                 if f"<B {mid}>" in buf:
                     _die(4, f"GONE: the {PROJECT_NAME} editor took this call and then exited (a crash? "
                             f"{os.path.join(ROOT, 'Saved', 'Crashes')} and the end of {gamelog}).")
                 return False, [], ""   # no process at all: the bridge is not responding, as at the timeout, only sooner
+            prompts = _editor_prompts({pid for pid, cmd in procs if not _is_game_instance(cmd) and _is_this_project(cmd)})
+            prompt_since = (prompt_since or time.time()) if prompts else None
+            if prompts and time.time() - prompt_since >= PROMPT_GRACE_S:
+                _die(5, f"BLOCKED: the {PROJECT_NAME} editor is waiting on a prompt: {prompts}. Nothing runs until someone answers it, and this call stays queued behind it.")
         time.sleep(0.05)   # was 0.25: a harness makes hundreds of calls per run, each paid this slack (loop deep dive, Oct 22)
     else:
         if f"<B {mid}>" in buf:
@@ -800,6 +807,35 @@ def _unreal_processes():
     return procs or [(0, "")]
 
 
+def _editor_prompts(pids):
+    """What a modal prompt on these processes says: a native dialog (an open-file prompt, a Windows message box), or the editor's main window disabled by one.
+    A prompt stops the editor's game thread, and with it the bridge, until someone answers it: nothing else tells that apart from a slow call (Nov 6: an open-file prompt from a
+    reimport held a batch for 7.4 hours, each later call timing out at 590 s)."""
+    if os.name != "nt" or not pids:
+        return []
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = []
+
+    def visit(hwnd, _):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value in pids and user32.IsWindowVisible(hwnd):
+            kind = ctypes.create_unicode_buffer(64)
+            title = ctypes.create_unicode_buffer(300)
+            user32.GetClassNameW(hwnd, kind, 64)
+            user32.GetWindowTextW(hwnd, title, 300)
+            if kind.value == "#32770":
+                found.append(title.value or "(an untitled dialog)")
+            elif kind.value == "UnrealWindow" and title.value.endswith("Unreal Editor") and not user32.IsWindowEnabled(hwnd):
+                found.append("(the main window is disabled by a modal window)")
+        return True
+
+    user32.EnumWindows(ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit), 0)
+    return found
+
+
 def _is_game_instance(cmdline):
     return re.search(r"(?:^|\s)-game(?:\s|$)", cmdline or "", re.I) is not None
 
@@ -1030,6 +1066,9 @@ def cmd_status(a):
         ingame = m.group(1) if m else "?"
         statel = delta.strip().splitlines()[-1] if delta.strip() else ""
     print(f"editor : {'RUNNING' if ed else 'DOWN   -> ue.py editor start'}")
+    prompts = _editor_prompts({pid for pid, cmd in _unreal_processes() if not _is_game_instance(cmd) and _is_this_project(cmd)}) if ed else []
+    if prompts:
+        print(f"PROMPT : {prompts} -- the editor is stopped until someone answers it")
     print(f"bridge : {'ALIVE' if br else ('DEAD   -> restart editor (init_unreal loads it)' if ed else '-')}")
     print(f"mcp    : {'ALIVE' if mc else ('DEAD   -> StartServer via the bridge failed; check the editor log' if br else ('DEAD   -> needs the bridge' if ed else '-'))}")
     print(f"pie    : {pie}   inGame: {ingame}")

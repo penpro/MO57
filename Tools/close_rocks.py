@@ -30,12 +30,16 @@ OPEN_AT = 0.2
 SKIP = re.compile(r"Vine|Hornbeam|flower_|LandSlideIcon|SM_Circle_|Arch_Flat|wjhiecy|IvyTest|/ClosedRocks/")
 
 
-def ue_py(code, timeout=590):
+class EditorStuck(Exception):
+    """The editor did not answer: a prompt, a crash, or a call that outlasted the timeout. Every later call would queue behind it, so a batch stops here."""
+
+
+def ue_py(code, timeout=1800):
     r = subprocess.run(UE + ["py", "--timeout", str(timeout), "-c", code], capture_output=True, text=True, cwd=ROOT)
     for line in r.stdout.splitlines():   # the echo of the code holds the mark too: the answer is the line whose mark is followed by JSON
         if MARK in line and line.split(MARK, 1)[1].lstrip().startswith("{"):
             return line.split(MARK, 1)[1]
-    raise SystemExit("editor gave no answer:\n" + r.stdout[-1500:] + r.stderr[-800:])
+    raise EditorStuck("editor gave no answer:\n" + r.stdout[-1500:] + r.stderr[-800:])
 
 
 def load_record():
@@ -58,10 +62,13 @@ def close_one(mesh, extra=(), in_place=False):
     dest = mesh if in_place else f"/Game/ClosedRocks/{name}/{name}_Closed"
     if in_place and not os.path.isfile(work + "/original.uasset"):
         shutil.copy2(content_file(mesh), work + "/original.uasset")
-    exported = json.loads(ue_py(f"import importlib, kitbash, close_rocks as c; importlib.reload(c); out({MARK!r} + c.export({mesh!r}, {src_fbx!r}))"))
-    print(f"{name}: exported {exported}", flush=True)
-    if not exported.get("ok"):
-        return None
+    if os.path.isfile(src_fbx) and os.path.getmtime(src_fbx) >= os.path.getmtime(content_file(mesh)):
+        print(f"{name}: the export from {os.path.getmtime(src_fbx):.0f} is newer than the mesh, used as it is", flush=True)
+    else:
+        exported = json.loads(ue_py(f"import importlib, kitbash, close_rocks as c; importlib.reload(c); out({MARK!r} + c.export({mesh!r}, {src_fbx!r}))"))
+        print(f"{name}: exported {exported}", flush=True)
+        if not exported.get("ok"):
+            return None
     if os.path.exists(out_fbx):
         os.remove(out_fbx)
     b = subprocess.run([BLENDER, "-b", "--factory-startup", "--python", os.path.join(ROOT, "Tools", "close_rocks_blender.py"), "--", src_fbx, out_fbx] + list(extra), capture_output=True, text=True)
@@ -71,6 +78,8 @@ def close_one(mesh, extra=(), in_place=False):
     if "already closed" in " ".join(lines):
         print(f"{name}: closed already, nothing to import", flush=True)
         return None
+    if not final and os.path.exists(src_fbx):
+        os.remove(src_fbx)   # Blender could not read it (an export cut short?): the next run exports it again
     if "-- WATERTIGHT" not in final or not os.path.isfile(out_fbx):
         print(f"{name}: NOT imported: {final or 'blender wrote nothing'}", flush=True)
         return None
@@ -91,7 +100,7 @@ def swap(dry):
     def closed_of(path):
         base = (path or "").split(".")[0]
         hit = record.get(base)
-        if not hit:
+        if not hit or hit["closed"] == base:   # closed in place: the tables already point at it
             return None
         name = hit["closed"].rsplit("/", 1)[1]
         return f"{hit['closed']}.{name}"
@@ -150,20 +159,22 @@ def main():
         todo = [m for m in json.load(open(CENSUS, encoding="utf-8")) if (m["openness"] >= OPEN_AT or m["boundaryEdges"] > 0) and m["mesh"] not in record and not SKIP.search(m["mesh"]) and match in m["mesh"]]
         todo.sort(key=lambda m: m["triangles_lod0"])
         print(f"{len(todo)} to close", flush=True)
-        done, failed = 0, []
+        done, failed, stuck = 0, [], None
         for m in todo[:limit]:
             in_place = any(w in ("Composition", "Feature") for w in m["where"])
             print(f"--- {m['mesh']} ({'in place' if in_place else 'a copy'}), {done} done, {len(failed)} failed", flush=True)
             try:
                 result = close_one(m["mesh"], (), in_place)
-            except SystemExit as e:
-                print(f"{m['mesh']}: {str(e)[:300]}", flush=True)
-                result = None
+            except EditorStuck as e:
+                stuck = f"{m['mesh']}: {e}"
+                break
             if result:
                 done += 1
             else:
                 failed.append(m["mesh"])
         print(f"CLOSED {done}, failed {len(failed)}: {failed}", flush=True)
+        if stuck:
+            raise SystemExit("STOPPED, the editor is stuck: " + stuck[:1500])
     elif cmd == "swap":
         swap("--dry" in sys.argv)
     else:

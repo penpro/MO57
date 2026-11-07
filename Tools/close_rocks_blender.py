@@ -262,6 +262,23 @@ if back_tris > back_tris_wanted:
     bpy.ops.mesh.decimate(ratio=back_tris_wanted / float(back_tris))
     bpy.ops.object.mode_set(mode="OBJECT")
     say("back thinned from %d triangles toward %d" % (back_tris, back_tris_wanted))
+    # The thinning can leave a hole in the back edged partly by three-faced edges (GrassGroundPatch_01: 1 boundary edge, 3 such), which no fill closes as it stands. An edge with an odd number of faces marks it: take its faces out, fill what opens.
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    seal_rounds = 0
+    while seal_rounds < 4:
+        odd = [e for e in bm.edges if len(e.link_faces) % 2 == 1]
+        if not odd:
+            break
+        seal_rounds += 1
+        around = list({f for e in odd for f in e.link_faces})
+        say("sealing the back, round %d: %d edge(s) with an odd number of faces, %d face(s) around them taken out" % (seal_rounds, len(odd), len(around)))
+        bmesh.ops.delete(bm, geom=around, context="FACES")
+        bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+    if seal_rounds:
+        bm.to_mesh(me)
+        me.update()
+    bm.free()
 bm = bmesh.new()
 bm.from_mesh(me)
 boundary_after = sum(1 for e in bm.edges if e.is_boundary)

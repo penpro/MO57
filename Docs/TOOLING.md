@@ -152,6 +152,8 @@ Every `build` / `cycle` first scraps the dev saves (`Saved/SaveGames/*.sav`) and
 `ue.py py` exits 3 "STILL RUNNING" when the editor took a call that outlasted `--timeout`: it finishes on its own, never re-run it.
 `ue.py py` exits 4 "GONE" when the editor took the call and then exited (a crash: `Saved/Crashes`); with no editor at all a call
 reports "bridge not responding" within ~2 s instead of at the timeout. Waiting on a long call yourself: check the process is alive too.
+`ue.py py` exits 5 "BLOCKED" within ~12 s when a prompt holds the editor (a native dialog on its process, or its main window disabled by a modal window), and `ue.py status` prints a PROMPT line:
+a prompt stops the game thread and the bridge with it until someone answers. An unattended batch stops at its first stuck call, and whoever waits on it watches per-item progress with a stall limit, never only its last line (Nov 6, `Docs/TRAPS.md`).
 The bridge never runs one call inside another (a slow-task dialog pumps Slate; Oct 26): a call sent meanwhile waits its turn.
 
 PowerShell fallback (CLAUDE.md until 2026-10-17, verbatim):

@@ -51,9 +51,34 @@ def seat_existing(closed_path, source_path):
     return json.dumps({"closed": closed_path, "seat": z})
 
 
+def source_triangles(mesh):
+    try:
+        return mesh.get_static_mesh_description(0).get_triangle_count()
+    except Exception:
+        return -1
+
+
+def give_fbx_source(mesh, fbx_path):
+    """An import over an existing mesh is a reimport, and a mesh whose first source file isn't an .fbx or .obj (a pack's mesh with none recorded) fails the FBX reimporter's CanReimport, so FReimportManager opens an
+    open-file prompt the automated flag doesn't stop (Editor.cpp GetNewReimportPath), which held a batch for 7.4 hours (Nov 6). With an FBX source recorded first, the reimporter takes it and never asks."""
+    data = mesh.get_editor_property("asset_import_data")
+    names = data.extract_filenames() if data else []
+    if not (names and names[0].lower().endswith((".fbx", ".obj"))):
+        if not isinstance(data, unreal.FbxStaticMeshImportData):
+            data = unreal.new_object(unreal.FbxStaticMeshImportData, mesh)
+            mesh.set_editor_property("asset_import_data", data)
+        data.scripted_add_filename(fbx_path, 0, "")
+    names = mesh.get_editor_property("asset_import_data").extract_filenames()
+    return bool(names and names[0].lower().endswith((".fbx", ".obj")))
+
+
 def import_closed(fbx_path, source_path, dest_path):
     # Everything of the source's is read BEFORE the import: closing in place overwrites it.
     source = unreal.load_asset(source_path)
+    in_place = source_path == dest_path
+    triangles_before = source_triangles(source)
+    if in_place and not give_fbx_source(source, fbx_path):
+        return json.dumps({"error": "could not record an FBX source on %s, so the import would prompt for a file: nothing imported" % source_path})
     sm = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
     source_bounds = source.get_bounds()
     source_bottom = source_bounds.origin.z - source_bounds.box_extent.z
@@ -70,6 +95,8 @@ def import_closed(fbx_path, source_path, dest_path):
     if "error" in result:
         return json.dumps(result)
     mesh = unreal.load_asset(dest_path)
+    if in_place and source_triangles(mesh) == triangles_before:   # a closed mesh always has more; a cancelled or refused reimport leaves the old one, and nothing after this may save it as if it were closed
+        return json.dumps({"error": "the import left %s as it was (%d triangles): not closed, not saved" % (source_path, triangles_before)})
     by_name = dict(slots)
     for i, slot in enumerate(mesh.static_materials):
         material = by_name.get(str(slot.material_slot_name).split(".")[0]) or (slots[i][1] if i < len(slots) else None)
