@@ -414,6 +414,8 @@ Wes's reports from his PIE check of round 2 (`Docs/BugReports_2026-10-24.md`). T
   at 950 m) rather than everywhere; ground displacement keeps rock's relief and flattens soil, litter, grass and sand to 0.3-0.5.
 
 ### 2026-10-23
+Wes's votes on the Nov 6 look checks (notes word for word: `Docs/BugReports_2026-11-06.md`). The calls in them: a cave bowl's gravel keeps to its centre and away from the edges, larger closed rocks go towards the outside, smaller clusters scatter round it in cascades (N-354); bowls are not circles, and some chain in runs of 2-5, as the lakes are lobed (N-355); "branching cave" joins the POIs (N-356). A down vote with "i'll look in game" is not a rejection: the row stays his.
+
 Wes's votes on the first review page (notes word for word: `Docs/BugReports_2026-10-23.md` § Wes's votes). The calls in them:
 - **Starting biomes: no high-elevation starts.** "let's gate the higher elevation biomes, so no alpine heath, or alpine rock or highlands";
   "shore strand and nordic strand should face the water" (N-203).
