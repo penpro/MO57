@@ -286,7 +286,7 @@ bool FMOWorldGen_OverhangsNative::RunTest(const FString& Parameters)
 	const float Voxel = P->Tuning.VoxelSizeCm;
 	const auto Field = [&P, Seed, Voxel](double X, double Y, double Z, float G) { return FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, G, Seed, Voxel); };
 
-	int32 Overhangs = 0, Cells = 0, Shelters = 0, HasBowls = 0, Checked = 0, Oversized = 0, ChainSizes[6] = {};
+	int32 Overhangs = 0, Cells = 0, Shelters = 0, HasBowls = 0, Checked = 0, Oversized = 0, ChainSizes[6] = {}, Apart = 0, RoofColumns = 0, RoofHoles = 0;
 	int32 Rocks = 0, NotKarst = 0, KeptOut = 0, OnRoof = 0, RoofSpots = 0, NearLip = 0, LipSpots = 0, Carved = 0, Footprint = 0, Under = 0, UnderSpots = 0;
 	for (int64 Cy = -CellSpan; Cy < CellSpan; ++Cy)
 	{
@@ -300,6 +300,13 @@ bool FMOWorldGen_OverhangsNative::RunTest(const FString& Parameters)
 			}
 			++Overhangs;
 			Shelters += E.Shelters.Num();
+			for (int32 K = 1; K < E.Shelters.Num(); ++K)
+			{
+				// Each dome after the first starts where the last one still stands: their plans overlap.
+				const FMOCaveEntranceHollow::FShelter& A = E.Shelters[K - 1];
+				const FMOCaveEntranceHollow::FShelter& S2 = E.Shelters[K];
+				Apart += FVector2D::Distance(A.Middle, S2.Middle) > (FMath::Max(A.HalfWidthCm, A.HalfDepthCm) + FMath::Max(S2.HalfWidthCm, S2.HalfDepthCm)) ? 1 : 0;
+			}
 			++ChainSizes[FMath::Min(E.Shelters.Num(), 5)];
 			HasBowls += E.Bowls.Num() > 0 ? 1 : 0;
 			NotKarst += FMOWorldGen::SampleBedrock(*P, E.Center.X, E.Center.Y, Seed) != EMOBedrock::Limestone ? 1 : 0;
@@ -330,10 +337,25 @@ bool FMOWorldGen_OverhangsNative::RunTest(const FString& Parameters)
 				// Just past its plan to either side, and in front of its mouth.
 				for (const FVector2D Spot : { S.Middle + Across * (double)(S.HalfWidthCm * 1.4f), S.Middle - Across * (double)(S.HalfWidthCm * 1.4f), S.Middle - S.Uphill * (double)(S.HalfDepthCm * 1.4f) })
 				{
+					if (FMOWorldGen::IsUnderOverhang(*P, Spot.X, Spot.Y, Seed))
+					{
+						continue;   // under the next dome of the chain, not round it
+					}
 					const float G = FMOWorldGen::SampleHeightCm(*P, Spot.X, Spot.Y, Seed, Voxel);
 					++LipSpots;
 					NearLip += FMOWorldGen::SampleOpeningDistanceUnderCm(*P, Spot.X, Spot.Y, G, Seed) >= 0.0f ? 1 : 0;
 					KeptOut += FMOWorldGen::DistanceToSinkholeRimZone(*P, Spot.X, Spot.Y, Seed) <= 0.0f ? 1 : 0;
+				}
+				// No hole through the roof over the back half: the hillside's own surface there is not carved.
+				for (float AlongShare = 0.1f; AlongShare <= 0.8f; AlongShare += 0.1f)
+				{
+					for (float AcrossShare = -0.6f; AcrossShare <= 0.61f; AcrossShare += 0.2f)
+					{
+						const FVector2D Spot = S.Middle + S.Uphill * (double)(AlongShare * S.HalfDepthCm) + Across * (double)(AcrossShare * S.HalfWidthCm);
+						const float G = FMOWorldGen::SampleHeightCm(*P, Spot.X, Spot.Y, Seed, Voxel);
+						++RoofColumns;
+						RoofHoles += Field(Spot.X, Spot.Y, G - 15.0f, G) < 0.0f ? 1 : 0;
+					}
 				}
 				// Under the roof reads as under it.
 				++UnderSpots;
@@ -367,11 +389,14 @@ bool FMOWorldGen_OverhangsNative::RunTest(const FString& Parameters)
 	TestEqual(TEXT("an overhang has no bowl"), HasBowls, 0);
 	TestEqual(TEXT("no rim rocks round an overhang"), Rocks, 0);
 	TestTrue(TEXT("native to any rock: some are not on limestone"), NotKarst > 0);
-	TestTrue(TEXT("some run to 2-5 shelters along the slope"), ChainSizes[2] + ChainSizes[3] + ChainSizes[4] + ChainSizes[5] > 0);
+	TestTrue(TEXT("most are chained: 2-5 domes along the slope (Wes, Nov 7)"), (ChainSizes[2] + ChainSizes[3] + ChainSizes[4] + ChainSizes[5]) * 2 > Overhangs);
+	TestEqual(TEXT("a chain's domes overlap: one shelter, not a row of them"), Apart, 0);
 	TestEqual(TEXT("no keep-out on or round a shelter: the biome's plants come right up"), KeptOut, 0);
 	TestTrue(TEXT("nearly all the roof takes plants (a thin lip doesn't)"), OnRoof * 100 >= RoofSpots * 90);
 	TestTrue(TEXT("the ground round a shelter is whole"), NearLip * 100 >= LipSpots * 90);
 	TestEqual(TEXT("a shelter's middle reads as under the overhang"), Under, UnderSpots);
+	AddInfo(FString::Printf(TEXT("roof over the domes' back halves: %d holes in %d columns"), RoofHoles, RoofColumns));
+	TestEqual(TEXT("no hole through the roof over a dome's back half"), RoofHoles, 0);
 	TestEqual(TEXT("it opens no more ground than its domes' plans"), Oversized, 0);
 	return true;
 }

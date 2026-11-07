@@ -877,7 +877,23 @@ namespace
 	}
 
 	/** A half dome cut flat by its floor: nothing below the floor is carved, so a fire and a sleeper have level ground. Rough by a hand's breadth or so, so its ceiling and walls don't read as a machined ellipsoid. */
-	float ShelterDistance(const FEntranceShelter& S, float Dx, float Dy, float Z, uint32 RoughSalt)
+	/** Over any dome's back half the hillside's skin stays this thick: the roughness lifted ceilings through thin roofs, and a chained dome's open front cut through its neighbour's roof (301 holes in 8,281 columns, Nov 7). */
+	constexpr float ShelterRoofKeepCm = 60.0f;
+
+	/** 0 at and before a dome's middle, 1 from a tenth of the way into its back half on, inside its plan (and a little past it). */
+	FORCEINLINE float ShelterBackWeight(const FEntranceShelter& S, float Dx, float Dy)
+	{
+		if (ShelterShareAt(S, Dx, Dy) > 1.3f)
+		{
+			return 0.0f;
+		}
+		const float Along = ((Dx - S.X) * S.DirX + (Dy - S.Y) * S.DirY) / S.HalfDepth;
+		const float Back = FMath::Clamp((Along + 0.05f) / 0.15f, 0.0f, 1.0f);
+		return Back * Back * (3.0f - 2.0f * Back);
+	}
+
+	/** The dome alone, rough, without its floor (a chain blends these, then lays one floor: ShelterDistance below). */
+	float ShelterDome(const FEntranceShelter& S, float Dx, float Dy, float Z, uint32 RoughSalt)
 	{
 		const float Qx = Dx - S.X, Qy = Dy - S.Y;
 		const float Along = Qx * S.DirX + Qy * S.DirY, Across = Qy * S.DirX - Qx * S.DirY, Over = Z - S.Floor;
@@ -888,11 +904,19 @@ namespace
 		const float K0 = FMath::Sqrt(Along * Along / (Rx * Rx) + Across * Across / (Ry * Ry) + Over * Over / (Rz * Rz));
 		const float K1 = FMath::Sqrt(Along * Along / (Rx * Rx * Rx * Rx) + Across * Across / (Ry * Ry * Ry * Ry) + Over * Over / (Rz * Rz * Rz * Rz));
 		float Dome = K1 > 1.0e-6f ? K0 * (K0 - 1.0f) / K1 : -Rz;
-		if (Dome < 150.0f && Dome > -150.0f)
+		if (Dome < 250.0f && Dome > -250.0f)
 		{
-			Dome += 28.0f * GradientNoise3((double)Dx / 230.0, (double)Dy / 230.0, (double)Z / 230.0, RoughSalt);
+			// Two scales of roughness: a hand's breadth, and lumps and hollows a couple of metres across (Wes, Nov 7: "not so uniform").
+			Dome += 28.0f * GradientNoise3((double)Dx / 230.0, (double)Dy / 230.0, (double)Z / 230.0, RoughSalt)
+				+ 55.0f * GradientNoise3((double)Dx / 700.0, (double)Dy / 700.0, (double)Z / 700.0, RoughSalt + 1u);
 		}
-		return FMath::Max(Dome, -Over);
+		return Dome;
+	}
+
+	/** A half dome cut flat by its floor: nothing below the floor is carved, so a fire and a sleeper have level ground. */
+	FORCEINLINE float ShelterDistance(const FEntranceShelter& S, float Dx, float Dy, float Z, uint32 RoughSalt)
+	{
+		return FMath::Max(ShelterDome(S, Dx, Dy, Z, RoughSalt), S.Floor - Z);
 	}
 	/** The outline never narrower than 0.92 of the radius (its rim at most ~9 % steeper: 37 deg at the main bowl's 35), at most 1.22 wider. */
 	constexpr float BowlMeanStretch = 1.07f;
@@ -1235,7 +1259,8 @@ namespace
 	}
 
 	/** One shelter with its mouth at (MouthX, MouthY), or false if the ground there won't hold one. Mouth and middle are world XY here; the caller makes them offsets. */
-	bool SettleShelter(const FMOWorldGenParams& P, double MouthX, double MouthY, float HalfDepth, float HalfWidth, float Height, int32 Seed, FEntranceShelter& Out, double& OutMiddleX, double& OutMiddleY)
+	bool SettleShelter(const FMOWorldGenParams& P, double MouthX, double MouthY, float HalfDepth, float HalfWidth, float Height, int32 Seed, FEntranceShelter& Out, double& OutMiddleX, double& OutMiddleY,
+		double MinSlope = OverhangMinSlope)
 	{
 		const FMOWorldGenTuning& T = P.Tuning;
 		const float Floor = FMOWorldGenDomain::SampleHeightCm(P, MouthX, MouthY, Seed, T.VoxelSizeCm);
@@ -1245,7 +1270,7 @@ namespace
 		}
 		const FVector2D Rise = GroundGradient(P, MouthX, MouthY, Floor, Seed);
 		const double Slope = Rise.Size();
-		if (Slope < OverhangMinSlope || Slope > OverhangMaxSlope)
+		if (Slope < MinSlope || Slope > OverhangMaxSlope)
 		{
 			return false;
 		}
@@ -1266,7 +1291,7 @@ namespace
 		{
 			const double At = (double)(Check[0] * Depth), Side = (double)(Check[1] * HalfWidth);
 			const double X = MiddleX + Dx * At - Dy * Side, Y = MiddleY + Dy * At + Dx * Side;
-			const float Top = Floor + Height * FMath::Sqrt(FMath::Max(0.0f, 1.0f - Check[0] * Check[0] - Check[1] * Check[1])) + 30.0f;
+			const float Top = Floor + Height * FMath::Sqrt(FMath::Max(0.0f, 1.0f - Check[0] * Check[0] - Check[1] * Check[1])) + 50.0f;   // the field keeps the skin over the back half whole (ShelterRoofKeepCm); this keeps the roof a real thickness
 			if (FMOWorldGenDomain::SampleHeightCm(P, X, Y, Seed, T.VoxelSizeCm) - Top < OverhangRoofCm)
 			{
 				return false;
@@ -1305,7 +1330,7 @@ namespace
 		{
 			const uint32 H = NextHash();
 			const uint32 K = NextHash();
-			const float A2 = 0.05f + 0.05f * Unit16(H), A3 = 0.03f + 0.03f * Unit16(H >> 16);
+			const float A2 = 0.08f + 0.08f * Unit16(H), A3 = 0.05f + 0.05f * Unit16(H >> 16);
 			S.C2 = A2 * (float)ShoreRing[K & 15u][0];
 			S.S2 = A2 * (float)ShoreRing[K & 15u][1];
 			S.C3 = A3 * (float)ShoreRing[(K >> 4) & 15u][0];
@@ -1339,24 +1364,57 @@ namespace
 
 		const float Limit = EntranceMargin * T.CaveEntranceCellCm - 1000.0f;
 		const uint32 ChainHash = NextHash();
+		// Chained (Wes, Nov 7: "i want them chained together so they're not so uniform"): most run on into one to four more domes, overlapping, so the hillside holds one long, uneven shelter.
 		const float Roll = Unit16(ChainHash);
-		const int32 More = Roll < 0.3f ? 0 : Roll < 0.6f ? 1 : Roll < 0.8f ? 2 : Roll < 0.93f ? 3 : 4;
-		const float Side = (ChainHash >> 16) & 1u ? 1.0f : -1.0f;
+		const int32 More = Roll < 0.12f ? 0 : Roll < 0.35f ? 1 : Roll < 0.65f ? 2 : Roll < 0.85f ? 3 : 4;
+		float Side = (ChainHash >> 16) & 1u ? 1.0f : -1.0f;
 		double MouthX = B.CenterX, MouthY = B.CenterY;
 		float LastWidth = First.HalfWidth, LastDirX = First.DirX, LastDirY = First.DirY;
 		for (int32 M = 0; M < More; ++M)
 		{
 			const uint32 H = NextHash();
 			const uint32 H2 = NextHash();
-			const float HalfWidth = 300.0f + 400.0f * Unit16(H), HalfDepth = 400.0f + 300.0f * Unit16(H >> 16), Height = 240.0f + 80.0f * Unit16(H2);
-			// Along the slope, a width or so on, wandering a little up or down it.
-			const float Step = (LastWidth + HalfWidth) * (1.1f + 0.7f * Unit16(H2 >> 16));
-			const float Wander = 400.0f * (Unit16(H2 >> 8) - 0.5f);
-			const double NextX = MouthX - (double)(Side * LastDirY * Step) + (double)(LastDirX * Wander);
-			const double NextY = MouthY + (double)(Side * LastDirX * Step) + (double)(LastDirY * Wander);
 			FEntranceShelter& Next = Out.Shelters[Out.NumShelters];
-			if (!SettleShelter(P, NextX, NextY, HalfDepth, HalfWidth, Height, Seed, Next, MiddleX, MiddleY)
-				|| FMath::Sqrt(FMath::Square((float)(MiddleX - B.CenterX)) + FMath::Square((float)(MiddleY - B.CenterY))) + Next.HalfDepth * 1.2f > Limit)
+			const FEntranceShelter& Prev = Out.Shelters[Out.NumShelters - 1];
+			// Up to four tries before the chain ends here: as drawn, the other way along the slope, then shorter and smaller each time. The domes after the first take a slope a little
+			// gentler than a first one needs (the hill already holds the first).
+			bool bPlaced = false;
+			double NextX = 0.0, NextY = 0.0;
+			float HalfWidth = 0.0f;
+			for (int32 Try = 0; Try < 4 && !bPlaced; ++Try)
+			{
+				const float Shrink = 1.0f - 0.18f * (float)Try;
+				HalfWidth = (250.0f + 400.0f * Unit16(H)) * Shrink;
+				const float HalfDepth = (350.0f + 450.0f * Unit16(H >> 16)) * Shrink, Height = 220.0f + 120.0f * Unit16(H2);
+				// Along the slope, overlapping the last by a tenth to a half of the two widths, wandering a little up or down it: domes of different sizes run together into one.
+				const float Step = (LastWidth + HalfWidth) * (0.5f + 0.4f * Unit16(H2 >> 16)) * Shrink;
+				const float Wander = Try == 0 ? 250.0f * (Unit16(H2 >> 8) - 0.5f) : 0.0f;
+				const float TrySide = Try == 1 ? -Side : Side;
+				NextX = MouthX - (double)(TrySide * LastDirY * Step) + (double)(LastDirX * Wander);
+				NextY = MouthY + (double)(TrySide * LastDirX * Step) + (double)(LastDirY * Wander);
+				if (!SettleShelter(P, NextX, NextY, HalfDepth, HalfWidth, Height, Seed, Next, MiddleX, MiddleY, OverhangMinSlope * 0.8)
+					|| FMath::Sqrt(FMath::Square((float)(MiddleX - B.CenterX)) + FMath::Square((float)(MiddleY - B.CenterY))) + Next.HalfDepth * 1.2f > Limit)
+				{
+					continue;
+				}
+				// It must still run into the last one: each dome faces its own bit of slope, and one that turned away would stand apart, a second shelter rather than the same one going on.
+				const float Gap = FMath::Sqrt(FMath::Square((float)(MiddleX - B.CenterX) - Prev.X) + FMath::Square((float)(MiddleY - B.CenterY) - Prev.Y));
+				if (Gap > 0.9f * (FMath::Max(Prev.HalfWidth, Prev.HalfDepth) + FMath::Max(HalfWidth, Next.HalfDepth)))
+				{
+					continue;
+				}
+				bPlaced = true;
+				// One floor through the chain where the slope allows: within 80 cm of the first's it is the first's (a step beyond that is the hillside's).
+				if (FMath::Abs(Next.Floor - First.Floor) <= 80.0f)
+				{
+					Next.Floor = First.Floor;
+				}
+				if (Try == 1)
+				{
+					Side = TrySide;   // the chain goes on the way that worked
+				}
+			}
+			if (!bPlaced)
 			{
 				break;
 			}
@@ -1437,7 +1495,7 @@ namespace
 	}
 
 	/** The entrance's distance (cm, negative inside) for the sample's cell. The passage and chamber need sample spacing fine enough to resolve a tube. bOutNative: it is an overhang's, which isn't a cave: the caves' gates (water, karst, high ground) are not its (it settled its own). */
-	float EntranceDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm, bool* bOutNative = nullptr)
+	float EntranceDistance(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed, float StepCm, bool* bOutNative = nullptr, float ColumnGroundCm = FLT_MAX)
 	{
 		const FMOWorldGenTuning& T = P.Tuning;
 		const int64 CellX = (int64)FMath::FloorToDouble(X / (double)T.CaveEntranceCellCm);
@@ -1480,10 +1538,27 @@ namespace
 				return FMOWorldGenDomain::CaveFarCm;
 			}
 			const uint32 RoughSalt = (uint32)FMOWorldGenDomain::HashSeed(Seed, SaltEntrance) + 500u;
-			float Shelter = FMOWorldGenDomain::CaveFarCm;
-			for (int32 K = 0; K < Tree->NumShelters; ++K)
+			// The chain's domes blend where they overlap: one shelter, its ceiling running from one to the next.
+			// The ceilings blend; the floor is the one of the dome you are in (the nearest ceiling's).
+			float Domes = ShelterDome(Tree->Shelters[0], Dx, Dy, Z0, RoughSalt);
+			float Nearest = Domes, Floor = Tree->Shelters[0].Floor;
+			float BackWeight = ShelterBackWeight(Tree->Shelters[0], Dx, Dy);
+			for (int32 K = 1; K < Tree->NumShelters; ++K)
 			{
-				Shelter = FMath::Min(Shelter, ShelterDistance(Tree->Shelters[K], Dx, Dy, Z0, RoughSalt));
+				const float Dome = ShelterDome(Tree->Shelters[K], Dx, Dy, Z0, RoughSalt);
+				Domes = SmoothMin(Domes, Dome, 150.0f);
+				if (Dome < Nearest)
+				{
+					Nearest = Dome;
+					Floor = Tree->Shelters[K].Floor;
+				}
+				BackWeight = FMath::Max(BackWeight, ShelterBackWeight(Tree->Shelters[K], Dx, Dy));
+			}
+			float Shelter = FMath::Max(Domes, Floor - Z0);
+			// The roof stays whole: over any dome's back half the carve keeps ShelterRoofKeepCm under the column's own ground (the mouths' arches, in front of the middles, are left open).
+			if (ColumnGroundCm < 1.0e8f && BackWeight > 0.0f)
+			{
+				Shelter = FMath::Lerp(Shelter, FMath::Max(Shelter, ShelterRoofKeepCm - (ColumnGroundCm - Z0)), BackWeight);
 			}
 			return Shelter;
 		}
@@ -1588,7 +1663,7 @@ float FMOWorldGenDomain::SampleCaveDistanceUnderGround(const FMOWorldGenParams& 
 	if (T.CaveEntranceChance > 0.0f && StepCm <= EntranceHollowMinRadiusCm * EntranceHollowStepFraction)
 	{
 		bool bNative = false;
-		const float Entrance = EntranceDistance(Params, X, Y, Z, Seed, StepCm, &bNative);
+		const float Entrance = EntranceDistance(Params, X, Y, Z, Seed, StepCm, &bNative, GroundCm);
 		if (bNative)
 		{
 			D = FMath::Min(D, Entrance);   // an overhang: part of the hillside, not a cave
@@ -2014,7 +2089,7 @@ float FMOWorldGenDomain::SampleOpeningDistanceUnderCm(const FMOWorldGenParams& P
 	float Near = SinkholeDistance(Params, X, Y, Under, Seed);
 	if (T.CaveEntranceChance > 0.0f)
 	{
-		Near = FMath::Min(Near, EntranceDistance(Params, X, Y, Under, Seed, T.VoxelSizeCm));
+		Near = FMath::Min(Near, EntranceDistance(Params, X, Y, Under, Seed, T.VoxelSizeCm, nullptr, (float)GroundZ));
 	}
 	if (T.RavineChance > 0.0f)
 	{

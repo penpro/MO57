@@ -30,3 +30,10 @@ So the overhangs lost their bowls altogether (N-357), and his "chain 2-5" for th
 ## A reply for the Steam thread "Flame on?" (N-358; Wes posts it, when he wants)
 
 You weren't missing anything, this was our bug. The game told you dry grass or shredded bark would work, then only accepted one specific item. The next update fixes it: dried grass and bark fibre will light a fire as they are, and the menu will say what you're using. Until then, breaking up an old fallen log sometimes gives Dry Tinder, and that's what the drill wants. Thanks for reporting it.
+
+## Round 3 votes (Nov 7, the same page)
+
+| Item | Vote | Wes's note | What it means |
+|---|---|---|---|
+| Overhangs, part of the hillside (`overhang-native`) | up | "these look good but i want them chained together so they're not so uniform... i think you thought i was talking about caves" | His Nov 6 "chain 2-5" was about the overhangs. They chain now: 2.9 overlapping domes each, blended into one uneven shelter (N-357). |
+| Cave bowls (`cave-bowls`) | up | | N-354, N-355 done. |
