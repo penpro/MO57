@@ -5,6 +5,8 @@
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "MOPCGCaveSpawnerSettings.h"
+#include "MOBiomeDefinitionRow.h"
+#include "Materials/MaterialInterface.h"
 #include "MOWorldGen.h"
 #include "MOWorldGenSettings.h"
 #include "MOWorldSeedSubsystem.h"
@@ -375,6 +377,125 @@ bool FMOWorldGen_OverhangsNative::RunTest(const FString& Parameters)
 }
 
 #if WITH_EDITOR
+namespace MOClosedMeshTest
+{
+	/** Edges used by one triangle only on the mesh's source, positions welded to a millimetre (a UV seam is not a hole). -1: no source to measure. */
+	int32 BoundaryEdges(const UStaticMesh* Mesh, int32& OutTriangles)
+	{
+		const FMeshDescription* Description = Mesh ? Mesh->GetMeshDescription(0) : nullptr;
+		OutTriangles = Description ? Description->Triangles().Num() : 0;
+		if (!Description)
+		{
+			return -1;
+		}
+		const FStaticMeshConstAttributes Attributes(*Description);
+		const TVertexAttributesConstRef<FVector3f> Positions = Attributes.GetVertexPositions();
+		const auto Weld = [&Positions](FVertexID Vertex)
+		{
+			const FVector3f V = Positions[Vertex];
+			return FIntVector(FMath::RoundToInt32(V.X * 10.0f), FMath::RoundToInt32(V.Y * 10.0f), FMath::RoundToInt32(V.Z * 10.0f));
+		};
+		TMap<TPair<FIntVector, FIntVector>, int32> Edges;
+		Edges.Reserve(OutTriangles * 2);
+		for (const FTriangleID Triangle : Description->Triangles().GetElementIDs())
+		{
+			const TArrayView<const FVertexID> Corners = Description->GetTriangleVertices(Triangle);
+			const FIntVector Welded[3] = { Weld(Corners[0]), Weld(Corners[1]), Weld(Corners[2]) };
+			for (int32 K = 0; K < 3; ++K)
+			{
+				const FIntVector& A = Welded[K];
+				const FIntVector& Other = Welded[(K + 1) % 3];
+				if (A == Other)
+				{
+					continue;
+				}
+				const bool bOrdered = A.X != Other.X ? A.X < Other.X : A.Y != Other.Y ? A.Y < Other.Y : A.Z < Other.Z;
+				++Edges.FindOrAdd(bOrdered ? TPair<FIntVector, FIntVector>(A, Other) : TPair<FIntVector, FIntVector>(Other, A));
+			}
+		}
+		int32 Boundary = 0;
+		for (const TPair<TPair<FIntVector, FIntVector>, int32>& Edge : Edges)
+		{
+			Boundary += Edge.Value == 1 ? 1 : 0;
+		}
+		return Boundary;
+	}
+
+	/** A few stray edges from welding at a millimetre are not an open scan's rim, which runs to hundreds. */
+	bool IsClosed(int32 Boundary, int32 Triangles)
+	{
+		return Boundary >= 0 && Boundary <= FMath::Max(8, Triangles / 20000);
+	}
+
+	/** A leaf card or a bark sheet is open by nature: not what this is about (the census's rule). */
+	bool IsFoliage(const UStaticMesh* Mesh)
+	{
+		for (const FStaticMaterial& Slot : Mesh->GetStaticMaterials())
+		{
+			const FString Name = Slot.MaterialInterface ? Slot.MaterialInterface->GetPathName().ToLower() : FString();
+			const UMaterial* Base = Slot.MaterialInterface ? Slot.MaterialInterface->GetMaterial() : nullptr;
+			const FString BaseName = Base ? Base->GetPathName().ToLower() : FString();
+			for (const TCHAR* Word : { TEXT("foliage"), TEXT("leaf"), TEXT("grass"), TEXT("fern"), TEXT("vine"), TEXT("bark") })
+			{
+				if (Name.Contains(Word) || BaseName.Contains(Word))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
+// The biomes' rocks, covers and debris (the census's tags), once Tools/close_rocks.py swap has pointed them at closed copies.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_BiomeRocksAreClosed,
+	"MOFramework.PCG.BiomeRocksAreClosed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_BiomeRocksAreClosed::RunTest(const FString& Parameters)
+{
+	UDataTable* Table = LoadObject<UDataTable>(nullptr, TEXT("/MOFramework/Data/DT_Biomes.DT_Biomes"));
+	if (!TestNotNull(TEXT("DT_Biomes"), Table))
+	{
+		return false;
+	}
+	const TSet<FName> Tags = { FName(TEXT("MOResource_Rock")), FName(TEXT("MOBiomeCover_Rock")), FName(TEXT("MOBiomeCover_Debris")) };
+	TMap<UStaticMesh*, FString> Meshes;
+	Table->ForeachRow<FMOBiomeDefinitionRow>(TEXT("BiomeRocksAreClosed"), [&](const FName& Name, const FMOBiomeDefinitionRow& Row)
+	{
+		for (const TArray<FMOBiomeSpeciesEntry>* List : { &Row.Species, &Row.WaterEdgeSpecies })
+		{
+			for (const FMOBiomeSpeciesEntry& Entry : *List)
+			{
+				if (Tags.Contains(Entry.HISMTag))
+				{
+					if (UStaticMesh* Mesh = Entry.Mesh.LoadSynchronous())
+					{
+						Meshes.Add(Mesh, Name.ToString());
+					}
+				}
+			}
+		}
+	});
+	TestTrue(TEXT("the biomes place rocks"), Meshes.Num() > 5);
+	int32 Measured = 0, Open = 0;
+	for (const TPair<UStaticMesh*, FString>& Pair : Meshes)
+	{
+		if (MOClosedMeshTest::IsFoliage(Pair.Key))
+		{
+			continue;
+		}
+		int32 Triangles = 0;
+		const int32 Boundary = MOClosedMeshTest::BoundaryEdges(Pair.Key, Triangles);
+		++Measured;
+		const bool bClosed = MOClosedMeshTest::IsClosed(Boundary, Triangles);
+		Open += bClosed ? 0 : 1;
+		TestTrue(FString::Printf(TEXT("%s (biome %s) is closed: %d boundary edges of %d triangles. Close it with Tools/close_rocks.py, then swap"), *Pair.Key->GetPathName(), *Pair.Value, Boundary, Triangles), bClosed);
+	}
+	AddInfo(FString::Printf(TEXT("%d rock meshes measured, %d open"), Measured, Open));
+	return true;
+}
+
 // Wes, Nov 6: "you're somehow back to using shitty open geometry assets, fix that". A rock or a patch of ground in the cave table must be closed: seen from behind or past a raised edge an open scan is a hole in the world. Plants are open by nature (the vines).
 // Boundary edges of the source mesh, positions welded to a millimetre (a UV seam is not a hole). A mesh that fails goes through Tools/close_rocks.py first, and only then into the table.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_CaveTableIsClosed,
@@ -405,45 +526,15 @@ bool FMOPCG_CaveTableIsClosed::RunTest(const FString& Parameters)
 	int32 Measured = 0;
 	for (const TPair<UStaticMesh*, FString>& Pair : Meshes)
 	{
-		const FMeshDescription* Description = Pair.Key->GetMeshDescription(0);
-		if (!TestNotNull(FString::Printf(TEXT("%s: has a source mesh to measure"), *Pair.Value), Description))
+		int32 Triangles = 0;
+		const int32 Boundary = MOClosedMeshTest::BoundaryEdges(Pair.Key, Triangles);
+		if (!TestTrue(FString::Printf(TEXT("%s: has a source mesh to measure"), *Pair.Value), Boundary >= 0))
 		{
 			continue;
 		}
-		const FStaticMeshConstAttributes Attributes(*Description);
-		const TVertexAttributesConstRef<FVector3f> Positions = Attributes.GetVertexPositions();
-		const auto Weld = [&Positions](FVertexID Vertex)
-		{
-			const FVector3f V = Positions[Vertex];
-			return FIntVector(FMath::RoundToInt32(V.X * 10.0f), FMath::RoundToInt32(V.Y * 10.0f), FMath::RoundToInt32(V.Z * 10.0f));
-		};
-		TMap<TPair<FIntVector, FIntVector>, int32> Edges;
-		Edges.Reserve(Description->Triangles().Num() * 2);
-		for (const FTriangleID Triangle : Description->Triangles().GetElementIDs())
-		{
-			const TArrayView<const FVertexID> Corners = Description->GetTriangleVertices(Triangle);
-			const FIntVector Welded[3] = { Weld(Corners[0]), Weld(Corners[1]), Weld(Corners[2]) };
-			for (int32 K = 0; K < 3; ++K)
-			{
-				const FIntVector& A = Welded[K];
-				const FIntVector& Other = Welded[(K + 1) % 3];
-				if (A == Other)
-				{
-					continue;
-				}
-				const bool bOrdered = A.X != Other.X ? A.X < Other.X : A.Y != Other.Y ? A.Y < Other.Y : A.Z < Other.Z;
-				++Edges.FindOrAdd(bOrdered ? TPair<FIntVector, FIntVector>(A, Other) : TPair<FIntVector, FIntVector>(Other, A));
-			}
-		}
-		int32 Boundary = 0;
-		for (const TPair<TPair<FIntVector, FIntVector>, int32>& Edge : Edges)
-		{
-			Boundary += Edge.Value == 1 ? 1 : 0;
-		}
 		++Measured;
-		AddInfo(FString::Printf(TEXT("%s (%s): %d triangles, %d boundary edges"), *Pair.Key->GetName(), *Pair.Value, Description->Triangles().Num(), Boundary));
-		// A few stray edges from welding at a millimetre are not an open scan's rim, which runs to hundreds.
-		TestTrue(FString::Printf(TEXT("%s (row %s) is closed: %d boundary edges. Close it with Tools/close_rocks.py before it goes in the table"), *Pair.Key->GetName(), *Pair.Value, Boundary), Boundary <= FMath::Max(8, Description->Triangles().Num() / 20000));
+		AddInfo(FString::Printf(TEXT("%s (%s): %d triangles, %d boundary edges"), *Pair.Key->GetName(), *Pair.Value, Triangles, Boundary));
+		TestTrue(FString::Printf(TEXT("%s (row %s) is closed: %d boundary edges. Close it with Tools/close_rocks.py before it goes in the table"), *Pair.Key->GetName(), *Pair.Value, Boundary), MOClosedMeshTest::IsClosed(Boundary, Triangles));
 	}
 	AddInfo(FString::Printf(TEXT("%d meshes measured"), Measured));
 	return true;
